@@ -1,0 +1,19 @@
+{
+    "name": "tinymvc/tinycore",
+    "description": "Core Classes of TinyMVC Framework",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Spark\\": "src/"
+        },
+        "files": [
+            "./src/Foundation/shortcut.php"
+        ]
+    },
+    "authors": [
+        {
+            "name": "Shahin Moyshan",
+            "email": "shahin.moyshan2@gmail.com"
+        }
+    ]
+}
