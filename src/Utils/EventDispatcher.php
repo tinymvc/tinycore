@@ -2,6 +2,8 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\EventDispatcherUtilContract;
+
 /**
  * Class EventDispatcher
  *
@@ -9,14 +11,20 @@ namespace Spark\Utils;
  *
  * @package Spark\Utils
  */
-class EventDispatcher
+class EventDispatcher implements EventDispatcherUtilContract
 {
     /**
-     * Array to hold event listeners.
+     * Constructor for the EventDispatcher class.
      *
-     * @var array
+     * Initializes the EventDispatcher with an optional array of listeners.
+     *
+     * @param array $listeners
+     *   An associative array where keys are event names and values are arrays
+     *   of callables to be executed when the event is dispatched.
      */
-    private array $listeners = [];
+    public function __construct(private array $listeners = [])
+    {
+    }
 
     /**
      * Registers a listener for a specific event.
@@ -27,6 +35,33 @@ class EventDispatcher
     public function addListener(string $eventName, callable $listener): void
     {
         $this->listeners[$eventName][] = $listener;
+    }
+
+    /**
+     * Retrieves all registered event listeners.
+     *
+     * @return array
+     *   An associative array where keys are event names and values are arrays
+     *   of callables registered as listeners for the events.
+     */
+    public function getListeners(): array
+    {
+        return $this->listeners;
+    }
+
+    /**
+     * Removes all registered event listeners.
+     *
+     * This method is useful in scenarios where you need to reset the event
+     * listeners to a clean state, such as when your application is
+     * bootstrapped or when you want to remove all listeners before adding
+     * new ones.
+     * 
+     * @return void
+     */
+    public function clearListeners(): void
+    {
+        $this->listeners = [];
     }
 
     /**
@@ -70,17 +105,5 @@ class EventDispatcher
         if (!$condition) {
             $this->dispatch($eventName, ...$args);
         }
-    }
-
-    /**
-     * Handles static calls by creating a new instance and calling the dynamic method.
-     *
-     * @param string $method The method name.
-     * @param array  $args   The arguments for the method.
-     * @return mixed The result of the method call.
-     */
-    public static function __callStatic($method, $args)
-    {
-        return get(self::class)->$method(...$args);
     }
 }

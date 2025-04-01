@@ -2,6 +2,9 @@
     "name": "tinymvc/tinycore",
     "description": "Core Classes of TinyMVC Framework",
     "license": "MIT",
+    "require": {
+        "laravel/serializable-closure": "^2.0"
+    },
     "autoload": {
         "psr-4": {
             "Spark\\": "src/"

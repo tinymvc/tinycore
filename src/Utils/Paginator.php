@@ -2,6 +2,8 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\PaginatorUtilContract;
+
 /**
  * Class Paginator
  * 
@@ -10,7 +12,7 @@ namespace Spark\Utils;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator
+class Paginator implements PaginatorUtilContract
 {
     /**
      * @var int $pages Total number of pages.

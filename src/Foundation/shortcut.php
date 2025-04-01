@@ -6,6 +6,7 @@ use Spark\Database\QueryBuilder;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Http\Response;
+use Spark\Queue\Job;
 use Spark\Router;
 use Spark\Utils\EventDispatcher;
 use Spark\Utils\Gate;
@@ -602,6 +603,28 @@ function authorize(string $ability, mixed ...$arguments): void
 }
 
 /**
+ * Get the Gate instance.
+ *
+ * This function returns the Gate instance, which is responsible for
+ * defining and checking the abilities of the current user.
+ *
+ * @param mixed ...$args Optional arguments to pass to the Gate instance.
+ *    If present, the arguments are passed to the Gate::define() method.
+ *
+ * @return Gate The Gate instance.
+ */
+function gate(...$args): Gate
+{
+    $gate = get(Gate::class);
+
+    if (!empty($args)) {
+        $gate->define(...$args);
+    }
+
+    return $gate;
+}
+
+/**
  * Manage and dispatch events.
  *
  * This function allows you to either add event listeners or dispatch events.
@@ -628,6 +651,41 @@ function event(null|array|string $eventName = null, ...$args): EventDispatcher
     }
 
     return $event;
+}
+
+/**
+ * Create a new Job instance.
+ *
+ * This function creates a new Job instance with the given callback and optional arguments.
+ * The callback is the function that will be executed when the job is processed.
+ *
+ * @param callable $callback The callback function to be executed when the job is processed.
+ * @param mixed ...$args Additional arguments to pass to the callback function.
+ * @return Job The new Job instance.
+ */
+function job(callable $callback, ...$args): Job
+{
+    return new Job($callback, ...$args);
+}
+
+/**
+ * Dispatch a job with the given callback.
+ *
+ * This function creates a new job instance using the provided callback
+ * and any additional arguments. The job is then dispatched to the queue
+ * for processing.
+ *
+ * @param callable $callback The callback function to be executed by the job.
+ * @param mixed ...$args Additional arguments to pass to the callback function.
+ * @return void
+ */
+function dispatch(callable $callback, ...$args): void
+{
+    // Create a new job instance.
+    $job = job($callback, ...$args);
+
+    // Dispatch the job to the queue.
+    $job->dispatch();
 }
 
 /**

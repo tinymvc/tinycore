@@ -2,6 +2,9 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\GateUtilContract;
+use Spark\Exceptions\Utils\AuthorizationException;
+
 /**
  * Class Gate
  *
@@ -10,7 +13,7 @@ namespace Spark\Utils;
  *
  * @package Spark\Utils
  */
-class Gate
+class Gate implements GateUtilContract
 {
     /**
      * Array of defined abilities.
@@ -101,26 +104,13 @@ class Gate
      *
      * @param string $ability
      * @param mixed  ...$arguments
+     * 
+     * @throws AuthorizationException
      */
     public function authorize(string $ability, mixed ...$arguments): void
     {
         if (!$this->allows($ability, ...$arguments)) {
-            // TODO: return a 403 response
+            throw new AuthorizationException('You are not authorized to perform this action.');
         }
-    }
-
-    /**
-     * Magic method call for the gate instance.
-     *
-     * Calls the method on the gate instance if it exists.
-     *
-     * @param string $method The method name.
-     * @param array  $args   The arguments for the method.
-     *
-     * @return mixed The result of the method call.
-     */
-    public static function __callStatic($method, $args)
-    {
-        return get(self::class)->$method(...$args);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\ViteUtilContract;
 use Spark\Utils\Ping;
 
 /**
@@ -13,7 +14,7 @@ use Spark\Utils\Ping;
  * @package Spark\Helpers
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Vite
+class Vite implements ViteUtilContract
 {
     /** @var array Configuration array for the Vite helper */
     private array $config;

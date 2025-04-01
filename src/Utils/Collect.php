@@ -2,6 +2,10 @@
 
 namespace Spark\Utils;
 
+use ArrayAccess;
+use Countable;
+use Spark\Contracts\Utils\CollectionUtilContract;
+
 /**
  * Class Collect
  * 
@@ -11,7 +15,7 @@ namespace Spark\Utils;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Collect
+class Collect implements ArrayAccess, Countable, CollectionUtilContract
 {
     /** @var array The collection items. */
     private array $items;
@@ -54,9 +58,20 @@ class Collect
      * @param mixed $default Default value if the key doesn't exist.
      * @return mixed
      */
-    public function get(int|string $key, $default = null)
+    public function get(int|string $key, $default = null): mixed
     {
         return $this->items[$key] ?? $default;
+    }
+
+    /**
+     * Retrieves the value at the specified offset.
+     *
+     * @param mixed $offset The offset to retrieve.
+     * @return mixed The value at the specified offset.
+     */
+    public function offsetGet(mixed $offset): mixed
+    {
+        return $this->get($offset);
     }
 
     /**
@@ -68,6 +83,17 @@ class Collect
     public function has(int|string $key): bool
     {
         return array_key_exists($key, $this->items);
+    }
+
+    /**
+     * Checks if a key exists in the collection.
+     *
+     * @param mixed $offset The key to check.
+     * @return bool
+     */
+    public function offsetExists(mixed $offset): bool
+    {
+        return $this->has($offset);
     }
 
     /**
@@ -95,6 +121,18 @@ class Collect
     }
 
     /**
+     * Sets the value at the specified offset in the collection.
+     *
+     * @param mixed $offset The key or index at which to set the value.
+     * @param mixed $value The value to set at the specified offset.
+     * @return void
+     */
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        $this->add($offset, $value);
+    }
+
+    /**
      * Removes an item from the collection by key.
      *
      * @param int|string $key The key to remove.
@@ -104,6 +142,17 @@ class Collect
     {
         unset($this->items[$key]);
         return $this;
+    }
+
+    /**
+     * Removes the item at the specified offset.
+     *
+     * @param mixed $offset The offset to remove.
+     * @return void
+     */
+    public function offsetUnset(mixed $offset): void
+    {
+        $this->remove($offset);
     }
 
     /**
@@ -438,7 +487,7 @@ class Collect
      * @param mixed $default
      * @return mixed
      */
-    public function find(callable $callback, $default = null)
+    public function find(callable $callback, $default = null): mixed
     {
         foreach ($this->items as $key => $value) {
             if ($callback($value, $key)) {

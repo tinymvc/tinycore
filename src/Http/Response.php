@@ -2,6 +2,8 @@
 
 namespace Spark\Http;
 
+use Spark\Contracts\Http\ResponseContract;
+
 /**
  * Class Response
  * 
@@ -10,7 +12,7 @@ namespace Spark\Http;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Response
+class Response implements ResponseContract
 {
     /**
      * Constructor

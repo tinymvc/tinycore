@@ -2,7 +2,10 @@
 
 namespace Spark\Utils;
 
-use Exception;
+use Spark\Contracts\Utils\HashUtilContract;
+use Spark\Exception\Utils\Hash\DecryptionFailedException;
+use Spark\Exception\Utils\Hash\EncryptionFailedException;
+use Spark\Exception\Utils\Hash\InvalidEncryptingKeyException;
 
 /**
  * Class Hash
@@ -12,7 +15,7 @@ use Exception;
  *
  * @package Spark\Utils
  */
-class Hash
+class Hash implements HashUtilContract
 {
     /**
      * Initializes the hash class with a key.
@@ -31,7 +34,7 @@ class Hash
     {
         $key ??= config('app_key'); // Get the key from the environment if not provided, otherwise use the default key
         if ($key === null) {
-            throw new Exception('Encryption key not provided.');
+            throw new InvalidEncryptingKeyException('Encryption key not provided.');
         }
 
         $this->setKey($key);
@@ -44,13 +47,13 @@ class Hash
      * an exception will be thrown.
      *
      * @param string $key The encryption key to use.
-     * @throws Exception If the provided key is less than 32 characters.
+     * @throws InvalidEncryptingKeyException If the provided key is less than 32 characters.
      */
     public function setKey(string $key): void
     {
         // Check if the key is less than 32 characters
         if (strlen($key) < 32) {
-            throw new Exception('The provided key must be at least 32 characters long.');
+            throw new InvalidEncryptingKeyException('The provided key must be at least 32 characters long.');
         }
 
         // Hash the key using SHA-256
@@ -110,7 +113,7 @@ class Hash
      *
      * @param string $value The plaintext string to encrypt.
      * @return string The encrypted string, base64 encoded.
-     * @throws Exception
+     * @throws EncryptionFailedException
      */
     public function encrypt(string $value): string
     {
@@ -122,7 +125,7 @@ class Hash
 
         // Check if encryption was successful
         if ($cipherText === false) {
-            throw new Exception('Encryption failed.');
+            throw new EncryptionFailedException('Encryption failed.');
         }
 
         // Use JSON encoding for cleaner and safer storage of IV and ciphertext
@@ -132,7 +135,7 @@ class Hash
         ]);
 
         if ($encryptedData === false) {
-            throw new Exception('Failed to encode encrypted data.');
+            throw new EncryptionFailedException('Failed to encode encrypted data.');
         }
 
         return base64_encode($encryptedData);
@@ -143,32 +146,32 @@ class Hash
      *
      * @param string $encrypted The base64-encoded encrypted string.
      * @return string The decrypted plaintext string.
-     * @throws Exception
+     * @throws DecryptionFailedException
      */
     public function decrypt(string $encrypted): string
     {
         $decodedData = base64_decode($encrypted, true);
 
         if ($decodedData === false) {
-            throw new Exception('Invalid base64-encoded data.');
+            throw new DecryptionFailedException('Invalid base64-encoded data.');
         }
 
         $data = json_decode($decodedData, true);
 
         if (!is_array($data) || empty($data['cipherText']) || empty($data['iv'])) {
-            throw new Exception('Invalid encrypted data format.');
+            throw new DecryptionFailedException('Invalid encrypted data format.');
         }
 
         $iv = base64_decode($data['iv'], true);
 
         if ($iv === false) {
-            throw new Exception('Invalid IV format.');
+            throw new DecryptionFailedException('Invalid IV format.');
         }
 
         $plainText = openssl_decrypt($data['cipherText'], 'AES-256-CBC', $this->key, 0, $iv);
 
         if ($plainText === false) {
-            throw new Exception('Decryption failed.');
+            throw new DecryptionFailedException('Decryption failed.');
         }
 
         return $plainText;

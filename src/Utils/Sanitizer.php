@@ -2,6 +2,8 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\SanitizerUtilContract;
+
 /**
  * Class Sanitizer
  * 
@@ -11,7 +13,7 @@ namespace Spark\Utils;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Sanitizer
+class Sanitizer implements SanitizerUtilContract
 {
     /**
      * Constructs a new sanitizer instance with optional initial data.

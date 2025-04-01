@@ -2,10 +2,12 @@
 
 namespace Spark\Database;
 
+use Spark\Contracts\Database\QueryBuilderContract;
+use Spark\Database\Exceptions\QueryBuilderException;
+use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Utils\Paginator;
 use PDO;
 use PDOStatement;
-use Exception;
 
 /**
  * Class Query
@@ -15,7 +17,7 @@ use Exception;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class QueryBuilder
+class QueryBuilder implements QueryBuilderContract
 {
     /**
      * Holds the SQL and bind parameters for the WHERE clause.
@@ -149,7 +151,7 @@ class QueryBuilder
         );
 
         if ($statement === false) {
-            throw new Exception('Failed to prepare statement');
+            throw new QueryBuilderException('Failed to prepare statement');
         }
 
         // Bind records value into statement.
@@ -165,7 +167,7 @@ class QueryBuilder
 
         // Execute insert query command.
         if ($statement->execute() === false) {
-            throw new Exception('Failed to execute statement');
+            throw new QueryBuilderException('Failed to execute statement');
         }
 
         // Returns the last inserted ID.
@@ -218,12 +220,14 @@ class QueryBuilder
      * @param mixed $value 
      *   The value to query. If null, the value will be determined
      *   based on the operator given.
-     * @param string $type 
+     * @param ?string $type 
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @return self
      */
-    public function where(string|array $column = null, ?string $operator = null, $value = null, string $type = 'AND'): self
+    public function where(string|array $column = null, ?string $operator = null, mixed $value = null, ?string $type = null): self
     {
+        $type ??= 'AND';
+
         if ($column !== null) {
             return $this->addWhere($type, $column, $operator, $value);
         }
@@ -296,7 +300,7 @@ class QueryBuilder
         );
 
         if ($statement === false) {
-            throw new Exception('Failed to prepare statement');
+            throw new QueryBuilderException('Failed to prepare statement');
         }
 
         // Bind the values for update
@@ -309,7 +313,7 @@ class QueryBuilder
 
         // Execute the statement and reset the WHERE clause
         if ($statement->execute() === false) {
-            throw new Exception('Failed to execute statement');
+            throw new QueryBuilderException('Failed to execute statement');
         }
 
         $this->resetWhere();
@@ -338,7 +342,7 @@ class QueryBuilder
         $statement = $this->database->prepare("DELETE FROM {$this->table} {$this->getWhereSql()}");
 
         if ($statement === false) {
-            throw new Exception('Failed to prepare statement');
+            throw new QueryBuilderException('Failed to prepare statement');
         }
 
         // Bind the WHERE clause parameters
@@ -346,7 +350,7 @@ class QueryBuilder
 
         // Execute the statement and reset the WHERE clause
         if ($statement->execute() === false) {
-            throw new Exception('Failed to execute statement');
+            throw new QueryBuilderException('Failed to execute statement');
         }
 
         // Reset current query builder.
@@ -538,7 +542,7 @@ class QueryBuilder
      *
      * @return mixed
      */
-    public function first()
+    public function first(): mixed
     {
         // Execute current select query by limiting to single record.
         $this->limit(1)->executeSelectQuery();
@@ -563,7 +567,7 @@ class QueryBuilder
      *
      * @return mixed
      */
-    public function last()
+    public function last(): mixed
     {
         // The last result as an object or false if none found.
         return $this->orderDesc()->first();
@@ -802,7 +806,7 @@ class QueryBuilder
         );
 
         if ($statement === false) {
-            throw new Exception('Failed to prepare statement');
+            throw new QueryBuilderException('Failed to prepare statement');
         }
 
         // Bind/Add conditions to filter records.
@@ -810,7 +814,7 @@ class QueryBuilder
 
         // Execute current select command.
         if ($statement->execute() === false) {
-            throw new Exception('Failed to execute statement');
+            throw new QueryBuilderException('Failed to execute statement');
         }
 
         // Set select statement into query to modify dynamically.
@@ -841,7 +845,7 @@ class QueryBuilder
      * @param string|null $operator The operator for the WHERE clause (e.g., '=', 'LIKE').
      * @param mixed|null $value The value to compare the column to.
      * @return self Returns the current instance for method chaining.
-     * @throws Exception If the provided arguments are invalid.
+     * @throws QueryBuilderInvalidWhereClauseException If the provided arguments are invalid.
      */
     private function addWhere(string $method, string|array $column = null, ?string $operator = null, $value = null): self
     {
@@ -893,7 +897,7 @@ class QueryBuilder
             // Simply add a where clause from string.
             $command = "{$method} {$column}";
         } else {
-            throw new Exception('Invalid where clause');
+            throw new QueryBuilderInvalidWhereClauseException('Invalid where clause');
         }
 
         // Register the where clause into current query builder.

@@ -2,6 +2,8 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\ValidatorUtilContract;
+
 /**
  * Class Validator
  * 
@@ -11,7 +13,7 @@ namespace Spark\Utils;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Validator
+class Validator implements ValidatorUtilContract
 {
     /**
      * Constructs a new validator instance.

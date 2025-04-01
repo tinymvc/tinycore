@@ -3,7 +3,8 @@
 namespace Spark\Utils;
 
 use GdImage;
-use RuntimeException;
+use Spark\Contracts\Utils\ImageUtilContract;
+use Spark\Exceptions\Utils\ImageUtilException;
 
 /**
  * Class Image
@@ -13,7 +14,7 @@ use RuntimeException;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Image
+class Image implements ImageUtilContract
 {
     /**
      * @var resource $image The GD image resource.
@@ -49,8 +50,8 @@ class Image
      * images information using the getimagesize and pathinfo functions.
      *
      * @param string $imageSource The source path of the image to be loaded.
-     * @throws RuntimeException If the GD extension is not loaded, or if the required functions are not enabled in this system.
-     * @throws RuntimeException If the source image file does not exist.
+     * @throws ImageUtilException If the GD extension is not loaded, or if the required functions are not enabled in this system.
+     * @throws ImageUtilException If the source image file does not exist.
      */
     public function setImageSource(string $imageSource)
     {
@@ -61,7 +62,7 @@ class Image
 
         // Check is GD php extension is loaded or not.
         if (!extension_loaded('gd')) {
-            throw new RuntimeException('Extension: GD is required to create image');
+            throw new ImageUtilException('Extension: GD is required to create image');
         }
 
         // The extensions are required for this image object.
@@ -81,13 +82,13 @@ class Image
         // Check if all extensions are enabled in this system.
         foreach ($requiredFunctions as $func) {
             if (!function_exists($func)) {
-                throw new RuntimeException("Required function: {$func}() is not found.");
+                throw new ImageUtilException("Required function: {$func}() is not found.");
             }
         }
 
         // Check if the source image file exist or not.
         if (!file_exists($this->imageSource)) {
-            throw new RuntimeException("Image file: {$this->imageSource} does not exist.");
+            throw new ImageUtilException("Image file: {$this->imageSource} does not exist.");
         }
 
         // Extract images information, size, dimensions, extension etc...
@@ -115,7 +116,7 @@ class Image
      * 
      * @return GdImage|resource The GD image resource.
      * 
-     * @throws RuntimeException If the image type is unsupported.
+     * @throws ImageUtilException If the image type is unsupported.
      */
     public function getImage()
     {
@@ -123,7 +124,7 @@ class Image
             $this->image = match ($this->getInfo('mime')) {
                 'image/jpeg', 'image/jpg' => imagecreatefromjpeg($this->imageSource),
                 'image/png' => imagecreatefrompng($this->imageSource),
-                default => throw new RuntimeException("Unsupported image type: {$this->imageSource}"),
+                default => throw new ImageUtilException("Unsupported image type: {$this->imageSource}"),
             };
         }
 

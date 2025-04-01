@@ -3,6 +3,8 @@
 namespace Spark\Foundation;
 
 use Spark\Container;
+use Spark\Contracts\Foundation\ApplicationContract;
+use Spark\Queue\Queue;
 use Spark\Router;
 use Spark\View;
 use Spark\Http\Middleware;
@@ -34,7 +36,7 @@ use Spark\Utils\Vite;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Application
+class Application implements ApplicationContract
 {
     /** @var Application Singleton instance of the application */
     public static Application $app;
@@ -84,6 +86,7 @@ class Application
         $this->container->singleton(Hash::class);
         $this->container->singleton(EventDispatcher::class);
         $this->container->singleton(Gate::class);
+        $this->container->singleton(Queue::class);
 
         // Bind core services
         $this->container->bind(QueryBuilder::class);
@@ -297,6 +300,7 @@ class Application
             )
             ->send();
     }
+
     /**
      * Retrieves a service from the dependency injection container.
      *

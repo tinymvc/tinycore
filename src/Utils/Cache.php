@@ -2,7 +2,8 @@
 
 namespace Spark\Utils;
 
-use RuntimeException;
+use Spark\Contracts\Utils\CacheUtilContract;
+use Spark\Exceptions\Utils\FailedToSaveCacheFileException;
 
 /**
  * Class Cache
@@ -13,7 +14,7 @@ use RuntimeException;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Cache
+class Cache implements CacheUtilContract
 {
     /** @var string Path to the cache file */
     private string $cachePath;
@@ -316,7 +317,7 @@ class Cache
      * and throws an exception if the cache directory is not writable.
      *
      * @param int $flags Optional lock flags.
-     * @throws RuntimeException Thrown if the cache directory is not writable.
+     * @throws FailedToSaveCacheFileException Thrown if the cache directory is not writable.
      * @return void
      */
     public function saveChanges(int $flags = LOCK_EX): void
@@ -327,9 +328,9 @@ class Cache
 
             // Check if cache directory exists, else create a new direcotry.
             if (!is_dir($cacheDir) && !mkdir($cacheDir, 0777, true)) {
-                throw new RuntimeException("Failed to create temp directory to store caches.");
+                throw new FailedToSaveCacheFileException("Failed to create temp directory to store caches.");
             } elseif (!is_writable($cacheDir) && !chmod($cacheDir, 0777)) {
-                throw new RuntimeException("Temp directory is not writable.");
+                throw new FailedToSaveCacheFileException("Temp directory is not writable.");
             }
 
             // Save updated cache data into local filesystem.

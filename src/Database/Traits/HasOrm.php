@@ -2,9 +2,11 @@
 
 namespace Spark\Database\Traits;
 
+use Spark\Database\Exceptions\InvalidOrmException;
+use Spark\Database\Exceptions\OrmDisabledLazyLoadingException;
+use Spark\Database\Exceptions\UndefinedOrmException;
 use Spark\Database\QueryBuilder;
 use PDO;
-use RuntimeException;
 
 /**
  * ORM - Object Relational Mapping
@@ -51,7 +53,7 @@ trait HasOrm
      * @param array $data The data to use for loading the initial model instance.
      * @return QueryBuilder The query object with attached mappers for handling the related data.
      * 
-     * @throws RuntimeException If the specified relationship is not defined in the ORM configuration.
+     * @throws UndefinedOrmException If the specified relationship is not defined in the ORM configuration.
      */
     public static function with(array|string $orm = '*', array $data = []): QueryBuilder
     {
@@ -67,7 +69,7 @@ trait HasOrm
             $config = $registeredOrm[$with] ?? false;
 
             if (!$config) {
-                throw new RuntimeException("Orm({$with}) does not specified in: " . $model::class);
+                throw new UndefinedOrmException("Orm({$with}) does not specified in: " . $model::class);
             }
 
             $query->addMapper(fn($data) => $model->handleOrm($data, $config, $with));
@@ -86,7 +88,7 @@ trait HasOrm
      * 
      * @return void
      * 
-     * @throws RuntimeException If the specified relationship is not defined in the ORM configuration.
+     * @throws UndefinedOrmException If the specified relationship is not defined in the ORM configuration.
      */
     public static function runOrm(array|string $orm = '*', array &$models = []): void
     {
@@ -105,7 +107,7 @@ trait HasOrm
             $config = $registeredOrm[$with] ?? false;
 
             if (!$config) {
-                throw new RuntimeException("Orm({$with}) does not specified in: " . $model::class);
+                throw new UndefinedOrmException("Orm({$with}) does not specified in: " . $model::class);
             }
 
             $model->handleOrm($models, $config, $with);
@@ -128,7 +130,7 @@ trait HasOrm
      * @param string $name The name of the ORM relationship to load.
      * @return mixed|null The related data if available, or null if not found.
      * 
-     * @throws RuntimeException If lazy loading is disabled for the requested relationship.
+     * @throws OrmDisabledLazyLoadingException If lazy loading is disabled for the requested relationship.
      */
     protected function getFromOrm($name)
     {
@@ -140,7 +142,7 @@ trait HasOrm
         $config = $this->orm()[$name] ?? false;
         if ($config) {
             if (isset($config['lazy']) && !$config['lazy']) {
-                throw new RuntimeException("Lazy load has been disabled for {$name}, " . static::class);
+                throw new OrmDisabledLazyLoadingException("Lazy load has been disabled for {$name}, " . static::class);
             }
 
             $this->handleOrm([$this], $config, $name);
@@ -185,7 +187,7 @@ trait HasOrm
      * @param string $with The name of the relationship to process.
      * @return array The data with attached ORM relationships.
      * 
-     * @throws RuntimeException If an invalid ORM type is specified.
+     * @throws InvalidOrmException If an invalid ORM type is specified.
      */
     private function handleOrm(array $data, array $config, string $with): array
     {
@@ -193,7 +195,7 @@ trait HasOrm
             'many-x' => $this->manyX($data, $config, $with),
             'many' => $this->many($data, $config, $with),
             'one' => $this->one($data, $config, $with),
-            default => throw new RuntimeException("Invalid Orm Type({$config['has']})")
+            default => throw new InvalidOrmException("Invalid Orm Type({$config['has']})")
         };
     }
 
@@ -208,7 +210,7 @@ trait HasOrm
     private function manyX(array $data, array $config, string $with): array
     {
         if (!isset($config['table'])) {
-            throw new RuntimeException("No intermediate table specified for Orm({$with})");
+            throw new InvalidOrmException("No intermediate table specified for Orm({$with})");
         }
 
         $primaryKey = static::$primaryKey;

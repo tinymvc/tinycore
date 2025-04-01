@@ -2,6 +2,7 @@
 
 namespace Spark\Foundation\Http\Middlewares;
 
+use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Utils\Hash;
@@ -51,7 +52,7 @@ class CsrfProtection
             // Validate the CSRF token against the cookie token
             if (empty($token) || !hash_equals(session('csrf_token', ''), $token)) {
                 // Return a 403 Forbidden response if the token is invalid
-                return new Response('Invalid CSRF token', 403);
+                throw new InvalidCsrfTokenException('Invalid CSRF token');
             }
         } else {
             // Check the CSRF token

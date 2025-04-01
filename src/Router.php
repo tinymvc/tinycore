@@ -2,7 +2,9 @@
 
 namespace Spark;
 
-use Exception;
+use Spark\Contracts\RouterContract;
+use Spark\Exceptions\Routing\InvalidNamedRouteException;
+use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -14,7 +16,7 @@ use Spark\Http\Response;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Router
+class Router implements RouterContract
 {
     /**
      * @var array $groupAttributes
@@ -287,14 +289,14 @@ class Router
      * 
      * @return string Returns the route's path.
      * 
-     * @throws Exception if the route does not exist.
+     * @throws InvalidNamedRouteException if the route does not exist.
      */
     public function route(string $name, null|string|array $context = null): string
     {
         // Retrieve the route path by name or throw an exception
         $route = $this->routes[$name]['path'] ?? null;
         if ($route === null) {
-            throw new Exception(sprintf('Route (%s) does not exist.', $name));
+            throw new InvalidNamedRouteException(sprintf('Route (%s) does not exist.', $name));
         }
 
         // Replace dynamic parameters in route path with context, if provided
@@ -357,8 +359,8 @@ class Router
             }
         }
 
-        // Return a 404 response if no route was matched
-        return new Response('Not Found', 404);
+        // Throw an exception for no matching route
+        throw new RouteNotFoundException('No matching route found.');
     }
 
     /**

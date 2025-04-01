@@ -2,6 +2,8 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\TranslatorUtilContract;
+
 /**
  * Class Translator
  * 
@@ -10,7 +12,7 @@ namespace Spark\Utils;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Translator
+class Translator implements TranslatorUtilContract
 {
     /**
      * Holds translated texts.
@@ -63,20 +65,20 @@ class Translator
      * If the prepend flag is true, the language file is added to the beginning
      * of the list. Otherwise, it is added to the end of the list.
      *
-     * @param string $lang_file The path to the language file to add.
+     * @param string $file The path to the language file to add.
      * @param bool $prepend Whether to add the language file to the beginning of the list.
      * @return void
      */
-    public function addLanguageFile(string $lang_file, bool $prepend = false): void
+    public function addLanguageFile(string $file, bool $prepend = false): void
     {
-        $lang_file = dir_path($lang_file);
+        $file = dir_path($file);
 
         if ($prepend) {
-            array_unshift($this->deferredLanguageFiles, $lang_file);
+            array_unshift($this->deferredLanguageFiles, $file);
             return;
         }
 
-        $this->deferredLanguageFiles[] = $lang_file;
+        $this->deferredLanguageFiles[] = $file;
     }
 
     /**

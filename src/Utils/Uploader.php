@@ -2,7 +2,8 @@
 
 namespace Spark\Utils;
 
-use RuntimeException;
+use Spark\Contracts\Utils\UploaderUtilContract;
+use Spark\Exceptions\Utils\UploaderUtilException;
 
 /**
  * Class uploader
@@ -13,7 +14,7 @@ use RuntimeException;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Uploader
+class Uploader implements UploaderUtilContract
 {
     /**
      * Upload directory path.
@@ -100,7 +101,7 @@ class Uploader
      *
      * @param string $uploadDir Upload directory path.
      * @return $this
-     * @throws RuntimeException If the upload directory cannot be created or is not writable.
+     * @throws UploaderUtilException If the upload directory cannot be created or is not writable.
      */
     public function setUploadDir(string $uploadDir): self
     {
@@ -108,12 +109,12 @@ class Uploader
         if (!is_dir($uploadDir)) {
             // Create the upload directory
             if (!mkdir($uploadDir, 0777, true)) {
-                throw new RuntimeException(__('Failed to create upload directory.'));
+                throw new UploaderUtilException(__('Failed to create upload directory.'));
             }
         } elseif (!is_writable($uploadDir)) {
             // Make the upload directory writable
             if (!chmod($uploadDir, 0777)) {
-                throw new RuntimeException(__('Upload directory is not writable.'));
+                throw new UploaderUtilException(__('Upload directory is not writable.'));
             }
         }
 
@@ -154,19 +155,19 @@ class Uploader
      *
      * @param array $file Array containing file details such as name, type, tmp_name, error, and size.
      * @return array|string Returns the file path of the uploaded file or an array of paths if resizing options are applied.
-     * @throws RuntimeException If file validation fails or moving the file fails.
+     * @throws UploaderUtilException If file validation fails or moving the file fails.
      */
     protected function processUpload(array $file): array|string
     {
         // Validate file size
         if (isset($this->maxSize) && $file['size'] > $this->maxSize) {
-            throw new RuntimeException(__('File size exceeds the maximum limit.'));
+            throw new UploaderUtilException(__('File size exceeds the maximum limit.'));
         }
 
         // Validate file extension
         $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
         if (!empty($this->extensions) && !in_array(strtolower($extension), $this->extensions)) {
-            throw new RuntimeException(__('Invalid file extension.'));
+            throw new UploaderUtilException(__('Invalid file extension.'));
         }
 
         // Create a unique file name
@@ -175,7 +176,7 @@ class Uploader
 
         // Move the uploaded file to the destination
         if (!move_uploaded_file($file['tmp_name'], $destination)) {
-            throw new RuntimeException(__('Failed to move uploaded file.'));
+            throw new UploaderUtilException(__('Failed to move uploaded file.'));
         }
 
         // Compress, resize, and bulk resize image if options are set and the file is an image

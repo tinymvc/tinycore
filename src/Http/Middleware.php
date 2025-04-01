@@ -2,8 +2,9 @@
 
 namespace Spark\Http;
 
-use Exception;
 use Spark\Container;
+use Spark\Contracts\Http\MiddlewareContract;
+use Spark\Http\Exceptions\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
 use Spark\Http\Response;
 
@@ -12,7 +13,7 @@ use Spark\Http\Response;
  * 
  * Manages the registration and execution of middleware in a stack-based approach.
  */
-class Middleware
+class Middleware implements MiddlewareContract
 {
     /**
      * Constructor for the middleware class.
@@ -84,7 +85,7 @@ class Middleware
         foreach ($this->stack as $abstract) {
             // If the middleware key doesn't exist in the registered list, throw an exception.
             if (!isset($this->registeredMiddlewares[$abstract])) {
-                throw new Exception("Middleware '{$abstract}' not found.");
+                throw new MiddlewareNotFoundExceptions("Middleware '{$abstract}' not found.");
             }
 
             // Resolve the middleware class from the container.

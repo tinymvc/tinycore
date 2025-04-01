@@ -2,6 +2,7 @@
 
 namespace Spark\Http;
 
+use Spark\Contracts\Http\RequestContract;
 use Spark\Http\Traits\ValidateRequest;
 
 /**
@@ -12,7 +13,7 @@ use Spark\Http\Traits\ValidateRequest;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Request
+class Request implements RequestContract
 {
     /**
      * Use the Validator trait to validate request data. If 
@@ -206,11 +207,11 @@ class Request
      * Retrieves a route parameter value by key.
      *
      * @param string $key The key of the route parameter.
-     * @param mixed $default The default value to return if the key does not exist.
+     * @param ?string $default The default value to return if the key does not exist.
      *
-     * @return mixed The value associated with the given key, or the default value if the key does not exist.
+     * @return ?string The value associated with the given key, or the default value if the key does not exist.
      */
-    public function getRouteParam(string $key, $default = null): mixed
+    public function getRouteParam(string $key, ?string $default = null): ?string
     {
         return $this->routeParams[$key] ?? $default;
     }
@@ -338,9 +339,9 @@ class Request
      * 
      * @param string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return mixed The parameter value or default.
+     * @return ?string The parameter value or default.
      */
-    public function query(string $key, $default = null): mixed
+    public function query(string $key, $default = null): ?string
     {
         return $this->queryParams[$key] ?? $default;
     }

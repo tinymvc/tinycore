@@ -2,8 +2,9 @@
 
 namespace Spark\Database;
 
-use Exception;
 use PDO;
+use Spark\Contracts\Database\ModelContract;
+use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
 
 /**
@@ -14,7 +15,7 @@ use Spark\Database\QueryBuilder;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-abstract class Model
+abstract class Model implements ModelContract
 {
     /**
      * @var string The table name associated with this model.
@@ -177,7 +178,7 @@ abstract class Model
         $guarded = $this->guarded ?? [];
 
         if (!isset($this->fillable) && !isset($this->guarded)) {
-            throw new Exception('Either fillable or guarded must be defined for the modal: ' . static::class);
+            throw new InvalidModelFillableException('Either fillable or guarded must be defined for the modal: ' . static::class);
         }
 
         foreach ($this->attributes as $key => $value) {

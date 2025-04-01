@@ -2,6 +2,7 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\TracerUtilContract;
 use Throwable;
 
 /**
@@ -12,7 +13,7 @@ use Throwable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Tracer
+class Tracer implements TracerUtilContract
 {
     /**
      * tracer constructor.
@@ -92,7 +93,7 @@ class Tracer
      * @param int $line Line number of the error.
      * @param array $trace Optional stack trace array.
      */
-    private function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
+    public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
         // Clear any previous output
         if (ob_get_length()) {

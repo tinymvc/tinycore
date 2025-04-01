@@ -2,9 +2,10 @@
 
 namespace Spark\Database;
 
-use Exception;
 use PDO;
 use PDOStatement;
+use Spark\Contracts\Database\DBContract;
+use Spark\Database\Exceptions\InvalidDatabaseConfigException;
 use Spark\Foundation\Application;
 
 /**
@@ -14,7 +15,7 @@ use Spark\Foundation\Application;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class DB
+class DB implements DBContract
 {
     /**
      * Store the PDO connection of database.
@@ -91,13 +92,13 @@ class DB
     /**
      * Executes a raw SQL query with optional arguments.
      *
-     * @param string $statement The SQL query.
+     * @param string $query The SQL query.
      * @param mixed ...$args Additional arguments for query execution.
      * @return PDOStatement|false The resulting statement or false on failure.
      */
-    public function query(string $statement, ...$args): PDOStatement|false
+    public function query(string $query, ...$args): false|PDOStatement
     {
-        return $this->getPdo()->query($statement, ...$args);
+        return $this->getPdo()->query($query, ...$args);
     }
 
     /**
@@ -107,7 +108,7 @@ class DB
      * @param array $options Options for statement preparation.
      * @return PDOStatement|false The prepared statement or false on failure.
      */
-    public function prepare(string $statement, array $options = []): PDOStatement|false
+    public function prepare(string $statement, array $options = []): false|PDOStatement
     {
         return $this->getPdo()->prepare($statement, $options);
     }
@@ -152,7 +153,7 @@ class DB
 
         // Check if config is empty.
         if (empty($this->config)) {
-            throw new Exception('Database configuration is empty.');
+            throw new InvalidDatabaseConfigException('Database configuration is empty.');
         }
 
         // Check if config has a default DSN else. create a new one. 

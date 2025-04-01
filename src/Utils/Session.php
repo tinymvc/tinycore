@@ -2,6 +2,8 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\SessionUtilContract;
+
 /**
  * Class Session
  * 
@@ -11,7 +13,7 @@ namespace Spark\Utils;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Session
+class Session implements SessionUtilContract
 {
     /**
      * Constructor for the session class.
@@ -34,7 +36,7 @@ class Session
      * @param mixed $default Optional default value to return if the key does not exist.
      * @return mixed The session value if it exists, or the default value.
      */
-    public function get(string $key, $default = null)
+    public function get(string $key, $default = null): mixed
     {
         return $_SESSION[$key] ?? $default;
     }
@@ -123,7 +125,7 @@ class Session
      * @param mixed $default Default value if key does not exist.
      * @return mixed The flash message value or default if not found.
      */
-    public function getFlash(string $key, $default = null)
+    public function getFlash(string $key, $default = null): mixed
     {
         $value = $_SESSION['_flash'][$key] ?? $default;
         unset($_SESSION['_flash'][$key]);

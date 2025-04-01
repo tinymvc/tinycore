@@ -2,7 +2,6 @@
 
 namespace Spark;
 
-use Exception;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionNamedType;
@@ -10,6 +9,12 @@ use ReflectionParameter;
 use ReflectionUnionType;
 use ReflectionMethod;
 use Reflector;
+use Spark\Contracts\ContainerContract;
+use Spark\Exceptions\Container\BuildServiceException;
+use Spark\Exceptions\Container\ClassDoesNotExistsException;
+use Spark\Exceptions\Container\FailedToResolveParameterException;
+use Spark\Exceptions\Container\InvalidMethodCallingFormatException;
+use Spark\Exceptions\Container\MethodDoesNotExistsException;
 
 /**
  * Class Container
@@ -18,7 +23,7 @@ use Reflector;
  *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Container
+class Container implements ContainerContract
 {
     /**
      * Registered bindings.
@@ -160,12 +165,12 @@ class Container
      * @param array|string|callable $abstract The class name, method name or a closure.
      * @param array $parameters The parameters to pass to the method or closure.
      *
-     * @throws Exception If the class does not exist, the method does not exist, or
+     * @throws MethodDoesNotExistsException If the class does not exist, the method does not exist, or
      *                   the method parameters cannot be resolved.
      *
      * @return mixed The result of calling the method or closure.
      */
-    public function call(array|string|callable $abstract, array $parameters = [])
+    public function call(array|string|callable $abstract, array $parameters = []): mixed
     {
         if (is_callable($abstract)) {
             // If it's a closure or callable, just call it with dependencies
@@ -182,7 +187,7 @@ class Container
         } elseif (is_array($abstract)) {
             [$class, $method] = $abstract;
         } else {
-            throw new Exception("Invalid call format. Expected 'ClassName@methodName' or '[ClassName, methodName]'.");
+            throw new InvalidMethodCallingFormatException("Invalid call format. Expected 'ClassName@methodName' or '[ClassName, methodName]'.");
         }
 
         // Resolve the class instance
@@ -190,7 +195,7 @@ class Container
 
         // Check if the method exists
         if (!method_exists($instance, $method)) {
-            throw new Exception("Method {$method} does not exist in class {$class}.");
+            throw new MethodDoesNotExistsException("Method {$method} does not exist in class {$class}.");
         }
 
         // Use reflection to resolve method parameters
@@ -287,7 +292,7 @@ class Container
      * @param string $abstract The abstract name of the class or interface.
      * @param array $seen An array of aliases that have been seen during resolution.
      *
-     * @throws Exception If a circular alias is detected.
+     * @throws InvalidAliasException If a circular alias is detected.
      *
      * @return string The concrete class name.
      */
@@ -295,7 +300,7 @@ class Container
     {
         if (isset($this->aliases[$abstract])) {
             if (in_array($abstract, $seen, true)) {
-                throw new Exception("Circular alias detected for {$abstract}.");
+                throw new InvalidAliasException("Circular alias detected for {$abstract}.");
             }
 
             return $this->resolveAlias($this->aliases[$abstract], [...$seen, $abstract]);
@@ -379,7 +384,7 @@ class Container
      * 
      * @return mixed The constructed instance.
      *
-     * @throws Exception If the class does not exist or is not instantiable.
+     * @throws BuildServiceException If the class does not exist or is not instantiable.
      */
     private function build(string|callable $concrete): mixed
     {
@@ -389,7 +394,7 @@ class Container
 
         if (!isset($this->reflectionCache[$concrete])) {
             if (!class_exists($concrete)) {
-                throw new Exception("Class {$concrete} does not exist.");
+                throw new ClassDoesNotExistsException("Class {$concrete} does not exist.");
             }
 
             // Cache the reflection class
@@ -399,7 +404,7 @@ class Container
         $reflection = $this->reflectionCache[$concrete];
 
         if (!$reflection->isInstantiable()) {
-            throw new Exception("Class {$concrete} is not instantiable.");
+            throw new BuildServiceException("Class {$concrete} is not instantiable.");
         }
 
         $constructor = $reflection->getConstructor();
@@ -427,14 +432,14 @@ class Container
      *
      * @return mixed The resolved value.
      *
-     * @throws Exception If the parameter could not be resolved.
+     * @throws FailedToResolveParameterException If the parameter could not be resolved.
      */
     private function resolveParameter(ReflectionParameter $param): mixed
     {
         $type = $param->getType();
 
         if (!$type) {
-            throw new Exception("Unable to resolve parameter {$param->getName()}.");
+            throw new FailedToResolveParameterException("Unable to resolve parameter {$param->getName()}.");
         }
 
         if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
@@ -454,6 +459,6 @@ class Container
             return $param->getDefaultValue();
         }
 
-        throw new Exception("Unable to resolve parameter {$param->getName()}.");
+        throw new FailedToResolveParameterException("Unable to resolve parameter {$param->getName()}.");
     }
 }

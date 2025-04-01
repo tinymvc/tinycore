@@ -2,8 +2,8 @@
 
 namespace Spark\Utils;
 
-use Exception;
-use RuntimeException;
+use Spark\Contracts\Utils\PingUtilContract;
+use Spark\Exceptions\Utils\PingUtilException;
 
 /**
  * Class Ping
@@ -14,7 +14,7 @@ use RuntimeException;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Ping
+class Ping implements PingUtilContract
 {
     /**
      * Constructor for the ping class.
@@ -36,13 +36,13 @@ class Ping
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
      * @return array The response data, including body, status code, final URL, and content length.
-     * @throws RuntimeException If cURL initialization fails.
+     * @throws PingUtilException If cURL initialization fails.
      */
     public function send(string $url, array $params = []): array
     {
         $curl = curl_init();
         if ($curl === false) {
-            throw new RuntimeException('Failed to initialize cURL.');
+            throw new PingUtilException('Failed to initialize cURL.');
         }
 
         // Default cURL options for the request
@@ -195,7 +195,7 @@ class Ping
      * @param string $name The HTTP method name.
      * @param array $arguments The arguments for the method.
      * @return array The response array from the send method.
-     * @throws Exception If the HTTP method is not supported.
+     * @throws PingUtilException If the HTTP method is not supported.
      */
     public function __call(string $name, array $arguments): array
     {
@@ -205,7 +205,7 @@ class Ping
             return $this->send(...$arguments);
         }
 
-        throw new Exception("Undefined Method: {$name}");
+        throw new PingUtilException("Undefined Method: {$name}");
     }
 
     /**

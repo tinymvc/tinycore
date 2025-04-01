@@ -2,6 +2,7 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Utils\AuthUtilContract;
 use Spark\Database\Model;
 use Throwable;
 
@@ -14,7 +15,7 @@ use Throwable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Auth
+class Auth implements AuthUtilContract
 {
     /**
      * @var false|Model The currently logged in user.

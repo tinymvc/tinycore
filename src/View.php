@@ -2,7 +2,8 @@
 
 namespace Spark;
 
-use Exception;
+use Spark\Contracts\ViewContract;
+use Spark\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Utils\Session;
@@ -14,7 +15,7 @@ use Spark\Utils\Session;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class View
+class View implements ViewContract
 {
     /**
      * Path to the directory containing template files
@@ -47,7 +48,7 @@ class View
         $path ??= config('views_dir');
 
         if ($path === null) {
-            throw new Exception('Views directory path is not set.');
+            throw new UndefinedViewDirectoryPathException('Views directory path is not set.');
         }
 
         $this->mergeContext([
@@ -93,7 +94,7 @@ class View
      * @param mixed $default The default value to return if $key is not set in the context.
      * @return mixed Returns the value associated with the key, or the default value if the key is not set.
      */
-    public function get(string $key, $default = null)
+    public function get(string $key, $default = null): mixed
     {
         return $this->context[$key] ?? $default;
     }
