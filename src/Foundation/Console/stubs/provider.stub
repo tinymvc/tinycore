@@ -1,0 +1,18 @@
+<?php
+
+namespace {{ namespace }};
+
+use Spark\Container;
+
+class {{ class }}
+{
+    public function register(Container $container)
+    {
+        // i am registering services
+    }
+
+    public function boot()
+    {
+        // i am bootstrapping services
+    }
+}

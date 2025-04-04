@@ -1,0 +1,12 @@
+<?php
+
+namespace {{ namespace }};
+
+use Spark\Database\Model;
+
+class {{ class }} extends Model
+{
+    public static string $table = '{{ table }}';
+
+    protected array $guarded = [];
+}

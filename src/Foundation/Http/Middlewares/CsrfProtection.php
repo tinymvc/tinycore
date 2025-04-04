@@ -3,9 +3,9 @@
 namespace Spark\Foundation\Http\Middlewares;
 
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
+use Spark\Hash;
 use Spark\Http\Request;
 use Spark\Http\Response;
-use Spark\Utils\Hash;
 use Throwable;
 
 /**

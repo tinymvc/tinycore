@@ -2,31 +2,36 @@
 
 namespace Spark\Foundation;
 
+use Spark\Console\Commands;
+use Spark\Console\Console;
 use Spark\Container;
 use Spark\Contracts\Foundation\ApplicationContract;
-use Spark\Queue\Queue;
-use Spark\Router;
-use Spark\View;
+use Spark\Database\DB;
+use Spark\Database\QueryBuilder;
+use Spark\EventDispatcher;
+use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
+use Spark\Hash;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
-use Spark\Database\DB;
-use Spark\Database\QueryBuilder;
+use Spark\Queue\Queue;
+use Spark\Router;
+use Spark\Translator;
 use Spark\Utils\Cache;
 use Spark\Utils\Collect;
-use Spark\Utils\EventDispatcher;
-use Spark\Utils\Gate;
-use Spark\Utils\Hash;
+use Spark\Http\Gate;
 use Spark\Utils\Image;
+use Spark\Http\InputSanitizer;
+use Spark\Http\InputValidator;
+use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
 use Spark\Utils\Ping;
-use Spark\Utils\Sanitizer;
-use Spark\Utils\Session;
+use Spark\Http\Session;
 use Spark\Utils\Tracer;
-use Spark\Utils\Translator;
 use Spark\Utils\Uploader;
-use Spark\Utils\Validator;
 use Spark\Utils\Vite;
+use Spark\View;
+use Throwable;
 
 /**
  * The Application class is the main entry point to the framework.
@@ -67,7 +72,7 @@ class Application implements ApplicationContract
 
         // Initialize the tracer if debug mode is enabled
         if (isset($env['debug']) && $env['debug']) {
-            Tracer::trace();
+            Tracer::start();
         }
 
         // Initialize the dependency injection container
@@ -92,12 +97,13 @@ class Application implements ApplicationContract
         $this->container->bind(QueryBuilder::class);
         $this->container->bind(Cache::class);
         $this->container->bind(Ping::class);
-        $this->container->bind(Validator::class);
-        $this->container->bind(Sanitizer::class);
+        $this->container->bind(InputValidator::class);
+        $this->container->bind(InputSanitizer::class);
         $this->container->bind(Uploader::class);
         $this->container->bind(Image::class);
         $this->container->bind(Paginator::class);
         $this->container->bind(Collect::class);
+        $this->container->bind(Mail::class);
     }
 
     /**
@@ -261,6 +267,22 @@ class Application implements ApplicationContract
     }
 
     /**
+     * Applies a callback to the application's command manager.
+     *
+     * This method takes a callback function, which receives the command
+     * manager from the dependency injection container, allowing custom
+     * command logic to be executed.
+     *
+     * @param callable $callback The callback to be applied to the command manager.
+     * @return self
+     */
+    public function withCommands(callable $callback): self
+    {
+        $callback($this->container->get(Commands::class));
+        return $this;
+    }
+
+    /**
      * Applies a middleware to the application.
      *
      * This method takes a callback function which receives the middleware
@@ -287,18 +309,46 @@ class Application implements ApplicationContract
      */
     public function run(): void
     {
-        // Bootstraps the application
+        try {
+            $this->container->bootServiceProviders();
+
+            $this->container
+                ->get(Router::class)
+                ->dispatch(
+                    $this->container,
+                    $this->container->get(Middleware::class),
+                    $this->container->get(Request::class),
+                )
+                ->send();
+        } catch (RouteNotFoundException) {
+            abort(error: 404, message: 'Not found');
+        } catch (AuthorizationException) {
+            abort(error: 403, message: 'Forbidden');
+        } catch (InvalidCsrfTokenException) {
+            abort(error: 419, message: 'Page Expired');
+        } catch (Throwable $e) {
+            if (!config('debug')) {
+                abort(error: 500, message: 'Internal Server Error');
+            }
+
+            Tracer::$instance->handleException($e);
+        }
+    }
+
+    /**
+     * Runs the command line interface.
+     *
+     * Bootstraps the application by registering providers and calling the `boot` method
+     * on each provider. Then, it runs the command line interface.
+     *
+     * @return void
+     */
+    public function handleCommand(): void
+    {
         $this->container->bootServiceProviders();
 
-        // Dispatches the request and sends the response
-        $this->container
-            ->get(Router::class)
-            ->dispatch(
-                $this->container,
-                $this->container->get(Middleware::class),
-                $this->container->get(Request::class),
-            )
-            ->send();
+        $console = $this->get(Console::class);
+        $console->run();
     }
 
     /**

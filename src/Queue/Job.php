@@ -5,8 +5,8 @@ namespace Spark\Queue;
 use Closure;
 use DateTime;
 use Spark\Contracts\Queue\JobContract;
+use Spark\EventDispatcher;
 use Spark\Foundation\Application;
-use Spark\Utils\EventDispatcher;
 use Throwable;
 
 /**

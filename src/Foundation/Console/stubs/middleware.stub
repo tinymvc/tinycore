@@ -1,0 +1,13 @@
+<?php
+
+namespace {{ namespace }};
+
+use Spark\Http\Request;
+
+class {{ class }}
+{
+    public function handle(Request $request)
+    {
+        // something
+    }
+}

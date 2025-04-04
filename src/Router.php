@@ -36,6 +36,16 @@ class Router implements RouterContract
     }
 
     /**
+     * Retrieves the array of routes registered with the router.
+     *
+     * @return array
+     */
+    public function getRoutes(): array
+    {
+        return $this->routes;
+    }
+
+    /**
      * Add a GET route to the router.
      * 
      * @param string $path The path for the GET route.

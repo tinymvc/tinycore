@@ -59,6 +59,18 @@ class DB implements DBContract
     }
 
     /**
+     * Retrieves the database driver name.
+     *
+     * If the driver is not specified in the configuration, it defaults to 'mysql'.
+     *
+     * @return string The database driver name.
+     */
+    public function getDriver(): string
+    {
+        return $this->config['driver'] ?? 'mysql';
+    }
+
+    /**
      * Resets the database configuration.
      *
      * This method resets the database configuration with the given configuration
@@ -186,7 +198,7 @@ class DB implements DBContract
      */
     private function buildDsn(): string
     {
-        return match ($this->config['driver']) {
+        return match ($this->getDriver()) {
             // create a sqlite data source name, sqlite.db filepath.
             'sqlite' => sprintf('sqlite:%s', $this->config['file']),
 

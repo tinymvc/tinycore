@@ -648,4 +648,15 @@ class Request implements RequestContract
     {
         return $this->isAjax() && $this->accept('application/json') && $this->header('x-fireline-agent');
     }
+
+    /**
+     * Checks if the request is an AJAX request, accepts JSON or if the path contains '/api/'.
+     * 
+     * @return bool True if the request is an AJAX request, accepts JSON or contains '/api/', false otherwise.
+     */
+    public function expectsJson(): bool
+    {
+        return $this->accept('application/json') &&
+            ($this->isAjax() || strpos($this->getPath(), '/api/') === 0);
+    }
 }

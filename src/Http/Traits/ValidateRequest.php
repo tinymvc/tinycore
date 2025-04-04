@@ -3,7 +3,7 @@
 namespace Spark\Http\Traits;
 
 use Spark\Foundation\Application;
-use Spark\Utils\Validator;
+use Spark\Http\InputValidator;
 
 /**
  * Trait for the validation helper.
@@ -43,7 +43,7 @@ trait ValidateRequest
     public function validate(array $rules): array
     {
         $attributes = $this->all(array_keys($rules)); // Get the attributes from the current request
-        $validator = Application::$app->get(Validator::class); // Get the validator instance
+        $validator = Application::$app->get(InputValidator::class); // Get the validator instance
 
         if (!$validator->validate($rules, $attributes)) { // Validate the attributes
             $errors = $validator->getErrors(); // Get the errors as an array
@@ -61,7 +61,7 @@ trait ValidateRequest
                     ->json(['status' => 'error', 'message' => $errorHtml])
                     ->send();
                 exit;
-            } elseif ($this->accept('application/json') && ($this->isAjax() || strpos($this->getPath(), '/api/') === 0)) {
+            } elseif ($this->expectsJson()) {
                 // Return the errors as a JSON response
                 response()
                     ->json(['message' => __('Validation failed'), 'errors' => $errors])

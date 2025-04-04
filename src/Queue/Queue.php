@@ -5,10 +5,10 @@ namespace Spark\Queue;
 use DateTime;
 use Laravel\SerializableClosure\SerializableClosure;
 use Spark\Contracts\Queue\QueueContract;
+use Spark\EventDispatcher;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
-use Spark\Utils\EventDispatcher;
 
 /**
  * A job queue that stores the jobs in a JSON file.

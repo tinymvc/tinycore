@@ -2,7 +2,9 @@
 
 namespace Spark\Utils;
 
+use Spark\Console\Prompt;
 use Spark\Contracts\Utils\TracerUtilContract;
+use Spark\View;
 use Throwable;
 
 /**
@@ -15,6 +17,9 @@ use Throwable;
  */
 class Tracer implements TracerUtilContract
 {
+    /** @var Tracer $instance */
+    public static self $instance;
+
     /**
      * tracer constructor.
      * 
@@ -25,6 +30,9 @@ class Tracer implements TracerUtilContract
      */
     public function __construct()
     {
+        // Set the tracer instance as a singleton
+        self::$instance = $this;
+
         // Set custom error, exception, and shutdown handlers.
         set_error_handler([$this, 'handleError']);
         set_exception_handler([$this, 'handleException']);
@@ -36,7 +44,7 @@ class Tracer implements TracerUtilContract
      * 
      * @return void
      */
-    public static function trace(): void
+    public static function start(): void
     {
         new self();
     }
@@ -95,6 +103,30 @@ class Tracer implements TracerUtilContract
      */
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
+        if (php_sapi_name() === 'cli') {
+            // Get the prompt instance
+            $prompt = get(Prompt::class);
+
+            // Format and output the error message
+            $prompt->message("[$type] $message", 'danger');
+            $prompt->message("File: $file(<danger>$line</danger>)");
+
+            if (!empty($trace)) {
+                $prompt->newline();
+                $prompt->message('Trace:', 'info');
+
+                // Format the trace output
+                foreach ($trace as $index => $frame) {
+                    $frameFile = $frame['file'] ?? '[internal function]';
+                    $frameLine = $frame['line'] ?? 'n/a';
+                    $frameFunction = $frame['function'] ?? 'unknown';
+                    $prompt->message("#$index $frameFile(<danger>$frameLine</danger>): <warning>$frameFunction()</warning>");
+                }
+            }
+
+            exit(1);
+        }
+
         // Clear any previous output
         if (ob_get_length()) {
             ob_end_clean();
@@ -106,71 +138,15 @@ class Tracer implements TracerUtilContract
         }
 
         // Detailed error output with stack trace if debug mode is enabled.
-        echo <<<HTML
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>{$type}: {$message}</title>
-                <style>* {margin: 0;padding: 0;}body { font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; }.container { padding: 20px; }.error-box { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 20px; }.trace-box { background-color: #f1f1f1; padding: 10px; border: 1px solid #ccc; margin-top: 10px; margin-top: 20px; }.trace-box pre { margin: 0; }h1 { font-size: 24px; margin: 0 0 10px; }p { margin: 0 0 10px; }.file { font-weight: bold; }.line { font-weight: bold; color: #d9534f; }</style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="error-box">
-                        <h1>{$type}: {$message}</h1>
-                        <p><span class="file">{$file}</span> at line <span class="line">{$line}</span></p>
-                    </div>
-                    {$this->parseTraceHtml($trace)}
-                </div>
-            </body>
-            </html>
-        HTML;
+        $view = get(View::class);
+        $view->setPath(__DIR__ . '/../Foundation/resources/views');
+
+        echo $view->render(
+            'tracer',
+            compact('type', 'message', 'file', 'line', 'trace')
+        );
 
         // End the script to prevent further execution
         exit;
-    }
-
-    /**
-     * Prase/Formats the stack trace into an HTML format for display.
-     * 
-     * @param array $trace Array of stack trace details.
-     * @return string Formatted HTML representation of the trace.
-     */
-    private function parseTraceHtml(array $trace): string
-    {
-        // Holds the error trace html markup.
-        $traceHtml = '';
-
-        // Convert to a error trace (string) from a exception array.
-        foreach ($trace as $index => $frame) {
-            $file = $frame['file'] ?? '[internal function]';
-            $line = $frame['line'] ?? '';
-            $function = $frame['function'] ?? '';
-            $class = $frame['class'] ?? '';
-            $type = $frame['type'] ?? '';
-            $args = isset($frame['args']) ? implode(
-                ', ',
-                array_map(
-                    fn($arg) => is_object($arg) ? get_class($arg) : gettype($arg),
-                    $frame['args']
-                )
-            ) : '';
-            $traceHtml .= "#{$index} {$file}({$line}): {$class}{$type}{$function}({$args})\n";
-        }
-
-        // Add a html wrapper for all traces item.
-        if (!empty($traceHtml)) {
-            $traceHtml = htmlspecialchars($traceHtml, ENT_QUOTES, 'UTF-8');
-            $traceHtml = <<<HTML
-                <div class="trace-box">
-                    <h2>Stack Trace</h2>
-                    <pre>{$traceHtml}</pre>
-                </div>
-            HTML;
-        }
-
-        // returns error trace html.
-        return $traceHtml;
     }
 }

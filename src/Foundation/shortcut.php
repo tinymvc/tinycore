@@ -1,24 +1,26 @@
 <?php
 
+use Spark\Console\Commands;
 use Spark\Container;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
+use Spark\EventDispatcher;
 use Spark\Foundation\Application;
+use Spark\Http\Auth;
+use Spark\Http\Gate;
+use Spark\Http\InputSanitizer;
+use Spark\Http\InputValidator;
 use Spark\Http\Request;
 use Spark\Http\Response;
+use Spark\Http\Session;
 use Spark\Queue\Job;
 use Spark\Router;
-use Spark\Utils\EventDispatcher;
-use Spark\Utils\Gate;
-use Spark\View;
-use Spark\Utils\Translator;
-use Spark\Utils\Auth;
+use Spark\Translator;
 use Spark\Utils\Cache;
 use Spark\Utils\Collect;
-use Spark\Utils\Session;
-use Spark\Utils\Sanitizer;
-use Spark\Utils\Validator;
+use Spark\Utils\Mail;
 use Spark\Utils\Vite;
+use Spark\View;
 
 /**
  * Retrieve the application instance.
@@ -420,7 +422,7 @@ function upload_dir(string $path = '/'): string
  */
 function dir_path(string $path): string
 {
-    return rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
+    return rtrim(str_replace(['//', '\\\\', '/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
 }
 
 // Helper/Utils Shortcut
@@ -656,33 +658,33 @@ function event(null|array|string $eventName = null, ...$args): EventDispatcher
 /**
  * Create a new Job instance.
  *
- * This function creates a new Job instance with the given callback and optional arguments.
- * The callback is the function that will be executed when the job is processed.
+ * This function creates a new Job instance with the given closure and optional arguments.
+ * The closure is the function that will be executed when the job is processed.
  *
- * @param callable $callback The callback function to be executed when the job is processed.
- * @param mixed ...$args Additional arguments to pass to the callback function.
+ * @param Closure $closure The closure function to be executed when the job is processed.
+ * @param mixed ...$args Additional arguments to pass to the closure function.
  * @return Job The new Job instance.
  */
-function job(callable $callback, ...$args): Job
+function job(Closure $closure, ...$args): Job
 {
-    return new Job($callback, ...$args);
+    return new Job($closure, ...$args);
 }
 
 /**
- * Dispatch a job with the given callback.
+ * Dispatch a job with the given closure.
  *
- * This function creates a new job instance using the provided callback
+ * This function creates a new job instance using the provided closure
  * and any additional arguments. The job is then dispatched to the queue
  * for processing.
  *
- * @param callable $callback The callback function to be executed by the job.
- * @param mixed ...$args Additional arguments to pass to the callback function.
+ * @param Closure $closure The closure function to be executed by the job.
+ * @param mixed ...$args Additional arguments to pass to the closure function.
  * @return void
  */
-function dispatch(callable $callback, ...$args): void
+function dispatch(Closure $closure, ...$args): void
 {
     // Create a new job instance.
-    $job = job($callback, ...$args);
+    $job = job($closure, ...$args);
 
     // Dispatch the job to the queue.
     $job->dispatch();
@@ -821,7 +823,7 @@ function vite(string|array $config = []): Vite
  * it is safe for further processing.
  *
  * @param array $filter An optional array of filters to apply to the input data.
- * @return Sanitizer|array An instance of the sanitizer or an array of input data.
+ * @return InputSanitizer|array An instance of the sanitizer or an array of input data.
  */
 function input(array $filter = [], bool $sanitizer = true): mixed
 {
@@ -831,7 +833,7 @@ function input(array $filter = [], bool $sanitizer = true): mixed
         return $data;
     }
 
-    return get(Sanitizer::class)
+    return get(InputSanitizer::class)
         ->setData($data);
 }
 
@@ -840,18 +842,18 @@ function input(array $filter = [], bool $sanitizer = true): mixed
  *
  * @param array $rules An array of validation rules to apply.
  * @param array|null $data An optional array of data to validate.
- * @return Sanitizer Returns a sanitizer object if validation passes.
+ * @return InputSanitizer Returns a sanitizer object if validation passes.
  * @throws Exception Throws an exception if validation fails, with the first error message or a default message.
  */
-function validator(array $rules, ?array $data = null): Sanitizer
+function validator(array $rules, ?array $data = null): InputSanitizer
 {
     $data ??= request()->all();
 
-    $validator = get(Validator::class);
+    $validator = get(InputValidator::class);
     $result = $validator->validate($rules, $data);
 
     if ($result) {
-        return get(Sanitizer::class)
+        return get(InputSanitizer::class)
             ->setData($result);
     }
 
@@ -939,4 +941,144 @@ function errors(null|array|string $field = null): mixed
 function old(string $field, string $default = null): ?string
 {
     return request()->old($field, $default);
+}
+
+/**
+ * Send an email using the Mail utility class.
+ *
+ * This function sends an email using the Mail utility class. The parameters
+ * are passed directly to the Mail utility class methods.
+ *
+ * @param null|string $to The recipient of the email
+ * @param null|string $subject The subject of the email
+ * @param null|string $content The content of the email
+ * @param null|bool $isHtml Whether the content is HTML or plain text
+ * @param null|string $template The template to use for the email
+ * @param null|array $body The context to pass to the template
+ * @param null|string $form The email address of the sender
+ * @param null|string $reply The email address of the reply to
+ * @return Mail The instance of the Mail utility class
+ */
+function mailer(?string $to = null, ?string $subject = null, ?string $body = null, ?bool $isHtml = null, ?string $template = null, ?array $context = null, ?string $from = null, ?string $reply = null): Mail
+{
+    $mailer = get(Mail::class);
+
+    if (isset($template)) {
+        // Merge the context with the other parameters
+        $context = array_merge((array) $context, compact('subject', 'to', 'from', 'reply'));
+        // Set the email body content using the template
+        $mailer->view($template, $context);
+    }
+
+    if (isset($body)) {
+        // Set the email body content directly
+        $mailer->body($body);
+    }
+
+    if (isset($isHtml)) {
+        // Set whether the content is HTML or plain text
+        $mailer->isHTML($isHtml);
+    }
+
+    if (isset($subject)) {
+        // Set the subject of the email
+        $mailer->subject($subject);
+    }
+
+    if (isset($to)) {
+        // Set the recipient of the email
+        $mailer->to($to);
+    }
+
+    if (isset($form)) {
+        // Set the email address of the sender
+        $mailer->mailer($form);
+    }
+
+    if (isset($reply)) {
+        // Set the email address of the reply to
+        $mailer->reply($reply);
+    }
+
+    return $mailer;
+}
+
+/**
+ * Abort the current request with a given HTTP status code.
+ *
+ * @param string|int $error The error name of the error view or the HTTP status code.
+ * @param int|null $code The HTTP status code.
+ *
+ * @return void
+ */
+function abort(string|int $error, ?int $code = null, ?string $message = null): void
+{
+    if ($code === null && is_int($error)) {
+        // If the error is an integer, use it as the HTTP status code
+        $code = $error;
+    }
+
+    $code ??= 500; // Default to 500 (Internal Server Error)
+
+    // Clear the output buffer
+    if (ob_get_length() > 0) {
+        ob_end_clean();
+    }
+
+    // If the request is an AJAX request or the path starts with /api/, 
+    // return a JSON response
+    if (request()->expectsJson()) {
+        // If the request is an AJAX request, return a JSON response
+        response()
+            ->json(['message' => $message ?? __e('Internal Server Error'), 'code' => $code], $code)
+            ->send();
+
+        exit; // Exit the script
+    }
+
+    // Get the view service
+    $view = get(View::class);
+
+    // Set the view path to the errors folder
+    if (!$view->templateExists("errors/$error")) {
+        $view->setPath(__DIR__ . '/resources/views');
+    }
+
+    // Set the error template
+    $errorTemplate = "errors/$error";
+    if (!$view->templateExists($errorTemplate)) {
+        $errorTemplate = 'errors/error';
+    }
+
+    // Render the error view
+    $viewHtml = $view->render($errorTemplate, compact('code', 'message'));
+
+    // Send the response with the error view
+    response($viewHtml, $code)
+        ->send();
+
+    exit; // Exit the script
+}
+
+/**
+ * Retrieves the Commands instance and optionally adds a new command.
+ *
+ * This function fetches the Commands instance and, if arguments are provided,
+ * adds a new command using the provided arguments.
+ *
+ * @param mixed ...$args Optional. Parameters for adding a new command.
+ * @return Commands The Commands instance.
+ */
+function command(...$args): Commands
+{
+    // Retrieve the Commands instance
+    $command = get(Commands::class);
+
+    // If arguments are provided, add a new command
+    if (!empty($args)) {
+        $command->addCommand(...$args);
+    }
+
+    // Return the Commands instance
+    return $command;
 }

@@ -6,7 +6,7 @@ use Spark\Contracts\ViewContract;
 use Spark\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
-use Spark\Utils\Session;
+use Spark\Http\Session;
 
 /**
  * Class View
@@ -283,5 +283,16 @@ class View implements ViewContract
         ob_start();
         include dir_path($templatePath);
         return ob_get_clean();
+    }
+
+    /**
+     * Checks if the specified template exists in the template root directory.
+     *
+     * @param string $template The template file name without extension.
+     * @return bool True if the template file exists, otherwise false.
+     */
+    public function templateExists(string $template): bool
+    {
+        return file_exists($this->path . '/' . str_replace('.php', '', $template) . '.php');
     }
 }
