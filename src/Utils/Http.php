@@ -2,11 +2,11 @@
 
 namespace Spark\Utils;
 
-use Spark\Contracts\Utils\PingUtilContract;
+use Spark\Contracts\Utils\HttpUtilContract;
 use Spark\Exceptions\Utils\PingUtilException;
 
 /**
- * Class Ping
+ * Class Http
  *
  * A helper class for making HTTP requests in PHP using cURL. Supports GET, POST, PUT, PATCH, and DELETE methods,
  * as well as custom headers, options, user agents, and file downloads.
@@ -14,7 +14,7 @@ use Spark\Exceptions\Utils\PingUtilException;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Ping implements PingUtilContract
+class Http implements HttpUtilContract
 {
     /**
      * Constructor for the ping class.

@@ -217,4 +217,11 @@ interface BlueprintContract
      * @return string
      */
     public function compileCreate(): string;
+
+    /**
+     * Compile the blueprint into an ALTER TABLE statement.
+     *
+     * @return string
+     */
+    public function compileAlter(): string;
 }

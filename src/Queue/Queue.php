@@ -2,8 +2,10 @@
 
 namespace Spark\Queue;
 
+use Closure;
 use DateTime;
 use Laravel\SerializableClosure\SerializableClosure;
+use RuntimeException;
 use Spark\Contracts\Queue\QueueContract;
 use Spark\EventDispatcher;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
@@ -54,7 +56,9 @@ class Queue implements QueueContract
         }
 
         // Set the serializable closure secret key.
-        SerializableClosure::setSecretKey(config('app_key'));
+        if (class_exists(SerializableClosure::class)) {
+            SerializableClosure::setSecretKey(config('app_key'));
+        }
 
         // Load the existing jobs from the queue file.
         $this->loadJobs();
@@ -153,7 +157,7 @@ class Queue implements QueueContract
      * Loads the jobs from the queue file.
      *
      * This method will read the data from the queue file and create an array of
-     * Job objects. The data from the file is decoded from JSON and the closure
+     * Job objects. The data from the file is decoded from JSON and the callback
      * is evaluated back into a callable.
      *
      * @return void
@@ -172,33 +176,35 @@ class Queue implements QueueContract
     }
 
     /**
-     * Serializes a Job object for storage.
+     * Serializes a Job object into an array that can be saved to JSON.
      *
-     * This method converts a Job object into an associative array that can be
-     * easily stored in a JSON file. The closure is serialized using a 
-     * SerializableClosure, and the event listeners are also serialized. The
-     * scheduled time is formatted as an ISO 8601 string.
+     * This method takes a Job object and returns an array of data that can be saved
+     * to JSON. The callback is serialized into a string and the scheduled time is
+     * saved as a string. The repeat and priority are saved as they are. The event
+     * listeners are serialized into an array of arrays, where each inner array
+     * contains the priority and callback of the event listener.
      *
-     * @param Job $job
-     *   The job to be serialized.
+     * @param Job $job The Job object to be serialized.
      *
-     * @return array
-     *   An associative array representation of the job.
+     * @return array The serialized Job object as an array.
      */
     private function serializeJob(Job $job): array
     {
         return [
-            'closure' => serialize(new SerializableClosure($job->getClosure())), // Serialize the closure and save it.
+            'callback' => $this->serializeCallback($job->getCallback()), // Serialize the callback and save it.
             'scheduledTime' => $job->getScheduledTime()->format('c'), // Save the scheduled time as string.
             'repeat' => $job->getRepeat(), // Save the repeat as it is.
             'priority' => $job->getPriority(), // Save the priority as it is.
             'eventListeners' => collect(
                 $job->getEventDispatcher()->getListeners()
             )
-                ->mapK(fn($closures, $eventName) => [
+                ->mapWithKeys(fn($events, $eventName) => [
                     $eventName => array_map(
-                        fn($closure) => serialize(new SerializableClosure($closure)),
-                        $closures
+                        fn($event) => [
+                            'priority' => $event['priority'],
+                            'callback' => $this->serializeCallback($event['callback'])
+                        ],
+                        $events
                     )
                 ])
                 ->all(), // Save the events as it is.
@@ -206,31 +212,33 @@ class Queue implements QueueContract
     }
 
     /**
-     * Unserializes a Job object from storage.
+     * Unserializes a serialized Job object into a Job object.
      *
-     * This method converts an associative array into a Job object. The closure
-     * is unserialized using a SerializableClosure, and the event listeners are
-     * also unserialized. The scheduled time is set from the string representation
-     * of an ISO 8601 date.
+     * This method takes a serialized Job object and returns a Job object.
+     * The callback is unserialized into a callable and the scheduled time is
+     * set using the ISO 8601 string. The repeat and priority are set as they
+     * are. The event listeners are unserialized into an array of arrays, where
+     * each inner array contains the priority and callback of the event listener.
      *
-     * @param array $job
-     *   An associative array representation of the job.
+     * @param array $job The serialized Job object to be unserialized.
      *
-     * @return Job
-     *   A Job object.
+     * @return Job The unserialized Job object.
      */
     private function unserializeJob(array $job): Job
     {
         return new Job(
-            unserialize($job['closure'])->getClosure(), // Unserialize the closure and get the closure.
+            $this->unserializeCallback($job['callback']), // Unserialize the callback and set it.
             new DateTime($job['scheduledTime']), // Set the scheduled time using the ISO 8601 string.
             $job['repeat'], // Set the repeat as it is.
             new EventDispatcher(
                 collect($job['eventListeners'])
-                    ->mapK(fn($closures, $eventName) => [
+                    ->mapWithKeys(fn($events, $eventName) => [
                         $eventName => array_map(
-                            fn($closure) => unserialize($closure)->getClosure(), // Unserialize the closure and get the closure.
-                            $closures
+                            fn($event) => [
+                                'priority' => $event['priority'],
+                                'callback' => $this->unserializeCallback($event['callback'])
+                            ], // Unserialize the callback and set it.
+                            $events
                         )
                     ])
                     ->all() // Set the event listeners as they are.
@@ -240,11 +248,70 @@ class Queue implements QueueContract
     }
 
     /**
+     * Serializes a callback to a string.
+     *
+     * If the callback is an anonymous function, it is serialized using a
+     * SerializableClosure. Otherwise, it is serialized using var_export.
+     *
+     * @param string|array|callable $callback
+     *   The callback to be serialized.
+     *
+     * @return string
+     *   The serialized string representation of the callback.
+     */
+    private function serializeCallback(string|array|callable $callback): string
+    {
+        if ($callback instanceof Closure) {
+            // If the callback is a Closure, check if the SerializableClosure package is installed.
+            // If not, throw an exception.
+            if (!class_exists(SerializableClosure::class)) {
+                throw new RuntimeException(
+                    'SerializableClosure package not found, please ' .
+                    'run: composer require laravel/serializable-closure to install it.'
+                );
+            }
+
+            // If the callback is an anonymous function, serialize it using a SerializableClosure.
+            $callback = serialize(new SerializableClosure($callback));
+        } else {
+            // Otherwise, serialize it using var_export.
+            $callback = var_export($callback, return: true);
+        }
+
+        return $callback;
+    }
+
+    /**
+     * Unserializes a callback from a string.
+     *
+     * If the callback is a string representation of a SerializableClosure, it is
+     * unserialized using unserialize. Otherwise, it is unserialized using eval.
+     *
+     * @param string $callback
+     *   The string representation of the callback to be unserialized.
+     *
+     * @return string|array|callable
+     *   The unserialized callback.
+     */
+    private function unserializeCallback(string $callback): string|array|callable
+    {
+        if (strpos($callback, 'SerializableClosure') !== false) {
+            // If the callback is serialized, unserialize it using unserialize.
+            $callback = unserialize($callback)->getClosure();
+        } else {
+            // Otherwise, unserialize it using eval.
+            $callback = eval ("return $callback;");
+        }
+
+        return $callback;
+    }
+
+    /**
      * Saves the jobs to the queue file.
      *
      * This method will take the current array of jobs in the queue and save them
      * to the queue file. The jobs are converted to an array of data that can be
-     * saved to JSON. The closure is converted to a string by var_exporting it.
+     * saved to JSON. The Callback is converted to a string by var_exporting it.
      * The scheduled time and repeat are saved as is.
      *
      * @return void
@@ -253,7 +320,7 @@ class Queue implements QueueContract
     {
         // Convert the jobs to an array of data that can be saved to JSON.
         $jobs = collect($this->getJobs())
-            ->multiSort('priority', true);
+            ->sortByDesc('priority');
 
         // Save the jobs to the queue file.
         $isSaved = file_put_contents($this->storageFile, $jobs->toJson(), LOCK_EX);

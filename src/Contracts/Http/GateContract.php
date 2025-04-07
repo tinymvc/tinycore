@@ -13,10 +13,10 @@ interface GateContract
      * Define a new ability.
      * 
      * @param string   $ability  The ability name.
-     * @param callable $callback A closure to determine authorization. 
+     * @param string|array|callable $callback A closure to determine authorization. 
      *                           The closure should accept at least the user (can be optional) as the first parameter.
      */
-    public function define(string $ability, callable $callback): void;
+    public function define(string $ability, string|array|callable $callback): void;
 
     /**
      * Determine if the given ability is allowed.
@@ -46,7 +46,7 @@ interface GateContract
      * @param string $ability
      * @param mixed  ...$arguments
      * 
-     * @throws AuthorizationException
+     * @throws \Spark\Exceptions\Http\AuthorizationException
      */
     public function authorize(string $ability, mixed ...$arguments): void;
 

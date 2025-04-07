@@ -132,7 +132,7 @@ interface RouterContract
      * 
      * @return string Returns the route's path.
      * 
-     * @throws InvalidNamedRouteException if the route does not exist.
+     * @throws \Spark\Exceptions\Routing\InvalidNamedRouteException if the route does not exist.
      */
     public function route(string $name, null|string|array $context = null): string;
 

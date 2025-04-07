@@ -64,7 +64,7 @@ class Schema implements SchemaContract
      * @param string $table The name of the table to be altered.
      * @param Closure $callback A callback function that defines the alterations.
      */
-    public static function table(string $table, Closure $callback)
+    public static function table(string $table, Closure $callback): void
     {
         $blueprint = new Blueprint($table, true);
         $callback($blueprint);

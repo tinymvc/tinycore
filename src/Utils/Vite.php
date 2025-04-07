@@ -3,7 +3,7 @@
 namespace Spark\Utils;
 
 use Spark\Contracts\Utils\ViteUtilContract;
-use Spark\Utils\Ping;
+use Spark\Utils\Http;
 
 /**
  * Class Vite
@@ -124,7 +124,7 @@ class Vite implements ViteUtilContract
         }
 
         // live check if vite development server is running or not
-        $http = new Ping();
+        $http = new Http();
         $http->options([CURLOPT_TIMEOUT => 1, CURLOPT_NOBODY => true]);
 
         return $this->config['running'] = $http->get($this->serverUrl($entry))['status'] === 200;

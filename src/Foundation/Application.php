@@ -9,6 +9,8 @@ use Spark\Contracts\Foundation\ApplicationContract;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
+use Spark\Exceptions\Http\AuthorizationException;
+use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Hash;
 use Spark\Http\Middleware;
@@ -18,14 +20,13 @@ use Spark\Queue\Queue;
 use Spark\Router;
 use Spark\Translator;
 use Spark\Utils\Cache;
-use Spark\Utils\Collect;
 use Spark\Http\Gate;
 use Spark\Utils\Image;
 use Spark\Http\InputSanitizer;
 use Spark\Http\InputValidator;
 use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
-use Spark\Utils\Ping;
+use Spark\Utils\Http;
 use Spark\Http\Session;
 use Spark\Utils\Tracer;
 use Spark\Utils\Uploader;
@@ -96,13 +97,12 @@ class Application implements ApplicationContract
         // Bind core services
         $this->container->bind(QueryBuilder::class);
         $this->container->bind(Cache::class);
-        $this->container->bind(Ping::class);
+        $this->container->bind(Http::class);
         $this->container->bind(InputValidator::class);
         $this->container->bind(InputSanitizer::class);
         $this->container->bind(Uploader::class);
         $this->container->bind(Image::class);
         $this->container->bind(Paginator::class);
-        $this->container->bind(Collect::class);
         $this->container->bind(Mail::class);
     }
 
@@ -139,7 +139,7 @@ class Application implements ApplicationContract
      */
     public function getEnv(string $key, $default = null): mixed
     {
-        return $this->env[$key] ?? $default;
+        return data_get($this->env, $key, $default);
     }
 
     /**
@@ -154,7 +154,7 @@ class Application implements ApplicationContract
      */
     public function setEnv(string $key, $value): void
     {
-        $this->env[$key] = $value;
+        data_set($this->env, $key, $value);
     }
 
     /**

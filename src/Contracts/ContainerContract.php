@@ -55,15 +55,6 @@ interface ContainerContract
     public function addServiceProvider($provider): void;
 
     /**
-     * Boot all registered service providers.
-     *
-     * This method will call the `boot` method of each provider, which is
-     * typically used to register service container bindings or perform other
-     * setup tasks.
-     */
-    public function bootServiceProviders(): void;
-
-    /**
      * Check if a binding exists.
      *
      * @param string $abstract The abstract name of the class or interface.

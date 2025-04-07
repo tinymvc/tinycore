@@ -99,6 +99,10 @@ class CommandsServiceProvider
         $commands->addCommand('key:generate', [PrimaryCommandsHandler::class, 'generateAppKey'])
             ->description('Generate a new encryption key');
 
+        // Make a Service Provider
+        $commands->addCommand('make:provider', [MakeStubCommandsHandler::class, 'makeProvider'])
+            ->description('Create a new service provider class');
+
         // Make a Migration file
         $commands->addCommand('make:migration', [MakeStubCommandsHandler::class, 'makeMigration'])
             ->description('Create a new database migration file');

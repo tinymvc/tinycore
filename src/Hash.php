@@ -18,6 +18,25 @@ use Spark\Exception\Hash\InvalidEncryptingKeyException;
 class Hash implements HashContract
 {
     /**
+     * The algorithm used for password hashing.
+     *
+     * This is the name of an algorithm supported by the password_hash() function.
+     *
+     * @var string
+     */
+    private string $passwordAlgorithm;
+
+    /**
+     * Default options for password hashing.
+     *
+     * These options are used for configuring the memory cost, time cost,
+     * and number of threads in password hashing algorithms.
+     *
+     * @var array
+     */
+    private array $passwordOptions;
+
+    /**
      * Initializes the hash class with a key.
      * 
      * The key will be used for cryptographic operations.
@@ -37,7 +56,13 @@ class Hash implements HashContract
             throw new InvalidEncryptingKeyException('Encryption key not provided.');
         }
 
-        $this->setKey($key);
+        $this->setKey($key); // Set the encryption key
+
+        // Default password algorithm
+        $this->passwordAlgorithm = PASSWORD_ARGON2ID;
+
+        // Set default password options
+        $this->passwordOptions = ['memory_cost' => 65536, 'time_cost' => 4, 'threads' => 2];
     }
 
     /**
@@ -58,6 +83,35 @@ class Hash implements HashContract
 
         // Hash the key using SHA-256
         $this->key = hash('sha256', $key);
+    }
+
+    /**
+     * Set the algorithm to use for password hashing.
+     * 
+     * The algorithm should be one of the supported algorithms by the password_hash function.
+     * 
+     * @param string $algorithm The algorithm to use for password hashing.
+     * 
+     * @see https://www.php.net/manual/en/password.constants.php
+     */
+    public function setPasswordAlgorithm(string $algorithm): void
+    {
+        $this->passwordAlgorithm = $algorithm;
+    }
+
+    /**
+     * Set the default options to use for password hashing.
+     *
+     * The options should be an associative array with the following keys:
+     * - memory_cost: The amount of memory to use in bytes (default: 65536).
+     * - time_cost: The amount of time to use in seconds (default: 4).
+     * - threads: The number of threads to use (default: 2).
+     *
+     * @param array $options The options to use for password hashing.
+     */
+    public function setPasswordOptions(array $options): void
+    {
+        $this->passwordOptions = array_merge($this->passwordOptions, $options);
     }
 
     /**
@@ -93,7 +147,7 @@ class Hash implements HashContract
      */
     public function hashPassword(string $password): string
     {
-        return password_hash($password, PASSWORD_ARGON2ID, ['memory_cost' => 65536, 'time_cost' => 4, 'threads' => 2]);
+        return password_hash($password, $this->passwordAlgorithm, $this->passwordOptions);
     }
 
     /**
@@ -175,5 +229,16 @@ class Hash implements HashContract
         }
 
         return $plainText;
+    }
+
+    /**
+     * Generate a cryptographically secure random string.
+     *
+     * @param int $length The number of bytes to generate.
+     * @return string The generated random string.
+     */
+    public function random(int $length = 32): string
+    {
+        return bin2hex(random_bytes($length));
     }
 }

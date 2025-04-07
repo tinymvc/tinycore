@@ -26,6 +26,7 @@ class Router implements RouterContract
      * middleware, name prefix, or path prefix.
      */
     private array $groupAttributes = [];
+
     /**
      * Construct a new router.
      *

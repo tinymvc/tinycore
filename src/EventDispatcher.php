@@ -3,6 +3,7 @@
 namespace Spark;
 
 use Spark\Contracts\EventDispatcherContract;
+use Spark\Exceptions\InvalidEventCallbackException;
 
 /**
  * Class EventDispatcher
@@ -31,10 +32,11 @@ class EventDispatcher implements EventDispatcherContract
      *
      * @param string   $eventName The name of the event.
      * @param callable $listener  The listener callback.
+     * @param int      $priority  The priority of the listener (default is 0).
      */
-    public function addListener(string $eventName, callable $listener): void
+    public function addListener(string $eventName, string|array|callable $listener, int $priority = 0): void
     {
-        $this->listeners[$eventName][] = $listener;
+        $this->listeners[$eventName][] = ['callback' => $listener, 'priority' => $priority];
     }
 
     /**
@@ -69,12 +71,22 @@ class EventDispatcher implements EventDispatcherContract
      *
      * @param string $eventName The name of the event.
      * @param mixed  ...$args   Arguments to pass to the event listeners.
+     * @return void
+     * 
+     * @throws InvalidEventCallbackException If the event callback is invalid.
      */
     public function dispatch(string $eventName, ...$args): void
     {
+        // Check if there are any listeners registered for the event
         if (isset($this->listeners[$eventName])) {
-            foreach ($this->listeners[$eventName] as $listener) {
-                $listener(...$args);
+            // Iterate over each listener for the event
+            $eventListeners = collect($this->listeners[$eventName])
+                ->sortByDesc('priority')
+                ->all();
+
+            foreach ($eventListeners as $listener) {
+                // Invoke the callback with the provided arguments
+                __invoke_callback($listener['callback'], ...$args);
             }
         }
     }

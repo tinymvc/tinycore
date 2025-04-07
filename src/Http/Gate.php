@@ -37,10 +37,10 @@ class Gate implements GateContract
      * Define a new ability.
      *
      * @param string   $ability  The ability name.
-     * @param callable $callback A closure to determine authorization. 
+     * @param string|array|callable $callback A closure to determine authorization. 
      *                           The closure should accept at least the user (can be optional) as the first parameter.
      */
-    public function define(string $ability, callable $callback): void
+    public function define(string $ability, string|array|callable $callback): void
     {
         $this->definitions[$ability] = $callback;
     }
@@ -49,9 +49,9 @@ class Gate implements GateContract
      * Register a callback to run before all ability checks.
      * If any before callback returns a non-null value, that value (cast to bool) will override the normal check.
      *
-     * @param callable $callback
+     * @param string|array|callable $callback
      */
-    public function before(callable $callback): void
+    public function before(string|array|callable $callback): void
     {
         $this->beforeCallbacks[] = $callback;
     }
@@ -68,7 +68,7 @@ class Gate implements GateContract
     {
         // Run "before" callbacks; if any return a non-null result, use that.
         foreach ($this->beforeCallbacks as $callback) {
-            $result = $callback(...$arguments);
+            $result = __invoke_callback($callback, ...$arguments);
             if ($result !== null) {
                 return (bool) $result;
             }
@@ -80,7 +80,7 @@ class Gate implements GateContract
         }
 
         // Call the ability callback.
-        $result = $this->definitions[$ability](...$arguments);
+        $result = __invoke_callback($this->definitions[$ability], ...$arguments);
 
         return (bool) $result;
     }

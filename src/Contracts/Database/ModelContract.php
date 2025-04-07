@@ -36,6 +36,14 @@ interface ModelContract
     public static function load(array $data): static;
 
     /**
+     * Creates a new model instance from the given data and saves it to the database.
+     *
+     * @param array $data The data to fill the model with.
+     * @return static The saved model instance.
+     */
+    public static function create(array $data): static;
+
+    /**
      * Saves the model to the database.
      *
      * @return int|bool The ID of the saved model or false on failure.
@@ -48,11 +56,4 @@ interface ModelContract
      * @return bool True if removal was successful, false otherwise.
      */
     public function remove(): bool;
-
-    /**
-     * Converts the model to an array.
-     *
-     * @return array An array representation of the model.
-     */
-    public function toArray(): array;
 }

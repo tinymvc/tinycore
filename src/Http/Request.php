@@ -659,4 +659,21 @@ class Request implements RequestContract
         return $this->accept('application/json') &&
             ($this->isAjax() || strpos($this->getPath(), '/api/') === 0);
     }
+
+    /**
+     * Retrieves a request value by key.
+     * 
+     * @param string $name The key to retrieve the value for.
+     * 
+     * @return mixed The retrieved value, or null if the key does not exist.
+     */
+    public function __get($name): mixed
+    {
+        return match (true) {
+            $this->hasQuery($name) => $this->query($name),
+            $this->hasPost($name) => $this->post($name),
+            $this->hasFile($name) => $this->file($name),
+            default => null
+        };
+    }
 }

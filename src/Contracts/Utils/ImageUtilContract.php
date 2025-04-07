@@ -29,6 +29,15 @@ interface ImageUtilContract
     public function resize(int $imgWidth, int $imgHeight, ?string $destination = null): bool;
 
     /**
+     * Resizes the image to multiple sizes and saves them.
+     * 
+     * @param array $sizes An associative array of [width1 => height1, width2 => height2] sizes.
+     * 
+     * @return array An array of file paths where resized images are saved.
+     */
+    public function bulkResize(array $sizes): array;
+
+    /**
      * Rotates the image.
      *
      * @param float $degrees The angle of rotation in degrees.

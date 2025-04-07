@@ -5,7 +5,9 @@ use Spark\Container;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
+use Spark\Exceptions\Http\InputValidationFailedException;
 use Spark\Foundation\Application;
+use Spark\Hash;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
 use Spark\Http\InputSanitizer;
@@ -17,8 +19,11 @@ use Spark\Queue\Job;
 use Spark\Router;
 use Spark\Translator;
 use Spark\Utils\Cache;
-use Spark\Utils\Collect;
+use Spark\Utils\Http;
+use Spark\Utils\Image;
 use Spark\Utils\Mail;
+use Spark\Utils\Paginator;
+use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
 use Spark\View;
 
@@ -237,17 +242,27 @@ function query(string $table): QueryBuilder
 }
 
 /**
- * Render a view and return the response.
+ * Get the current view instance or render a template with the given context.
  *
- * @param string $template
- * @param array $context
- * @return Response
+ * If no arguments are provided, this function will return the current View instance.
+ * If a template name is provided, this function will render the template with the given context
+ * and return an instance of the Response class with the rendered HTML.
+ *
+ * @param string|null $template The path to the template file to render.
+ * @param array $context An associative array of variables to pass to the template.
+ * @return View|Response The View instance or the Response instance with the rendered HTML.
  */
-function view(string $template, array $context = []): Response
+function view(?string $template = null, array $context = []): View|Response
 {
+    // Return the current View instance.
+    if ($template === null) {
+        return get(View::class);
+    }
+
+    // Render the template with the given context.
     return get(Response::class)->write(
         get(View::class)
-            ->render($template, $context)
+            ->render($template, $context) // Render the template.
     );
 }
 
@@ -394,6 +409,21 @@ function storage_dir(string $path = '/'): string
 }
 
 /**
+ * Get the language directory path with an optional appended path.
+ *
+ * This function returns the language directory path, optionally appending a
+ * specified sub-path to it. The resulting path is normalized with a single
+ * trailing slash.
+ *
+ * @param string $path The sub-path to append to the language directory path. Default is '/'.
+ * @return string The full path to the language directory, including the appended sub-path.
+ */
+function lang_dir(string $path = '/'): string
+{
+    return dir_path(config('lang_dir') . '/' . ltrim($path, '/'));
+}
+
+/**
  * Get the upload directory path with an optional appended path.
  *
  * This function returns the upload directory path, optionally appending a
@@ -481,12 +511,13 @@ function dd(...$args): never
  * @return mixed The value of the specified environment variable, or the default
  * value if it is not set.
  */
-function config(array|string $key, $default = null): mixed
+function config(array|string $key, $default = null)
 {
     if (is_array($key)) {
         foreach ($key as $k => $v) {
             app()->setEnv($k, $v);
         }
+        return;
     }
 
     return app()->getEnv($key, $default);
@@ -605,22 +636,24 @@ function authorize(string $ability, mixed ...$arguments): void
 }
 
 /**
- * Get the Gate instance.
+ * Manage the application's access control abilities.
  *
- * This function returns the Gate instance, which is responsible for
- * defining and checking the abilities of the current user.
+ * This function allows you to either access the Gate instance or define a new
+ * ability. If an ability name and callback are provided, the ability is
+ * registered. If only an ability name is provided, the ability is retrieved.
+ * If no arguments are provided, the Gate instance is returned.
  *
- * @param mixed ...$args Optional arguments to pass to the Gate instance.
- *    If present, the arguments are passed to the Gate::define() method.
+ * @param string|null $ability The ability name to register or retrieve.
+ * @param string|array|callable|null $callback The callback to use for the ability.
  *
  * @return Gate The Gate instance.
  */
-function gate(...$args): Gate
+function gate(string|null $ability = null, string|array|callable|null $callback = null): Gate
 {
     $gate = get(Gate::class);
 
-    if (!empty($args)) {
-        $gate->define(...$args);
+    if ($ability !== null && $callback !== null) {
+        $gate->define($ability, $callback);
     }
 
     return $gate;
@@ -645,7 +678,13 @@ function event(null|array|string $eventName = null, ...$args): EventDispatcher
     // If an array of events is provided with no additional arguments, add listeners.
     if (is_array($eventName) && empty($args)) {
         foreach ($eventName as $k => $v) {
-            $event->addListener($k, $v);
+            if (is_array($v)) {
+                foreach ($v as $e) {
+                    $event->addListener($k, $e);
+                }
+            } else {
+                $event->addListener($k, $v);
+            }
         }
     } elseif (is_string($eventName)) {
         // Dispatch the event with any additional arguments.
@@ -658,33 +697,33 @@ function event(null|array|string $eventName = null, ...$args): EventDispatcher
 /**
  * Create a new Job instance.
  *
- * This function creates a new Job instance with the given closure and optional arguments.
- * The closure is the function that will be executed when the job is processed.
+ * This function creates a new Job instance with the given callback and optional arguments.
+ * The callback is the function that will be executed when the job is processed.
  *
- * @param Closure $closure The closure function to be executed when the job is processed.
- * @param mixed ...$args Additional arguments to pass to the closure function.
+ * @param string|array|callable $callback The callback function to be executed when the job is processed.
+ * @param mixed ...$config Additional arguments to pass to the Job constructor.
  * @return Job The new Job instance.
  */
-function job(Closure $closure, ...$args): Job
+function job(string|array|callable $callback, ...$config): Job
 {
-    return new Job($closure, ...$args);
+    return new Job($callback, ...$config);
 }
 
 /**
- * Dispatch a job with the given closure.
+ * Dispatch a job with the given callback.
  *
- * This function creates a new job instance using the provided closure
+ * This function creates a new job instance using the provided callback
  * and any additional arguments. The job is then dispatched to the queue
  * for processing.
  *
- * @param Closure $closure The closure function to be executed by the job.
- * @param mixed ...$args Additional arguments to pass to the closure function.
+ * @param string|array|callable $callback The callback function to be executed by the job.
+ * @param mixed ...$config Additional arguments to pass to the Job constructor.
  * @return void
  */
-function dispatch(Closure $closure, ...$args): void
+function dispatch(string|array|callable $callback, ...$config): void
 {
     // Create a new job instance.
-    $job = job($closure, ...$args);
+    $job = job($callback, ...$config);
 
     // Dispatch the job to the queue.
     $job->dispatch();
@@ -719,22 +758,6 @@ function is_guest(): bool
 function user(?string $key = null, $default = null): mixed
 {
     return $key !== null ? (auth()->getUser()->{$key} ?? $default) : auth()->getUser();
-}
-
-/**
- * Create a new collection instance.
- *
- * This function initializes a new collection object containing the given items.
- * The collection can be used to manipulate and interact with the array of items
- * using various collection methods.
- *
- * @param array $items The array of items to include in the collection.
- *
- * @return Collect A collection instance containing the provided items.
- */
-function collect(array $items = []): Collect
-{
-    return get(Collect::class)->make($items);
 }
 
 /**
@@ -857,18 +880,7 @@ function validator(array $rules, ?array $data = null): InputSanitizer
             ->setData($result);
     }
 
-    throw new Exception($validator->getFirstError() ?? 'validation failed');
-}
-
-/**
- * Escapes a string for safe output in HTML by converting special characters to HTML entities.
- *
- * @param null|string $text The string to be escaped.
- * @return ?string The escaped string, safe for HTML output.
- */
-function _e(?string $text): string
-{
-    return htmlspecialchars($text ?? '', ENT_QUOTES, 'UTF-8');
+    throw new InputValidationFailedException($validator->getFirstError() ?? 'Input validation failed');
 }
 
 /**
@@ -888,7 +900,7 @@ function _e(?string $text): string
  */
 function __e(string $text, $arg = null, array $args = [], array $args2 = []): string
 {
-    return _e(
+    return e(
         __($text, $arg, $args, $args2)
     );
 }
@@ -1081,4 +1093,114 @@ function command(...$args): Commands
 
     // Return the Commands instance
     return $command;
+}
+
+/**
+ * Retrieves the Hash instance.
+ *
+ * This function returns the Hash instance, which provides methods
+ * for hashing, validating, encrypting, and decrypting strings.
+ *
+ * @return Hash The Hash instance.
+ */
+function hashing(): Hash
+{
+    return get(Hash::class);
+}
+
+/**
+ * Retrieves the HTTP instance and optionally makes a request.
+ *
+ * This function fetches the HTTP instance and, if a URL is provided,
+ * makes a request using the provided parameters and configuration.
+ *
+ * @param string|null $url Optional. The URL to make the request to.
+ * @param array $params Optional. The query parameters for the request.
+ * @param array $config Optional. The configuration for the request.
+ * @return mixed The HTTP instance if no URL is provided, otherwise the response.
+ */
+function http(?string $url = null, array $params = [], array $config = []): mixed
+{
+    $http = get(Http::class);
+
+    if ($url !== null) {
+        $http->resetConfig($config);
+        return $http->send($url, $params);
+    }
+
+    return $http;
+}
+
+/**
+ * Retrieves the Image instance and optionally creates a new image.
+ *
+ * This function fetches the Image instance and, if an image source is provided,
+ * creates a new image using the provided image source.
+ *
+ * @param string $imageSource The source path of the image to be loaded.
+ * @return Image The Image instance.
+ */
+function image(string $imageSource): Image
+{
+    return new Image($imageSource);
+}
+
+/**
+ * Retrieves the Paginator instance and optionally creates a new pagination.
+ *
+ * This function fetches the Paginator instance and, if parameters are provided,
+ * creates a new pagination using the provided parameters.
+ *
+ * @param int $total The total number of items.
+ * @param int $limit The number of items per page.
+ * @param string $keyword The URL parameter keyword for the page.
+ * @param array $data The data array for pagination.
+ * @return Paginator The Paginator instance.
+ */
+function paginator(int $total = 0, int $limit = 10, string $keyword = 'page', array $data = []): Paginator
+{
+    $paginator = new Paginator($total, $limit, $keyword);
+
+    $paginator->setData($data);
+
+    return $paginator;
+}
+
+/**
+ * Retrieves the Uploader instance and optionally sets up a new upload.
+ *
+ * This function fetches the Uploader instance and, if parameters are provided,
+ * sets up a new upload using the provided parameters.
+ *
+ * @param string|null $uploadTo Optional. The upload destination path. Default is null.
+ * @param string|null $uploadDir Optional. The upload directory path. Default is the value of the 'upload_dir' configuration.
+ * @param array $extensions Optional. The array of allowed file extensions. Default is an empty array.
+ * @param int|null $maxSize Optional. The maximum allowed file size in bytes. Default is 2097152 (2MB).
+ * @param array|null $resize Optional. The resize configuration array. Default is an empty array.
+ * @param array|null $resizes Optional. The resizes configuration array. Default is an empty array.
+ * @param int|null $compress Optional. The compression ratio for images. Default is null.
+ * @return Uploader The Uploader instance.
+ */
+function uploader(
+    ?string $uploadTo = null,
+    ?string $uploadDir = null,
+    array $extensions = [],
+    ?int $maxSize = 2097152,
+    ?array $resize = null,
+    ?array $resizes = null,
+    ?int $compress = null
+): Uploader {
+    $uploader = new Uploader;
+
+    $uploader->setup(
+        uploadTo: $uploadTo,
+        uploadDir: $uploadDir,
+        extensions: $extensions,
+        maxSize: $maxSize,
+        resize: $resize,
+        resizes: $resizes,
+        compress: $compress
+    );
+
+    return $uploader;
 }

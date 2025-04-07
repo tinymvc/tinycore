@@ -172,6 +172,16 @@ class Container implements ContainerContract
      */
     public function call(array|string|callable $abstract, array $parameters = []): mixed
     {
+        // __invoke the callback. e.x, MyCustomLib::class => MyCustomLib->__invoke();
+        if (
+            is_string($abstract) && class_exists($abstract) &&
+            !is_callable($abstract)
+        ) {
+            $callback = $this->get($abstract); // Resolve the class instance
+            return $callback(...$parameters); // Call __invoke method
+        }
+
+        // If it's a closure or callable
         if (is_callable($abstract)) {
             // If it's a closure or callable, just call it with dependencies
             $reflectionFunction = new ReflectionFunction($abstract);

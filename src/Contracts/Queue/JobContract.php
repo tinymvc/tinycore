@@ -62,13 +62,13 @@ interface JobContract
      *
      * The catch option is a closure that will be executed when the job fails.
      *
-     * @param Closure $closure
-     *     The catch closure.
+     * @param string|array|callable $callback
+     *     The catch callback.
      *
      * @return self
      *     The job instance.
      */
-    public function catch(Closure $closure): self;
+    public function catch(string|array|callable $callback): self;
 
     /**
      * Sets the before option for the job.
@@ -76,13 +76,13 @@ interface JobContract
      * The before option is a closure that will be executed before the job is
      * executed.
      *
-     * @param Closure $closure
-     *     The before closure.
+     * @param string|array|callable $callback
+     *     The before callback.
      *
      * @return self
      *     The job instance.
      */
-    public function before(Closure $closure): self;
+    public function before(string|array|callable $callback): self;
 
     /**
      * Sets the after option for the job.
@@ -90,13 +90,13 @@ interface JobContract
      * The after option is a closure that will be executed after the job is
      * executed.
      *
-     * @param Closure $closure
-     *     The after closure.
+     * @param string|array|callable $callback
+     *     The after callback.
      *
      * @return self
      *     The job instance.
      */
-    public function after(Closure $closure): self;
+    public function after(string|array|callable $callback): self;
 
     /**
      * Handles the job.

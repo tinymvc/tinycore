@@ -7,6 +7,31 @@ namespace Spark\Foundation\Console;
  */
 class MakeStubCommandsHandler
 {
+
+    /**
+     * Create a provider stub.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     *
+     * @return void
+     */
+    public function makeProvider(array $args)
+    {
+        StubCreation::make(
+            $args['_args'][0] ?? null,
+            'What is the name of the provider?',
+            [
+                'stub' => __DIR__ . '/stubs/provider.stub',
+                'destination' => 'app/Provider/::subfolder:ucfirst/::name:ucfirst.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'App\Provider::subfolder:namespace',
+                    '{{ class }}' => '::name:ucfirst',
+                ],
+            ]
+        );
+    }
+
     /**
      * Create a migration stub.
      *
@@ -22,9 +47,9 @@ class MakeStubCommandsHandler
             'What is the name of the migration?',
             [
                 'stub' => __DIR__ . '/stubs/migration.stub',
-                'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '.php',
+                'destination' => 'database/migrations/::subfolder:lowercase/migration_::name:pluralize:lowercase_' . date('Y_m_d_His') . '.php',
                 'replacements' => [
-                    '{{ table }}' => '::name:lowercase',
+                    '{{ table }}' => '::name:pluralize:lowercase',
                 ],
             ]
         );
@@ -45,11 +70,11 @@ class MakeStubCommandsHandler
             'What is the name of the model?',
             [
                 'stub' => __DIR__ . '/stubs/model.stub',
-                'destination' => 'app/Models/::subfolder:ucfirst/::name:ucfirst.php',
+                'destination' => 'app/Models/::subfolder:ucfirst/::name:singularize:ucfirst.php',
                 'replacements' => [
                     '{{ namespace }}' => 'App\Models::subfolder:namespace',
-                    '{{ class }}' => '::name:ucfirst',
-                    '{{ table }}' => '::name:lowercase'
+                    '{{ class }}' => '::name:singularize:ucfirst',
+                    '{{ table }}' => '::name:pluralize:lowercase'
                 ],
             ]
         );
@@ -70,10 +95,10 @@ class MakeStubCommandsHandler
             'What is the name of the controller?',
             [
                 'stub' => __DIR__ . '/stubs/controller.stub',
-                'destination' => 'app/Http/Controllers/::subfolder:ucfirst/::name:ucfirstController.php',
+                'destination' => 'app/Http/Controllers/::subfolder:ucfirst/::name:ucfirst.php',
                 'replacements' => [
                     '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
-                    '{{ class }}' => '::name:ucfirstController',
+                    '{{ class }}' => '::name:ucfirst',
                 ],
             ]
         );
@@ -94,10 +119,10 @@ class MakeStubCommandsHandler
             'What is the name of the middleware?',
             [
                 'stub' => __DIR__ . '/stubs/middleware.stub',
-                'destination' => 'app/Http/Middlewares/::subfolder:ucfirst/::name:ucfirstMiddleware.php',
+                'destination' => 'app/Http/Middlewares/::subfolder:ucfirst/::name:ucfirst.php',
                 'replacements' => [
                     '{{ namespace }}' => 'App\Http\Middlewares::subfolder:namespace',
-                    '{{ class }}' => '::name:ucfirstMiddleware',
+                    '{{ class }}' => '::name:ucfirst',
                 ],
             ]
         );

@@ -71,6 +71,17 @@ class DB implements DBContract
     }
 
     /**
+     * Checks if the current database driver matches the specified driver.
+     *
+     * @param string $driver The driver to check against the current driver.
+     * @return bool True if the current driver matches the specified driver, false otherwise.
+     */
+    public function isDriver(string $driver): bool
+    {
+        return $this->getDriver() === $driver;
+    }
+
+    /**
      * Resets the database configuration.
      *
      * This method resets the database configuration with the given configuration

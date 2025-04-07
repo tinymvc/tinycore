@@ -25,6 +25,14 @@ interface SchemaContract
     public static function create(string $table, Closure $callback): void;
 
     /**
+     * Alters an existing table in the database.
+     *
+     * @param string $table The name of the table to be altered.
+     * @param Closure $callback
+     */
+    public static function table(string $table, Closure $callback): void;
+
+    /**
      * Drops a table from the database if it exists.
      *
      * @param string $table The name of the table to be dropped.

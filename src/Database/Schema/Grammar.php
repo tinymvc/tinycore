@@ -44,7 +44,7 @@ class Grammar implements GrammarContract
      */
     public function isSQLite(): bool
     {
-        return $this->isSQLite();
+        return $this->driver === 'sqlite';
     }
 
     /**

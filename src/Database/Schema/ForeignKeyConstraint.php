@@ -3,6 +3,7 @@
 namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\ForeignKeyConstraintContract;
+use Spark\Support\Str;
 
 /**
  * Class ForeignKeyConstraint
@@ -71,8 +72,11 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      */
     public function constrained(string $table = null): self
     {
-        $baseTable = $table ?? str_replace('_id', '', $this->columns[0]);
-        return $this->references('id')->on($baseTable);
+        // Take to word before _id
+        $table ??= Str::lower(
+            Str::plural(Str::beforeLast($this->columns[0], '_id'))
+        );
+        return $this->references('id')->on($table);
     }
 
     /**

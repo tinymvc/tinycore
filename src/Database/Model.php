@@ -4,6 +4,7 @@ namespace Spark\Database;
 
 use PDO;
 use Spark\Contracts\Database\ModelContract;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
 
@@ -15,7 +16,7 @@ use Spark\Database\QueryBuilder;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-abstract class Model implements ModelContract
+abstract class Model implements ModelContract, Arrayable
 {
     /**
      * @var string The table name associated with this model.
@@ -71,6 +72,16 @@ abstract class Model implements ModelContract
     }
 
     /**
+     * Retrieves all records for the model's table.
+     *
+     * @return array An array of model instances.
+     */
+    public static function all(): array
+    {
+        return self::get()->result();
+    }
+
+    /**
      * Finds a model by its primary key ID.
      *
      * @param int $value The Unique Identifier of the model to retrieve.
@@ -106,6 +117,20 @@ abstract class Model implements ModelContract
     }
 
     /**
+     * Creates a new model instance from the given data and saves it to the database.
+     * 
+     * @param array $data Key-value pairs of model properties.
+     * @return static The saved model instance.
+     */
+    public static function create(array $data): static
+    {
+        $model = self::load($data);
+        $model->save();
+
+        return $model;
+    }
+
+    /**
      * Saves the model to the database, either updating or creating a new entry.
      *
      * @return int|bool The ID of the saved model or false on failure.
@@ -129,9 +154,9 @@ abstract class Model implements ModelContract
 
         // Apply model events after saved the record.
         $this->decodeSavedData();
-        $event_status = $this->afterSavedData();
+        $eventStatus = $this->afterSavedData();
 
-        if (!$status && $event_status) {
+        if (!$status && $eventStatus) {
             $status = true;
         }
 
@@ -178,7 +203,9 @@ abstract class Model implements ModelContract
         $guarded = $this->guarded ?? [];
 
         if (!isset($this->fillable) && !isset($this->guarded)) {
-            throw new InvalidModelFillableException('Either fillable or guarded must be defined for the modal: ' . static::class);
+            throw new InvalidModelFillableException(
+                'Either fillable or guarded must be defined for the modal: ' . static::class
+            );
         }
 
         foreach ($this->attributes as $key => $value) {
@@ -208,11 +235,6 @@ abstract class Model implements ModelContract
             $data = $this->beforeSave($data);
         }
 
-        // Check uploaded files, if model has files enabled.
-        if (method_exists($this, 'uploadChanges')) {
-            $data = $this->uploadChanges($data);
-        }
-
         // Parse model property into string if the are in array.
         foreach ($data as $key => $value) {
             $data[$key] = is_array($value) ? json_encode($value) : $value;
@@ -233,12 +255,7 @@ abstract class Model implements ModelContract
 
         // Call afterSave event
         if (method_exists($this, 'afterSave')) {
-            $this->afterSave();
-        }
-
-        // Check ORM form fields changes 
-        if (method_exists($this, 'checkOrmFormFields')) {
-            $status = $this->checkOrmFormFields();
+            $status = $this->afterSave();
         }
 
         return $status;
@@ -268,11 +285,6 @@ abstract class Model implements ModelContract
         if (method_exists($this, 'afterRemove')) {
             $this->afterRemove();
         }
-
-        // Removed uploaded files wich are associated with this model
-        if (method_exists($this, 'removeUploaded')) {
-            $this->removeUploaded($this->attributes);
-        }
     }
 
     /**
@@ -287,10 +299,11 @@ abstract class Model implements ModelContract
             /** 
              * if the property is json format then decode json
              * string to associative array.
-             * 
-             * if property is a array then replace it to model.
              */
-            if (is_string($value) && (strpos($value, '[') === 0 || strpos($value, '{') === 0)) {
+            if (
+                is_string($value) && (strpos($value, '[') === 0
+                    || strpos($value, '{') === 0)
+            ) {
                 $value = json_decode($value, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
                     $this->{$key} = $value;
@@ -374,7 +387,7 @@ abstract class Model implements ModelContract
      *
      * @return array An array of model properties and their values.
      */
-    public function toArray(): array
+    public function toArray()
     {
         return $this->attributes;
     }

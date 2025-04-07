@@ -21,10 +21,7 @@ class PrimaryCommandsHandler
      * This method runs a PHP built-in server on localhost using the specified port
      * from the arguments or defaults to port 8080. It provides a console message
      * indicating the server's address and start time. The server runs in the
-     * background, and the user can stop it using Ctrl+C.
-     *
-     * The method determines the appropriate command to start the server based on 
-     * the operating system, supporting both Windows and Unix-like environments.
+     * foreground, allowing proper termination with Ctrl+C.
      *
      * @param Prompt $prompt
      *   An instance of the Prompt class for displaying messages in the console.
@@ -35,6 +32,7 @@ class PrimaryCommandsHandler
     public function startDevelopmentServer(Prompt $prompt, array $args)
     {
         $port = $args['_args'][0] ?? 8080;
+
         $prompt->message(
             sprintf(
                 "<info>Info</info> Server running on <bold>[http://localhost:%s]</bold> at <bold>%s</bold>.",
@@ -44,16 +42,8 @@ class PrimaryCommandsHandler
         );
         $prompt->message("Press <bold>Ctrl+C</bold> to stop the server.", "warning");
 
-        // Determine the appropriate null device and background execution syntax based on the operating system
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            // Windows environment
-            $command = "start /B php -S localhost:{$port} -t public > nul 2>&1";
-        } else {
-            // Unix-like environment
-            $command = "php -S localhost:{$port} -t public > /dev/null 2>&1 &";
-        }
-
-        shell_exec($command);
+        // Simple foreground execution
+        passthru("php -S localhost:{$port} -t public");
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Spark\Database;
 use Spark\Contracts\Database\QueryBuilderContract;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
+use Spark\Support\Collection;
 use Spark\Utils\Paginator;
 use PDO;
 use PDOStatement;
@@ -31,7 +32,7 @@ class QueryBuilder implements QueryBuilderContract
      * 
      * @var array
      */
-    private array $query = ['sql' => '', 'joins' => '', 'join_num' => 0];
+    private array $query = ['sql' => '', 'alias' => '', 'joins' => ''];
 
     /**
      * Array to store data mappers for processing retrieved data.
@@ -373,11 +374,13 @@ class QueryBuilder implements QueryBuilderContract
             $fields = implode(',', $fields);
         }
 
-        // Build the FROM clause
-        $table = isset($this->table) ? "FROM {$this->table}" : '';
+        if (stripos($fields, ' FROM ') === false) {
+            // Build the FROM clause
+            $fields .= isset($this->table) ? " FROM {$this->table}" : '';
+        }
 
         // Build the initial SELECT SQL query
-        $this->query['sql'] = "SELECT {$fields} {$table}";
+        $this->query['sql'] = "SELECT {$fields}";
 
         // Returns the current instance for method chaining.
         return $this;
@@ -394,8 +397,24 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function as(string $alias): self
     {
-        $this->query['alias'] = $alias !== '' ? stripos($alias, 'AS ') === false ? " AS {$alias} " : " {$alias} " : '';
+        if (stripos($alias, 'AS ') === false) {
+            $alias = "AS {$alias}";
+        }
+
+        $this->query['alias'] = " {$alias} ";
         return $this;
+    }
+
+    /**
+     * Sets an alias for the current table in the FROM clause.
+     *
+     * @param string $alias The alias for the table.
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function alias(string $alias): self
+    {
+        return $this->as($alias);
     }
 
     /**
@@ -462,6 +481,19 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Sets the ordering clause for the query.
+     *
+     * @param string $field The field to order by.
+     * @param string $sort The sorting direction, defaults to 'ASC'.
+     * @return self
+     */
+    public function orderBy(string $field, string $sort = 'ASC'): self
+    {
+        $this->query['order'] = "$field $sort";
+        return $this;
+    }
+
+    /**
      * Sets ascending order for a specified field.
      *
      * @param string $field Field to order by in ascending order, defaults to 'id'.
@@ -488,13 +520,24 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets the GROUP BY clause for the query.
      *
-     * @param string $group Group by clause as a string.
+     * @param string|array $fields Group by clause as a string or array.
      * @return self
      */
-    public function group(string $group): self
+    public function group(string|array $fields): self
     {
-        $this->query['group'] = $group;
+        $this->query['group'] = implode(', ', (array) $fields);
         return $this;
+    }
+
+    /**
+     * Alias for the group() method.
+     *
+     * @param string|array $group Group by clause as a string or array.
+     * @return self
+     */
+    public function groupBy(string|array $group): self
+    {
+        return $this->group($group);
     }
 
     /**
@@ -526,6 +569,19 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Specifies the number of records to fetch.
+     *
+     * @param int $limit Number of records to fetch.
+     * @return self
+     */
+    public function take(int $limit): self
+    {
+        $this->query['limit'] = $limit;
+
+        return $this;
+    }
+
+    /**
      * Specifies the fetch mode(s) for the query results.
      *
      * @param mixed ...$fetch PDO fetch styles (e.g., PDO::FETCH_ASSOC).
@@ -545,7 +601,7 @@ class QueryBuilder implements QueryBuilderContract
     public function first(): mixed
     {
         // Execute current select query by limiting to single record.
-        $this->limit(1)->executeSelectQuery();
+        $this->take(1)->executeSelectQuery();
 
         // Fetch first record from database and apply mapper if exists.
         $result = $this->applyMapper(
@@ -608,6 +664,26 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Retrieves all results from the executed query.
+     *
+     * @return array Array of query results.
+     */
+    public function all(): array
+    {
+        return $this->result();
+    }
+
+    /**
+     * Retrieves all results from the executed query and returns them in a collection.
+     *
+     * @return \Spark\Support\Collection Array of query results.
+     */
+    public function collect(): Collection
+    {
+        return collect($this->result());
+    }
+
+    /**
      * Paginates query results.
      *
      * @param int $limit Number of items per page.
@@ -626,7 +702,7 @@ class QueryBuilder implements QueryBuilderContract
         $paginator->keyword = $keyword;
 
         // Count total records from exisitng command only for serverside database driver.
-        if ($this->database->getConfig('driver') !== 'sqlite') {
+        if ($this->database->isDriver('mysql')) {
             $this->query['sql'] = preg_replace('/SELECT /', 'SELECT SQL_CALC_FOUND_ROWS ', $this->query['sql'], 1);
         }
 
@@ -638,15 +714,15 @@ class QueryBuilder implements QueryBuilderContract
             ->executeSelectQuery();
 
         // Get total record count, from sqlite database and update it to paginator class.
-        if ($this->database->getConfig('driver') === 'sqlite') {
-            $paginator->total = $this->count();
-        } else {
+        if ($this->database->isDriver('mysql')) {
             // Get number of records from exisitng query command.
             $total = $this->database->prepare('SELECT FOUND_ROWS()');
             $total->execute();
 
             // Update number of items into paginator class.
             $paginator->total = $total->fetch(PDO::FETCH_COLUMN);
+        } else {
+            $paginator->total = $this->count();
         }
 
         // Set database records into paginator class.
@@ -677,7 +753,7 @@ class QueryBuilder implements QueryBuilderContract
         // Create sql command to count rows.
         $statement = $this->database->prepare(
             "SELECT COUNT(1) FROM {$this->table}"
-            . $this->getAlias()
+            . $this->query['alias']
             . $this->query['joins']
             . $this->getWhereSql()
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
@@ -722,17 +798,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function addJoin(string $type, string $table, string $condition): self
     {
-        // Generate an alias for the joined table
-        $alias = sprintf('t%s', ++$this->query['join_num']);
-
         // Build and add the join clause to the SQL query
-        $this->query['joins'] .= sprintf(
-            " %s JOIN %s %s ON %s ",
-            $type,
-            $table,
-            stripos($table, ' AS ') === false ? " AS $alias" : '',
-            $condition
-        );
+        $this->query['joins'] .= sprintf(" %s JOIN %s ON %s ", $type, $table, $condition);
 
         // Returns the current instance for method chaining.
         return $this;
@@ -796,7 +863,7 @@ class QueryBuilder implements QueryBuilderContract
         // Build complete select command with condition, order, and limit.
         $statement = $this->database->prepare(
             $this->query['sql']
-            . $this->getAlias()
+            . $this->query['alias']
             . $this->query['joins']
             . $this->getWhereSql()
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
@@ -911,19 +978,6 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Get the alias for the current table in the query.
-     *
-     * Returns the alias set in the query builder, or " AS p " if joins are defined,
-     * or an empty string if neither of the above conditions are met.
-     *
-     * @return string The alias for the current table in the query.
-     */
-    private function getAlias(): string
-    {
-        return $this->query['alias'] ?? (!empty($this->query['joins']) ? ' AS p ' : '');
-    }
-
-    /**
      * Checks if any conditions have been set in the WHERE clause.
      *
      * @return bool
@@ -992,9 +1046,21 @@ class QueryBuilder implements QueryBuilderContract
     private function resetQuery(): void
     {
         // Reset Select query parameters.
-        $this->query = ['sql' => '', 'joins' => '', 'join_num' => 0];
+        $this->query = ['sql' => '', 'alias' => '', 'joins' => ''];
 
         // Reset where query parameters.
         $this->resetWhere();
+    }
+
+    /**
+     * Handles dynamic method calls to the query result collection.
+     *
+     * @param string $method The method name.
+     * @param array $args The method arguments.
+     * @return mixed The result of the query result collection method call.
+     */
+    public function __call($method, $args)
+    {
+        return call_user_func([$this->collect(), $method], ...$args);
     }
 }

@@ -2,7 +2,6 @@
 
 namespace Spark\Queue;
 
-use Closure;
 use DateTime;
 use Spark\Contracts\Queue\JobContract;
 use Spark\EventDispatcher;
@@ -25,8 +24,8 @@ class Job implements JobContract
      *
      * Creates a new Job instance.
      *
-     * @param Closure $closure
-     *   The closure to run when the job is processed.
+     * @param string|array|Closure|callable $callback
+     *   The Callback to run when the job is processed.
      *
      * @param string|DateTime|null $scheduledTime
      *   The time at which the job should be processed. If a string is
@@ -46,7 +45,7 @@ class Job implements JobContract
      *   first.
      */
     public function __construct(
-        private Closure $closure,
+        private $callback,
         private null|string|DateTime $scheduledTime = null,
         private ?string $repeat = null,
         private ?EventDispatcher $eventDispatcher = null,
@@ -78,7 +77,17 @@ class Job implements JobContract
      */
     public function repeat(?string $repeat): self
     {
-        $this->repeat = $repeat;
+        $repeatSteps = [
+            'daily' => '1 day',
+            'hourly' => '1 hour',
+            'weekly' => '1 week',
+            'biweekly' => '2 weeks',
+            'monthly' => '1 month',
+            'quarterly' => '3 months',
+            'yearly' => '1 year',
+        ];
+
+        $this->repeat = $repeatSteps[$repeat] ?? $repeat;
 
         return $this;
     }
@@ -138,15 +147,15 @@ class Job implements JobContract
      * should contain logic to handle any exceptions or errors that
      * may arise.
      *
-     * @param Closure $closure
-     *   A closure to handle errors that occur during execution.
+     * @param Closure $callback
+     *   A callback to handle errors that occur during execution.
      *
      * @return self
      *   Returns the current Job instance for method chaining.
      */
-    public function catch(Closure $closure): self
+    public function catch(string|array|callable $callback): self
     {
-        $this->eventDispatcher->addListener('error', $closure);
+        $this->eventDispatcher->addListener('error', $callback);
 
         return $this;
     }
@@ -158,15 +167,15 @@ class Job implements JobContract
      * immediately before the job starts. The closure
      * should contain logic that needs to run before the job does.
      *
-     * @param Closure $closure
-     *   A closure to execute before the job.
+     * @param string|array|callable $callback
+     *   A callback to execute before the job.
      *
      * @return self
      *   Returns the current Job instance for method chaining.
      */
-    public function before(Closure $closure): self
+    public function before(string|array|callable $callback): self
     {
-        $this->eventDispatcher->addListener('before', $closure);
+        $this->eventDispatcher->addListener('before', $callback);
 
         return $this;
     }
@@ -178,15 +187,15 @@ class Job implements JobContract
      * immediately after the job has been completed. The closure
      * should contain logic that needs to run after the job has finished executing.
      *
-     * @param Closure $closure
-     *   A closure to execute after the job has been completed.
+     * @param string|array|callable $callback
+     *   A callback to execute after the job has been completed.
      *
      * @return self
      *   Returns the current Job instance for method chaining.
      */
-    public function after(Closure $closure): self
+    public function after(string|array|callable $callback): self
     {
-        $this->eventDispatcher->addListener('after', $closure);
+        $this->eventDispatcher->addListener('after', $callback);
 
         return $this;
     }
@@ -206,8 +215,8 @@ class Job implements JobContract
         $this->eventDispatcher->dispatch('before', $this);
 
         try {
-            // Call the closure function associated with the job to process the job.
-            call_user_func($this->closure, $this);
+            // Execute the job's closure function.
+            __invoke_callback($this->callback, $this);
         } catch (Throwable $e) {
             // Call the 'error' event listeners to execute any code that needs to be run when an error occurs during the job processing.
             $this->eventDispatcher->dispatch('error', $e, $this);
@@ -228,18 +237,18 @@ class Job implements JobContract
      */
     public function isRepeated(): bool
     {
-        return $this->repeat !== null;
+        return isset($this->repeat) && !empty($this->repeat);
     }
 
     /**
-     * Returns the closure function associated with the job.
+     * Returns the callback function associated with the job.
      *
-     * @return Closure
-     *   The closure function associated with the job.
+     * @return string|array|callable
+     *   The callback function associated with the job.
      */
-    public function getClosure(): Closure
+    public function getCallback(): string|array|callable
     {
-        return $this->closure;
+        return $this->callback;
     }
 
     /**
@@ -254,10 +263,6 @@ class Job implements JobContract
      */
     public function getRepeat(): ?string
     {
-        if (isset($this->repeat) && strpos($this->repeat, '+') !== 0) {
-            return "+{$this->repeat}";
-        }
-
         return $this->repeat;
     }
 

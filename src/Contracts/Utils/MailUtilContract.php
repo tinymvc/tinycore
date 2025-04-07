@@ -28,6 +28,20 @@ interface MailUtilContract
     public function body(string $body, bool $isHtml): self;
 
     /**
+     * Set the email body content using a template.
+     *
+     * This method allows you to set the email body content using a template.
+     * The template is rendered using the Hyper\template engine.
+     * The engine is configured to look for the template file in the mail
+     * directory of the application.
+     *
+     * @param string $template The name of the template file to render.
+     * @param array $context An associative array of context to pass to the template.
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function view(string $template, array $context = []): self;
+
+    /**
      * Add a carbon copy (CC) recipient to the email.
      * 
      * @param string $address The email address of the CC recipient.

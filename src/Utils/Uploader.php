@@ -68,18 +68,20 @@ class Uploader implements UploaderUtilContract
     /**
      * Sets up the uploader configuration.
      *
-     * @param string $uploadDir Upload directory path.
+     * @param ?string $uploadTo Upload directory path.
+     * @param ?string $uploadDir Upload directory path.
      * @param array $extensions Supported file extensions.
-     * @param bool $multiple Whether to support multiple file uploads.
+     * @param ?bool $multiple Whether to support multiple file uploads.
      * @param int|null $maxSize Maximum file size (in bytes).
      * @param array|null $resize Resize options for images.
      * @param array|null $resizes Bulk resize options for images.
      * @param int|null $compress Compression level for images.
      */
     public function setup(
-        string $uploadDir = 'uploads',
+        ?string $uploadTo = null,
+        ?string $uploadDir = null,
         array $extensions = [],
-        bool $multiple = false,
+        ?bool $multiple = null,
         ?int $maxSize = 2097152,
         ?array $resize = null,
         ?array $resizes = null,
@@ -91,6 +93,12 @@ class Uploader implements UploaderUtilContract
         $this->resize = $resize;
         $this->resizes = $resizes;
         $this->compress = $compress;
+
+        $uploadDir ??= config('upload_dir');
+
+        if ($uploadTo) {
+            $uploadDir = dir_path($uploadDir . DIRECTORY_SEPARATOR . $uploadTo);
+        }
 
         // Set the upload directory
         return $this->setUploadDir($uploadDir);
@@ -109,12 +117,12 @@ class Uploader implements UploaderUtilContract
         if (!is_dir($uploadDir)) {
             // Create the upload directory
             if (!mkdir($uploadDir, 0777, true)) {
-                throw new UploaderUtilException(__('Failed to create upload directory.'));
+                throw new UploaderUtilException(__('Failed to create upload directory.'), 501);
             }
         } elseif (!is_writable($uploadDir)) {
             // Make the upload directory writable
             if (!chmod($uploadDir, 0777)) {
-                throw new UploaderUtilException(__('Upload directory is not writable.'));
+                throw new UploaderUtilException(__('Upload directory is not writable.'), 502);
             }
         }
 
@@ -125,11 +133,17 @@ class Uploader implements UploaderUtilContract
     /**
      * Uploads a file or multiple files.
      *
-     * @param array $files Array containing file details (e.g., $_FILES['file']).
+     * @param string|array $files The file(s) to upload.
      * @return string|array Returns the file path(s) of the uploaded file(s).
      */
-    public function upload(array $files): string|array
+    public function upload(string|array $files): string|array
     {
+        if (is_string($files)) {
+            $files = $_FILES[$files] ?? [];
+        }
+
+        $this->multiple ??= count($files['name']) > 1;
+
         if ($this->multiple) {
             $uploadedFiles = [];
             foreach ($files['name'] as $key => $name) {
@@ -161,13 +175,13 @@ class Uploader implements UploaderUtilContract
     {
         // Validate file size
         if (isset($this->maxSize) && $file['size'] > $this->maxSize) {
-            throw new UploaderUtilException(__('File size exceeds the maximum limit.'));
+            throw new UploaderUtilException(__('File size exceeds the maximum limit.'), 503);
         }
 
         // Validate file extension
         $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
         if (!empty($this->extensions) && !in_array(strtolower($extension), $this->extensions)) {
-            throw new UploaderUtilException(__('Invalid file extension.'));
+            throw new UploaderUtilException(__('Invalid file extension.'), 504);
         }
 
         // Create a unique file name
@@ -176,7 +190,7 @@ class Uploader implements UploaderUtilContract
 
         // Move the uploaded file to the destination
         if (!move_uploaded_file($file['tmp_name'], $destination)) {
-            throw new UploaderUtilException(__('Failed to move uploaded file.'));
+            throw new UploaderUtilException(__('Failed to move uploaded file.'), 505);
         }
 
         // Compress, resize, and bulk resize image if options are set and the file is an image

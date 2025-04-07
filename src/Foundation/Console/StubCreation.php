@@ -3,6 +3,7 @@
 namespace Spark\Foundation\Console;
 
 use Spark\Console\Prompt;
+use Spark\Support\Pluralizer;
 
 /**
  * Class StubCreation
@@ -81,6 +82,10 @@ class StubCreation
         // Load the stub file contents
         $stub = file_get_contents($stubConfig['stub']);
 
+        // Get the plural and singular versions of the name
+        $namePlural = Pluralizer::plural($name);
+        $nameSingular = Pluralizer::singular($name);
+
         // Prepare replacement values for the stub
         $replacementValues = [
             '::subfolder:namespace' => !empty($subFolders) ? '\\' . implode(
@@ -96,8 +101,14 @@ class StubCreation
             '::subfolder' => dir_path(
                 implode('/', $subFolders)
             ),
+            '::name:pluralize:lowercase' => strtolower($namePlural),
+            '::name:singularize:lowercase' => strtolower($nameSingular),
+            '::name:pluralize:ucfirst' => ucfirst($namePlural),
+            '::name:singularize:ucfirst' => ucfirst($nameSingular),
             '::name:lowercase' => strtolower($name),
             '::name:ucfirst' => ucfirst($name),
+            '::name:pluralize' => $namePlural,
+            '::name:singularize' => $nameSingular,
             '::name' => $name,
         ];
 

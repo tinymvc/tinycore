@@ -7,6 +7,7 @@ use Spark\Database\Exceptions\OrmDisabledLazyLoadingException;
 use Spark\Database\Exceptions\UndefinedOrmException;
 use Spark\Database\QueryBuilder;
 use PDO;
+use Spark\Support\Str;
 
 /**
  * ORM - Object Relational Mapping
@@ -115,16 +116,6 @@ trait HasOrm
     }
 
     /**
-     * Retrieve the registered ORM configurations for the model.
-     * 
-     * @return array
-     */
-    public function getRegisteredOrm(): array
-    {
-        return $this->orm();
-    }
-
-    /**
      * Magic getter method to load and return ORM data on demand (lazy loading).
      * 
      * @param string $name The name of the ORM relationship to load.
@@ -158,7 +149,7 @@ trait HasOrm
      * @param string $name The name of the ORM relationship to check.
      * @return bool True if the relationship has been set, false otherwise.
      */
-    protected function existsInOrm($name)
+    protected function existsInOrm($name): bool
     {
         // If the relationship is not set, return false.
         // Otherwise, return true if the relationship is not empty.
@@ -172,7 +163,7 @@ trait HasOrm
      * 
      * @return void
      */
-    protected function removeFromOrm($name)
+    protected function removeFromOrm($name): void
     {
         // Remove the ORM relationship from the data set.
         unset($this->orm[$name]);
@@ -210,7 +201,7 @@ trait HasOrm
     private function manyX(array $data, array $config, string $with): array
     {
         if (!isset($config['table'])) {
-            throw new InvalidOrmException("No intermediate table specified for Orm({$with})");
+            throw new InvalidOrmException("No intermediate/pivot table specified for Orm({$with})");
         }
 
         $primaryKey = static::$primaryKey;
@@ -221,24 +212,25 @@ trait HasOrm
             ->unique();
 
         // get or genarate foreign for forriegn model
-        $foreignKey = $config['foreignKey'] ?? $model::$table . '_id';
+        $foreignKey = $config['foreignKey'] ?? $this->generateForeignKey($model::$table);
 
         // get or genarate local for currennt/loccal model
-        $localKey = $config['localKey'] ?? static::$table . '_id';
+        $localKey = $config['localKey'] ?? $this->generateForeignKey(static::$table);
 
         // get objects from intermediate table
         $objects = $ids->count() > 0 ? $this->applyCallback(
             $model->query()
                 ->fetch(PDO::FETCH_ASSOC)
                 ->select("p.*, t1.{$foreignKey}, t1.{$localKey}")
-                ->join($config['table'], "t1.{$foreignKey} = p.{$primaryKey}")
+                ->as('p')
+                ->join($config['table'] . ' as t1', "t1.{$foreignKey} = p.{$primaryKey}")
                 ->where([
                     "t1.{$localKey}" => $ids->all()
                 ]),
             $config
         )->result() : [];
 
-        return $this->parseOrmData($data, $objects, $model, $with);
+        return $this->parseOrmData($data, $objects, $model, $with, $localKey);
     }
 
     /**
@@ -257,7 +249,7 @@ trait HasOrm
             ->unique();
 
         // get or genarate local for currennt/loccal model
-        $localKey = $config['localKey'] ?? static::$table . '_id';
+        $localKey = $config['localKey'] ?? $this->generateForeignKey(static::$table);
 
         // get objects from foreign table
         $objects = $ids->count() > 0 ? $this->applyCallback(
@@ -270,7 +262,7 @@ trait HasOrm
             $config
         )->result() : [];
 
-        return $this->parseOrmData($data, $objects, $model, $with);
+        return $this->parseOrmData($data, $objects, $model, $with, $localKey);
     }
 
     /**
@@ -280,13 +272,11 @@ trait HasOrm
      * @param array $objects The related objects fetched based on the ORM configuration.
      * @param object $model The related model object.
      * @param string $with The name of the relationship.
+     * @param string $localKey The local key for the current model.
      * @return array The data with attached ORM data.
      */
-    private function parseOrmData(array $data, $objects, $model, $with): array
+    private function parseOrmData(array $data, $objects, $model, $with, $localKey): array
     {
-        // get or genarate localkey for currennt/loccal model
-        $localKey = $config['localKey'] ?? static::$table . '_id';
-
         // attach related data
         foreach ($data as $d) {
             if (!isset($d->orm[$with])) {
@@ -316,10 +306,7 @@ trait HasOrm
         $model = new $config['model'];
 
         // get or genarate foreign for forriegn model
-        $foreignKey = $config['foreignKey'] ?? $model::$table . '_id';
-
-        // get or genarate local for currennt/loccal model
-        $localKey = $config['localKey'] ?? static::$primaryKey;
+        $foreignKey = $config['foreignKey'] ?? $this->generateForeignKey($model::$table);
 
         // get ids from main data
         $ids = collect($data)
@@ -331,7 +318,7 @@ trait HasOrm
             $model->query()
                 ->select()
                 ->fetch(PDO::FETCH_ASSOC)
-                ->where([$localKey => $ids->all()]),
+                ->where([static::$primaryKey => $ids->all()]),
             $config
         )
             ->result() : [];
@@ -343,7 +330,7 @@ trait HasOrm
             }
 
             foreach ($objects as $o) {
-                if ($o[$localKey] === $d->{$foreignKey}) {
+                if ($o[static::$primaryKey] === $d->{$foreignKey}) {
                     $d->orm[$with] = $model->load($o);
                     break;
                 }
@@ -371,60 +358,15 @@ trait HasOrm
     }
 
     /**
-     * Validates and handles form submissions for many-x relationships, 
-     * synchronizing the intermediate table records.
-     * 
-     * @return bool True if validation and synchronization were successful, false otherwise.
+     * Generates a foreign key column name based on a table name.
+     *
+     * @param string $tableOrColumn The name of the table.
+     * @return string The generated foreign key column name.
      */
-    protected function checkOrmFormFields(): bool
+    private function generateForeignKey(string $tableOrColumn): string
     {
-        $status = false;
-        foreach ($this->orm() as $config) {
-            if (
-                $config['has'] !== 'many-x' ||
-                !isset($config['table']) ||
-                request()->post($config['table'], false) === false
-            ) {
-                continue;
-            }
-
-            $old_ids = array_filter(
-                array_map('trim', explode(',', request()->post("_{$config['table']}", '')))
-            );
-            $new_ids = request()->post($config['table'], []);
-            $new_ids = array_filter(
-                is_string($new_ids) ? array_filter(
-                    array_map('trim', explode(',', $new_ids))
-                ) : $new_ids
-            );
-
-            $remove_ids = array_diff($old_ids, $new_ids);
-            $create_ids = array_diff($new_ids, $old_ids);
-
-            $model = new $config['model'];
-            $query = query($config['table']);
-
-            // get or genarate foreignkey and localkey
-            $foreignKey = $config['foreignKey'] ?? $model::$table . '_id';
-            $localKey = $config['localKey'] ?? static::$table . '_id';
-
-            if (!empty($create_ids)) {
-                $ids = collect($create_ids)
-                    ->map(fn($id) => [
-                        $foreignKey => $id,
-                        $localKey => $this->primaryValue(),
-                    ])
-                    ->all();
-                $query->insert(array_values($ids));
-                $status = true;
-            }
-
-            if (!empty($remove_ids)) {
-                $query->delete([$localKey => $this->primaryValue(), $foreignKey => $remove_ids]);
-                $status = true;
-            }
-        }
-
-        return $status;
+        return Str::lower(
+            Str::plural(Str::beforeLast($tableOrColumn, '_id'))
+        ) . '_id';
     }
 }

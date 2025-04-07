@@ -66,6 +66,25 @@ class Commands implements CommandsContract
     }
 
     /**
+     * Sets the help message for the most recently added command.
+     *
+     * This method updates the help information for the last command added
+     * to the commands array in the Commands instance.
+     *
+     * @param string $help
+     *   The help message to set for the command.
+     *
+     * @return $this
+     *   The Commands instance.
+     */
+    public function help(string $help): self
+    {
+        $this->commands[array_key_last($this->commands)]['help'] = $help;
+
+        return $this;
+    }
+
+    /**
      * Checks if a command is registered in the Commands instance.
      *
      * @param string $name
@@ -110,6 +129,10 @@ class Commands implements CommandsContract
 
         $prompt->message("Command: {$commandName}", "success");
         $prompt->message("Description: " . $command['description'], "info");
+
+        if (isset($command['help'])) {
+            $prompt->message("<bold>Help:</bold> " . $command['help'], "raw");
+        }
     }
 
     /**

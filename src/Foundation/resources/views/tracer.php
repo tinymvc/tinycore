@@ -6,8 +6,8 @@ $view->title = "{$type}: $message";
 
 <div class="tracer">
     <div class="error-box">
-        <h1><?= _e($type) ?>: <?= _e($message) ?></h1>
-        <p><span class="file"><?= _e($file) ?></span> at line <span class="line"><?= _e($line) ?></span></p>
+        <h1><?= e($type) ?>: <?= e($message) ?></h1>
+        <p><span class="file"><?= e($file) ?></span> at line <span class="line"><?= e($line) ?></span></p>
     </div>
     <?php if (isset($trace) && !empty($trace)): ?>
         <div class="trace-box">
