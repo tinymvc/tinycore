@@ -142,6 +142,6 @@ class Route implements HttpRouteContract
      */
     public static function group($attributes, $callback): void
     {
-        return Application::$app->container->get(Router::class)->group($attributes, $callback);
+        Application::$app->container->get(Router::class)->group($attributes, $callback);
     }
 }
