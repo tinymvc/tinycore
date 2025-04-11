@@ -13,12 +13,12 @@ interface InputValidatorContract
     /**
      * Validates input data against specified rules.
      *
-     * @param array $rules Array of validation rules where the key is the field name
+     * @param string|array $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
      * @param array $inputData Array of input data to validate.
      * @return bool|array Returns validated data as an array if valid, or false if validation fails.
      */
-    public function validate(array $rules, array $inputData): bool|array;
+    public function validate(string|array $rules, array $inputData): bool|array;
 
     /**
      * Returns all validation errors.

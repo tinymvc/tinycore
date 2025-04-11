@@ -863,12 +863,12 @@ function input(array $filter = [], bool $sanitizer = true): mixed
 /**
  * Validates the given data against a set of rules.
  *
- * @param array $rules An array of validation rules to apply.
+ * @param string|array $rules An array of validation rules to apply.
  * @param array|null $data An optional array of data to validate.
  * @return InputSanitizer Returns a sanitizer object if validation passes.
  * @throws Exception Throws an exception if validation fails, with the first error message or a default message.
  */
-function validator(array $rules, ?array $data = null): InputSanitizer
+function validator(string|array $rules, ?array $data = null): InputSanitizer
 {
     $data ??= request()->all();
 
