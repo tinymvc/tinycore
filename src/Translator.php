@@ -3,6 +3,7 @@
 namespace Spark;
 
 use Spark\Contracts\TranslatorContract;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Translator
@@ -14,6 +15,8 @@ use Spark\Contracts\TranslatorContract;
  */
 class Translator implements TranslatorContract
 {
+    use Macroable;
+
     /**
      * Holds translated texts.
      * 

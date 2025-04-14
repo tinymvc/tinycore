@@ -4,6 +4,7 @@ namespace Spark;
 
 use Spark\Contracts\EventDispatcherContract;
 use Spark\Exceptions\InvalidEventCallbackException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class EventDispatcher
@@ -14,6 +15,8 @@ use Spark\Exceptions\InvalidEventCallbackException;
  */
 class EventDispatcher implements EventDispatcherContract
 {
+    use Macroable;
+
     /**
      * Constructor for the EventDispatcher class.
      *

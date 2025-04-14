@@ -6,6 +6,7 @@ use Spark\Contracts\Database\QueryBuilderContract;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Support\Collection;
+use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
 use PDO;
 use PDOStatement;
@@ -20,6 +21,8 @@ use PDOStatement;
  */
 class QueryBuilder implements QueryBuilderContract
 {
+    use Macroable;
+
     /**
      * Holds the SQL and bind parameters for the WHERE clause.
      * 

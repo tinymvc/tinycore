@@ -7,6 +7,7 @@ use Spark\Contracts\Database\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Model
@@ -18,6 +19,8 @@ use Spark\Database\QueryBuilder;
  */
 abstract class Model implements ModelContract, Arrayable
 {
+    use Macroable;
+
     /**
      * @var string The table name associated with this model.
      */

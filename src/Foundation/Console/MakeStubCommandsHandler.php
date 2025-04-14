@@ -47,7 +47,7 @@ class MakeStubCommandsHandler
             'What is the name of the migration?',
             [
                 'stub' => __DIR__ . '/stubs/migration.stub',
-                'destination' => 'database/migrations/::subfolder:lowercase/migration_::name:pluralize:lowercase_' . date('Y_m_d_His') . '.php',
+                'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
                 'replacements' => [
                     '{{ table }}' => '::name:pluralize:lowercase',
                 ],

@@ -4,6 +4,7 @@ namespace Spark\Utils;
 
 use Spark\Contracts\Utils\UploaderUtilContract;
 use Spark\Exceptions\Utils\UploaderUtilException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class uploader
@@ -16,6 +17,8 @@ use Spark\Exceptions\Utils\UploaderUtilException;
  */
 class Uploader implements UploaderUtilContract
 {
+    use Macroable;
+
     /**
      * Upload directory path.
      *
@@ -33,9 +36,9 @@ class Uploader implements UploaderUtilContract
     /**
      * Whether to support multiple file uploads.
      *
-     * @var bool
+     * @var ?bool
      */
-    public bool $multiple;
+    public ?bool $multiple;
 
     /**
      * Maximum file size (in bytes).
@@ -142,7 +145,7 @@ class Uploader implements UploaderUtilContract
             $files = $_FILES[$files] ?? [];
         }
 
-        $this->multiple ??= count($files['name']) > 1;
+        $this->multiple ??= is_array($files['name']) && count($files['name']) > 1;
 
         if ($this->multiple) {
             $uploadedFiles = [];

@@ -6,6 +6,7 @@ use Spark\Contracts\HashContract;
 use Spark\Exception\Hash\DecryptionFailedException;
 use Spark\Exception\Hash\EncryptionFailedException;
 use Spark\Exception\Hash\InvalidEncryptingKeyException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Hash
@@ -17,6 +18,8 @@ use Spark\Exception\Hash\InvalidEncryptingKeyException;
  */
 class Hash implements HashContract
 {
+    use Macroable;
+
     /**
      * The algorithm used for password hashing.
      *

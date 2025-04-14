@@ -3,6 +3,7 @@
 namespace Spark\Utils;
 
 use Spark\Contracts\Utils\ViteUtilContract;
+use Spark\Support\Traits\Macroable;
 use Spark\Utils\Http;
 
 /**
@@ -16,6 +17,8 @@ use Spark\Utils\Http;
  */
 class Vite implements ViteUtilContract
 {
+    use Macroable;
+
     /** @var array Configuration array for the Vite helper */
     private array $config;
 

@@ -366,7 +366,7 @@ trait HasOrm
     private function generateForeignKey(string $tableOrColumn): string
     {
         return Str::lower(
-            Str::plural(Str::beforeLast($tableOrColumn, '_id'))
+            Str::singular(Str::beforeLast($tableOrColumn, '_id'))
         ) . '_id';
     }
 }

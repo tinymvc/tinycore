@@ -140,7 +140,7 @@ class Blueprint implements BlueprintContract
      */
     public function foreignId(string $name): ForeignKeyConstraint
     {
-        $this->integer($name)->unsigned();
+        $this->integer($name);
         return $this->foreign($name);
     }
 

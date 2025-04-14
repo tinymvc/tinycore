@@ -4,6 +4,7 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\AuthContract;
 use Spark\Database\Model;
+use Spark\Support\Traits\Macroable;
 use Throwable;
 
 /**
@@ -17,6 +18,8 @@ use Throwable;
  */
 class Auth implements AuthContract
 {
+    use Macroable;
+
     /**
      * @var false|Model The currently logged in user.
      */
@@ -85,6 +88,19 @@ class Auth implements AuthContract
 
         // Return the currently logged in user
         return $this->user;
+    }
+
+    /**
+     * Retrieves the currently logged in user.
+     *
+     * This method returns the currently authenticated user model if the user
+     * is logged in, or false if no user is authenticated.
+     *
+     * @return false|Model The user model or false if no user is logged in.
+     */
+    public function user(): false|Model
+    {
+        return $this->getUser();
     }
 
     /**

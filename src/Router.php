@@ -8,6 +8,7 @@ use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Router
@@ -18,6 +19,8 @@ use Spark\Http\Response;
  */
 class Router implements RouterContract
 {
+    use Macroable;
+
     /**
      * @var array $groupAttributes
      * 

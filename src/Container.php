@@ -15,6 +15,7 @@ use Spark\Exceptions\Container\ClassDoesNotExistsException;
 use Spark\Exceptions\Container\FailedToResolveParameterException;
 use Spark\Exceptions\Container\InvalidMethodCallingFormatException;
 use Spark\Exceptions\Container\MethodDoesNotExistsException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Container
@@ -25,6 +26,8 @@ use Spark\Exceptions\Container\MethodDoesNotExistsException;
  */
 class Container implements ContainerContract
 {
+    use Macroable;
+
     /**
      * Registered bindings.
      *

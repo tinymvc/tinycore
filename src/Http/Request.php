@@ -4,6 +4,7 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\RequestContract;
 use Spark\Http\Traits\ValidateRequest;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Request
@@ -15,6 +16,8 @@ use Spark\Http\Traits\ValidateRequest;
  */
 class Request implements RequestContract
 {
+    use Macroable;
+
     /**
      * Use the Validator trait to validate request data. If 
      * it fails, then redirect to previous page with error messages

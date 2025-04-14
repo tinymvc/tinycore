@@ -7,6 +7,7 @@ use PDOStatement;
 use Spark\Contracts\Database\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
 use Spark\Foundation\Application;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Database
@@ -17,6 +18,8 @@ use Spark\Foundation\Application;
  */
 class DB implements DBContract
 {
+    use Macroable;
+
     /**
      * Store the PDO connection of database.
      * 

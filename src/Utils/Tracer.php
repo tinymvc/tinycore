@@ -4,6 +4,7 @@ namespace Spark\Utils;
 
 use Spark\Console\Prompt;
 use Spark\Contracts\Utils\TracerUtilContract;
+use Spark\Support\Traits\Macroable;
 use Spark\View;
 use Throwable;
 
@@ -17,6 +18,8 @@ use Throwable;
  */
 class Tracer implements TracerUtilContract
 {
+    use Macroable;
+
     /** @var Tracer $instance */
     public static self $instance;
 

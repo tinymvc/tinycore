@@ -620,7 +620,7 @@ if (!function_exists('with')) {
     }
 }
 
-if (function_exists('__invoke_callback')) {
+if (!function_exists('__invoke_callback')) {
     /**
      * Invoke the given callback with the given arguments.
      *

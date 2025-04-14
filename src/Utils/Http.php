@@ -4,6 +4,7 @@ namespace Spark\Utils;
 
 use Spark\Contracts\Utils\HttpUtilContract;
 use Spark\Exceptions\Utils\PingUtilException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Http
@@ -16,6 +17,8 @@ use Spark\Exceptions\Utils\PingUtilException;
  */
 class Http implements HttpUtilContract
 {
+    use Macroable;
+
     /**
      * Constructor for the ping class.
      *

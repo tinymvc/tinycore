@@ -4,6 +4,7 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\GateContract;
 use Spark\Exceptions\Http\AuthorizationException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Gate
@@ -15,6 +16,8 @@ use Spark\Exceptions\Http\AuthorizationException;
  */
 class Gate implements GateContract
 {
+    use Macroable;
+
     /**
      * Array of defined abilities.
      * Each ability is associated with a closure that receives parameters (the user and any extra arguments).

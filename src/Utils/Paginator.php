@@ -3,6 +3,7 @@
 namespace Spark\Utils;
 
 use Spark\Contracts\Utils\PaginatorUtilContract;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Paginator
@@ -14,6 +15,8 @@ use Spark\Contracts\Utils\PaginatorUtilContract;
  */
 class Paginator implements PaginatorUtilContract
 {
+    use Macroable;
+
     /**
      * @var int $pages Total number of pages.
      */

@@ -7,6 +7,7 @@ use Spark\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Http\Session;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class View
@@ -17,6 +18,8 @@ use Spark\Http\Session;
  */
 class View implements ViewContract
 {
+    use Macroable;
+
     /**
      * Path to the directory containing template files
      * 

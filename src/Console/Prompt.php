@@ -3,6 +3,7 @@
 namespace Spark\Console;
 
 use Spark\Console\Contracts\PromptContract;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Provides functionality for interacting with the user.
@@ -14,6 +15,8 @@ use Spark\Console\Contracts\PromptContract;
  */
 class Prompt implements PromptContract
 {
+    use Macroable;
+
     /**
      * Prompts the user with a question and returns their input.
      *

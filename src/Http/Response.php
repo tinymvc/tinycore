@@ -3,6 +3,7 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\ResponseContract;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Response
@@ -14,6 +15,8 @@ use Spark\Contracts\Http\ResponseContract;
  */
 class Response implements ResponseContract
 {
+    use Macroable;
+
     /**
      * Constructor
      * 

@@ -18,6 +18,7 @@ use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Queue\Queue;
 use Spark\Router;
+use Spark\Support\Traits\Macroable;
 use Spark\Translator;
 use Spark\Utils\Cache;
 use Spark\Http\Gate;
@@ -44,6 +45,8 @@ use Throwable;
  */
 class Application implements ApplicationContract
 {
+    use Macroable;
+
     /** @var Application Singleton instance of the application */
     public static Application $app;
 

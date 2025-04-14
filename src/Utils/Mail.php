@@ -4,6 +4,7 @@ namespace Spark\Utils;
 
 use PHPMailer\PHPMailer\PHPMailer;
 use Spark\Contracts\Utils\MailUtilContract;
+use Spark\Support\Traits\Macroable;
 use Spark\View;
 
 /**
@@ -17,6 +18,8 @@ use Spark\View;
  */
 class Mail extends PHPMailer implements MailUtilContract
 {
+    use Macroable;
+
     /**
      * Construct a new instance of the Mail utility class.
      *

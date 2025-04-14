@@ -5,6 +5,7 @@ namespace Spark\Database;
 use Spark\Console\Prompt;
 use Spark\Contracts\Database\MigrationContract;
 use Spark\Database\Exceptions\InvalidMigrationFile;
+use Throwable;
 
 /**
  * Class Migration
@@ -97,32 +98,36 @@ class Migration implements MigrationContract
         // Sort files for consistency in the order they are applied.
         sort($files);
 
-        foreach ($files as $file) {
-            if (basename($file) === 'migrations.json') {
-                continue;
+        try {
+            foreach ($files as $file) {
+                if (basename($file) === 'migrations.json') {
+                    continue;
+                }
+
+                $migrationName = basename($file);
+
+                // Skip if this migration has already been applied.
+                if (in_array($migrationName, $appliedMigrations)) {
+                    continue;
+                }
+
+                // Include the migration file; it should return an instance with up() and down() methods.
+                $migration = require $file;
+
+                if (is_object($migration) && method_exists($migration, 'up')) {
+                    $migration->up();
+
+                    $this->prompt->message("Applied migration: {$migrationName}", 'success');
+
+                    $appliedMigrations[] = $migrationName;
+                }
             }
-
-            $migrationName = basename($file);
-
-            // Skip if this migration has already been applied.
-            if (in_array($migrationName, $appliedMigrations)) {
-                continue;
-            }
-
-            // Include the migration file; it should return an instance with up() and down() methods.
-            $migration = require $file;
-
-            if (is_object($migration) && method_exists($migration, 'up')) {
-                $migration->up();
-
-                $this->prompt->message("Applied migration: {$migrationName}", 'success');
-
-                $appliedMigrations[] = $migrationName;
-            }
+            // Save the list of applied migrations
+            $this->saveAppliedMigrations($appliedMigrations);
+        } catch (Throwable $e) {
+            $this->saveAppliedMigrations($appliedMigrations); // Save the list of applied migrations
+            throw $e;
         }
-
-        // Save the list of applied migrations
-        $this->saveAppliedMigrations($appliedMigrations);
     }
 
     /**
@@ -142,31 +147,40 @@ class Migration implements MigrationContract
             return;
         }
 
+        // Reverse the applied migrations, so they are applied in the correct order
+        $remainingMigrations = array_reverse($appliedMigrations);
+
         // Determine the migrations to rollback: the last $steps applied migrations.
-        $migrationsToRollback = array_slice($appliedMigrations, -$steps);
+        $migrationsToRollback = array_slice($remainingMigrations, 0, $steps);
 
-        foreach ($migrationsToRollback as $migrationName) {
-            $file = $this->migrationsFolder . DIRECTORY_SEPARATOR . $migrationName;
+        try {
+            foreach ($migrationsToRollback as $index => $migrationName) {
+                $file = $this->migrationsFolder . DIRECTORY_SEPARATOR . $migrationName;
 
-            if (!file_exists($file)) {
-                $this->prompt->message("Migration file not found: {$migrationName}", 'warning');
-                continue;
+                if (!file_exists($file)) {
+                    $this->prompt->message("Migration file not found: {$migrationName}", 'warning');
+                    continue;
+                }
+
+                $migration = require $file;
+
+                if (is_object($migration) && method_exists($migration, 'down')) {
+                    $migration->down();
+
+                    $this->prompt->message("Rolled back migration: {$migrationName}", 'success');
+
+                    // Remove the rolled back migration from the list
+                    $remainingMigrations = array_slice($remainingMigrations, $index + 1);
+                }
             }
-
-            $migration = require $file;
-
-            if (is_object($migration) && method_exists($migration, 'down')) {
-                $migration->down();
-
-                $this->prompt->message("Rolled back migration: {$migrationName}", 'success');
-            }
+            // Save the list of applied migrations
+            $remainingMigrations = array_reverse($remainingMigrations);
+            $this->saveAppliedMigrations($remainingMigrations);
+        } catch (Throwable $e) {
+            $remainingMigrations = array_reverse($remainingMigrations);
+            $this->saveAppliedMigrations($remainingMigrations); // Save the list of applied migrations
+            throw $e;
         }
-
-        // Update the migration record by removing the rolled-back migrations.
-        $remainingMigrations = array_slice($appliedMigrations, 0, -$steps);
-
-        // Save the list of applied migrations
-        $this->saveAppliedMigrations($remainingMigrations);
     }
 
     /**

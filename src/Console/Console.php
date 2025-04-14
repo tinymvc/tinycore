@@ -5,9 +5,12 @@ namespace Spark\Console;
 use Spark\Console\Contracts\ConsoleContract;
 use Spark\Console\Exeptions\NotAllowedException;
 use Spark\Foundation\Application;
+use Spark\Support\Traits\Macroable;
 
 class Console implements ConsoleContract
 {
+    use Macroable;
+
     /**
      * Constructs a new instance of the Console class.
      *

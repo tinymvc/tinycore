@@ -4,6 +4,7 @@ namespace Spark\Utils;
 
 use Spark\Contracts\Utils\CacheUtilContract;
 use Spark\Exceptions\Utils\FailedToSaveCacheFileException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Cache
@@ -16,6 +17,8 @@ use Spark\Exceptions\Utils\FailedToSaveCacheFileException;
  */
 class Cache implements CacheUtilContract
 {
+    use Macroable;
+
     /** @var string Path to the cache file */
     private string $cachePath;
 
