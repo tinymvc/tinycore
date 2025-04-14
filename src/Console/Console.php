@@ -42,6 +42,12 @@ class Console implements ConsoleContract
         // Retrieve the command name from the command line arguments
         $commandName = $argv[1] ?? null;
 
+        // Get the command line arguments
+        $rawArgs = array_slice($argv, 2);
+
+        // Parse the arguments
+        $parsedArgs = $this->parseArguments($rawArgs);
+
         $this->prompt->newline(); // Add a newline
 
         if (!$commandName) {
@@ -60,7 +66,7 @@ class Console implements ConsoleContract
         }
 
         // Execute the specified command
-        $this->executeCommand($commandName);
+        $this->executeCommand($commandName, $parsedArgs);
     }
 
     /**
@@ -71,24 +77,19 @@ class Console implements ConsoleContract
      * 
      * @param string $name
      *   The name of the command to execute.
+     * 
+     * @param array $args
+     *   The parsed arguments for the command.
      *   
      * @return void
      */
-    public function executeCommand(string $name): void
+    public function executeCommand(string $name, array $args): void
     {
-        global $argv;
-
-        // Get the command line arguments
-        $rawArgs = array_slice($argv, 2);
-
-        // Parse the arguments
-        $parsedArgs = $this->parseArguments($rawArgs);
-
         // Get the command instance
         $command = $this->commands->getCommand($name);
 
         // Execute the command
-        Application::$app->container->call($command['callback'], ['args' => $parsedArgs]);
+        Application::$app->container->call($command['callback'], ['args' => $args]);
     }
 
 
