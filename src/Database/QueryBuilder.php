@@ -905,8 +905,13 @@ class QueryBuilder implements QueryBuilderContract
         $on = $field1;
         $table = $this->grammar->wrapTable($this->prefix . $table);
 
-        if (!is_null($operator)) {
-            $on = $field1 . ' ' . $operator . ' ' . $field2;
+        if ($operator !== null) {
+            if ($field2 === null) {
+                $field2 = $operator;
+                $operator = '=';
+            }
+
+            $on = "$field1 $operator $field2";
         }
 
         $this->query['joins'] .= " {$type}JOIN $table ON $on";
