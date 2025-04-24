@@ -23,9 +23,9 @@ interface QueryBuilderContract
      *
      * @param array $data The data to insert.
      * @param array $config Optional configuration for the query.
-     * @return int The number of rows inserted.
+     * @return int|array Returns last insert ID or array of returned data (PostgreSQL with returning)
      */
-    public function insert(array $data, array $config = []): int;
+    public function insert(array $data, array $config = []): int|array;
 
     /**
      * Add a where clause to the query.
@@ -66,13 +66,17 @@ interface QueryBuilderContract
     public function select(array|string $fields = '*'): self;
 
     /**
-     * Add a join to the query.
+     * Adds a JOIN clause to the query.
      *
-     * @param string $table The table to join.
-     * @param string $condition The condition for the join.
-     * @return QueryBuilderContract Returns the query builder instance.
+     * @param string      $table    The table to join.
+     * @param string|null $field1   The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2   The second field to join on.
+     * @param string      $type     The type of the join (e.g., LEFT, RIGHT, INNER).
+     *
+     * @return self Returns the query builder instance.
      */
-    public function join(string $table, string $condition): self;
+    public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self;
 
     /**
      * Get the first row of the result set.

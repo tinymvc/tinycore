@@ -2,9 +2,11 @@
 
 namespace Spark\Database;
 
+use Closure;
 use Spark\Contracts\Database\QueryBuilderContract;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
+use Spark\Database\Schema\Grammar;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
@@ -28,7 +30,7 @@ class QueryBuilder implements QueryBuilderContract
      * 
      * @var array
      */
-    private array $where = ['sql' => '', 'bind' => []];
+    private array $where = ['sql' => '', 'bind' => [], 'grouped' => false];
 
     /**
      * Holds the SQL structure, join conditions, and join count.
@@ -52,6 +54,20 @@ class QueryBuilder implements QueryBuilderContract
     private string $table;
 
     /**
+     * Holds the table prefix to be used for the query.
+     * 
+     * @var string $prefix
+     */
+    private string $prefix = '';
+
+    /**
+     * Holds the database schema grammar for the query.
+     * 
+     * @var \Spark\Database\Schema\Grammar
+     */
+    private Grammar $grammar;
+
+    /**
      * Constructor for the query class.
      *
      * Initializes the query object with a database instance, 
@@ -61,6 +77,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function __construct(private DB $database)
     {
+        $this->grammar = new Grammar($this->database->getDriver());
     }
 
     /**
@@ -72,6 +89,18 @@ class QueryBuilder implements QueryBuilderContract
     public function table(string $table): self
     {
         $this->table = $table;
+        return $this;
+    }
+
+    /**
+     * Sets the table prefix to be used for the query.
+     * 
+     * @param string $prefix The table prefix to set.
+     * @return self
+     */
+    public function prefix(string $prefix): self
+    {
+        $this->prefix = $prefix;
         return $this;
     }
 
@@ -90,91 +119,50 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Inserts data into the database with optional configurations.
      * 
-     * @param array $data The data to insert.
-     * @param array $config Optional configurations ['ignore' => false, 'replace' => false, 'conflict' => ['id'], 'update' => []]
-     * @return int
+     * @param array $data The data to insert (single record or multiple records)
+     * @param array $config Optional configurations [
+     *     'ignore' => bool,      // Skip errors on duplicate
+     *     'replace' => bool,     // Replace existing records
+     *     'conflict' => array,   // Conflict target columns (for ON CONFLICT)
+     *     'update' => array,     // Columns to update on conflict
+     *     'returning' => mixed   // Columns to return (PostgreSQL)
+     * ]
+     * @return int|array Returns last insert ID or array of returned data (PostgreSQL with returning)
+     * @throws QueryBuilderException
      */
-    public function insert(array $data, array $config = []): int
+    public function insert(array $data, array $config = []): int|array
     {
-        // Ignore insert when data is empty.
         if (empty($data)) {
             return 0;
         }
 
-        // Transform Single record into multiple.
-        if (!(isset($data[0]) && is_array($data[0]))) {
-            $data = [$data];
-        }
+        // Normalize data to always be an array of records
+        $data = !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
 
-        // Extract database tables fields from first record.
         $fields = array_keys($data[0]);
 
-        // Create and run sql insert command.
-        $statement = $this->database->prepare(
-            sprintf(
-                // sql insert command.
-                "%s %s INTO {$this->table} (%s) VALUES %s %s;",
+        // Generate the SQL statement
+        $sql = $this->compileInsert($data, $config);
 
-                // create or replace data into database 
-                isset($config['replace']) && $config['replace'] === true ?
-                'REPLACE' : 'INSERT',
-
-                // use ignore when failed
-                isset($config['ignore']) && $config['ignore'] === true ?
-                ($this->database->getConfig('driver') === 'sqlite' ? 'OR IGNORE' : 'IGNORE') : '',
-
-                // join all the database table field using "," comma.
-                join(',', $fields),
-
-                // use placeholder of records and bind value later, to avoid sql injection.
-                $this->createPlaceholder($data),
-
-                // bulk update database records on conflict.
-                isset($config['update']) && !empty($config['update']) ?
-                ($this->database->getConfig('driver') === 'sqlite' ?
-                        // bulk update records when pdo driver is sqlite.
-                    ('ON CONFLICT(' . join(',', $config['conflict'] ?? ['id']) . ') DO UPDATE SET ' . (join(
-                        ', ',
-                        array_map(
-                            fn($key, $value) => sprintf('%s = excluded.%s', $key, $value),
-                            array_keys($config['update']),
-                            array_values($config['update'])
-                        )
-                    )))
-                    // bulk update records when pdo driver is mysql.
-                    : ('ON DUPLICATE KEY UPDATE ' . (join(
-                        ', ',
-                        array_map(
-                            fn($key, $value) => sprintf('%s = VALUES(%s)', $key, $value),
-                            array_keys($config['update']),
-                            array_values($config['update'])
-                        )
-                    )))
-                ) : ''
-            )
-        );
-
+        // Prepare the statement
+        $statement = $this->database->prepare($sql);
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
         }
 
-        // Bind records value into statement.
-        foreach ($data as $serial => $row) {
-            foreach ($fields as $column) {
-                $statement->bindValue(
-                    sprintf(':%s_%s', $column, $serial),
-                    isset($row[$column]) && is_array($row[$column]) ?
-                    ($row[$column]['text'] ?? null) : ($row[$column] ?? null)
-                );
-            }
-        }
+        // Bind all values
+        $this->bindInsertValues($statement, $data, $fields);
 
-        // Execute insert query command.
+        // Execute the statement
         if ($statement->execute() === false) {
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        // Returns the last inserted ID.
+        // Handle PostgreSQL RETURNING clause
+        if ($this->grammar->isPostgreSQL() && isset($config['returning'])) {
+            return $statement->fetchAll(PDO::FETCH_ASSOC);
+        }
+
         return $this->database->getPdo()->lastInsertId();
     }
 
@@ -216,7 +204,7 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Add a where clause to the query.
      *
-     * @param string|array $column 
+     * @param string|array|Closure $column 
      *   The column name to query, or an array of column names.
      * @param string|null $operator 
      *   The operator to use. If null, the operator will be determined
@@ -224,39 +212,89 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value 
      *   The value to query. If null, the value will be determined
      *   based on the operator given.
-     * @param ?string $type 
+     * @param ?string $andOr 
      *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @param bool $not
+     *   If true, the where clause will be negated.
+     * 
      * @return self
      */
-    public function where(string|array $column = null, ?string $operator = null, mixed $value = null, ?string $type = null): self
+    public function where(string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false): self
     {
-        $type ??= 'AND';
-
         if ($column !== null) {
-            return $this->addWhere($type, $column, $operator, $value);
+            return $this;
+        } elseif ($column instanceof Closure) {
+            return $column($this);
         }
 
+        $andOr ??= 'AND';
+
+        // Holds a conditional clause for database.
+        $command = '';
+
+        if (is_string($column) && is_string($operator)) {
+            // Create a where clause from column, operator, and value.
+            // for example: "title like :title"
+            if ($value === null) {
+                $value = $operator;
+                $operator = '=';
+            }
+
+            $command = sprintf(
+                "%s %s %s :%s",
+                $andOr,
+                $column,
+                $operator,
+                str_replace('.', '', $column)
+            );
+            $this->where['bind'] = array_merge($this->where['bind'], [$column => $value]);
+        } elseif (is_array($column) && $operator === null && $value === null) {
+            // Create a where clause from array conditions.
+            $command = sprintf(
+                "%s %s",
+                $andOr,
+                implode(
+                    " {$andOr} ",
+                    array_map(
+                        fn($attr, $value) => $attr . (is_array($value) ?
+                            // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
+                            sprintf(
+                                ($not ? ' IS NOT' : '') . " IN (%s)",
+                                join(",", array_map(fn($index) => ':' . str_replace('.', '', $attr) . '_' . $index, array_keys($value)))
+                            )
+                            // Create a where close to match is equal, Ex. "id = :id_0"
+                            : ($not ? ' !=' : ' =') . " :" . str_replace('.', '', $attr)
+                        ),
+                        array_keys($column),
+                        array_values($column)
+                    )
+                )
+            );
+
+            // Append where clause binding values, safe & GOOD PDO practice.
+            $this->where['bind'] = array_merge($this->where['bind'], $column);
+        } elseif (is_string($column) && $operator === null && $value === null) {
+            // Simply add a where clause from string.
+            $command = "{$andOr} {$column}";
+        } else {
+            throw new QueryBuilderInvalidWhereClauseException('Invalid where clause');
+        }
+
+        // Grouped where clauses.
+        if ($this->where['grouped']) {
+            $command = "($command";
+            $this->where['grouped'] = false;
+        }
+
+        // Register the where clause into current query builder.
+        $this->where['sql'] .= sprintf(
+            ' %s ',
+            empty($this->where['sql']) ? ltrim($command, "$andOr ") : $command
+        );
+
+        // Returns the current instance for method chaining.
         return $this;
     }
-
-    /**
-     * Add an AND where clause to the query.
-     *
-     * @param string|array $column
-     *   The column name to query, or an array of column names.
-     * @param string|null $operator
-     *   The operator to use. If null, the operator will be determined
-     *   based on the value given.
-     * @param mixed $value
-     *   The value to query. If null, the value will be determined
-     *   based on the operator given.
-     * @return self
-     */
-    public function andWhere(string|array $column = null, ?string $operator = null, $value = null): self
-    {
-        return $this->addWhere('AND', $column, $operator, $value);
-    }
-
 
     /**
      * Add an OR where clause to the query.
@@ -274,7 +312,376 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function orWhere(string|array $column = null, ?string $operator = null, $value = null): self
     {
-        return $this->addWhere('OR', $column, $operator, $value);
+        return $this->where($column, $operator, $value, 'OR');
+    }
+
+    /**
+     * Add an AND NOT where clause to the query.
+     *
+     * @param string|array $column
+     *   The column name to query, or an array of column names.
+     * @param string|null $operator
+     *   The operator to use. If null, the operator will be determined
+     *   based on the value given.
+     * @param mixed $value
+     *   The value to query. If null, the value will be determined
+     *   based on the operator given.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function notWhere(string|array $column = null, ?string $operator = null, $value = null): self
+    {
+        return $this->where($column, $operator, $value, 'AND', true);
+    }
+
+    /**
+     * Add an OR NOT where clause to the query.
+     *
+     * @param string|array $column
+     *   The column name to query, or an array of column names.
+     * @param string|null $operator
+     *   The operator to use. If null, the operator will be determined
+     *   based on the value given.
+     * @param mixed $value
+     *   The value to query. If null, the value will be determined
+     *   based on the operator given.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orNotWhere(string|array $column = null, ?string $operator = null, $value = null): self
+    {
+        return $this->where($column, $operator, $value, 'OR', true);
+    }
+
+    /**
+     * Adds a WHERE condition that the given column is null.
+     *
+     * @param string $where
+     *   The column name to query.
+     * @param bool $not
+     *   Whether to use IS NOT NULL instead of IS NULL.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereNull($where, $not = false): self
+    {
+        $where = $where . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
+
+        return $this->where($where);
+    }
+
+    /**
+     * Adds a WHERE condition that the given column is not null.
+     *
+     * @param string $where
+     *   The column name to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereNotNull($where): self
+    {
+        return $this->whereNull($where, true);
+    }
+
+    /**
+     * Add a WHERE condition that the given column is in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function in(string $column, array $values): self
+    {
+        return $this->where([$column => $values]);
+    }
+
+    /**
+     * Add a WHERE condition that the given column is not in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function notIn(string $column, array $values): self
+    {
+        return $this->where(column: [$column => $values], not: true);
+    }
+
+    /**
+     * Add an OR WHERE condition that the given column is in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orIn($column, array $values): self
+    {
+        return $this->where(column: [$column => $values], andOr: 'OR');
+    }
+
+    /**
+     * Add an OR WHERE condition that the given column is not in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orNotIn($column, array $values): self
+    {
+        return $this->where(column: [$column => $values], andOr: 'OR ', not: true);
+    }
+
+    /**
+     * Add a WHERE condition using FIND_IN_SET function.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param mixed $key
+     *   The key to find in the set.
+     * @param string $type
+     *   Optional type to prepend to the FIND_IN_SET clause (e.g., 'NOT').
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function findInSet($field, $key, $type = '', $andOr = 'AND'): self
+    {
+        // If the key is not numeric, wrap it with grammar-specific quotes
+        $key = is_numeric($key) ? $key : $this->grammar->wrap($key);
+
+        // Construct the FIND_IN_SET condition
+        $where = "{$type}FIND_IN_SET ($key, $field)";
+
+        // Add the condition to the query's WHERE clause
+        return $this->where(column: $where, andOr: $andOr);
+    }
+
+    /**
+     * Add a WHERE condition using FIND_IN_SET function, negated.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param mixed $key
+     *   The key to find in the set.
+     *
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function notFindInSet($field, $key): self
+    {
+        return $this->findInSet($field, $key, 'NOT ');
+    }
+
+    /**
+     * Add an OR WHERE condition using the FIND_IN_SET function.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param mixed $key
+     *   The key to find in the set.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orFindInSet($field, $key): self
+    {
+        return $this->findInSet($field, $key, '', 'OR');
+    }
+
+    /**
+     * Add an OR WHERE condition using the FIND_IN_SET function, negated.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param mixed $key
+     *   The key to find in the set.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orNotFindInSet($field, $key): self
+    {
+        return $this->findInSet($field, $key, 'NOT ', 'OR');
+    }
+
+    /**
+     * Add a WHERE condition that checks if the field is between two values.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $value1
+     *   The first value of the range.
+     * @param mixed $value2
+     *   The second value of the range.
+     * @param string $type
+     *   The type of comparison, e.g., 'NOT'.
+     * @param string $andOr
+     *   The logical operator to combine with previous conditions, e.g., 'AND' or 'OR'.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function between($field, $value1, $value2, $type = '', $andOr = 'AND'): self
+    {
+        $where = '(' . $field . ' ' . $type . 'BETWEEN '
+            . ($this->grammar->wrap($value1) . ' AND ' . $this->grammar->wrap($value2)) . ')';
+
+        return $this->where(column: $where, andOr: $andOr);
+    }
+
+    /**
+     * Add a WHERE condition that checks if the field is not between two values.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $value1
+     *   The first value of the range.
+     * @param mixed $value2
+     *   The second value of the range.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function notBetween($field, $value1, $value2): self
+    {
+        return $this->between($field, $value1, $value2, 'NOT ');
+    }
+
+    /**
+     * Add an OR WHERE condition that checks if the field is between two values.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $value1
+     *   The first value of the range.
+     * @param mixed $value2
+     *   The second value of the range.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orBetween($field, $value1, $value2): self
+    {
+        return $this->between($field, $value1, $value2, '', 'OR');
+    }
+
+    /**
+     * Add an OR WHERE condition that checks if the field is not between two values.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $value1
+     *   The first value of the range.
+     * @param mixed $value2
+     *   The second value of the range.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orNotBetween($field, $value1, $value2): self
+    {
+        return $this->between($field, $value1, $value2, 'NOT ', 'OR');
+    }
+
+    /**
+     * Add a WHERE condition using the LIKE operator.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $data
+     *   The data to match against using the LIKE operator.
+     * @param string $type
+     *   Optional type to prepend to the LIKE clause (e.g., 'NOT').
+     * @param string $andOr
+     *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function like($field, $data, $type = '', $andOr = 'AND'): self
+    {
+        $like = $this->grammar->wrap($data);
+        $where = "$field {$type}LIKE $like";
+
+        return $this->where(column: $where, andOr: $andOr);
+    }
+
+    /**
+     * Add an OR WHERE condition that checks if the field matches the given data
+     * using the LIKE operator.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $data
+     *   The data to match against using the LIKE operator.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orLike($field, $data): self
+    {
+        return $this->like($field, $data, '', 'OR');
+    }
+
+    /**
+     * Add an AND WHERE condition that checks if the field does not match
+     * the given data using the LIKE operator.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $data
+     *   The data to match against using the NOT LIKE operator.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function notLike($field, $data): self
+    {
+        return $this->like($field, $data, 'NOT ', 'AND');
+    }
+
+    /**
+     * Add an OR WHERE condition that checks if the field does not match
+     * the given data using the NOT LIKE operator.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param mixed $data
+     *   The data to match against using the NOT LIKE operator.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orNotLike($field, $data): self
+    {
+        return $this->like($field, $data, 'NOT ', 'OR');
+    }
+
+    /**
+     * Add a grouped WHERE condition.
+     *
+     * This method will execute the given callback with the current instance
+     * as the first parameter. The callback should call any of the where,
+     * orWhere, whereNull, or orWhereNull methods to add the desired
+     * conditions.
+     *
+     * The callback should not return anything, but the conditions will be
+     * added to the query.
+     *
+     * @param \Closure $callback
+     *   The callback to call to add the conditions.
+     *
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function grouped(Closure $callback)
+    {
+        $this->where['grouped'] = true;
+        call_user_func($callback, $this);
+        $this->where['sql'] .= ')';
+
+        return $this;
     }
 
     /**
@@ -294,10 +701,13 @@ class QueryBuilder implements QueryBuilderContract
             return false;
         }
 
+        // Prepare the table name
+        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+
         // Prepare the SQL update statement
         $statement = $this->database->prepare(
             sprintf(
-                "UPDATE {$this->table} SET %s %s",
+                "UPDATE {$table} SET %s %s",
                 implode(', ', array_map(fn($attr) => "$attr=:$attr", array_keys($data))),
                 $this->getWhereSql()
             )
@@ -342,8 +752,11 @@ class QueryBuilder implements QueryBuilderContract
             return false;
         }
 
+        // Prepare the table name
+        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+
         // Prepare the SQL delete statement
-        $statement = $this->database->prepare("DELETE FROM {$this->table} {$this->getWhereSql()}");
+        $statement = $this->database->prepare("DELETE FROM {$table} {$this->getWhereSql()}");
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -379,13 +792,69 @@ class QueryBuilder implements QueryBuilderContract
 
         if (stripos($fields, ' FROM ') === false) {
             // Build the FROM clause
-            $fields .= isset($this->table) ? " FROM {$this->table}" : '';
+            $fields .= isset($this->table) ? " FROM {$this->grammar->wrapTable($this->prefix . $this->table)}" : '';
         }
 
         // Build the initial SELECT SQL query
         $this->query['sql'] = "SELECT {$fields}";
 
         // Returns the current instance for method chaining.
+        return $this;
+    }
+
+    /**
+     * @param string      $field
+     * @param string|null $name
+     *
+     * @return $this
+     */
+    public function max($field, $name = null)
+    {
+        $column = 'MAX(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $this->select($column);
+
+        return $this;
+    }
+
+    /**
+     * @param string      $field
+     * @param string|null $name
+     *
+     * @return $this
+     */
+    public function min($field, $name = null)
+    {
+        $column = 'MIN(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $this->select($column);
+
+        return $this;
+    }
+
+    /**
+     * @param string      $field
+     * @param string|null $name
+     *
+     * @return $this
+     */
+    public function sum($field, $name = null)
+    {
+        $column = 'SUM(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $this->select($column);
+
+        return $this;
+    }
+
+    /**
+     * @param string      $field
+     * @param string|null $name
+     *
+     * @return $this
+     */
+    public function avg($field, $name = null)
+    {
+        $column = 'AVG(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $this->select($column);
+
         return $this;
     }
 
@@ -421,51 +890,119 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Adds a JOIN clause to the query.
+     *
+     * @param string      $table The table to join.
+     * @param string|null $field1 The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     * @param string      $type The type of the join (e.g., LEFT, RIGHT, INNER).
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
+    {
+        $on = $field1;
+        $table = $this->grammar->wrapTable($this->prefix . $table);
+
+        if (!is_null($operator)) {
+            $on = $field1 . ' ' . $operator . ' ' . $field2;
+        }
+
+        $this->query['joins'] .= " {$type}JOIN $table ON $on";
+
+        return $this;
+    }
+
+    /**
      * Adds an INNER JOIN clause to the query.
      *
-     * @param string $table  The table to join.
-     * @param string $condition  The join condition.
-     * @return self
+     * @param string      $table The table to join.
+     * @param string|null $field1 The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     *
+     * @return self The current instance for method chaining.
      */
-    public function join(string $table, string $condition): self
+    public function innerJoin($table, $field1, $operator = '', $field2 = '')
     {
-        return $this->addJoin('INNER', $table, $condition);
+        return $this->join($table, $field1, $operator, $field2, 'INNER ');
     }
 
     /**
      * Adds a LEFT JOIN clause to the query.
      *
-     * @param string $table  The table to join.
-     * @param string $condition  The join condition.
-     * @return self
+     * @param string      $table The table to join.
+     * @param string|null $field1 The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     *
+     * @return self The current instance for method chaining.
      */
-    public function leftJoin(string $table, string $condition): self
+    public function leftJoin($table, $field1, $operator = '', $field2 = '')
     {
-        return $this->addJoin('LEFT', $table, $condition);
+        return $this->join($table, $field1, $operator, $field2, 'LEFT ');
     }
 
     /**
      * Adds a RIGHT JOIN clause to the query.
      *
-     * @param string $table  The table to join.
-     * @param string $condition  The join condition.
-     * @return self
+     * @param string      $table The table to join.
+     * @param string|null $field1 The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     *
+     * @return self The current instance for method chaining.
      */
-    public function rightJoin(string $table, string $condition): self
+    public function rightJoin($table, $field1, $operator = '', $field2 = '')
     {
-        return $this->addJoin('RIGHT', $table, $condition);
+        return $this->join($table, $field1, $operator, $field2, 'RIGHT ');
     }
 
     /**
-     * Adds a CROSS JOIN clause to the query.
+     * Adds a FULL OUTER JOIN clause to the query.
      *
-     * @param string $table  The table to join.
-     * @param string $condition  The join condition.
-     * @return self
+     * @param string      $table The table to join.
+     * @param string|null $field1 The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     *
+     * @return self The current instance for method chaining.
      */
-    public function crossJoin(string $table, string $condition): self
+
+    public function fullOuterJoin($table, $field1, $operator = '', $field2 = '')
     {
-        return $this->addJoin('CROSS', $table, $condition);
+        return $this->join($table, $field1, $operator, $field2, 'FULL OUTER ');
+    }
+
+    /**
+     * Adds a LEFT OUTER JOIN clause to the query.
+     *
+     * @param string      $table The table to join.
+     * @param string|null $field1 The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function leftOuterJoin($table, $field1, $operator = '', $field2 = '')
+    {
+        return $this->join($table, $field1, $operator, $field2, 'LEFT OUTER ');
+    }
+
+    /**
+     * Adds a RIGHT OUTER JOIN clause to the query.
+     *
+     * @param string      $table The table to join.
+     * @param string|null $field1 The first field to join on.
+     * @param string|null $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function rightOuterJoin($table, $field1, $operator = '', $field2 = '')
+    {
+        return $this->join($table, $field1, $operator, $field2, 'RIGHT OUTER ');
     }
 
     /**
@@ -528,7 +1065,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function group(string|array $fields): self
     {
-        $this->query['group'] = implode(', ', (array) $fields);
+        $this->query['group'] = $this->grammar->columnize($fields);
         return $this;
     }
 
@@ -753,9 +1290,12 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function count(): int
     {
+        // Get table name.
+        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+
         // Create sql command to count rows.
         $statement = $this->database->prepare(
-            "SELECT COUNT(1) FROM {$this->table}"
+            "SELECT COUNT(1) FROM {$table}"
             . $this->query['alias']
             . $this->query['joins']
             . $this->getWhereSql()
@@ -789,66 +1329,6 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         return $data;
-    }
-
-    /**
-     * Adds a join clause to the query with a specified join type.
-     *
-     * @param string $type  The type of join (INNER, LEFT, RIGHT, CROSS).
-     * @param string $table  The table to join.
-     * @param string $condition  The join condition.
-     * @return self
-     */
-    private function addJoin(string $type, string $table, string $condition): self
-    {
-        // Build and add the join clause to the SQL query
-        $this->query['joins'] .= sprintf(" %s JOIN %s ON %s ", $type, $table, $condition);
-
-        // Returns the current instance for method chaining.
-        return $this;
-    }
-
-    /**
-     * Creates placeholders for SQL values in bulk insertions.
-     * 
-     * @param array $data The data array for placeholders.
-     * @return string
-     */
-    private function createPlaceholder(array $data): string
-    {
-        // Holds all records, to be going to inserted into the database.
-        $values = [];
-
-        // Add placeholders on each records, instead of actual value.
-        foreach ($data as $serial => $row) {
-
-            // Create dynamic placeholder, depands on parameters.
-            $params = array_map(
-                fn($attr, $value) => sprintf(
-                    '%s:%s_%s%s',
-
-                    // create placeholder from array value ex: ['prefix' => 'DATE('].
-                    is_array($value) && isset($value['prefix']) ?
-                    $value['prefix'] : '',
-
-                    // Placeholder main part.
-                    $attr,
-                    $serial,
-
-                    // create placeholder from array value ex: ['suffix' => ')'].
-                    is_array($value) && isset($value['suffix']) ?
-                    $value['suffix'] : ''
-                ),
-                array_keys($row),
-                array_values($row)
-            );
-
-            // Push this record by "," comma into $values.
-            $values[] = join(',', $params);
-        }
-
-        // Returns a string of placeholders for the SQL statement.
-        return '(' . join('), (', $values) . ')';
     }
 
     /**
@@ -900,84 +1380,6 @@ class QueryBuilder implements QueryBuilderContract
     private function getStatement(): PDOStatement
     {
         return $this->query['statement'];
-    }
-
-
-    /**
-     * Adds a WHERE clause to the current SQL query.
-     *
-     * This method allows building dynamic WHERE clauses using method chaining.
-     * It supports single column conditions, array-based conditions for complex
-     * clauses, and simple string clauses.
-     *
-     * @param string $method The logical method (e.g., WHERE, AND, OR) to use.
-     * @param string|array|null $column The column name or array of column-value pairs.
-     * @param string|null $operator The operator for the WHERE clause (e.g., '=', 'LIKE').
-     * @param mixed|null $value The value to compare the column to.
-     * @return self Returns the current instance for method chaining.
-     * @throws QueryBuilderInvalidWhereClauseException If the provided arguments are invalid.
-     */
-    private function addWhere(string $method, string|array $column = null, ?string $operator = null, $value = null): self
-    {
-        // Holds a conditional clause for database.
-        $command = '';
-
-        if (is_string($column) && is_string($operator)) {
-            // Create a where clause from column, operator, and value.
-            // for example: "title like :title"
-            if ($value === null) {
-                $value = $operator;
-                $operator = '=';
-            }
-
-            $command = sprintf(
-                "%s %s %s :%s",
-                $method,
-                $column,
-                $operator,
-                str_replace('.', '', $column)
-            );
-            $this->where['bind'] = array_merge($this->where['bind'], [$column => $value]);
-        } elseif (is_array($column) && $operator === null && $value === null) {
-            // Create a where clause from array conditions.
-            $command = sprintf(
-                "%s %s",
-                $method,
-                implode(
-                    " {$method} ",
-                    array_map(
-                        fn($attr, $value) => $attr . (is_array($value) ?
-                            // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
-                            sprintf(
-                                " IN (%s)",
-                                join(",", array_map(fn($index) => ':' . str_replace('.', '', $attr) . '_' . $index, array_keys($value)))
-                            )
-                            // Create a where close to match is equal, Ex. "id = :id_0"
-                            : " = :" . str_replace('.', '', $attr)
-                        ),
-                        array_keys($column),
-                        array_values($column)
-                    )
-                )
-            );
-
-            // Append where clause binding values, safe & GOOD PDO practice.
-            $this->where['bind'] = array_merge($this->where['bind'], $column);
-        } elseif (is_string($column) && $operator === null && $value === null) {
-            // Simply add a where clause from string.
-            $command = "{$method} {$column}";
-        } else {
-            throw new QueryBuilderInvalidWhereClauseException('Invalid where clause');
-        }
-
-        // Register the where clause into current query builder.
-        $this->where['sql'] .= sprintf(
-            ' %s ',
-            empty($this->where['sql']) ? ltrim($command, "$method ") : $command
-        );
-
-        // Returns the current instance for method chaining.
-        return $this;
     }
 
     /**
@@ -1038,7 +1440,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function resetWhere(): void
     {
-        $this->where = ['sql' => '', 'bind' => []];
+        $this->where = ['sql' => '', 'bind' => [], 'grouped' => false];
     }
 
     /**
@@ -1053,6 +1455,180 @@ class QueryBuilder implements QueryBuilderContract
 
         // Reset where query parameters.
         $this->resetWhere();
+    }
+
+    /**
+     * Compiles the INSERT SQL statement based on configuration.
+     * 
+     * @param array $data The data to be inserted.
+     * @param array $config The configuration array.
+     * @return string The compiled INSERT SQL statement.
+     */
+    private function compileInsert(array $data, array $config): string
+    {
+        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+
+        // Base command (INSERT/REPLACE)
+        $command = $this->getInsertCommand($config);
+
+        // IGNORE modifier
+        $ignore = $this->getIgnoreModifier($config);
+
+        // Columns
+        $columns = $this->grammar->columnize(
+            array_keys($data[0]) // Get keys from first record
+        );
+
+        // Values placeholders
+        $values = $this->createPlaceholder($data);
+
+        // ON CONFLICT/DUPLICATE KEY UPDATE clause
+        $conflict = $this->compileConflictClause($config);
+
+        // RETURNING clause (PostgreSQL)
+        $returning = $this->compileReturningClause($config);
+
+        return trim("$command $ignore INTO $table ($columns) VALUES $values $conflict $returning");
+    }
+
+    /**
+     * Gets the appropriate INSERT command based on configuration.
+     * 
+     * @param array $config The configuration array.
+     * @return string The INSERT command.
+     */
+    private function getInsertCommand(array $config): string
+    {
+        if (isset($config['replace']) && $config['replace'] === true) {
+            return $this->grammar->isMySQL() ? 'REPLACE' : 'INSERT';
+        }
+        return 'INSERT';
+    }
+
+    /**
+     * Gets the IGNORE modifier for the INSERT statement.
+     * 
+     * @param array $config The configuration array.
+     * @return string The IGNORE modifier.
+     */
+    private function getIgnoreModifier(array $config): string
+    {
+        if (!isset($config['ignore']) || $config['ignore'] !== true) {
+            return '';
+        }
+
+        if ($this->grammar->isSQLite()) {
+            return 'OR IGNORE';
+        }
+
+        if ($this->grammar->isMySQL()) {
+            return 'IGNORE';
+        }
+
+        // PostgreSQL doesn't support IGNORE, we'll use ON CONFLICT DO NOTHING instead
+        return '';
+    }
+
+    /**
+     * Compiles the conflict resolution clause.
+     * 
+     * @param array $config The configuration array.
+     * @return string The compiled conflict resolution clause.
+     */
+    private function compileConflictClause(array $config): string
+    {
+        if (empty($config['update'])) {
+            // For PostgreSQL with ignore but no update, use DO NOTHING
+            if ($this->grammar->isPostgreSQL() && isset($config['ignore']) && $config['ignore'] === true) {
+                $conflictColumns = $this->grammar->columnize($config['conflict'] ?? ['id']);
+                return "ON CONFLICT ($conflictColumns) DO NOTHING";
+            }
+            return '';
+        }
+
+        $conflictColumns = $this->grammar->columnize($config['conflict'] ?? ['id']);
+        $updates = [];
+
+        foreach ($config['update'] as $key => $value) {
+            if ($this->grammar->isPostgreSQL()) {
+                $updates[] = $this->grammar->wrapColumn($key) . ' = EXCLUDED.' . $this->grammar->wrapColumn($value);
+            } elseif ($this->grammar->isMySQL()) {
+                $updates[] = $this->grammar->wrapColumn($key) . ' = VALUES(' . $this->grammar->wrapColumn($value) . ')';
+            } elseif ($this->grammar->isSQLite()) {
+                $updates[] = $this->grammar->wrapColumn($key) . ' = excluded.' . $this->grammar->wrapColumn($value);
+            }
+        }
+
+        if ($this->grammar->isPostgreSQL() || $this->grammar->isSQLite()) {
+            return "ON CONFLICT ($conflictColumns) DO UPDATE SET " . implode(', ', $updates);
+        }
+
+        return 'ON DUPLICATE KEY UPDATE ' . implode(', ', $updates);
+    }
+
+    /**
+     * Compiles the RETURNING clause for PostgreSQL.
+     * 
+     * @param array $config The configuration array.
+     * @return string The compiled RETURNING clause.
+     */
+    private function compileReturningClause(array $config): string
+    {
+        if (!$this->grammar->isPostgreSQL() || empty($config['returning'])) {
+            return '';
+        }
+
+        $returning = is_array($config['returning'])
+            ? $config['returning']
+            : [$config['returning']];
+
+        return 'RETURNING ' . $this->grammar->columnize($returning);
+    }
+
+    /**
+     * Binds all values for the insert statement.
+     * 
+     * @param PDOStatement $statement The PDO statement.
+     * @param array $data The data to bind.
+     */
+    private function bindInsertValues(PDOStatement $statement, array $data, array $fields): void
+    {
+        foreach ($data as $serial => $row) {
+            foreach ($fields as $column) {
+                $value = $row[$column] ?? null;
+
+                // Handle array values (for functions/expressions)
+                if (is_array($value)) {
+                    $value = $value['text'] ?? ($value['value'] ?? null);
+                }
+
+                $statement->bindValue(
+                    sprintf(':%s_%s', $column, $serial),
+                    $value,
+                    $this->getParameterType($value)
+                );
+            }
+        }
+    }
+
+    /**
+     * Determines the PDO parameter type for a value.
+     * 
+     * @param mixed $value The value to determine the parameter type for.
+     * @return int The PDO parameter type.
+     */
+    private function getParameterType(mixed $value): int
+    {
+        if (is_int($value)) {
+            return PDO::PARAM_INT;
+        }
+        if (is_bool($value)) {
+            return PDO::PARAM_BOOL;
+        }
+        if (is_null($value)) {
+            return PDO::PARAM_NULL;
+        }
+        return PDO::PARAM_STR;
     }
 
     /**
