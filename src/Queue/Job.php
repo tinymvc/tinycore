@@ -216,7 +216,7 @@ class Job implements JobContract
 
         try {
             // Execute the job's closure function.
-            __invoke_callback($this->callback, $this);
+            Application::$app->container->call($this->callback, [$this]);
         } catch (Throwable $e) {
             // Call the 'error' event listeners to execute any code that needs to be run when an error occurs during the job processing.
             $this->eventDispatcher->dispatch('error', $e, $this);

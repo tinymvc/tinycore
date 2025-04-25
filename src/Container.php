@@ -13,7 +13,7 @@ use Spark\Contracts\ContainerContract;
 use Spark\Exceptions\Container\BuildServiceException;
 use Spark\Exceptions\Container\ClassDoesNotExistsException;
 use Spark\Exceptions\Container\FailedToResolveParameterException;
-use Spark\Exceptions\Container\InvalidMethodCallingFormatException;
+use Spark\Exceptions\Container\InvalidAliasException;
 use Spark\Exceptions\Container\MethodDoesNotExistsException;
 use Spark\Support\Traits\Macroable;
 
@@ -175,18 +175,8 @@ class Container implements ContainerContract
      */
     public function call(array|string|callable $abstract, array $parameters = []): mixed
     {
-        // __invoke the callback. e.x, MyCustomLib::class => MyCustomLib->__invoke();
-        if (
-            is_string($abstract) && class_exists($abstract) &&
-            !is_callable($abstract)
-        ) {
-            $callback = $this->get($abstract); // Resolve the class instance
-            return $callback(...$parameters); // Call __invoke method
-        }
-
-        // If it's a closure or callable
+        // If it's a closure or callable, just call it with dependencies
         if (is_callable($abstract)) {
-            // If it's a closure or callable, just call it with dependencies
             $reflectionFunction = new ReflectionFunction($abstract);
             $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters);
 
@@ -200,7 +190,7 @@ class Container implements ContainerContract
         } elseif (is_array($abstract)) {
             [$class, $method] = $abstract;
         } else {
-            throw new InvalidMethodCallingFormatException("Invalid call format. Expected 'ClassName@methodName' or '[ClassName, methodName]'.");
+            [$class, $method] = [$abstract, 'handle'];
         }
 
         // Resolve the class instance
@@ -208,7 +198,14 @@ class Container implements ContainerContract
 
         // Check if the method exists
         if (!method_exists($instance, $method)) {
-            throw new MethodDoesNotExistsException("Method {$method} does not exist in class {$class}.");
+            $method = '__invoke';
+        }
+
+        // Check if the method exists
+        if (!method_exists($instance, $method)) {
+            throw new MethodDoesNotExistsException(
+                "Method [$method] does not exist on class [$class]."
+            );
         }
 
         // Use reflection to resolve method parameters
@@ -236,15 +233,7 @@ class Container implements ContainerContract
     private function getReflectorDependencies(Reflector $reflector, array $parameters): array
     {
         $dependencies = array_map(
-            /**
-             * Resolve a parameter by first checking if it has been set in the $parameters array.
-             * If not, attempt to resolve it by calling the resolveParameter method.
-             *
-             * @param ReflectionParameter $param The parameter to resolve.
-             *
-             * @return mixed The resolved parameter.
-             */
-            fn(ReflectionParameter $param) => $parameters[$param->getName()] ?? $this->resolveParameter($param),
+            fn(ReflectionParameter $param) => $parameters[$param->getName()] ?? $this->resolveParameter($param, $parameters[$param->getPosition()] ?? null),
             $reflector->getParameters()
         );
 
@@ -442,12 +431,13 @@ class Container implements ContainerContract
      * the container. If the parameter has a default value, return that.
      *
      * @param ReflectionParameter $param The parameter to resolve.
+     * @param mixed $default The default value to return if the parameter has no value.
      *
      * @return mixed The resolved value.
      *
      * @throws FailedToResolveParameterException If the parameter could not be resolved.
      */
-    private function resolveParameter(ReflectionParameter $param): mixed
+    private function resolveParameter(ReflectionParameter $param, mixed $default = null): mixed
     {
         $type = $param->getType();
 
@@ -466,6 +456,10 @@ class Container implements ContainerContract
                     return $this->get($unionType->getName());
                 }
             }
+        }
+
+        if ($type instanceof ReflectionNamedType && $type->isBuiltin() && $default) {
+            return $default;
         }
 
         if ($param->isDefaultValueAvailable()) {

@@ -4,6 +4,7 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\GateContract;
 use Spark\Exceptions\Http\AuthorizationException;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -71,7 +72,7 @@ class Gate implements GateContract
     {
         // Run "before" callbacks; if any return a non-null result, use that.
         foreach ($this->beforeCallbacks as $callback) {
-            $result = __invoke_callback($callback, ...$arguments);
+            $result = Application::$app->container->call($callback, ...$arguments);
             if ($result !== null) {
                 return (bool) $result;
             }
@@ -83,7 +84,7 @@ class Gate implements GateContract
         }
 
         // Call the ability callback.
-        $result = __invoke_callback($this->definitions[$ability], ...$arguments);
+        $result = Application::$app->container->call($this->definitions[$ability], $arguments);
 
         return (bool) $result;
     }

@@ -148,6 +148,21 @@ class Router implements RouterContract
     }
 
     /**
+     * Add a route that matches multiple HTTP methods to the router.
+     * 
+     * @param array $methods An array of HTTP methods to match.
+     * @param string $path The path for the route.
+     * @param callable|string|array $callback The handler or callback for the route.
+     * 
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function match(array $methods, string $path, callable|string|array $callback): self
+    {
+        $this->add($path, $methods, $callback);
+        return $this;
+    }
+
+    /**
      * Add a route with a view to the router.
      * 
      * @param string $path The path for the route.
@@ -353,7 +368,7 @@ class Router implements RouterContract
     {
         // Iterate through all routes to find a match
         foreach ($this->routes as $route) {
-            if ($this->match($route['method'], $route['path'], $request)) {
+            if ($this->matchRoute($route['method'], $route['path'], $request)) {
                 // Add route-specific middleware to the middleware stack
                 $middleware->queue($route['middleware']);
 
@@ -386,7 +401,7 @@ class Router implements RouterContract
      * 
      * @return bool True if the route matches the request path and method, false otherwise.
      */
-    private function match($routeMethod, $routePath, Request $request): bool
+    private function matchRoute($routeMethod, $routePath, Request $request): bool
     {
         if ($routeMethod !== '*') {
             // Convert route method to uppercase

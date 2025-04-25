@@ -227,6 +227,21 @@ class Application implements ApplicationContract
     }
 
     /**
+     * Resolves a service or a value from the dependency injection container,
+     * by calling the given abstract as a function.
+     *
+     * This method takes an abstract name or class name and resolves it by
+     * calling it as a function. The resolved value is then returned.
+     *
+     * @param string $abstract The abstract name or class name of the service or value to be resolved.
+     * @return mixed The resolved service or value.
+     */
+    public function resolve(string $abstract): mixed
+    {
+        return $this->container->call($abstract);
+    }
+
+    /**
      * Checks if a given abstract has a binding in the container.
      *
      * @param string $abstract The abstract name or class name of the service or value to be checked.
@@ -330,11 +345,11 @@ class Application implements ApplicationContract
         } catch (InvalidCsrfTokenException) {
             abort(error: 419, message: 'Page Expired');
         } catch (Throwable $e) {
-            if (!config('debug')) {
-                abort(error: 500, message: 'Internal Server Error');
+            if (config('debug')) {
+                Tracer::$instance->handleException($e);
             }
 
-            Tracer::$instance->handleException($e);
+            abort(error: 500, message: 'Internal Server Error');
         }
     }
 

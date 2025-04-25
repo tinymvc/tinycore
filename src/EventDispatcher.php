@@ -4,6 +4,7 @@ namespace Spark;
 
 use Spark\Contracts\EventDispatcherContract;
 use Spark\Exceptions\InvalidEventCallbackException;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -89,7 +90,7 @@ class EventDispatcher implements EventDispatcherContract
 
             foreach ($eventListeners as $listener) {
                 // Invoke the callback with the provided arguments
-                __invoke_callback($listener['callback'], ...$args);
+                Application::$app->container->call($listener['callback'], $args);
             }
         }
     }
