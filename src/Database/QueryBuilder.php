@@ -77,7 +77,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function __construct(private DB $database)
     {
-        $this->grammar = new Grammar($this->database->getDriver());
+        $this->grammar = new Grammar($database->getDriver());
     }
 
     /**
@@ -90,6 +90,26 @@ class QueryBuilder implements QueryBuilderContract
     {
         $this->table = $table;
         return $this;
+    }
+
+    /**
+     * Returns the database instance associated with this query.
+     *
+     * @return DB The database instance associated with this query.
+     */
+    public function getDB(): DB
+    {
+        return $this->database;
+    }
+
+    /**
+     * Retrieves the database schema grammar instance associated with this query.
+     *
+     * @return Grammar The database schema grammar instance associated with this query.
+     */
+    public function getGrammar(): Grammar
+    {
+        return $this->grammar;
     }
 
     /**
@@ -224,7 +244,7 @@ class QueryBuilder implements QueryBuilderContract
         if ($column !== null) {
             return $this;
         } elseif ($column instanceof Closure) {
-            return $column($this);
+            return $this->grouped($column);
         }
 
         $andOr ??= 'AND';
@@ -243,7 +263,7 @@ class QueryBuilder implements QueryBuilderContract
             $command = sprintf(
                 "%s %s %s :%s",
                 $andOr,
-                $column,
+                $this->grammar->wrap($column),
                 $operator,
                 str_replace('.', '', $column)
             );
@@ -256,10 +276,10 @@ class QueryBuilder implements QueryBuilderContract
                 implode(
                     " {$andOr} ",
                     array_map(
-                        fn($attr, $value) => $attr . (is_array($value) ?
+                        fn($attr, $value) => $this->grammar->wrap($attr) . (is_array($value) ?
                             // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
                             sprintf(
-                                ($not ? ' IS NOT' : '') . " IN (%s)",
+                                ($not ? ' NOT' : '') . " IN (%s)",
                                 join(",", array_map(fn($index) => ':' . str_replace('.', '', $attr) . '_' . $index, array_keys($value)))
                             )
                             // Create a where close to match is equal, Ex. "id = :id_0"
@@ -458,7 +478,7 @@ class QueryBuilder implements QueryBuilderContract
     public function findInSet($field, $key, $type = '', $andOr = 'AND'): self
     {
         // If the key is not numeric, wrap it with grammar-specific quotes
-        $key = is_numeric($key) ? $key : $this->grammar->wrap($key);
+        $key = is_numeric($key) ? $key : $this->quote($key);
 
         // Construct the FIND_IN_SET condition
         $where = "{$type}FIND_IN_SET ($key, $field)";
@@ -532,7 +552,7 @@ class QueryBuilder implements QueryBuilderContract
     public function between($field, $value1, $value2, $type = '', $andOr = 'AND'): self
     {
         $where = '(' . $field . ' ' . $type . 'BETWEEN '
-            . ($this->grammar->wrap($value1) . ' AND ' . $this->grammar->wrap($value2)) . ')';
+            . ($this->quote($value1) . ' AND ' . $this->quote($value2)) . ')';
 
         return $this->where(column: $where, andOr: $andOr);
     }
@@ -604,7 +624,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function like($field, $data, $type = '', $andOr = 'AND'): self
     {
-        $like = $this->grammar->wrap($data);
+        $like = $this->quote($data);
         $where = "$field {$type}LIKE $like";
 
         return $this->where(column: $where, andOr: $andOr);
@@ -669,7 +689,7 @@ class QueryBuilder implements QueryBuilderContract
      * The callback should not return anything, but the conditions will be
      * added to the query.
      *
-     * @param \Closure $callback
+     * @param Closure $callback
      *   The callback to call to add the conditions.
      *
      * @return self
@@ -678,7 +698,7 @@ class QueryBuilder implements QueryBuilderContract
     public function grouped(Closure $callback)
     {
         $this->where['grouped'] = true;
-        call_user_func($callback, $this);
+        $callback($this);
         $this->where['sql'] .= ')';
 
         return $this;
@@ -708,7 +728,7 @@ class QueryBuilder implements QueryBuilderContract
         $statement = $this->database->prepare(
             sprintf(
                 "UPDATE {$table} SET %s %s",
-                implode(', ', array_map(fn($attr) => "$attr=:$attr", array_keys($data))),
+                implode(', ', array_map(fn($attr) => $this->grammar->wrap($attr) . " = :$attr", array_keys($data))),
                 $this->getWhereSql()
             )
         );
@@ -719,7 +739,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Bind the values for update
         foreach ($data as $key => $val) {
-            $statement->bindValue(":$key", $val);
+            $statement->bindValue(":$key", $val, $this->getParameterType($val));
         }
 
         // Bind the WHERE clause parameters
@@ -1223,9 +1243,19 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return \Spark\Support\Collection Array of query results.
      */
-    public function collect(): Collection
+    public function getCollection(): Collection
     {
         return collect($this->result());
+    }
+
+    /**
+     * Retrieves the query results and returns them in a collection.
+     *
+     * @return \Spark\Support\Collection Array of query results.
+     */
+    public function collect(): Collection
+    {
+        return $this->getCollection();
     }
 
     /**
@@ -1433,7 +1463,7 @@ class QueryBuilder implements QueryBuilderContract
                 }
             } else {
                 // binds clause values from a string condition, Ex. "id = 1".
-                $statement->bindValue($param, $value);
+                $statement->bindValue($param, $value, $this->getParameterType($value));
             }
         }
     }
@@ -1591,6 +1621,17 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Quotes a value for use in an SQL statement.
+     * 
+     * @param string $value The value to quote.
+     * @return string The quoted value.
+     */
+    private function quote(string $value): string
+    {
+        return $this->database->getPdo()->quote($value);
+    }
+
+    /**
      * Binds all values for the insert statement.
      * 
      * @param PDOStatement $statement The PDO statement.
@@ -1645,6 +1686,6 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function __call($method, $args)
     {
-        return call_user_func([$this->collect(), $method], ...$args);
+        return call_user_func_array([$this->getCollection(), $method], $args);
     }
 }
