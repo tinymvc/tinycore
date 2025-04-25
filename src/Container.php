@@ -190,7 +190,7 @@ class Container implements ContainerContract
         } elseif (is_array($abstract)) {
             [$class, $method] = $abstract;
         } else {
-            [$class, $method] = [$abstract, 'handle'];
+            [$class, $method] = [$abstract, '__invoke'];
         }
 
         // Resolve the class instance
@@ -198,7 +198,7 @@ class Container implements ContainerContract
 
         // Check if the method exists
         if (!method_exists($instance, $method)) {
-            $method = '__invoke';
+            $method = 'handle';
         }
 
         // Check if the method exists

@@ -3,6 +3,7 @@
 namespace Spark\Console;
 
 use Spark\Console\Contracts\CommandsContract;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Commands
@@ -16,6 +17,8 @@ use Spark\Console\Contracts\CommandsContract;
  */
 class Commands implements CommandsContract
 {
+    use Macroable;
+
     /**
      * Constructs a new instance of the Commands class.
      *
