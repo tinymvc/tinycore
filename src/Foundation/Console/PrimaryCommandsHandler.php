@@ -176,4 +176,87 @@ class PrimaryCommandsHandler
 
         $prompt->message("<info>Info</info> Application key has been updated.");
     }
+	
+	/**
+     * Creates a symbolic link for the uploads directory.
+     *
+     * This method creates a symbolic link from the storage uploads directory
+     * to the public uploads directory. It first checks if the symbolic link
+     * or directory already exists. If it does, an informational message is displayed.
+     * If not, it attempts to create the symbolic link and provides feedback
+     * on whether the operation was successful or not.
+     *
+     * @param Prompt $prompt
+     *   An instance of the Prompt class for displaying messages in the console.
+     *
+     * @return void
+     */
+    public function createSymbolicLinkForUploads(Prompt $prompt)
+    {
+        $storageUploadsDir = storage_dir('uploads');
+        $publicUploadsDir = root_dir('public/uploads');
+
+        // Check if the symbolic link already exists
+        if (is_link($publicUploadsDir) || file_exists($publicUploadsDir)) {
+            $prompt->message("The symbolic link is already exists.", "warning");
+            return;
+        }
+
+        if (stripos(PHP_OS, 'WIN') === 0) {
+            // Use junction on Windows
+            $cmd = sprintf('mklink /J "%s" "%s"', $publicUploadsDir, $storageUploadsDir);
+
+            exec($cmd, $output, $retval);
+
+            if ($retval === 0) {
+                $prompt->message("<info>Success</info> Symbolic link created successfully: $publicUploadsDir → $storageUploadsDir");
+                return;
+            }
+        }
+
+        // Attempt to create the symbolic link
+        if (symlink($storageUploadsDir, $publicUploadsDir)) {
+            $prompt->message("<info>Success</info> Symbolic link created successfully: $publicUploadsDir → $storageUploadsDir");
+            return;
+        }
+
+        $prompt->message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
+    }
+
+    /**
+     * Copies the example environment configuration file to the main environment file.
+     *
+     * This method checks if the main environment file (`env.php`) already exists.
+     * If it does, the user is prompted to confirm whether they want to override it.
+     * If the user agrees or if the file does not exist, the method attempts to copy
+     * the example environment file (`env.example.php`) to `env.php`. Feedback is
+     * provided to the user on whether the operation was successful or not.
+     *
+     * @param Prompt $prompt
+     *   An instance of the Prompt class for displaying messages and confirmations in the console.
+     *
+     * @return void
+     */
+    public function copyConfigFile(Prompt $prompt)
+    {
+        $envPath = root_dir('env.php');
+        $exampleEnvPath = root_dir('env.example.php');
+
+        if (file_exists($envPath)) {
+            $override = $prompt->confirm(
+                "The config: {$envPath}\n is already exists. Do you want to override it?",
+                true
+            );
+
+            if (!$override) {
+                return;
+            }
+        }
+
+        if (copy($exampleEnvPath, $envPath)) {
+            $prompt->message("<info>Success</info> env.php file created successfully.");
+        } else {
+            $prompt->message("Failed to create env.php file. Please create it manually.", 'danger');
+        }
+    }
 }

@@ -18,6 +18,7 @@
     },
     "suggest": {
         "league/commonmark": "Required to use Str::markdown() and Stringable::markdown() (^2.6).",
+        "voku/portable-ascii": "Required to use on Str::slug() with non-english strings (^2.0).,",
         "ramsey/uuid": "Required to use Str::uuid() (^4.7).",
         "symfony/uid": "Required to use Str::ulid() (^7.2).",
         "doctrine/inflector": "Required to use Str::plural() and Stringable::plural() (^2.0).",

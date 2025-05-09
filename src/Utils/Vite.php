@@ -53,7 +53,7 @@ class Vite implements ViteUtilContract
             'root' => '/',
             'entry' => 'app.js',
             'dist' => 'build',
-            'dist_path' => 'public/assets/',
+            'dist_path' => 'public/',
             'manifest' => null,
         ], $config);
 
