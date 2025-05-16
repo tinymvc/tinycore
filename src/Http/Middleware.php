@@ -7,6 +7,7 @@ use Spark\Contracts\Http\MiddlewareContract;
 use Spark\Http\Exceptions\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
 use Spark\Http\Response;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Middleware
@@ -15,6 +16,8 @@ use Spark\Http\Response;
  */
 class Middleware implements MiddlewareContract
 {
+    use Macroable;
+
     /**
      * Constructor for the middleware class.
      * 

@@ -18,7 +18,10 @@ use Spark\Support\Traits\Macroable;
  */
 class DB implements DBContract
 {
-    use Macroable;
+    use Macroable {
+        __call as macroCall;
+        __callStatic as macroCallStatic;
+    }
 
     /**
      * Store the PDO connection of database.
@@ -148,6 +151,11 @@ class DB implements DBContract
      */
     public function __call(string $name, array $args)
     {
+        // call the macro if it exists.
+        if (static::hasMacro($name)) {
+            return $this->macroCall($name, $args);
+        }
+
         return call_user_func_array([$this->getPdo(), $name], $args);
     }
 
@@ -160,6 +168,11 @@ class DB implements DBContract
      */
     public static function __callStatic($name, $arguments)
     {
+        // call the macro if it exists.
+        if (static::hasMacro($name)) {
+            return static::macroCallStatic($name, $arguments);
+        }
+
         // Create a new QueryBuilder instance with the current context.
         $query = Application::$app->get(QueryBuilder::class);
 

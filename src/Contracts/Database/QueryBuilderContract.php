@@ -1,5 +1,4 @@
 <?php
-
 namespace Spark\Contracts\Database;
 
 /**
@@ -30,7 +29,7 @@ interface QueryBuilderContract
     /**
      * Add a where clause to the query.
      *
-     * @param string|array $column The column name to query, or an array of column names.
+     * @param null|string|array $column The column name to query, or an array of column names.
      * @param ?string $operator The operator to use. If null, the operator will be determined
      *   based on the value given.
      * @param mixed $value The value to query. If null, the value will be determined
@@ -38,7 +37,7 @@ interface QueryBuilderContract
      * @param ?string $type The type of the value given.
      * @return QueryBuilderContract Returns the query builder instance.
      */
-    public function where(string|array $column = null, ?string $operator = null, mixed $value = null, ?string $type = null): self;
+    public function where(null|string|array $column = null, ?string $operator = null, mixed $value = null, ?string $type = null): self;
 
     /**
      * Update data in the database.
@@ -93,11 +92,18 @@ interface QueryBuilderContract
     public function last(): mixed;
 
     /**
-     * Get the result set.
+     * Get the all the rows.
      *
-     * @return array The result set.
+     * @return array The result array.
      */
-    public function result(): array;
+    public function all(): array;
+
+    /**
+     * Get the result set as a collection.
+     *
+     * @return \Spark\Support\Collection The result set as a collection.
+     */
+    public function get(): \Spark\Support\Collection;
 
     /**
      * Get the number of rows in the result set.

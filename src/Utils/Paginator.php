@@ -226,7 +226,7 @@ class Paginator implements PaginatorUtilContract
                 $classes['li'] ?? 'page-item',
                 $classes['a'] ?? 'page-link',
                 $this->getAnchor($this->getPage() - 1),
-                $entity['prev'] ?? __('previous')
+                $entity['prev'] ?? __('Previous')
             );
         }
 
@@ -279,7 +279,7 @@ class Paginator implements PaginatorUtilContract
                 $classes['li'] ?? 'page-item',
                 $classes['a'] ?? 'page-link',
                 $this->getAnchor($this->getPage() + 1),
-                $entity['next'] ?? __('next')
+                $entity['next'] ?? __('Next')
             );
         }
 

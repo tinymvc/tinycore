@@ -5,6 +5,7 @@ namespace Spark\Http;
 use Spark\Contracts\Http\HttpRouteContract;
 use Spark\Foundation\Application;
 use Spark\Router;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Route
@@ -28,6 +29,8 @@ use Spark\Router;
  */
 class Route implements HttpRouteContract
 {
+    use Macroable;
+
     /**
      * Registers a new GET route with the router.
      *

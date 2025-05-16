@@ -2,7 +2,10 @@
 
 namespace Spark\Http;
 
+use ArrayAccess;
 use Spark\Contracts\Http\InputSanitizerContract;
+use Spark\Contracts\Support\Arrayable;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Sanitizer
@@ -13,8 +16,10 @@ use Spark\Contracts\Http\InputSanitizerContract;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class InputSanitizer implements InputSanitizerContract
+class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
 {
+    use Macroable;
+
     /**
      * Constructs a new sanitizer instance with optional initial data.
      *
@@ -176,7 +181,7 @@ class InputSanitizer implements InputSanitizerContract
      * @param string $name Key to retrieve.
      * @return mixed The value associated with the key, or null if not found.
      */
-    public function __get($name)
+    public function __get($name): mixed
     {
         return $this->get($name);
     }
@@ -188,7 +193,7 @@ class InputSanitizer implements InputSanitizerContract
      * @param mixed $value Value to set.
      * @return void
      */
-    public function __set($name, $value)
+    public function __set($name, $value): void
     {
         $this->set($name, $value);
     }
@@ -199,8 +204,63 @@ class InputSanitizer implements InputSanitizerContract
      * @param string $name Key to check.
      * @return bool True if key is set, false otherwise.
      */
-    public function __isset($name)
+    public function __isset($name): bool
     {
         return $this->has($name);
+    }
+
+    /**
+     * Magic method to unset a key-value pair in the sanitizer data array.
+     *
+     * @param string $name Key to unset.
+     * @return void
+     */
+    public function offsetExists($key): bool
+    {
+        return $this->has($key);
+    }
+
+    /**
+     * Magic method to unset a key-value pair in the sanitizer data array.
+     *
+     * @param string $name Key to unset.
+     * @return void
+     */
+    public function offsetUnset($key): void
+    {
+        unset($this->data[$key]);
+    }
+
+    /**
+     * Magic method to retrieve a value from the sanitizer data array.
+     *
+     * @param string $key Key to retrieve.
+     * @return mixed The value associated with the key, or null if not found.
+     */
+    public function offsetGet($key): mixed
+    {
+        return $this->get($key);
+    }
+
+    /**
+     * Magic method to set a key-value pair in the sanitizer data array.
+     *
+     * @param string $key Key to set.
+     * @param mixed $value Value to set.
+     * @return void
+     */
+    public function offsetSet($key, $value): void
+    {
+        $this->set($key, $value);
+    }
+
+    /**
+     * Converts the sanitizer data array to an associative array.
+     *
+     * @return array The sanitizer data array.
+     */
+    public function toArray(): array
+    {
+        return $this->data;
     }
 }

@@ -4,6 +4,7 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\AuthContract;
 use Spark\Database\Model;
+use Spark\Hash;
 use Spark\Support\Traits\Macroable;
 use Throwable;
 
@@ -18,7 +19,9 @@ use Throwable;
  */
 class Auth implements AuthContract
 {
-    use Macroable;
+    use Macroable {
+        __call as macroCall;
+    }
 
     /**
      * @var false|Model The currently logged in user.
@@ -310,6 +313,10 @@ class Auth implements AuthContract
      */
     public function __call(string $method, array $args)
     {
+        if (static::hasMacro($method)) {
+            return $this->macroCall($method, $args);
+        }
+
         return $this->getUser()->{$method}(...$args);
     }
 }

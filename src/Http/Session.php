@@ -155,4 +155,24 @@ class Session implements SessionContract
     {
         unset($_SESSION['_flash']);
     }
+
+    /**
+     * Checks if the session is started.
+     *
+     * @return bool True if the session is started, false otherwise.
+     */
+    public function all(): array
+    {
+        return $_SESSION;
+    }
+
+    /**
+     * Close session and write data to the session storage.
+     *
+     * @return void
+     */
+    public function close(): void
+    {
+        session_write_close();
+    }
 }

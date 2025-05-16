@@ -2,6 +2,7 @@
 
 namespace Spark\Database\Traits;
 
+use Closure;
 use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Exceptions\OrmDisabledLazyLoadingException;
 use Spark\Database\Exceptions\UndefinedOrmException;
@@ -27,52 +28,107 @@ trait HasOrm
     private array $orm;
 
     /**
-     * The ORM configuration for the current model.
+     * Defines a one-to-one relationship.
      * 
-     * This should return an array with the following structure:
+     * @param string $model The related model class name.
+     * @param string|null $foreignKey The foreign key in the related model (optional).
+     * @param string|null $localKey The local key in the current model (optional).
+     * @param bool $lazy Whether to enable lazy loading (default: true).
+     * @param Closure|null $callback A callback function to apply custom logic to the query object (optional).
      * 
-     * [
-     *     'relationshipName' => [
-     *         'has' => 'one|many|many-x',
-     *         'lazy' => Enable lazy loading (default: true),
-     *         'model' => Fully Qualified Model Name,
-     *         'foreignKey' => 'foreign_key',
-     *         'localKey' => 'local_key',
-     *         'table' => 'pivate_table' (optional, only required for many-x (one-to-many) relationships),
-     *         'callback' => 'callback_function' (optional, to apply custom logic to the query object),
-     *     ]
-     * ]
-     * 
-     * @return array The ORM configuration for the current model.
+     * @return array The ORM configuration for the one-to-one relationship.
      */
-    abstract protected function orm(): array;
+    protected function hasOne(
+        string $model,
+        ?string $foreignKey = null,
+        ?string $localKey = null,
+        bool $lazy = true,
+        ?Closure $callback = null
+    ): array {
+        return [
+            'has' => 'one',
+            'lazy' => $lazy,
+            'model' => $model,
+            'foreignKey' => $foreignKey,
+            'localKey' => $localKey,
+            'callback' => $callback,
+        ];
+    }
+
+    /**
+     * Defines a one-to-many relationship.
+     * 
+     * @param string $model The related model class name.
+     * @param string|null $foreignKey The foreign key in the related model (optional).
+     * @param string|null $localKey The local key in the current model (optional).
+     * @param bool $lazy Whether to enable lazy loading (default: true).
+     * @param Closure|null $callback A callback function to apply custom logic to the query object (optional).
+     * 
+     * @return array The ORM configuration for the one-to-many relationship.
+     */
+    protected function hasMany(
+        string $model,
+        ?string $foreignKey = null,
+        ?string $localKey = null,
+        bool $lazy = true,
+        ?Closure $callback = null
+    ): array {
+        return [
+            'has' => 'many',
+            'lazy' => $lazy,
+            'model' => $model,
+            'foreignKey' => $foreignKey,
+            'localKey' => $localKey,
+            'callback' => $callback,
+        ];
+    }
+
+    /**
+     * Defines a many-to-many relationship using an intermediate table.
+     * 
+     * @param string $model The related model class name.
+     * @param string|null $table The name of the pivot/intermediate table.
+     * @param string|null $foreignKey The foreign key in the related model (optional).
+     * @param string|null $localKey The local key in the current model (optional).
+     * @param bool $lazy Whether to enable lazy loading (default: true).
+     * @param Closure|null $callback A callback function to apply custom logic to the query object (optional).
+     * 
+     * @return array The ORM configuration for the many-to-many relationship.
+     */
+    protected function hasManyX(
+        string $model,
+        ?string $table = null,
+        ?string $foreignKey = null,
+        ?string $localKey = null,
+        bool $lazy = true,
+        ?Closure $callback = null
+    ): array {
+        return [
+            'has' => 'many-x',
+            'lazy' => $lazy,
+            'model' => $model,
+            'foreignKey' => $foreignKey,
+            'localKey' => $localKey,
+            'table' => $table,
+            'callback' => $callback,
+        ];
+    }
 
     /**
      * Allows for eager loading of related ORM data by specifying the relationships to load.
      * 
      * @param array|string $orm The relationships to load, or '*' to load all configured relationships.
-     * @param array $data The data to use for loading the initial model instance.
      * @return QueryBuilder The query object with attached mappers for handling the related data.
      * 
      * @throws UndefinedOrmException If the specified relationship is not defined in the ORM configuration.
      */
-    public static function with(array|string $orm = '*', array $data = []): QueryBuilder
+    public static function with(array|string $orm): QueryBuilder
     {
-        $model = static::load($data);
-        $query = $model->get();
-        $registeredOrm = $model->orm();
+        $model = new static;
+        $registeredOrm = $model->getRegisteredRelations($orm);
+        $query = $model->query();
 
-        if ($orm === '*') {
-            $orm = array_keys($registeredOrm);
-        }
-
-        foreach ((array) $orm as $with) {
-            $config = $registeredOrm[$with] ?? false;
-
-            if (!$config) {
-                throw new UndefinedOrmException("Orm({$with}) does not specified in: " . $model::class);
-            }
-
+        foreach ($registeredOrm as $with => $config) {
             $query->addMapper(fn($data) => $model->handleOrm($data, $config, $with));
         }
 
@@ -91,26 +147,16 @@ trait HasOrm
      * 
      * @throws UndefinedOrmException If the specified relationship is not defined in the ORM configuration.
      */
-    public static function runOrm(array|string $orm = '*', array &$models = []): void
+    public static function runOrm(array|string $orm, array &$models = []): void
     {
         if (empty($models)) {
             return;
         }
 
-        $model = new self;
-        $registeredOrm = $model->orm();
+        $model = new static;
+        $registeredOrm = $model->getRegisteredRelations($orm);
 
-        if ($orm === '*') {
-            $orm = array_keys($registeredOrm);
-        }
-
-        foreach ((array) $orm as $with) {
-            $config = $registeredOrm[$with] ?? false;
-
-            if (!$config) {
-                throw new UndefinedOrmException("Orm({$with}) does not specified in: " . $model::class);
-            }
-
+        foreach ($registeredOrm as $with => $config) {
             $model->handleOrm($models, $config, $with);
         }
     }
@@ -130,14 +176,15 @@ trait HasOrm
         }
 
         // load lazy orm data
-        $config = $this->orm()[$name] ?? false;
+        $config = $this->getRegisteredRelations($name, true);
         if ($config) {
             if (isset($config['lazy']) && !$config['lazy']) {
                 throw new OrmDisabledLazyLoadingException("Lazy load has been disabled for {$name}, " . static::class);
             }
 
-            $this->handleOrm([$this], $config, $name);
-            return $this->orm[$name];
+            $this->handleOrm([$this], $config, $name); // load the data
+
+            return $this->orm[$name]; // return the loaded data
         }
 
         return null;
@@ -167,6 +214,29 @@ trait HasOrm
     {
         // Remove the ORM relationship from the data set.
         unset($this->orm[$name]);
+    }
+
+    /**
+     * Retrieves the registered ORM relationships for the current model.
+     * 
+     * @param array|string $orm The relationships to retrieve, or '*' to retrieve all registered relationships.
+     * @param bool $single Whether to return a single relationship configuration (default: false).
+     * 
+     * @return array The registered ORM relationships.
+     */
+    private function getRegisteredRelations(array|string $orm, bool $single = false)
+    {
+        $ormConfigs = [];
+        foreach ((array) $orm as $with) {
+            // Check if the relationship is set to load all relationships.
+            if (!method_exists($this, $with)) {
+                continue;
+            }
+
+            $ormConfigs[$with] = $this->{$with}();
+        }
+
+        return $single ? $ormConfigs[array_key_first($ormConfigs)] ?? null : $ormConfigs;
     }
 
     /**
@@ -228,7 +298,7 @@ trait HasOrm
                     "t1.{$localKey}" => $ids->all()
                 ]),
             $config
-        )->result() : [];
+        )->all() : [];
 
         return $this->parseOrmData($data, $objects, $model, $with, $localKey);
     }
@@ -260,7 +330,7 @@ trait HasOrm
                     $localKey => $ids->all()
                 ]),
             $config
-        )->result() : [];
+        )->all() : [];
 
         return $this->parseOrmData($data, $objects, $model, $with, $localKey);
     }
@@ -321,7 +391,7 @@ trait HasOrm
                 ->where([static::$primaryKey => $ids->all()]),
             $config
         )
-            ->result() : [];
+            ->all() : [];
 
         // attach related data
         foreach ($data as $d) {

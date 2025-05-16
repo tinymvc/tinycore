@@ -33,7 +33,7 @@ interface HttpUtilContract
      *
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
-     * @return array The response data, including body, status code, final URL, and content length.
+     * @return \ArrayAccess The response data, including body, status code, final URL, and content length.
      */
-    public function send(string $url, array $params = []): array;
+    public function send(string $url, array $params = []): \ArrayAccess;
 }

@@ -2,6 +2,7 @@
 
 namespace Spark\Contracts\Database;
 
+use Spark\Contracts\Support\Arrayable;
 use Spark\Database\QueryBuilder;
 
 /**
@@ -30,18 +31,18 @@ interface ModelContract
     /**
      * Creates a new model instance and fills it with the given data.
      *
-     * @param array $data The data to fill the model with.
+     * @param array|Arrayable $data The data to fill the model with.
      * @return static A new model instance populated with the given data.
      */
-    public static function load(array $data): static;
+    public static function load(array|Arrayable $data): static;
 
     /**
      * Creates a new model instance from the given data and saves it to the database.
      *
-     * @param array $data The data to fill the model with.
+     * @param array|Arrayable $data The data to fill the model with.
      * @return static The saved model instance.
      */
-    public static function create(array $data): static;
+    public static function create(array|Arrayable $data): static;
 
     /**
      * Saves the model to the database.

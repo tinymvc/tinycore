@@ -495,7 +495,15 @@ function dump(...$args)
  */
 function dd(...$args): never
 {
+    // show the file and line number
+    $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1);
+    $file = $trace[0]['file']; // Get the file name
+    $line = $trace[0]['line']; // Get the line number
+
+    echo '<p style="color:#666;font-size: 14px;margin: 25px 25px 0 25px;font-style:italic;"><strong>// Dumped from:</strong> ' . $file . ':' . $line . '</p>';
+
     dump(...$args);
+
     die(0);
 }
 
@@ -846,18 +854,12 @@ function vite(string|array $config = []): Vite
  * it is safe for further processing.
  *
  * @param array $filter An optional array of filters to apply to the input data.
- * @return InputSanitizer|array An instance of the sanitizer or an array of input data.
+ * @return InputSanitizer An instance of the sanitizer.
  */
-function input(array $filter = [], bool $sanitizer = true): mixed
+function input(array $filter = []): InputSanitizer
 {
-    $data = request()->all($filter);
-
-    if (!$sanitizer) {
-        return $data;
-    }
-
     return get(InputSanitizer::class)
-        ->setData($data);
+        ->setData(request()->all($filter));
 }
 
 /**
@@ -947,10 +949,10 @@ function errors(null|array|string $field = null): mixed
  * Retrieve the old value of a given field from the previous request.
  *
  * @param string $field The field name to retrieve the old value for.
- * @param string $default The default value to return if the field does not exist.
+ * @param ?string $default The default value to return if the field does not exist.
  * @return string|null The old value of the field from the previous request, or the default value if not found.
  */
-function old(string $field, string $default = null): ?string
+function old(string $field, ?string $default = null): ?string
 {
     return request()->old($field, $default);
 }

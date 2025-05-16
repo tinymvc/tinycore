@@ -148,9 +148,10 @@ class Blueprint implements BlueprintContract
      * Add a 'foreign' constraint to the blueprint.
      *
      * @param array|string $columns The column(s) to constrain.
+     * @param string|null $table The name of the table.
      * @return ForeignKeyConstraint
      */
-    public function foreign(array|string $columns, string $table = null): ForeignKeyConstraint
+    public function foreign(array|string $columns, ?string $table = null): ForeignKeyConstraint
     {
         $constraint = new ForeignKeyConstraint($columns);
 
@@ -166,10 +167,10 @@ class Blueprint implements BlueprintContract
      * Add a 'constrained' foreign key to the blueprint.
      *
      * @param string $column The name of the column.
-     * @param string $table The name of the table.
+     * @param string|null $table The name of the table.
      * @return ForeignKeyConstraint
      */
-    public function constrained(string $column, string $table = null): ForeignKeyConstraint
+    public function constrained(string $column, ?string $table = null): ForeignKeyConstraint
     {
         return $this->foreign($column)->constrained($table);
     }
@@ -216,11 +217,11 @@ class Blueprint implements BlueprintContract
      * Add a 'double' column to the blueprint.
      *
      * @param string $name The name of the column.
-     * @param int $precision The precision of the double.
-     * @param int $scale The scale of the double.
+     * @param ?int $precision The precision of the double.
+     * @param ?int $scale The scale of the double.
      * @return Column
      */
-    public function double(string $name, int $precision = null, int $scale = null): Column
+    public function double(string $name, ?int $precision = null, ?int $scale = null): Column
     {
         return $this->addColumn('double', $name, compact('precision', 'scale'));
     }
@@ -229,11 +230,11 @@ class Blueprint implements BlueprintContract
      * Add a 'float' column to the blueprint.
      *
      * @param string $name The name of the column.
-     * @param int $precision The precision of the float.
-     * @param int $scale The scale of the float.
+     * @param ?int $precision The precision of the float.
+     * @param ?int $scale The scale of the float.
      * @return Column
      */
-    public function float(string $name, int $precision = null, int $scale = null): Column
+    public function float(string $name, ?int $precision = null, ?int $scale = null): Column
     {
         return $this->addColumn('float', $name, compact('precision', 'scale'));
     }
@@ -489,10 +490,10 @@ class Blueprint implements BlueprintContract
      * Drop an index from the blueprint.
      *
      * @param string|array $columns The name(s) of the index(es) to drop.
-     * @param string $type The type of index to drop.
+     * @param string|null $type The type of index to drop.
      * @return self
      */
-    public function dropIndex($columns, $type = null): self
+    public function dropIndex($columns, ?string $type = null): self
     {
         $type ??= 'index';
 

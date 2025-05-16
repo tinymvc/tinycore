@@ -11,6 +11,7 @@ use Spark\EventDispatcher;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * A job queue that stores the jobs in a JSON file.
@@ -24,6 +25,8 @@ use Spark\Queue\Exceptions\InvalidStorageFileException;
  */
 class Queue implements QueueContract
 {
+    use Macroable;
+
     /**
      * @var array<int, array> The array of jobs to be run.
      */

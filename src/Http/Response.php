@@ -144,6 +144,30 @@ class Response implements ResponseContract
     }
 
     /**
+     * Clears the response content, status code, headers, and session flash data.
+     *
+     * This method is typically used to reset the response object to its initial state.
+     * It clears the response content, status code, headers, and any session flash data.
+     *
+     * @return void
+     */
+    public function clear(): void
+    {
+        // Clear the response content and headers
+        $this->content = '';
+        $this->statusCode = 200;
+        $this->headers = [];
+
+        // Clear session flash data
+        session()->clearFlash();
+
+        // Clear any output buffers
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+    }
+
+    /**
      * Sends the HTTP response to the client, including headers, status code, and content.
      * Applies any output filters to the content before outputting it.
      */

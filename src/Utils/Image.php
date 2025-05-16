@@ -5,6 +5,7 @@ namespace Spark\Utils;
 use GdImage;
 use Spark\Contracts\Utils\ImageUtilContract;
 use Spark\Exceptions\Utils\ImageUtilException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Image
@@ -16,6 +17,8 @@ use Spark\Exceptions\Utils\ImageUtilException;
  */
 class Image implements ImageUtilContract
 {
+    use Macroable;
+
     /**
      * @var resource $image The GD image resource.
      */

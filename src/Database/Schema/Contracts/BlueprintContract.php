@@ -87,21 +87,21 @@ interface BlueprintContract
      * Add a 'foreign' column to the blueprint.
      *
      * @param array|string $columns The column(s) to constrain.
-     * @param string $table The name of the table the column references.
+     * @param string|null $table The name of the table the column references.
      *
      * @return ForeignKeyConstraint
      */
-    public function foreign(array|string $columns, string $table = null): ForeignKeyConstraint;
+    public function foreign(array|string $columns, ?string $table = null): ForeignKeyConstraint;
 
     /**
      * Add a constrained 'foreign' column to the blueprint.
      *
      * @param string $name The name of the column.
-     * @param string $table The name of the table the column references.
+     * @param string|null $table The name of the table the column references.
      *
      * @return ForeignKeyConstraint
      */
-    public function constrained(string $column, string $table = null): ForeignKeyConstraint;
+    public function constrained(string $column, ?string $table = null): ForeignKeyConstraint;
 
     /**
      * Add a 'decimal' column to the blueprint.
@@ -118,23 +118,23 @@ interface BlueprintContract
      * Add a 'double' column to the blueprint.
      *
      * @param string $name The name of the column.
-     * @param int $precision The precision of the column.
-     * @param int $scale The scale of the column.
+     * @param null|int $precision The precision of the column.
+     * @param null|int $scale The scale of the column.
      *
      * @return Column
      */
-    public function double(string $name, int $precision = null, int $scale = null): Column;
+    public function double(string $name, ?int $precision = null, ?int $scale = null): Column;
 
     /**
      * Add a 'float' column to the blueprint.
      *
      * @param string $name The name of the column.
-     * @param int $precision The precision of the column.
-     * @param int $scale The scale of the column.
+     * @param null|int $precision The precision of the column.
+     * @param null|int $scale The scale of the column.
      *
      * @return Column
      */
-    public function float(string $name, int $precision = null, int $scale = null): Column;
+    public function float(string $name, ?int $precision = null, ?int $scale = null): Column;
 
     /**
      * Add an 'enum' column to the blueprint.

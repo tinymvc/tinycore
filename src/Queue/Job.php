@@ -6,6 +6,7 @@ use DateTime;
 use Spark\Contracts\Queue\JobContract;
 use Spark\EventDispatcher;
 use Spark\Foundation\Application;
+use Spark\Support\Traits\Macroable;
 use Throwable;
 
 /**
@@ -19,6 +20,8 @@ use Throwable;
  */
 class Job implements JobContract
 {
+    use Macroable;
+
     /**
      * Constructor.
      *

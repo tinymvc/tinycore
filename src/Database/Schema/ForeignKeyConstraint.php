@@ -70,7 +70,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      * @param  string|null  $table
      * @return $this
      */
-    public function constrained(string $table = null): self
+    public function constrained(?string $table = null): self
     {
         // Take to word before _id
         $table ??= Str::lower(

@@ -45,7 +45,9 @@ use Throwable;
  */
 class Application implements ApplicationContract
 {
-    use Macroable;
+    use Macroable {
+        __call as macroCall;
+    }
 
     /** @var Application Singleton instance of the application */
     public static Application $app;
@@ -438,6 +440,10 @@ class Application implements ApplicationContract
      */
     public function __call(string $method, array $arguments)
     {
+        if (static::hasMacro($method)) {
+            return $this->macroCall($method, $arguments);
+        }
+
         return $this->container->{$method}(...$arguments);
     }
 }

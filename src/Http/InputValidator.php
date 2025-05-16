@@ -3,6 +3,8 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\InputValidatorContract;
+use Spark\Support\Str;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Validator
@@ -15,6 +17,8 @@ use Spark\Contracts\Http\InputValidatorContract;
  */
 class InputValidator implements InputValidatorContract
 {
+    use Macroable;
+
     /**
      * Constructs a new validator instance.
      * 
@@ -34,14 +38,15 @@ class InputValidator implements InputValidatorContract
      */
     public function validate(string|array $rules, array $inputData): bool|array
     {
-        if (is_string($rules)) {
-            $rules = array_map('trim', explode('|', $rules));
-        }
 
         $validData = [];
         foreach ($rules as $field => $fieldRules) {
             $value = $inputData[$field] ?? null;
             $valid = true;
+
+            if (is_string($fieldRules)) {
+                $fieldRules = array_map('trim', explode('|', $fieldRules));
+            }
 
             // Check if field is required
             $is_required = in_array('required', $fieldRules, true);
@@ -52,8 +57,8 @@ class InputValidator implements InputValidatorContract
                 $ruleName = $rule;
                 $ruleParams = [];
                 if (strpos($rule, ':') !== false) {
-                    [$ruleName, $ruleParams] = explode(':', $rule, 2);
-                    $ruleParams = explode(',', $ruleParams);
+                    [$ruleName, $ruleParams] = array_map('trim', explode(':', $rule, 2));
+                    $ruleParams = array_map('trim', explode(',', $ruleParams));
                 }
 
                 // Check if value is valid
@@ -66,11 +71,16 @@ class InputValidator implements InputValidatorContract
                     'url' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_URL) : true,
                     'number' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
                     'array' => ($has_valid_value || $is_required) ? is_array($value) : true,
-                    'text' => ($has_valid_value || $is_required) ? is_string($value) : true,
-                    'min' => ($has_valid_value || $is_required) ? strlen($value ?? '') >= (int) $ruleParams[0] : true,
-                    'max' => ($has_valid_value || $is_required) ? strlen($value ?? '') <= (int) $ruleParams[0] : true,
-                    'length' => ($has_valid_value || $is_required) ? strlen($value ?? '') == (int) $ruleParams[0] : true,
-                    'equal' => ($has_valid_value || $is_required) ? $value == ($inputData[$ruleParams[0]] ?? null) : true,
+                    'text', 'char' => ($has_valid_value || $is_required) ? is_string($value) : true,
+                    'min', 'minimum' => ($has_valid_value || $is_required) ? strlen($value ?? '') >= (int) $ruleParams[0] : true,
+                    'max', 'maximum' => ($has_valid_value || $is_required) ? strlen($value ?? '') <= (int) $ruleParams[0] : true,
+                    'length', 'size' => ($has_valid_value || $is_required) ? strlen($value ?? '') == (int) $ruleParams[0] : true,
+                    'equal', 'same', 'same_as' => ($has_valid_value || $is_required) ? $value == ($inputData[$ruleParams[0]] ?? null) : true,
+                    'confirmed' => ($has_valid_value || $is_required) ? $value == ($inputData[$field . '_confirmation'] ?? null) : true,
+                    'in', 'exists' => ($has_valid_value || $is_required) ? in_array($value, $ruleParams, true) : true,
+                    'not_in', 'not_exists' => ($has_valid_value || $is_required) ? !in_array($value, $ruleParams, true) : true,
+                    'regex' => ($has_valid_value || $is_required) ? preg_match($ruleParams[0], $value) : true,
+                    'unique' => ($has_valid_value || $is_required) ? query($ruleParams[0])->where($ruleParams[1] ?? $field, $value)->count() === 0 : true,
                     default => true
                 };
 
@@ -110,8 +120,6 @@ class InputValidator implements InputValidatorContract
         return !empty($this->errors) ? (array_values(array_values($this->errors)[0] ?? [])[0] ?? null) : null;
     }
 
-    /** @Add helper methods for this validator object */
-
     /**
      * Adds an error message for a failed validation rule.
      *
@@ -121,7 +129,7 @@ class InputValidator implements InputValidatorContract
      */
     private function addError(string $field, string $rule, array $params = []): void
     {
-        $prettyField = __($this->parseFieldName($field));
+        $prettyField = __(Str::headline($field));
 
         // Error messages for each validation rule
         $this->errors[$field][] = match ($rule) {
@@ -130,23 +138,17 @@ class InputValidator implements InputValidatorContract
             'url' => __("The %s field must be a valid URL.", $prettyField),
             'number' => __("The %s field must be a number.", $prettyField),
             'array' => __("The %s field must be an array.", $prettyField),
-            'text' => __("The %s field must be a text.", $prettyField),
-            'min' => __("The %s field must be at least %s characters long.", [$prettyField, $params[0] ?? 0]),
-            'max' => __("The %s field must not exceed %s characters.", [$prettyField, $params[0] ?? 0]),
-            'length' => __("The %s field must be %s characters.", [$prettyField, $params[0] ?? 0]),
-            'equal' => __("The %s field must be equal to %s field.", [$prettyField, __($this->parseFieldName($params[0] ?? ''))]),
+            'text', 'char' => __("The %s field must be a text.", $prettyField),
+            'min', 'minimum' => __("The %s field must be at least %s characters long.", [$prettyField, $params[0] ?? 0]),
+            'max', 'maximum' => __("The %s field must not exceed %s characters.", [$prettyField, $params[0] ?? 0]),
+            'length', 'size' => __("The %s field must be %s characters.", [$prettyField, $params[0] ?? 0]),
+            'equal', 'same', 'same_as' => __("The %s field must be equal to %s field.", [$prettyField, __(Str::headline($params[0] ?? ''))]),
+            'confirmed' => __("The %s field must be confirmed.", $prettyField),
+            'in', 'exists' => __("The %s field must be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
+            'not_in', 'not_exists' => __("The %s field must not be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
+            'regex' => __("The %s field must match the pattern: %s.", [$prettyField, $params[0] ?? '']),
+            'unique' => __("The %s field must be unique in the %s table.", [$prettyField, $params[0] ?? '']),
             default => __("The %s field has an invalid value.", $prettyField)
         };
-    }
-
-    /**
-     * Converts a field name into a human-readable format.
-     *
-     * @param string $field Field name to convert.
-     * @return string Pretty field name.
-     */
-    private function parseFieldName(string $field): string
-    {
-        return strtolower(str_replace(['-', '_', '.'], ' ', $field));
     }
 }

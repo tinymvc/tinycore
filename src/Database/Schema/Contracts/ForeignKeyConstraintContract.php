@@ -12,10 +12,10 @@ interface ForeignKeyConstraintContract
     /**
      * Set the table name that is being constrained.
      *
-     * @param string $table
+     * @param null|string $table
      * @return static
      */
-    public function constrained(string $table = null): self;
+    public function constrained(?string $table = null): self;
 
     /**
      * Set the columns that the foreign key references.

@@ -45,7 +45,7 @@ trait ValidateRequest
         $attributes = $this->all(array_keys($rules)); // Get the attributes from the current request
         $validator = Application::$app->get(InputValidator::class); // Get the validator instance
 
-        if (!$validator->validate($rules, $attributes)) { // Validate the attributes
+        if (!$validator->validate($rules, $this->all())) { // Validate the request
             $errors = $validator->getErrors(); // Get the errors as an array
 
             // If the request wants a JSON response
@@ -145,13 +145,13 @@ trait ValidateRequest
              * 
              * @param string $field
              *   The field name.
-             * @param string $default
+             * @param ?string $default
              *   The default value to return if the field does not exist.
              * 
              * @return string|null
              *   The old value of the given field.
              */
-            public function getOld(string $field, string $default = null): ?string
+            public function getOld(string $field, ?string $default = null): ?string
             {
                 return $this->attributes[$field] ?? $default;
             }
@@ -281,10 +281,10 @@ trait ValidateRequest
      * Get the value of a field from the previous request using the old input.
      *
      * @param string $field The name of the field to retrieve.
-     * @param string $default The default value to return if the field is not found.
+     * @param ?string $default The default value to return if the field is not found.
      * @return string|null The value of the field from the previous request, or the default value if not found.
      */
-    public function old(string $field, string $default = null): ?string
+    public function old(string $field, ?string $default = null): ?string
     {
         return $this->getErrorObject()->getOld($field, $default);
     }

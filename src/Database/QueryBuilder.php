@@ -1,8 +1,9 @@
 <?php
-
 namespace Spark\Database;
 
 use Closure;
+use PDO;
+use PDOStatement;
 use Spark\Contracts\Database\QueryBuilderContract;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
@@ -10,59 +11,114 @@ use Spark\Database\Schema\Grammar;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
-use PDO;
-use PDOStatement;
 
 /**
  * Class Query
- *
- * This class provides methods to build and execute SQL queries for CRUD operations and 
- * joins in a structured and dynamic way.
  * 
+ * @method Collection except($keys)
+ * @method Collection filter(?callable $callback = null)
+ * @method Collection map(callable $callback)
+ * @method Collection mapToDictionary(callable $callback)
+ * @method Collection mapWithKeys(callable $callback)
+ * @method Collection merge($items)
+ * @method Collection mergeRecursive($items)
+ * @method Collection only($keys)
+ * @method Collection forget($keys)
+ * @method bool contains($key, $operator = null, $value = null)
+ * @method bool doesntContain($key, $operator = null, $value = null)
+ * @method bool has($key)
+ * @method bool hasAny($key)
+ * @method string implode($value, $glue = null)
+ * @method Collection diff($items)
+ * @method Collection diffUsing($items, callable $callback)
+ * @method Collection diffAssoc($items)
+ * @method Collection diffKeys($items)
+ * @method Collection duplicates($callback = null, $strict = false)
+ * @method Collection keyBy($keyBy)
+ * @method Collection intersect($items)
+ * @method Collection intersectAssoc($items)
+ * @method Collection pluck($value, $key = null)
+ * @method Collection combine($values)
+ * @method Collection union($items)
+ * @method Collection nth($step, $offset = 0)
+ * @method Collection|TValue|null pop($count = 1)
+ * @method Collection|TValue|null shift($count = 1)
+ * @method Collection prepend($value, $key = null)
+ * @method Collection push(...$values)
+ * @method Collection unshift(...$values)
+ * @method Collection concat($source)
+ * @method mixed pull($key, $default = null)
+ * @method mixed random($number = null, $preserveKeys = false)
+ * @method mixed search($value, $strict = false)
+ * @method Collection put($key, $value)
+ * @method Collection reverse()
+ * @method Collection shuffle()
+ * @method Collection sliding($size = 2, $step = 1)
+ * @method Collection skip($count)
+ * @method Collection skipUntil($value)
+ * @method Collection skipWhile($value)
+ * @method Collection slice($offset, $length = null)
+ * @method Collection split($numberOfGroups)
+ * @method Collection splitIn($numberOfGroups)
+ * @method Collection chunk($size, $preserveKeys = true)
+ * @method Collection chunkWhile(callable $callback)
+ * @method Collection sort($callback = null)
+ * @method Collection splice($offset, $length = null, $replacement = [])
+ * @method Collection transform(callable $callback)
+ * @method Collection dot()
+ * @method Collection unique($key = null, $strict = false)
+ * @method Collection pad($size, $value)
+ * @method Collection add($item)
+ *
+ * This class provides methods to build and execute SQL queries for CRUD operations and
+ * joins in a structured and dynamic way.
+ *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class QueryBuilder implements QueryBuilderContract
 {
-    use Macroable;
+    use Macroable {
+        __call as macroCall;
+    }
 
     /**
      * Holds the SQL and bind parameters for the WHERE clause.
-     * 
+     *
      * @var array
      */
     private array $where = ['sql' => '', 'bind' => [], 'grouped' => false];
 
     /**
      * Holds the SQL structure, join conditions, and join count.
-     * 
+     *
      * @var array
      */
     private array $query = ['sql' => '', 'alias' => '', 'joins' => ''];
 
     /**
      * Array to store data mappers for processing retrieved data.
-     * 
+     *
      * @var array
      */
     private array $dataMapper = [];
 
     /**
      * Holds the table name to be used for the query.
-     * 
+     *
      * @var string
      */
     private string $table;
 
     /**
      * Holds the table prefix to be used for the query.
-     * 
+     *
      * @var string $prefix
      */
     private string $prefix = '';
 
     /**
      * Holds the database schema grammar for the query.
-     * 
+     *
      * @var \Spark\Database\Schema\Grammar
      */
     private Grammar $grammar;
@@ -70,7 +126,7 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Constructor for the query class.
      *
-     * Initializes the query object with a database instance, 
+     * Initializes the query object with a database instance,
      * which is used for executing SQL queries.
      *
      * @param DB $database The database instance to be used for query execution.
@@ -82,7 +138,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Sets the table name to be used for the query.
-     * 
+     *
      * @param string $table The table name to set.
      * @return self
      */
@@ -114,7 +170,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Sets the table prefix to be used for the query.
-     * 
+     *
      * @param string $prefix The table prefix to set.
      * @return self
      */
@@ -126,7 +182,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Adds a data mapper callback to process query results.
-     * 
+     *
      * @param callable $callback The callback function to process data.
      * @return self Returns the query object.
      */
@@ -138,7 +194,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Inserts data into the database with optional configurations.
-     * 
+     *
      * @param array $data The data to insert (single record or multiple records)
      * @param array $config Optional configurations [
      *     'ignore' => bool,      // Skip errors on duplicate
@@ -188,12 +244,12 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Update multiple records into the database with optional configurations.
-     * 
-     * @param array $data 
-     * @param array $config 
-     * @return int 
+     *
+     * @param array $data
+     * @param array $config
+     * @return int
      */
-    public function bulkUpdate(array $data, array $config = []): int
+    public function bulkUpdate(array $data, array $config = []): int|array
     {
         // Transform single records into multiple.
         if (!(isset($data[0]) && is_array($data[0]))) {
@@ -217,37 +273,38 @@ class QueryBuilder implements QueryBuilderContract
             $config['update'] = array_merge(...array_map(fn($field) => [$field => $field], $fields));
         }
 
-        // Returns to base insert method. integer on success else, 0 on fails. 
+        // Returns to base insert method. integer on success else, 0 on fails.
         return $this->insert($data, $config);
     }
 
     /**
      * Add a where clause to the query.
      *
-     * @param string|array|Closure $column 
+     * @param null|string|array|Closure $column
      *   The column name to query, or an array of column names.
-     * @param string|null $operator 
+     * @param string|null $operator
      *   The operator to use. If null, the operator will be determined
      *   based on the value given.
-     * @param mixed $value 
+     * @param mixed $value
      *   The value to query. If null, the value will be determined
      *   based on the operator given.
-     * @param ?string $andOr 
+     * @param ?string $andOr
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @param bool $not
      *   If true, the where clause will be negated.
-     * 
+     *
      * @return self
      */
-    public function where(string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false): self
+    public function where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false): self
     {
-        if ($column !== null) {
+        if ($column === null) {
             return $this;
         } elseif ($column instanceof Closure) {
             return $this->grouped($column);
         }
 
         $andOr ??= 'AND';
+
 
         // Holds a conditional clause for database.
         $command = '';
@@ -263,7 +320,7 @@ class QueryBuilder implements QueryBuilderContract
             $command = sprintf(
                 "%s %s %s :%s",
                 $andOr,
-                $this->grammar->wrap($column),
+                $column,
                 $operator,
                 str_replace('.', '', $column)
             );
@@ -276,7 +333,7 @@ class QueryBuilder implements QueryBuilderContract
                 implode(
                     " {$andOr} ",
                     array_map(
-                        fn($attr, $value) => $this->grammar->wrap($attr) . (is_array($value) ?
+                        fn($attr, $value) => $attr . (is_array($value) ?
                             // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
                             sprintf(
                                 ($not ? ' NOT' : '') . " IN (%s)",
@@ -330,7 +387,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhere(string|array $column = null, ?string $operator = null, $value = null): self
+    public function orWhere(null|string|array $column = null, ?string $operator = null, $value = null): self
     {
         return $this->where($column, $operator, $value, 'OR');
     }
@@ -349,7 +406,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notWhere(string|array $column = null, ?string $operator = null, $value = null): self
+    public function notWhere(null|string|array $column = null, ?string $operator = null, $value = null): self
     {
         return $this->where($column, $operator, $value, 'AND', true);
     }
@@ -368,7 +425,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotWhere(string|array $column = null, ?string $operator = null, $value = null): self
+    public function orNotWhere(null|string|array $column = null, ?string $operator = null, $value = null): self
     {
         return $this->where($column, $operator, $value, 'OR', true);
     }
@@ -722,13 +779,13 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Prepare the table name
-        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+        $table = $this->prefix . $this->table;
 
         // Prepare the SQL update statement
         $statement = $this->database->prepare(
             sprintf(
                 "UPDATE {$table} SET %s %s",
-                implode(', ', array_map(fn($attr) => $this->grammar->wrap($attr) . " = :$attr", array_keys($data))),
+                implode(', ', array_map(fn($attr) => $attr . " = :$attr", array_keys($data))),
                 $this->getWhereSql()
             )
         );
@@ -773,7 +830,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Prepare the table name
-        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+        $table = $this->prefix . $this->table;
 
         // Prepare the SQL delete statement
         $statement = $this->database->prepare("DELETE FROM {$table} {$this->getWhereSql()}");
@@ -812,7 +869,7 @@ class QueryBuilder implements QueryBuilderContract
 
         if (stripos($fields, ' FROM ') === false) {
             // Build the FROM clause
-            $fields .= isset($this->table) ? " FROM {$this->grammar->wrapTable($this->prefix . $this->table)}" : '';
+            $fields .= isset($this->table) ? " FROM {$this->prefix}{$this->table}" : '';
         }
 
         // Build the initial SELECT SQL query
@@ -828,7 +885,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return $this
      */
-    public function max($field, $name = null)
+    public function max($field, $name = null): self
     {
         $column = 'MAX(' . $field . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
@@ -842,7 +899,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return $this
      */
-    public function min($field, $name = null)
+    public function min($field, $name = null): self
     {
         $column = 'MIN(' . $field . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
@@ -856,7 +913,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return $this
      */
-    public function sum($field, $name = null)
+    public function sum($field, $name = null): self
     {
         $column = 'SUM(' . $field . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
@@ -870,7 +927,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return $this
      */
-    public function avg($field, $name = null)
+    public function avg($field, $name = null): self
     {
         $column = 'AVG(' . $field . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
@@ -898,18 +955,6 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Sets an alias for the current table in the FROM clause.
-     *
-     * @param string $alias The alias for the table.
-     *
-     * @return self The current instance for method chaining.
-     */
-    public function alias(string $alias): self
-    {
-        return $this->as($alias);
-    }
-
-    /**
      * Adds a JOIN clause to the query.
      *
      * @param string      $table The table to join.
@@ -923,7 +968,7 @@ class QueryBuilder implements QueryBuilderContract
     public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
     {
         $on = $field1;
-        $table = $this->grammar->wrapTable($this->prefix . $table);
+        $table = $this->prefix . $table;
 
         if ($operator !== null) {
             if ($field2 === null) {
@@ -1088,21 +1133,10 @@ class QueryBuilder implements QueryBuilderContract
      * @param string|array $fields Group by clause as a string or array.
      * @return self
      */
-    public function group(string|array $fields): self
+    public function groupBy(string|array $fields): self
     {
         $this->query['group'] = $this->grammar->columnize($fields);
         return $this;
-    }
-
-    /**
-     * Alias for the group() method.
-     *
-     * @param string|array $group Group by clause as a string or array.
-     * @return self
-     */
-    public function groupBy(string|array $group): self
-    {
-        return $this->group($group);
     }
 
     /**
@@ -1202,7 +1236,7 @@ class QueryBuilder implements QueryBuilderContract
     public function latest(): array
     {
         // Array of the latest results.
-        return $this->orderDesc()->result();
+        return $this->orderDesc()->all();
     }
 
     /**
@@ -1210,9 +1244,9 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return array Array of query results.
      */
-    public function result(): array
+    public function all(): array
     {
-        // Execute current sql swlwct command.
+        // Execute current sql select command.
         $this->executeSelectQuery();
 
         // Fetch all results from database.
@@ -1229,33 +1263,13 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Retrieves all results from the executed query.
-     *
-     * @return array Array of query results.
-     */
-    public function all(): array
-    {
-        return $this->result();
-    }
-
-    /**
      * Retrieves all results from the executed query and returns them in a collection.
      *
      * @return \Spark\Support\Collection Array of query results.
      */
-    public function getCollection(): Collection
+    public function get(): Collection
     {
-        return collect($this->result());
-    }
-
-    /**
-     * Retrieves the query results and returns them in a collection.
-     *
-     * @return \Spark\Support\Collection Array of query results.
-     */
-    public function collect(): Collection
-    {
-        return $this->getCollection();
+        return collect($this->all());
     }
 
     /**
@@ -1263,7 +1277,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @param int $limit Number of items per page.
      * @param string $keyword URL query parameter name for pagination.
-     * @return Paginator
+     * @return \Spark\Utils\Paginator
      */
     public function paginate(int $limit = 10, string $keyword = 'page'): Paginator
     {
@@ -1326,7 +1340,7 @@ class QueryBuilder implements QueryBuilderContract
     public function count(): int
     {
         // Get table name.
-        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+        $table = $this->prefix . $this->table;
 
         // Create sql command to count rows.
         $statement = $this->database->prepare(
@@ -1348,11 +1362,27 @@ class QueryBuilder implements QueryBuilderContract
         return $statement->fetch(PDO::FETCH_COLUMN);
     }
 
+    /**
+     * Magic method to handle dynamic method calls.
+     *
+     * @param string $method The name of the method being called.
+     * @param array $args The arguments passed to the method.
+     * @return mixed
+     */
+    public function __call($method, $args)
+    {
+        if (static::hasMacro($method)) {
+            return $this->macroCall($method, $args);
+        }
+
+        return call_user_func_array([$this->get(), $method], $args);
+    }
+
     /** @internal helpers methods for this query builder class */
 
     /**
      * Applies all data mappers to a dataset.
-     * 
+     *
      * @param array $data Data to process.
      * @return array Processed data after all mappers are applied.
      */
@@ -1449,7 +1479,7 @@ class QueryBuilder implements QueryBuilderContract
     {
         // Bind where clause values to filter records.
         foreach ($this->where['bind'] ?? [] as $param => $value) {
-            /** 
+            /**
              * Create a placeholder of the parameter exactly added into the where clause.
              * Ex. "id = :id", ==> :id is the parameter.
              */
@@ -1494,14 +1524,14 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Compiles the INSERT SQL statement based on configuration.
-     * 
+     *
      * @param array $data The data to be inserted.
      * @param array $config The configuration array.
      * @return string The compiled INSERT SQL statement.
      */
     private function compileInsert(array $data, array $config): string
     {
-        $table = $this->grammar->wrapTable($this->prefix . $this->table);
+        $table = $this->prefix . $this->table;
 
         // Base command (INSERT/REPLACE)
         $command = $this->getInsertCommand($config);
@@ -1528,7 +1558,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Gets the appropriate INSERT command based on configuration.
-     * 
+     *
      * @param array $config The configuration array.
      * @return string The INSERT command.
      */
@@ -1542,7 +1572,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Gets the IGNORE modifier for the INSERT statement.
-     * 
+     *
      * @param array $config The configuration array.
      * @return string The IGNORE modifier.
      */
@@ -1565,8 +1595,23 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Creates a placeholder string for the INSERT statement.
+     *
+     * @param array $data The data to be inserted.
+     * @return string The placeholder string.
+     */
+    private function createPlaceholder(array $data): string
+    {
+        $placeholders = [];
+        foreach ($data as $serial => $row) {
+            $placeholders[] = '(' . implode(',', array_map(fn($column) => ':' . $column . '_' . $serial, array_keys($row))) . ')';
+        }
+        return implode(',', $placeholders);
+    }
+
+    /**
      * Compiles the conflict resolution clause.
-     * 
+     *
      * @param array $config The configuration array.
      * @return string The compiled conflict resolution clause.
      */
@@ -1603,7 +1648,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Compiles the RETURNING clause for PostgreSQL.
-     * 
+     *
      * @param array $config The configuration array.
      * @return string The compiled RETURNING clause.
      */
@@ -1622,7 +1667,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Quotes a value for use in an SQL statement.
-     * 
+     *
      * @param string $value The value to quote.
      * @return string The quoted value.
      */
@@ -1633,7 +1678,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Binds all values for the insert statement.
-     * 
+     *
      * @param PDOStatement $statement The PDO statement.
      * @param array $data The data to bind.
      */
@@ -1659,7 +1704,7 @@ class QueryBuilder implements QueryBuilderContract
 
     /**
      * Determines the PDO parameter type for a value.
-     * 
+     *
      * @param mixed $value The value to determine the parameter type for.
      * @return int The PDO parameter type.
      */
@@ -1675,17 +1720,5 @@ class QueryBuilder implements QueryBuilderContract
             return PDO::PARAM_NULL;
         }
         return PDO::PARAM_STR;
-    }
-
-    /**
-     * Handles dynamic method calls to the query result collection.
-     *
-     * @param string $method The method name.
-     * @param array $args The method arguments.
-     * @return mixed The result of the query result collection method call.
-     */
-    public function __call($method, $args)
-    {
-        return call_user_func_array([$this->getCollection(), $method], $args);
     }
 }
