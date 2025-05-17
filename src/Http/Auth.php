@@ -43,13 +43,13 @@ class Auth implements AuthContract
     {
         $this->config = array_merge([
             'session_key' => 'admin_user_id',
-            'cache_enabled' => true,
+            'cache_enabled' => false,
             'cache_name' => 'logged_user',
             'cache_expire' => '10 minutes',
             'guest_route' => 'admin.auth.login',
             'logged_in_route' => 'admin.dashboard',
             'cookie_name' => null,
-            'cookie_expire' => '30 days',
+            'cookie_expire' => '6 months',
         ], $config);
     }
 
@@ -197,7 +197,7 @@ class Auth implements AuthContract
 
         if ($remember && isset($this->config['cookie_name'])) {
             // set cookie expiration time
-            $tokenExpire = strtotime($this->config['cookie_expire'] ?? '30 days');
+            $tokenExpire = strtotime($this->config['cookie_expire'] ?? '1 year');
 
             // add user hashed token in cookie with expiration
             $token = get(Hash::class)

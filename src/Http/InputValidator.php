@@ -67,11 +67,11 @@ class InputValidator implements InputValidatorContract
                 // Apply validation rule
                 $valid = match ($ruleName) {
                     'required' => $has_valid_value,
-                    'email' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_EMAIL) : true,
-                    'url' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_URL) : true,
-                    'number' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
-                    'array' => ($has_valid_value || $is_required) ? is_array($value) : true,
-                    'text', 'char' => ($has_valid_value || $is_required) ? is_string($value) : true,
+                    'email', 'mail' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_EMAIL) : true,
+                    'url', 'link' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_URL) : true,
+                    'number', 'int', 'integer' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
+                    'array', 'list' => ($has_valid_value || $is_required) ? is_array($value) : true,
+                    'text', 'char', 'string' => ($has_valid_value || $is_required) ? is_string($value) : true,
                     'min', 'minimum' => ($has_valid_value || $is_required) ? strlen($value ?? '') >= (int) $ruleParams[0] : true,
                     'max', 'maximum' => ($has_valid_value || $is_required) ? strlen($value ?? '') <= (int) $ruleParams[0] : true,
                     'length', 'size' => ($has_valid_value || $is_required) ? strlen($value ?? '') == (int) $ruleParams[0] : true,
@@ -134,11 +134,11 @@ class InputValidator implements InputValidatorContract
         // Error messages for each validation rule
         $this->errors[$field][] = match ($rule) {
             'required' => __("The %s field is required.", $prettyField),
-            'email' => __("The %s field must be a valid email address.", $prettyField),
-            'url' => __("The %s field must be a valid URL.", $prettyField),
-            'number' => __("The %s field must be a number.", $prettyField),
-            'array' => __("The %s field must be an array.", $prettyField),
-            'text', 'char' => __("The %s field must be a text.", $prettyField),
+            'email', 'mail' => __("The %s field must be a valid email address.", $prettyField),
+            'url', 'link' => __("The %s field must be a valid URL.", $prettyField),
+            'number', 'int', 'integer' => __("The %s field must be a number.", $prettyField),
+            'array', 'list' => __("The %s field must be an array.", $prettyField),
+            'text', 'char', 'string' => __("The %s field must be a text.", $prettyField),
             'min', 'minimum' => __("The %s field must be at least %s characters long.", [$prettyField, $params[0] ?? 0]),
             'max', 'maximum' => __("The %s field must not exceed %s characters.", [$prettyField, $params[0] ?? 0]),
             'length', 'size' => __("The %s field must be %s characters.", [$prettyField, $params[0] ?? 0]),

@@ -357,17 +357,17 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderInvalidWhereClauseException('Invalid where clause');
         }
 
-        // Grouped where clauses.
-        if ($this->where['grouped']) {
-            $command = "($command";
-            $this->where['grouped'] = false;
-        }
-
         // Register the where clause into current query builder.
         $this->where['sql'] .= sprintf(
             ' %s ',
             empty($this->where['sql']) ? ltrim($command, "$andOr ") : $command
         );
+
+        // Grouped where clauses.
+        if ($this->where['grouped']) {
+            $this->where['sql'] = ' (' . $this->where['sql'];
+            $this->where['grouped'] = false;
+        }
 
         // Returns the current instance for method chaining.
         return $this;

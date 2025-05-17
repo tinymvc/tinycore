@@ -3,9 +3,9 @@
 namespace Spark;
 
 use Spark\Contracts\HashContract;
-use Spark\Exception\Hash\DecryptionFailedException;
-use Spark\Exception\Hash\EncryptionFailedException;
-use Spark\Exception\Hash\InvalidEncryptingKeyException;
+use Spark\Exceptions\Hash\DecryptionFailedException;
+use Spark\Exceptions\Hash\EncryptionFailedException;
+use Spark\Exceptions\Hash\InvalidEncryptingKeyException;
 use Spark\Support\Traits\Macroable;
 
 /**

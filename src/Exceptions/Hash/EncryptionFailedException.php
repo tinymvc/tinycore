@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Exception\Hash;
+namespace Spark\Exceptions\Hash;
 
 use Exception;
 

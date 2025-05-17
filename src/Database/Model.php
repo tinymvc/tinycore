@@ -137,14 +137,13 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public static function load(array|Arrayable $data): static
     {
-        if ($data instanceof Arrayable) {
-            $data = $data->toArray();
-        }
-
         // Create & Hold a new model.
         $model = new static();
 
-        $model->fill($data);
+        $model->fill($data); // Fill the model with the given data.
+
+        // Decode model properties from JSON to array if necessary.
+        $model->decodeSavedData();
 
         // Return the new model object.
         return $model;
@@ -180,9 +179,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
         foreach ($data as $key => $value) {
             $this->attributes[$key] = $value;
         }
-
-        // Decode model properties from JSON to array if necessary.
-        $this->decodeSavedData();
 
         return $this;
     }
@@ -400,11 +396,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function __get($name)
     {
-        if (isset($this->attributes[$name])) {
-            return $this->attributes[$name];
-        }
-
-        return $this->getFromOrm($name);
+        return $this->attributes[$name] ?? $this->getFromOrm($name);
     }
 
     /**
@@ -451,7 +443,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function offsetExists(mixed $offset): bool
     {
-        return isset($this->attributes[$offset]);
+        return isset($this->attributes[$offset]) || $this->existsInOrm($offset);
     }
 
     /**
@@ -462,7 +454,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->attributes[$offset] ?? null;
+        return $this->attributes[$offset] ?? $this->getFromOrm($offset);
     }
 
     /**
@@ -485,7 +477,11 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function offsetUnset(mixed $offset): void
     {
-        unset($this->attributes[$offset]);
+        if (isset($this->attributes[$offset])) {
+            unset($this->attributes[$offset]);
+        } else {
+            $this->removeFromOrm($offset);
+        }
     }
 
     /**
@@ -518,15 +514,5 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
         }
 
         return call_user_func([self::query(), $name], ...$arguments);
-    }
-
-    /**
-     * Converts the model to a string representation.
-     *
-     * @return string A string representation of the model instance.
-     */
-    public function __toString()
-    {
-        return sprintf('model: (%s), %s(%d)', static::class, static::$table, $this->primaryValue('#'));
     }
 }

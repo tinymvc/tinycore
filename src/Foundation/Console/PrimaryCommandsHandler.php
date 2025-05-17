@@ -176,8 +176,8 @@ class PrimaryCommandsHandler
 
         $prompt->message("<info>Info</info> Application key has been updated.");
     }
-	
-	/**
+
+    /**
      * Creates a symbolic link for the uploads directory.
      *
      * This method creates a symbolic link from the storage uploads directory
