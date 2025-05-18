@@ -88,11 +88,12 @@ class Vite implements ViteUtilContract
     /**
      * Generates a script tag to inject React Refresh runtime.
      *
-     * @param string $entry The entry file name.
+     * @param null|string $entry The entry file name.
      * @return string The HTML script tag for React Refresh runtime.
      */
-    public function reactRefreshTag(string $entry): string
+    public function reactRefreshTag(?string $entry = null): string
     {
+        $entry ??= $this->config('entry');
         $tag = '';
         if ($this->isRunning($entry)) {
             $tag = <<<HTML
