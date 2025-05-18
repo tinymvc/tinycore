@@ -138,7 +138,7 @@ class Request implements RequestContract
      */
     private function parsePhpInput(): array
     {
-        if ($this->method === 'POST' && empty($this->postParams)) {
+        if (in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE']) && empty($this->postParams)) {
             // Get the raw POST data from the php://input stream.
             $params = file_get_contents('php://input');
 
