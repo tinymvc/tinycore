@@ -292,7 +292,7 @@ class Http implements HttpUtilContract
     private function parseResponse(array $response): ArrayAccess
     {
         $class = new class implements ArrayAccess {
-            public string $body = ''; // The response body
+            public mixed $body = ''; // The response body
             public int $status = 0; // The HTTP status code
             public string $lastUrl = ''; // The last URL after redirects
             public int $length = 0; // The content length of the response

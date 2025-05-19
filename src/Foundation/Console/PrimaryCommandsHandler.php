@@ -222,41 +222,4 @@ class PrimaryCommandsHandler
 
         $prompt->message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
     }
-
-    /**
-     * Copies the example environment configuration file to the main environment file.
-     *
-     * This method checks if the main environment file (`env.php`) already exists.
-     * If it does, the user is prompted to confirm whether they want to override it.
-     * If the user agrees or if the file does not exist, the method attempts to copy
-     * the example environment file (`env.example.php`) to `env.php`. Feedback is
-     * provided to the user on whether the operation was successful or not.
-     *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages and confirmations in the console.
-     *
-     * @return void
-     */
-    public function copyConfigFile(Prompt $prompt)
-    {
-        $envPath = root_dir('env.php');
-        $exampleEnvPath = root_dir('env.example.php');
-
-        if (file_exists($envPath)) {
-            $override = $prompt->confirm(
-                "The config: {$envPath}\n is already exists. Do you want to override it?",
-                true
-            );
-
-            if (!$override) {
-                return;
-            }
-        }
-
-        if (copy($exampleEnvPath, $envPath)) {
-            $prompt->message("<info>Success</info> env.php file created successfully.");
-        } else {
-            $prompt->message("Failed to create env.php file. Please create it manually.", 'danger');
-        }
-    }
 }

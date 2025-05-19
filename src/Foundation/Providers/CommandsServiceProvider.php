@@ -98,10 +98,6 @@ class CommandsServiceProvider
         // Add the key:generate command
         $commands->addCommand('key:generate', [PrimaryCommandsHandler::class, 'generateAppKey'])
             ->description('Generate a new encryption key');
-			
-		// Copy env.php file from example.env.php
-        $commands->addCommand('config:copy', [PrimaryCommandsHandler::class, 'copyConfigFile'])
-            ->description('Create a copy of env.php file');
 
         // Add the storage:link command
         $commands->addCommand('storage:link', [PrimaryCommandsHandler::class, 'createSymbolicLinkForUploads'])
