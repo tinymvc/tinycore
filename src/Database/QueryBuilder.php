@@ -14,7 +14,7 @@ use Spark\Utils\Paginator;
 
 /**
  * Class Query
- * 
+ *
  * @method Collection except($keys)
  * @method Collection filter(?callable $callback = null)
  * @method Collection map(callable $callback)
@@ -305,7 +305,6 @@ class QueryBuilder implements QueryBuilderContract
 
         $andOr ??= 'AND';
 
-
         // Holds a conditional clause for database.
         $command = '';
 
@@ -317,14 +316,10 @@ class QueryBuilder implements QueryBuilderContract
                 $operator = '=';
             }
 
-            $command = sprintf(
-                "%s %s %s :%s",
-                $andOr,
-                $column,
-                $operator,
-                str_replace('.', '', $column)
-            );
-            $this->where['bind'] = array_merge($this->where['bind'], [$column => $value]);
+            $columnPlaceholder = $this->getWhereSqlColumn($column);
+            $command = sprintf("%s %s %s :%s", $andOr, $column, $operator, $columnPlaceholder);
+
+            $this->where['bind'][$columnPlaceholder] = $value;
         } elseif (is_array($column) && $operator === null && $value === null) {
             // Create a where clause from array conditions.
             $command = sprintf(
@@ -333,28 +328,37 @@ class QueryBuilder implements QueryBuilderContract
                 implode(
                     " {$andOr} ",
                     array_map(
-                        fn($attr, $value) => $attr . (is_array($value) ?
-                            // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
-                            sprintf(
-                                ($not ? ' NOT' : '') . " IN (%s)",
-                                join(",", array_map(fn($index) => ':' . str_replace('.', '', $attr) . '_' . $index, array_keys($value)))
-                            )
-                            // Create a where close to match is equal, Ex. "id = :id_0"
-                            : ($not ? ' !=' : ' =') . " :" . str_replace('.', '', $attr)
-                        ),
+                        function ($attr, $value) use ($not) {
+
+                            $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
+                            $this->where['bind'][$columnPlaceholder] = $value; // Bind the value to the placeholder.
+            
+                            return $attr . (is_array($value) ?
+                                // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
+                                sprintf(
+                                    ($not ? ' NOT' : '') . " IN (%s)",
+                                    join(",", array_map(fn($index) => ":{$columnPlaceholder}_$index", array_keys($value)))
+                                )
+                                // Create a where close to match is equal, Ex. "id = :id_0"
+                                : ($not ? ' !=' : ' =') . " :" . $columnPlaceholder
+                            );
+                        },
                         array_keys($column),
                         array_values($column)
                     )
                 )
             );
-
-            // Append where clause binding values, safe & GOOD PDO practice.
-            $this->where['bind'] = array_merge($this->where['bind'], $column);
         } elseif (is_string($column) && $operator === null && $value === null) {
             // Simply add a where clause from string.
             $command = "{$andOr} {$column}";
         } else {
             throw new QueryBuilderInvalidWhereClauseException('Invalid where clause');
+        }
+
+        // Grouped where clauses.
+        if ($this->where['grouped']) {
+            $command = "$andOr (" . ltrim($command, $andOr);
+            $this->where['grouped'] = false;
         }
 
         // Register the where clause into current query builder.
@@ -363,13 +367,21 @@ class QueryBuilder implements QueryBuilderContract
             empty($this->where['sql']) ? ltrim($command, "$andOr ") : $command
         );
 
-        // Grouped where clauses.
-        if ($this->where['grouped']) {
-            $this->where['sql'] = ' (' . $this->where['sql'];
-            $this->where['grouped'] = false;
-        }
-
         // Returns the current instance for method chaining.
+        return $this;
+    }
+
+    /**
+     * Adds a WHERE binding to the query.
+     * This method allows you to add additional bindings to the WHERE clause.
+     *
+     * @param array $args
+     * @return QueryBuilder
+     */
+    public function addWhereBinding(array $args): self
+    {
+        $this->where['bind'] = array_merge($this->where['bind'], $args);
+
         return $this;
     }
 
@@ -537,8 +549,14 @@ class QueryBuilder implements QueryBuilderContract
         // If the key is not numeric, wrap it with grammar-specific quotes
         $key = is_numeric($key) ? $key : $this->quote($key);
 
+        // Get the SQL column placeholder for binding.
+        $columnPlaceholder = $this->getWhereSqlColumn($field);
+
         // Construct the FIND_IN_SET condition
-        $where = "{$type}FIND_IN_SET ($key, $field)";
+        $where = "{$type}FIND_IN_SET (:$columnPlaceholder, $field)";
+
+        // Bind the key to the placeholder
+        $this->where['bind'][$columnPlaceholder] = $key;
 
         // Add the condition to the query's WHERE clause
         return $this->where(column: $where, andOr: $andOr);
@@ -608,8 +626,14 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function between($field, $value1, $value2, $type = '', $andOr = 'AND'): self
     {
+        $columnPlaceholder1 = $this->getWhereSqlColumn("{$field}1");
+        $columnPlaceholder2 = $this->getWhereSqlColumn("{$field}2");
+
         $where = '(' . $field . ' ' . $type . 'BETWEEN '
-            . ($this->quote($value1) . ' AND ' . $this->quote($value2)) . ')';
+            . (":$columnPlaceholder1 AND :$columnPlaceholder2") . ')';
+
+        $this->where['bind'][$columnPlaceholder1] = $value1;
+        $this->where['bind'][$columnPlaceholder2] = $value2;
 
         return $this->where(column: $where, andOr: $andOr);
     }
@@ -681,8 +705,11 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function like($field, $data, $type = '', $andOr = 'AND'): self
     {
+        $columnPlaceholder = $this->getWhereSqlColumn($field);
         $like = $this->quote($data);
-        $where = "$field {$type}LIKE $like";
+        $where = "$field {$type}LIKE :$columnPlaceholder";
+
+        $this->where['bind'][$columnPlaceholder] = $like;
 
         return $this->where(column: $where, andOr: $andOr);
     }
@@ -785,7 +812,7 @@ class QueryBuilder implements QueryBuilderContract
         $statement = $this->database->prepare(
             sprintf(
                 "UPDATE {$table} SET %s %s",
-                implode(', ', array_map(fn($attr) => $attr . " = :$attr", array_keys($data))),
+                implode(', ', array_map(fn($attr) => "$attr = :$attr", array_keys($data))),
                 $this->getWhereSql()
             )
         );
@@ -1467,6 +1494,28 @@ class QueryBuilder implements QueryBuilderContract
     {
         // Returns the SQL string for the WHERE clause.
         return $this->hasWhere() ? ' WHERE ' . trim($this->where['sql']) . ' ' : '';
+    }
+
+    /**
+     * Get the Where SQL column name.
+     * This method ensures that the column name is unique by appending an index if necessary.
+     *
+     * @param string $column The column name to be used in the WHERE clause.
+     * @return string
+     *   Returns a unique column name for the WHERE clause.
+     */
+    private function getWhereSqlColumn(string $column): string
+    {
+        $column = str_replace('.', '', $column);
+
+        $index = 0;
+        $x_column = $column;
+        do {
+            $x_column = $index === 0 ? $column : "$column$index";
+            $index++;
+        } while (isset($this->where['bind'][$x_column]));
+
+        return $x_column;
     }
 
     /**
