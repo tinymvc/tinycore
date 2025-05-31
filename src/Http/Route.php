@@ -22,7 +22,8 @@ use Spark\Support\Traits\Macroable;
  * @method static Router any(string $path, callable|string|array $callback)
  * @method static Router group(array $attributes, callable $callback)
  * @method static Router view(string $path, string $template)
- * 
+ * @method static Router resource(string $path, string $callback, string|null $name = null, string|array $middleware = [], array $only = [], array $except = [])
+ *
  * @package Spark\Http
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
@@ -133,6 +134,32 @@ class Route implements HttpRouteContract
     public static function view($path, $template): Router
     {
         return Application::$app->container->get(Router::class)->view($path, $template);
+    }
+
+    /**
+     * Registers a resourceful route with the router.
+     *
+     * This method allows you to define a set of routes for a resource, such as
+     * index, create, store, show, edit, update, and destroy actions.
+     *
+     * @param string $path The base path for the resource.
+     * @param string $callback The controller or callback that handles the resource.
+     * @param string|null $name Optional name for the resource route.
+     * @param string|array $middleware Optional middleware to apply to the resource routes.
+     * @param array $only Optional array of actions to include in the resource route.
+     * @param array $except Optional array of actions to exclude from the resource route.
+     *
+     * @return \Spark\Router The router instance to allow method chaining.
+     */
+    public static function resource(
+        string $path,
+        string $callback,
+        string|null $name = null,
+        string|array $middleware = [],
+        array $only = [],
+        array $except = [],
+    ): Router {
+        return Application::$app->container->get(Router::class)->resource($path, $callback, $name, $middleware, $only, $except);
     }
 
     /**

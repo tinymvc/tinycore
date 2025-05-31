@@ -292,6 +292,67 @@ class Router implements RouterContract
     }
 
     /**
+     * Registers a resource route with the router.
+     *
+     * This method creates a set of RESTful routes for a resource, allowing
+     * for standard CRUD operations. The routes can be filtered by 'only' or
+     * 'except' parameters to include or exclude specific actions.
+     *
+     * @param string $path The base path for the resource routes.
+     * @param string $callback The controller class or callback to handle the resource actions.
+     * @param array $only An array of actions to include (e.g., ['index', 'show']).
+     * @param array $except An array of actions to exclude (e.g., ['create', 'update']).
+     * @param string|null $name Optional name prefix for the resource routes.
+     * @param string|array $middleware Optional middleware to apply to the resource routes.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function resource(
+        string $path,
+        string $callback,
+        string|null $name = null,
+        string|array $middleware = [],
+        array $only = [],
+        array $except = [],
+    ): self {
+
+        $name ??= trim($path, '/');
+        $name = str_replace('/', '.', $name);
+
+        // Define the resource routes based on the provided path and callback
+        $routes = [
+            'index' => ['method' => 'GET', 'path' => $path, 'callback' => [$callback, 'index'], 'name' => "$name.index"],
+            'show' => ['method' => 'GET', 'path' => "$path/{id}", 'callback' => [$callback, 'show'], 'name' => "$name.show"],
+            'create' => ['method' => 'GET', 'path' => "$path/create", 'callback' => [$callback, 'create'], 'name' => "$name.create"],
+            'store' => ['method' => 'POST', 'path' => $path, 'callback' => [$callback, 'store'], 'name' => "$name.store"],
+            'edit' => ['method' => 'GET', 'path' => "$path/{id}/edit", 'callback' => [$callback, 'edit'], 'name' => "$name.edit"],
+            'update' => ['method' => ['PUT', 'PATCH'], 'path' => "$path/{id}", 'callback' => [$callback, 'update'], 'name' => "$name.update"],
+            'destroy' => ['method' => 'DELETE', 'path' => "$path/{id}", 'callback' => [$callback, 'destroy'], 'name' => "$name.destroy"],
+        ];
+
+        // Filter routes based on 'only' and 'except' parameters
+        if (!empty($only)) {
+            $routes = array_intersect_key($routes, array_flip($only));
+        }
+        if (!empty($except)) {
+            $routes = array_diff_key($routes, array_flip($except));
+        }
+
+        // Register the resource routes
+        foreach ($routes as $route) {
+            $this->add(
+                path: $route['path'],
+                method: $route['method'],
+                callback: $route['callback'],
+                name: $route['name'],
+                middleware: $middleware
+            );
+        }
+
+        return $this;
+    }
+
+    /**
      * Adds a group of routes to the router with shared attributes.
      *
      * The passed callback is called immediately. Any routes defined within the
