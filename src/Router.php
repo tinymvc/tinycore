@@ -1,5 +1,4 @@
 <?php
-
 namespace Spark;
 
 use Spark\Contracts\RouterContract;
@@ -12,9 +11,9 @@ use Spark\Support\Traits\Macroable;
 
 /**
  * Class Router
- * 
+ *
  * A basic router for handling HTTP requests, middleware, and dispatching routes to their respective handlers.
- * 
+ *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Router implements RouterContract
@@ -23,7 +22,7 @@ class Router implements RouterContract
 
     /**
      * @var array $groupAttributes
-     * 
+     *
      * Holds the shared attributes for a group of routes. This is used
      * when defining a group of routes with common properties such as
      * middleware, name prefix, or path prefix.
@@ -51,10 +50,10 @@ class Router implements RouterContract
 
     /**
      * Add a GET route to the router.
-     * 
+     *
      * @param string $path The path for the GET route.
      * @param callable|string|array $callback The handler or callback for the GET route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function get(string $path, callable|string|array $callback): self
@@ -65,10 +64,10 @@ class Router implements RouterContract
 
     /**
      * Add a POST route to the router.
-     * 
+     *
      * @param string $path The path for the POST route.
      * @param callable|string|array $callback The handler or callback for the POST route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function post(string $path, callable|string|array $callback): self
@@ -79,10 +78,10 @@ class Router implements RouterContract
 
     /**
      * Add a PUT route to the router.
-     * 
+     *
      * @param string $path The path for the PUT route.
      * @param callable|string|array $callback The handler or callback for the PUT route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function put(string $path, callable|string|array $callback): self
@@ -93,10 +92,10 @@ class Router implements RouterContract
 
     /**
      * Add a PATCH route to the router.
-     * 
+     *
      * @param string $path The path for the PATCH route.
      * @param callable|string|array $callback The handler or callback for the PATCH route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function patch(string $path, callable|string|array $callback): self
@@ -107,10 +106,10 @@ class Router implements RouterContract
 
     /**
      * Add a DELETE route to the router.
-     * 
+     *
      * @param string $path The path for the DELETE route.
      * @param callable|string|array $callback The handler or callback for the DELETE route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function delete(string $path, callable|string|array $callback): self
@@ -121,10 +120,10 @@ class Router implements RouterContract
 
     /**
      * Add an OPTIONS route to the router.
-     * 
+     *
      * @param string $path The path for the OPTIONS route.
      * @param callable|string|array $callback The handler or callback for the OPTIONS route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function options(string $path, callable|string|array $callback): self
@@ -135,10 +134,10 @@ class Router implements RouterContract
 
     /**
      * Add a route that matches any HTTP method to the router.
-     * 
+     *
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function any(string $path, callable|string|array $callback): self
@@ -149,11 +148,11 @@ class Router implements RouterContract
 
     /**
      * Add a route that matches multiple HTTP methods to the router.
-     * 
+     *
      * @param array $methods An array of HTTP methods to match.
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function match(array $methods, string $path, callable|string|array $callback): self
@@ -164,10 +163,10 @@ class Router implements RouterContract
 
     /**
      * Add a route with a view to the router.
-     * 
+     *
      * @param string $path The path for the route.
      * @param string $template The template to use for the route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function view(string $path, string $template): self
@@ -178,9 +177,9 @@ class Router implements RouterContract
 
     /**
      * Assign middleware to the most recently added route.
-     * 
+     *
      * @param string|array $middleware An array of middleware to be associated with the route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function middleware(string|array $middleware): self
@@ -191,9 +190,9 @@ class Router implements RouterContract
 
     /**
      * Assign a name to the most recently added route.
-     * 
+     *
      * @param string $name The name to assign to the route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function name(string $name): self
@@ -208,14 +207,14 @@ class Router implements RouterContract
 
     /**
      * Add a new route to the router.
-     * 
+     *
      * @param string $path Route path.
      * @param string|array|null $method HTTP method(s) allowed for this route.
      * @param callable|string|array|null $callback The handler or callback for the route.
      * @param string|null $template Optional template for the route.
      * @param string|null $name Optional name for the route.
      * @param string|array $middleware Middleware specific to this route.
-     * 
+     *
      * @return self Returns the router instance to allow method chaining.
      */
     public function add(
@@ -231,42 +230,47 @@ class Router implements RouterContract
 
         // Check if there are any group attributes to apply to the route
         if (!empty($this->groupAttributes)) {
+            // Prepend the grouped path to the route path if it exists
+            $groupedPath = array_map(fn($attr) => $attr['path'] ?? null, $this->groupAttributes);
+            $groupedPath = implode('', array_filter($groupedPath));
+            $path = "$groupedPath$path";
 
-            // Prepend the group path to the route path if it exists
-            if (isset($this->groupAttributes['path'])) {
-                $path = $this->groupAttributes['path'] . $path;
-            }
-
-            // Merge group methods with specified route methods
-            if (isset($this->groupAttributes['method'])) {
-                $method = array_merge((array) $this->groupAttributes['method'], (array) $method);
-            }
+            // Merge grouped methods with specified route methods
+            $groupedMethods = array_map(fn($attr) => $attr['method'] ?? null, $this->groupAttributes);
+            $method = array_unique(array_merge((array) $method, array_filter($groupedMethods)));
 
             // Merge group middleware with specified route middleware
-            if (isset($this->groupAttributes['middleware'])) {
-                $middleware = array_merge((array) $this->groupAttributes['middleware'], (array) $middleware);
+            $groupedMiddlewares = array_map(fn($attr) => $attr['middleware'] ?? null, $this->groupAttributes);
+            $middleware = array_unique(array_merge((array) $middleware, array_filter($groupedMiddlewares)));
+
+            // Append grouped name to the route name if both are set
+            $groupedName = array_map(fn($attr) => $attr['name'] ?? null, $this->groupAttributes);
+            $groupedName = implode('', array_filter($groupedName));
+            if (!empty($groupedName)) {
+                $name ??= '';
+                $name = "$groupedName$name";
             }
 
-            // Append group name to the route name if both are set
-            if (isset($name) && isset($this->groupAttributes['name'])) {
-                $name = $this->groupAttributes['name'] . $name;
-            }
-
-            // Prepend group template path to the route template if both are set
-            if (isset($template) && isset($this->groupAttributes['template'])) {
-                $template = $this->groupAttributes['template'] . $template;
+            // Prepend grouped template path to the route template if both are set
+            $groupedTemplate = array_map(fn($attr) => $attr['template'] ?? null, $this->groupAttributes);
+            $groupedTemplate = implode('', array_filter($groupedTemplate));
+            if (!empty($groupedTemplate)) {
+                $template ??= '';
+                $template = "$groupedTemplate$template";
             }
 
             // If group callback is set and no template is used, apply it to the callback
-            if (isset($this->groupAttributes['callback']) && $template === null) {
+            $groupedCallback = array_map(fn($attr) => $attr['callback'] ?? null, $this->groupAttributes);
+            $groupedCallback = array_filter($groupedCallback);
+            if (empty($template) && !empty($groupedCallback)) {
+                $groupedCallback = end($groupedCallback); // Get the last callback from the group attributes
                 $callback = match (true) {
-                    $callback === null => $this->groupAttributes['callback'],
-                    is_string($callback) => [$this->groupAttributes['callback'], $callback],
+                    $callback === null => $groupedCallback,
+                    is_string($callback) && !is_array($groupedCallback) && !is_callable($callback) => [$groupedCallback, $callback],
                     default => $callback, // original callback for closure or array
                 };
             }
         }
-
 
         // Define the route properties
         $route = [
@@ -274,11 +278,11 @@ class Router implements RouterContract
             'method' => $method,
             'callback' => $callback,
             'template' => $template,
-            'middleware' => $middleware
+            'middleware' => $middleware,
         ];
 
         // Store the route by name if given, otherwise add to unnamed routes array
-        if ($name !== null) {
+        if (!empty($name)) {
             $this->routes[$name] = $route;
         } else {
             $this->routes[] = $route;
@@ -289,35 +293,35 @@ class Router implements RouterContract
 
     /**
      * Adds a group of routes to the router with shared attributes.
-     * 
+     *
      * The passed callback is called immediately. Any routes defined within the
      * callback will have the given attributes applied to them.
-     * 
+     *
      * @param array $attributes An array of shared attributes for the group of routes.
      * @param callable $callback The callback that defines the group of routes.
-     * 
+     *
      * @return void
      */
     public function group(array $attributes, callable $callback): void
     {
         // Store the group attributes that will be applied to all routes within the group
-        $this->groupAttributes = $attributes;
+        $this->groupAttributes[] = $attributes;
 
         // Call the callback immediately to define the group of routes
         $callback($this);
 
-        // Reset the group attributes after the callback has been executed
-        $this->groupAttributes = [];
+        // Remove the last group attributes after the callback has been executed
+        array_pop($this->groupAttributes);
     }
 
     /**
      * Get the URL path for a named route.
-     * 
+     *
      * @param string $name The name of the route.
      * @param string|null|array $context Optional context parameter for dynamic segments.
-     * 
+     *
      * @return string Returns the route's path.
-     * 
+     *
      * @throws InvalidNamedRouteException if the route does not exist.
      */
     public function route(string $name, null|string|array $context = null): string
@@ -348,20 +352,19 @@ class Router implements RouterContract
         return rtrim($route, '*/');
     }
 
-
     /**
      * Dispatches the incoming HTTP request to the appropriate route handler.
-     * 
+     *
      * Iterates through the defined routes to find a match for the request path and method.
      * If a route matches, it queues any route-specific middleware and processes the middleware stack.
      * The response is returned if the middleware halts the request. Otherwise, it handles template
      * rendering or resolves the callback for the matched route, returning the callback's response.
      * If no route matches, a 404 'Not Found' response is returned.
-     * 
+     *
      * @param Container $container The dependency injection container.
      * @param Middleware $middleware The middleware stack to be processed.
      * @param Request $request The HTTP request instance.
-     * 
+     *
      * @return Response The HTTP response object.
      */
     public function dispatch(Container $container, Middleware $middleware, Request $request): Response
@@ -394,11 +397,11 @@ class Router implements RouterContract
 
     /**
      * Attempts to match the request path with the given route path and method.
-     * 
+     *
      * @param string|array $routeMethod The HTTP method(s) allowed for this route.
      * @param string $routePath The route path to match against the request path.
      * @param Request $request The request object.
-     * 
+     *
      * @return bool True if the route matches the request path and method, false otherwise.
      */
     private function matchRoute($routeMethod, $routePath, Request $request): bool
