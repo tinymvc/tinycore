@@ -573,10 +573,6 @@ class Router implements RouterContract
 
         // If the response is a string, create a new Response object with it
         if (is_string($response) || is_numeric($response) || is_bool($response)) {
-            if (is_bool($response)) {
-                $response = $response ? 1 : 0;
-            }
-
             return new Response($response);
         }
 
