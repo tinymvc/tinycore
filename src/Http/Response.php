@@ -17,6 +17,13 @@ class Response implements ResponseContract
 {
     use Macroable;
 
+    /**
+     * This property holds the URL to which the user will be redirected.
+     * It is set when the `redirect` method is called and used in the `send` method
+     * to perform the actual redirection.
+     * 
+     * @var string The URL to redirect to.
+     */
     private string $redirectUrl;
 
     /**
