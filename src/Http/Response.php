@@ -17,6 +17,8 @@ class Response implements ResponseContract
 {
     use Macroable;
 
+    private string $redirectUrl;
+
     /**
      * Constructor
      * 
@@ -77,13 +79,15 @@ class Response implements ResponseContract
      * Redirects the user to a specified URL and optionally terminates script execution.
      *
      * @param string $url The URL to redirect to.
-     * @param bool $replace Whether to replace the current headers (default is true).
      * @param int $httpCode Optional HTTP status code for the redirect (default is 0).
+     * @return $this Current response instance for method chaining.
      */
-    public function redirect(string $url, bool $replace = true, int $httpCode = 0): void
+    public function redirect(string $url, int $httpCode = 0): self
     {
-        header("Location: $url", $replace, $httpCode);
-        exit;
+        $this->redirectUrl = $url;
+        $this->setStatusCode($httpCode); // Default to 302 if no code is provided
+
+        return $this;
     }
 
     /**
@@ -173,6 +177,12 @@ class Response implements ResponseContract
      */
     public function send(): void
     {
+        // If a redirect URL is set, perform the redirect.
+        if (isset($this->redirectUrl)) {
+            header("Location: {$this->redirectUrl}", true, $this->statusCode);
+            exit; // Terminate script execution after redirect
+        }
+
         // Set http response code and headers.
         http_response_code($this->statusCode);
         foreach ($this->headers as $key => $value) {

@@ -2,6 +2,7 @@
 namespace Spark;
 
 use Spark\Contracts\RouterContract;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Exceptions\Routing\InvalidNamedRouteException;
 use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Http\Middleware;
@@ -439,7 +440,7 @@ class Router implements RouterContract
                 // Execute middleware stack and return response if middleware stops request
                 $middlewareResponse = $middleware->process($container, $request);
                 if ($middlewareResponse) {
-                    return $middlewareResponse;
+                    return $this->parseHttpResponse($middlewareResponse);
                 }
 
                 // Handle view rendering or instantiate a class for callback if specified
@@ -448,7 +449,9 @@ class Router implements RouterContract
                 }
 
                 // Call the matched route's callback
-                return $container->call($route['callback'], $request->getRouteParams());
+                return $this->parseHttpResponse(
+                    $container->call($route['callback'], $request->getRouteParams())
+                );
             }
         }
 
@@ -548,5 +551,49 @@ class Router implements RouterContract
 
         // Return the matched parameters
         return $matches;
+    }
+
+    /**
+     * Parses the HTTP response and returns a Response object.
+     *
+     * This method checks the type of the response and converts it to a Response object.
+     * It handles strings, arrays, and Arrayable objects, converting them to JSON responses
+     * when necessary. If the response is already a Response object, it returns it directly.
+     *
+     * @param mixed $response The response to parse.
+     *
+     * @return Response The parsed response object.
+     */
+    private function parseHttpResponse(mixed $response): Response
+    {
+        // If the response is already a Response object, return it
+        if ($response instanceof Response) {
+            return $response;
+        }
+
+        // If the response is a string, create a new Response object with it
+        if (is_string($response) || is_numeric($response) || is_bool($response)) {
+            if (is_bool($response)) {
+                $response = $response ? 1 : 0;
+            }
+
+            return new Response($response);
+        }
+
+        // Define a closure to convert data to an array if it implements Arrayable
+        $toArray = fn(array $data) => array_map(fn($item) => $item instanceof Arrayable ? $item->toArray() : $item, $data);
+
+        // If the response is an array, convert it to JSON and return as a Response
+        if (is_array($response)) {
+            return new Response(json_encode($toArray($response)), 200, ['Content-Type' => 'application/json']);
+        }
+
+        // If the response implements Arrayable, convert it to an array and return as JSON
+        if ($response instanceof Arrayable) {
+            return new Response(json_encode($toArray($response->toArray())), 200, ['Content-Type' => 'application/json']);
+        }
+
+        // Otherwise, return an empty response
+        return new Response();
     }
 }
