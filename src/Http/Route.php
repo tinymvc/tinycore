@@ -137,6 +137,23 @@ class Route implements HttpRouteContract
     }
 
     /**
+     * Matches a route with the specified HTTP methods and path.
+     *
+     * This method allows you to define a route that responds to specific HTTP
+     * methods (GET, POST, etc.) and a path, with a callback or controller action.
+     *
+     * @param array $methods The HTTP methods to match (e.g., ['get', 'post']).
+     * @param string $path The path for the route.
+     * @param callable|string|array $callback The handler or callback for the route.
+     *
+     * @return \Spark\Router The router instance to allow method chaining.
+     */
+    public static function match(array $methods, string $path, callable|string|array $callback): Router
+    {
+        return Application::$app->container->get(Router::class)->match($methods, $path, $callback);
+    }
+
+    /**
      * Registers a resourceful route with the router.
      *
      * This method allows you to define a set of routes for a resource, such as

@@ -38,11 +38,10 @@ interface ResponseContract
      * Redirects the user to a specified URL and optionally terminates script execution.
      *
      * @param string $url The URL to redirect to.
-     * @param bool $replace Whether to replace the current headers (default is true).
      * @param int $httpCode Optional HTTP status code for the redirect (default is 0).
-     * @return void
+     * @return self Current response instance for method chaining.
      */
-    public function redirect(string $url, bool $replace = true, int $httpCode = 0): void;
+    public function redirect(string $url, int $httpCode = 0): self;
 
     /**
      * Sets the HTTP status code for the response.
