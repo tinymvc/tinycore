@@ -576,17 +576,14 @@ class Router implements RouterContract
             return new Response($response);
         }
 
-        // Define a closure to convert data to an array if it implements Arrayable
-        $toArray = fn(array $data) => array_map(fn($item) => $item instanceof Arrayable ? $item->toArray() : $item, $data);
-
         // If the response is an array, convert it to JSON and return as a Response
         if (is_array($response)) {
-            return new Response(json_encode($toArray($response)), 200, ['Content-Type' => 'application/json']);
+            return new Response(json_encode(toPureArray($response)), 200, ['Content-Type' => 'application/json']);
         }
 
         // If the response implements Arrayable, convert it to an array and return as JSON
         if ($response instanceof Arrayable) {
-            return new Response(json_encode($toArray($response->toArray())), 200, ['Content-Type' => 'application/json']);
+            return new Response(json_encode(toPureArray($response->toArray())), 200, ['Content-Type' => 'application/json']);
         }
 
         // Otherwise, return an empty response
