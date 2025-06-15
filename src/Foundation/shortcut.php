@@ -6,6 +6,7 @@ use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
 use Spark\Exceptions\Http\InputValidationFailedException;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Http\Auth;
@@ -1326,4 +1327,30 @@ if (!function_exists('uploader')) {
 
         return $uploader;
     }
+}
+
+/**
+ * Recursively converts any Arrayable objects and nested arrays into pure arrays.
+ *
+ * @param  mixed  $data  An Arrayable, an array of mixed values, or any other value.
+ * @return mixed         A pure array if input was Arrayable/array; otherwise the original value.
+ */
+function toPureArray(mixed $data): mixed
+{
+    // If it's an object that knows how to cast itself to array, do it and recurse
+    if ($data instanceof Arrayable) {
+        return toPureArray($data->toArray());
+    }
+
+    // If it's an array, recurse into each element
+    if (is_array($data)) {
+        return array_map(
+            /** @param mixed $item */
+            fn($item): mixed => toPureArray($item),
+            $data
+        );
+    }
+
+    // Otherwise return as-is (string/int/etc)
+    return $data;
 }
