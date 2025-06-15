@@ -27,6 +27,18 @@ trait HasOrm
      */
     private array $orm;
 
+
+    /**
+     * Initializes the ORM data for the model.
+     * 
+     * This method is called when the model is instantiated to ensure that the ORM data
+     * is ready for use. It can be overridden in child classes to customize ORM initialization.
+     */
+    protected function getOrm(): array
+    {
+        return $this->orm ?? [];
+    }
+
     /**
      * Defines a one-to-one relationship.
      * 
