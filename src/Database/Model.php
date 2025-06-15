@@ -432,7 +432,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function toArray()
     {
-        return $this->attributes;
+        return array_merge($this->attributes, $this->getOrm());
     }
 
     /**
