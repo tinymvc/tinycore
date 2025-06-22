@@ -22,7 +22,8 @@ interface QueueContract
      *
      * This method will execute the jobs that are scheduled and ready to run.
      *
+     * @param int $maxJobs The maximum number of jobs to run in this execution.
      * @return void
      */
-    public function run(): void;
+    public function run(int $maxJobs): void;
 }

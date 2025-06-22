@@ -4,7 +4,6 @@ namespace Spark\Contracts\Http;
 
 use Spark\Container;
 use Spark\Http\Request;
-use Spark\Http\Response;
 
 /**
  * Interface MiddlewareContract
@@ -39,7 +38,7 @@ interface MiddlewareContract
      * 
      * @param Container $container The service container.
      * @param Request $request The request being processed.
-     * @return ?Response The response from the middleware or null.
+     * @return mixed The response from the middleware or null.
      */
-    public function process(Container $container, Request $request): ?Response;
+    public function process(Container $container, Request $request): mixed;
 }

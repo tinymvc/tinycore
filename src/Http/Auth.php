@@ -2,6 +2,7 @@
 
 namespace Spark\Http;
 
+use ArrayAccess;
 use Spark\Contracts\Http\AuthContract;
 use Spark\Database\Model;
 use Spark\Hash;
@@ -17,7 +18,7 @@ use Throwable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Auth implements AuthContract
+class Auth implements AuthContract, ArrayAccess
 {
     use Macroable {
         __call as macroCall;
@@ -51,6 +52,22 @@ class Auth implements AuthContract
             'cookie_name' => null,
             'cookie_expire' => '6 months',
         ], $config);
+    }
+
+    /**
+     * Configures the Auth instance with additional settings.
+     * 
+     * This method allows you to modify the default configuration
+     * for the Auth instance, such as session keys, cache settings,
+     * and route redirections.
+     * 
+     * @param array $config An associative array of configuration settings.
+     * @return void
+     */
+    public function configure(array $config): void
+    {
+        // Merge the provided configuration with the existing configuration
+        $this->config = array_merge($this->config, $config);
     }
 
     /**
@@ -302,6 +319,68 @@ class Auth implements AuthContract
     public function __isset(string $name)
     {
         return isset($this->getUser()->{$name});
+    }
+
+    /**
+     * Magic unset for the admin user properties.
+     *
+     * @param string $name
+     * @return void
+     */
+    public function __unset(string $name)
+    {
+        unset($this->getUser()->{$name});
+    }
+
+    /**
+     * Check if the given field exists in the user model.
+     *
+     * This method is used to determine if a specific property or field
+     * exists in the user model, allowing for dynamic access to user attributes.
+     *
+     * @param string $key The name of the field to check.
+     * @return bool True if the field exists, false otherwise.
+     */
+    public function offsetExists($key): bool
+    {
+        return isset($this->{$key});
+    }
+
+    /**
+     * Method to unset a key-value pair in the user model.
+     *
+     * @param string $key The key to unset.
+     * @return void
+     */
+    public function offsetUnset($key): void
+    {
+        unset($this->{$key});
+    }
+
+    /**
+     *  Method to get a value by key from the user model.
+     *
+     * This method allows for accessing user properties dynamically using array-like syntax.
+     *
+     * @param string $key The key to retrieve the value for.
+     * @return mixed The value associated with the key, or null if the key does not exist.
+     */
+    public function offsetGet($key): mixed
+    {
+        return $this->{$key};
+    }
+
+    /**
+     *  Method to set a value by key in the user model.
+     *  This method allows for dynamically setting user properties using array-like syntax.
+     *
+     * @param string $key The key to set the value for.
+     * @param mixed $value The value to set for the key.
+     * @return void
+     */
+    public function offsetSet($key, $value): void
+    {
+        $this->{$key} = $value;
     }
 
     /**

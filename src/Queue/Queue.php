@@ -113,10 +113,11 @@ class Queue implements QueueContract
      * their scheduled time is in the past. If the job is repeated, it will be
      * rescheduled for the next time. If the job is not repeated, it will be
      * removed from the queue.
-     *
+     * 
+     * @param int $maxJobs The maximum number of jobs to run in this execution.
      * @return void
      */
-    public function run(): void
+    public function run(int $maxJobs): void
     {
         if (empty($this->getJobs())) {
             return;
@@ -124,7 +125,13 @@ class Queue implements QueueContract
 
         $now = new DateTime();
 
+        $ranJobs = 0; // Counter for the number of jobs run.
+
         foreach ($this->getJobs() as $key => $serializedJob) {
+            // If the maximum number of jobs to run has been reached, break the loop.
+            if ($ranJobs >= $maxJobs) {
+                break;
+            }
 
             $job = $this->unserializeJob($serializedJob);
 
@@ -142,6 +149,8 @@ class Queue implements QueueContract
                     $job->schedule(new DateTime($job->getRepeat()));
                     $this->addJob($job);
                 }
+
+                $ranJobs++; // Increment the counter for the number of jobs run.
             }
         }
     }

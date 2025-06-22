@@ -111,15 +111,19 @@ class PrimaryCommandsHandler
      *   An instance of the Prompt class for displaying messages in the console.
      * @param Queue $queue
      *   An instance of the Queue class for running queue jobs.
+     *  @param array $args
+     *   An associative array of arguments, where the maximum number of jobs to run
      *
      * @return void
      */
-    public function runQueueJobs(Prompt $prompt, Queue $queue)
+    public function runQueueJobs(Prompt $prompt, Queue $queue, array $args)
     {
         $start = microtime(true);
         $prompt->message("Running queue jobs...", "info");
 
-        $queue->run(); // Run all pending queue jobs
+        $maxJobs = intval($args['_args'][0] ?? 10);
+
+        $queue->run($maxJobs); // Run all pending queue jobs
 
         $prompt->message(
             "Queue jobs completed in " . round(microtime(true) - $start, 2) . " seconds.",

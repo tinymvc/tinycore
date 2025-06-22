@@ -97,7 +97,7 @@ class Vite implements ViteUtilContract
      * @param null|string $entry The entry file name.
      * @return string The HTML script tag for React Refresh runtime.
      */
-    public function reactRefreshTag(?string $entry = null): string
+    private function reactRefreshTag(?string $entry = null): string
     {
         $entry ??= $this->config('entry');
         $tag = '';

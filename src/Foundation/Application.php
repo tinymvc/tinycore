@@ -2,6 +2,7 @@
 
 namespace Spark\Foundation;
 
+use App\Models\User;
 use Spark\Console\Commands;
 use Spark\Console\Console;
 use Spark\Container;
@@ -13,6 +14,7 @@ use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Hash;
+use Spark\Http\Auth;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -98,6 +100,10 @@ class Application implements ApplicationContract
         $this->container->singleton(EventDispatcher::class);
         $this->container->singleton(Gate::class);
         $this->container->singleton(Queue::class);
+        $this->container->singleton(
+            Auth::class,
+            fn() => new Auth(session: $this->container->get(Session::class), userModel: User::class)
+        );
 
         // Bind core services
         $this->container->bind(QueryBuilder::class);

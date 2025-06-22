@@ -20,6 +20,7 @@ use Spark\Support\Traits\Macroable;
  * @method static Router delete(string $path, callable|string|array $callback)
  * @method static Router options(string $path, callable|string|array $callback)
  * @method static Router any(string $path, callable|string|array $callback)
+ * @method static Router redirect(string $from, string $to, int $status = 302)
  * @method static Router group(array $attributes, callable $callback)
  * @method static Router view(string $path, string $template)
  * @method static Router resource(string $path, string $callback, string|null $name = null, string|array $middleware = [], array $only = [], array $except = [])
@@ -177,6 +178,22 @@ class Route implements HttpRouteContract
         array $except = [],
     ): Router {
         return Application::$app->container->get(Router::class)->resource($path, $callback, $name, $middleware, $only, $except);
+    }
+
+    /**
+     *  Redirects from one route to another.
+     *
+     *  This method allows you to define a route that redirects from one path to another.
+     *
+     * @param string $from The path to redirect from.
+     * @param string $to The path to redirect to.
+     * @param int $status The HTTP status code for the redirect (default is 302).
+     *
+     * @return \Spark\Router The router instance to allow method chaining.
+     */
+    public static function redirect(string $from, string $to, int $status = 302): Router
+    {
+        return Application::$app->container->get(Router::class)->redirect($from, $to, $status);
     }
 
     /**

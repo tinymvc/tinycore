@@ -190,6 +190,23 @@ class Router implements RouterContract
     }
 
     /**
+     * Redirect to a specified path.
+     *
+     * This method adds a route that redirects to a specified URL with an optional HTTP status code.
+     *
+     * @param string $from The path for the redirect route.
+     * @param string $to The URL to redirect to.
+     * @param int $status The HTTP status code for the redirect (default is 302).
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function redirect(string $from, string $to, int $status = 302): self
+    {
+        $this->add($from, 'GET', fn() => header("Location: $to", true, $status) && exit);
+        return $this;
+    }
+
+    /**
      * Assign a name to the most recently added route.
      *
      * @param string $name The name to assign to the route.

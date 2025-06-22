@@ -3,6 +3,7 @@
 namespace Spark\Http\Traits;
 
 use Spark\Foundation\Application;
+use Spark\Http\InputSanitizer;
 use Spark\Http\InputValidator;
 
 /**
@@ -36,11 +37,11 @@ trait ValidateRequest
      * 
      * @param array $rules
      *   The validation rules.
-     * 
-     * @return array
-     *   The validated attributes.
+     *
+     * @return InputSanitizer
+     *   Returns the validated attributes as an InputSanitizer instance.
      */
-    public function validate(array $rules): array
+    public function validate(array $rules): InputSanitizer
     {
         $attributes = $this->all(array_keys($rules)); // Get the attributes from the current request
         $validator = Application::$app->get(InputValidator::class); // Get the validator instance
@@ -76,7 +77,7 @@ trait ValidateRequest
                 ->back(); // Redirect the user back to the previous page
         }
 
-        return $attributes; // Return the validated attributes
+        return new InputSanitizer($attributes); // Return the validated attributes
     }
 
     /**

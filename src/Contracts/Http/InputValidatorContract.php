@@ -2,6 +2,8 @@
 
 namespace Spark\Contracts\Http;
 
+use Spark\Http\InputSanitizer;
+
 /**
  * Interface for the validator utility contract.
  *
@@ -16,9 +18,9 @@ interface InputValidatorContract
      * @param string|array $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
      * @param array $inputData Array of input data to validate.
-     * @return bool|array Returns validated data as an array if valid, or false if validation fails.
+     * @return bool|InputSanitizer Returns validated data as an InputSanitizer instance if valid,
      */
-    public function validate(string|array $rules, array $inputData): bool|array;
+    public function validate(string|array $rules, array $inputData): bool|InputSanitizer;
 
     /**
      * Returns all validation errors.

@@ -255,6 +255,53 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
     }
 
     /**
+     *  Converts the sanitizer data array to an associative array based on the provided configuration.
+     *
+     *  @param array $config An associative array where keys are the data keys and values are the types to sanitize.
+     *  @return array An associative array with sanitized values based on the provided configuration.
+     *  Supported types: 'email', 'text', 'html', 'number', 'float', 'boolean', 'url', 'ip'.
+     *  If a type is not recognized, it defaults to returning the raw value.
+     *  
+     *  Example:
+     *  $config = [
+     *      'user_email' => 'email',
+     *      'user_name' => 'text',
+     *      'user_age' => 'number',
+     *  ];
+     *  $sanitizedData = $sanitizer->to($config);
+     *
+     *  This will return an associative array with sanitized values for each key based on the specified type.
+     *  If a key does not exist in the sanitizer data, it will return null for that key.
+     *  If a type is not recognized, it will return the raw value for that key.
+     */
+    public function to(array $config): array
+    {
+        $result = [];
+
+        foreach ($config as $key => $type) {
+            //  If the type is not a string, assume the key itself is the type
+            //  This allows for flexibility in specifying types or using the key as the type.
+            if (is_int($type)) {
+                $type = $key;
+            }
+
+            $result[$key] = match ($type) {
+                'email' => $this->email($key),
+                'text' => $this->text($key),
+                'html' => $this->html($key),
+                'number' => $this->number($key),
+                'float' => $this->float($key),
+                'boolean' => $this->boolean($key),
+                'url' => $this->url($key),
+                'ip' => $this->ip($key),
+                default => $this->get($key),
+            };
+        }
+
+        return $result;
+    }
+
+    /**
      * Converts the sanitizer data array to an associative array.
      *
      * @return array The sanitizer data array.
@@ -262,5 +309,16 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
     public function toArray(): array
     {
         return $this->data;
+    }
+
+    /**
+     *  Converts the sanitizer data to a string representation.
+     * 
+     *  @return string The string representation of the first sanitized text value.
+     *  If no text is found, returns an empty string.
+     */
+    public function __toString(): string
+    {
+        return $this->text(array_key_first($this->data), true) ?? '';
     }
 }

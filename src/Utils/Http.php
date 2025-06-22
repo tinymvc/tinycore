@@ -287,9 +287,9 @@ class Http implements HttpUtilContract
      * Parses the response from cURL and returns an ArrayAccess object.
      *
      * @param array $response The response data from cURL.
-     * @return ArrayAccess An object implementing ArrayAccess with the response data.
+     * @return array|ArrayAccess An object implementing ArrayAccess with the response data.
      */
-    private function parseResponse(array $response): ArrayAccess
+    private function parseResponse(array $response): array|ArrayAccess
     {
         $class = new class implements ArrayAccess {
             public mixed $body = ''; // The response body
@@ -340,6 +340,16 @@ class Http implements HttpUtilContract
             public function text()
             {
                 return (string) $this->body ?? '';
+            }
+
+            /**
+             * Check if the response was a successful (2xx) response.
+             *
+             * @return bool True if successful, false otherwise.
+             */
+            public function isOk(): bool
+            {
+                return $this->status === 200;
             }
 
             /**

@@ -2,6 +2,7 @@
 
 namespace Spark\Http;
 
+use ArrayAccess;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Http\Traits\ValidateRequest;
 use Spark\Support\Traits\Macroable;
@@ -14,7 +15,7 @@ use Spark\Support\Traits\Macroable;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Request implements RequestContract
+class Request implements RequestContract, ArrayAccess
 {
     use Macroable;
 
@@ -664,7 +665,18 @@ class Request implements RequestContract
     }
 
     /**
-     * Retrieves a request value by key.
+     * Creates an InputSanitizer instance with the current request data.
+     * 
+     * @param string|array $filter Optional filter to apply to the input data.
+     * @return InputSanitizer An instance of InputSanitizer with the request data.
+     */
+    public function input(string|array $filter = []): InputSanitizer
+    {
+        return new InputSanitizer($this->all((array) $filter));
+    }
+
+    /**
+     * Magic Method: Retrieves a request value by key.
      * 
      * @param string $name The key to retrieve the value for.
      * 
@@ -676,7 +688,111 @@ class Request implements RequestContract
             $this->hasQuery($name) => $this->query($name),
             $this->hasPost($name) => $this->post($name),
             $this->hasFile($name) => $this->file($name),
+            $this->hasRouteParam($name) => $this->getRouteParam($name),
             default => null
+        };
+    }
+
+    /**
+     * Magic Method: Sets a request value by key.
+     * 
+     * @param string $name The key to set the value for.
+     * @param mixed $value The value to set for the key.
+     */
+    public function __set($name, $value): void
+    {
+        return $this->offsetSet($name, $value);
+    }
+
+    /**
+     * Magic Method: Checks if a request value exists by key.
+     *
+     * @param string $name The key to check for existence.
+     *
+     * @return bool True if the key exists, false otherwise.
+     */
+    public function __isset($name): bool
+    {
+        return $this->offsetExists($name);
+    }
+
+    /**
+     * Magic Method: Unsets a request value by key.
+     * @param string $name The key to unset.
+     * @return void
+     *
+     * This method allows unsetting a request value by key, which can be useful
+     * for removing query parameters, post parameters, file uploads, or route parameters.
+     * It uses the offsetUnset method to perform the actual unsetting operation.
+     */
+    public function __unset($name): void
+    {
+        $this->offsetUnset($name);
+    }
+
+    /**
+     * Checks if a request value exists by key.
+     *
+     * @param string $name The key to check for existence.
+     *
+     * @return bool True if the key exists, false otherwise.
+     */
+    public function offsetExists($name): bool
+    {
+        return $this->{$name} !== null;
+    }
+
+    /**
+     * Unsets a request value by key.
+     * 
+     * @param string $name The key to unset.
+     * @return void
+     */
+    public function offsetUnset($name): void
+    {
+        match (true) {
+            $this->hasQuery($name) => $this->setQueryParam($name, null),
+            $this->hasPost($name) => $this->setPostParam($name, null),
+            $this->hasFile($name) => $this->fileUploads[$name] = null,
+            $this->hasRouteParam($name) => $this->routeParams[$name] = null,
+        };
+    }
+
+    /**
+     * Retrieves a request value by key.
+     * @param string $name The key to retrieve the value for.
+     *
+     * @return mixed The retrieved value, or null if the key does not exist.
+     */
+    public function offsetGet($name): mixed
+    {
+        return $this->{$name};
+    }
+
+    /**
+     * Sets a request value by key.
+     * 
+     * @param string $name The key to set the value for.
+     * @param mixed $value The value to set for the key.
+     *
+     * This method allows setting values for query parameters, post parameters,
+     * file uploads, or route parameters based on the key provided.
+     *
+     * If the key corresponds to a query parameter, it will be set using
+     * setQueryParam. If it corresponds to a post parameter, it will be set
+     * using setPostParam. If it corresponds to a file upload, it will be added
+     * to the fileUploads array. If it corresponds to a route parameter, it will
+     * be added to the routeParams array.
+     *
+     * @return void
+     */
+    public function offsetSet($name, $value): void
+    {
+        match (true) {
+            $this->hasQuery($name) => $this->setQueryParam($name, $value),
+            $this->hasPost($name) => $this->setPostParam($name, $value),
+            $this->hasFile($name) => $this->fileUploads[$name] = $value,
+            $this->hasRouteParam($name) => $this->routeParams[$name] = $value,
         };
     }
 }

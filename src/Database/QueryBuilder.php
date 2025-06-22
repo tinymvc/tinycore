@@ -159,6 +159,23 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     *  Sets the database instance for this query.
+     *
+     *  This method allows you to change the database instance associated with this query.
+     *  It is useful when you need to switch databases or when the query needs to be executed
+     *  against a different database connection.
+     * 
+     *  @param DB $database The database instance to set.
+     *  @return self
+     */
+    public function setDB(DB $database): self
+    {
+        $this->database = $database;
+        $this->grammar = new Grammar($database->getDriver());
+        return $this;
+    }
+
+    /**
      * Retrieves the database schema grammar instance associated with this query.
      *
      * @return Grammar The database schema grammar instance associated with this query.

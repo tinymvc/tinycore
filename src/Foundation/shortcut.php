@@ -26,7 +26,7 @@ use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
 use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
-use Spark\View;
+use Spark\View\View;
 
 if (!function_exists('app')) {
     /**
@@ -270,6 +270,23 @@ if (!function_exists('query')) {
     }
 }
 
+if (!function_exists('external_db')) {
+    /**
+     *  Create a new QueryBuilder instance for an external database.
+     *
+     *  This function allows you to create a QueryBuilder instance that connects to an external database
+     *  using the provided configuration array. The configuration should include the necessary parameters
+     *  such as 'host', 'username', 'password', and 'database'.
+     *
+     *  @param array $config The configuration array for the external database connection.
+     *  @return QueryBuilder The QueryBuilder instance connected to the external database.
+     */
+    function external_db(array $config): QueryBuilder
+    {
+        return new QueryBuilder(new DB($config));
+    }
+}
+
 if (!function_exists('view')) {
     /**
      * Get the current view instance or render a template with the given context.
@@ -320,7 +337,7 @@ if (!function_exists('fireline')) {
             // Return a JSON response with the rendered HTML and title
             return response()->json([
                 'html' => $engine->render($template, $context),
-                'title' => $engine->get('title'),
+                'title' => $engine->yieldSection('title'),
             ])
                 ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
                 ->setHeader('Pragma', 'no-cache')
@@ -346,7 +363,8 @@ if (!function_exists('url')) {
      */
     function url(string $path = ''): string
     {
-        return rtrim(request()->getRootUrl() . '/' . ltrim(str_replace('\\', '/', $path), '/'), '/');
+        $rootUrl = config('root_url', request()->getRootUrl());
+        return rtrim($rootUrl . '/' . ltrim(str_replace('\\', '/', $path), '/'), '/');
     }
 }
 
@@ -434,6 +452,24 @@ if (!function_exists('root_dir')) {
     function root_dir(string $path = '/'): string
     {
         return dir_path(app()->getPath() . '/' . ltrim($path, '/'));
+    }
+}
+
+if (!function_exists('resource_dir')) {
+    /**
+     * Get the resources directory path with an optional appended path.
+     *
+     * This function returns the application's resources directory path, optionally
+     * appending a specified sub-path to it. The resulting path is normalized
+     * with a single trailing slash.
+     *
+     * @param string $path The sub-path to append to the resources directory path. Default is '/'.
+     *
+     * @return string The full path to the resources directory, including the appended sub-path.
+     */
+    function resource_dir(string $path = '/'): string
+    {
+        return root_dir('resources/' . ltrim($path, '/'));
     }
 }
 
@@ -951,10 +987,10 @@ if (!function_exists('input')) {
      * @param array $filter An optional array of filters to apply to the input data.
      * @return InputSanitizer An instance of the sanitizer.
      */
-    function input(array $filter = []): InputSanitizer
+    function input(string|array $filter = []): InputSanitizer
     {
         return get(InputSanitizer::class)
-            ->setData(request()->all($filter));
+            ->setData(request()->all((array) $filter));
     }
 }
 

@@ -6,7 +6,6 @@ use Spark\Container;
 use Spark\Contracts\Http\MiddlewareContract;
 use Spark\Http\Exceptions\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
-use Spark\Http\Response;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -81,9 +80,9 @@ class Middleware implements MiddlewareContract
      * 
      * @param Container $container The service container.
      * @param Request $request The request being processed.
-     * @return ?Response The response from the middleware or null.
+     * @return mixed The response from the middleware or null.
      */
-    public function process(Container $container, Request $request): ?Response
+    public function process(Container $container, Request $request): mixed
     {
         foreach ($this->stack as $abstract) {
             // If the middleware key doesn't exist in the registered list, throw an exception.
@@ -98,7 +97,7 @@ class Middleware implements MiddlewareContract
             $result = $middleware->handle($request);
 
             // If the middleware returns a response, return it and break the loop.
-            if ($result instanceof Response) {
+            if ($result) {
                 return $result;
             }
         }
