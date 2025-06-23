@@ -485,7 +485,8 @@ class BladeCompiler implements BladeCompilerContract
             'abort' => 'abort(%s);',
             'old' => 'echo e(old(%s));',
             'share' => '$this->share(%s);',
-            'authorize' => 'authorize(%s);'
+            'authorize' => 'authorize(%s);',
+            'json' => 'echo \Spark\Support\Js::from(%s);'
         ];
 
         // Compile conditional directives
