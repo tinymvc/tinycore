@@ -2,6 +2,7 @@
 
 namespace Spark\View;
 
+use InvalidArgumentException;
 use Spark\View\Contracts\BladeCompilerContract;
 
 /**
@@ -26,13 +27,6 @@ class BladeCompiler implements BladeCompilerContract
      * @var array
      */
     private array $customDirectives = [];
-
-    /**
-     * Array of component aliases
-     * 
-     * @var array
-     */
-    private array $componentAliases = [];
 
     /**
      * Raw PHP blocks to preserve during compilation
@@ -70,18 +64,27 @@ class BladeCompiler implements BladeCompilerContract
      */
     public function compileString(string $template): string
     {
+        // Remove Blade comments first
+        $template = $this->compileComments($template);
+
         // Preserve raw PHP blocks
         $template = $this->preserveRawBlocks($template);
 
-        // Compile different template features
+        // Compile structural directives
         $template = $this->compileExtends($template);
         $template = $this->compileSections($template);
         $template = $this->compileYields($template);
         $template = $this->compileIncludes($template);
-        $template = $this->compileComponents($template);
-        $template = $this->compileEchos($template);
+        $template = $this->compileXComponents($template);
+
+        // Compile control flow directives
         $template = $this->compileDirectives($template);
+
+        // Compile PHP blocks
         $template = $this->compilePhpBlocks($template);
+
+        // Compile echo statements last to avoid conflicts
+        $template = $this->compileEchos($template);
 
         // Restore raw PHP blocks
         $template = $this->restoreRawBlocks($template);
@@ -99,7 +102,8 @@ class BladeCompiler implements BladeCompilerContract
     {
         return preg_replace_callback('/\@php(.*?)\@endphp/s', function ($matches) {
             $key = '__RAW_BLOCK_' . count($this->rawBlocks) . '__';
-            $this->rawBlocks[$key] = '<?php' . $matches[1] . '?>';
+            $content = trim($matches[1]);
+            $this->rawBlocks[$key] = "<?php" . ($content ? "\n    " . $content . "\n" : "") . "?>";
             return $key;
         }, $template);
     }
@@ -127,7 +131,7 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileExtends(string $template): string
     {
-        return preg_replace('/\@extends\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php $view->setExtends(\'$1\'); ?>', $template);
+        return preg_replace('/\@extends\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php $this->setExtends(\'$1\'); ?>', $template);
     }
 
     /**
@@ -136,19 +140,23 @@ class BladeCompiler implements BladeCompilerContract
     private function compileSections(string $template): string
     {
         // @section('name')
-        $template = preg_replace('/\@section\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php $view->startSection(\'$1\'); ?>', $template);
+        $template = preg_replace('/\@section\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php $this->startSection(\'$1\'); ?>', $template);
 
-        // @section('name', 'content') - inline section
-        $template = preg_replace('/\@section\s*\(\s*[\'"]([^\'"]+)[\'"]?\s*,\s*[\'"]([^\'"]*)[\'"]?\s*\)/', '<?php $view->startSection(\'$1\'); echo \'$2\'; $view->endSection(); ?>', $template);
+        // @section('name', expression) - inline section
+        $template = preg_replace_callback('/\@section\s*\(\s*[\'"]([^\'"]+)[\'"]\s*,\s*(.+?)\s*\)/s', function ($matches) {
+            $sectionName = $matches[1];
+            $expression = trim($matches[2]);
+            return "<?php \$this->startSection('$sectionName'); echo $expression; \$this->endSection(); ?>";
+        }, $template);
 
         // @endsection
-        $template = preg_replace('/\@endsection/', '<?php $view->endSection(); ?>', $template);
+        $template = preg_replace('/\@endsection/', '<?php $this->endSection(); ?>', $template);
 
         // @stop (alias for @endsection)
-        $template = preg_replace('/\@stop/', '<?php $view->endSection(); ?>', $template);
+        $template = preg_replace('/\@stop/', '<?php $this->endSection(); ?>', $template);
 
         // @show (end section and immediately yield it)
-        $template = preg_replace('/\@show/', '<?php $view->endSection(); echo $view->yieldSection($view->getCurrentSection()); ?>', $template);
+        $template = preg_replace('/\@show/', '<?php $this->endSection(); echo $this->yieldSection($this->getCurrentSection()); ?>', $template);
 
         return $template;
     }
@@ -158,13 +166,239 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileYields(string $template): string
     {
-        // @yield('section', 'default')
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*[\'"]([^\'"]*)[\'"])?\s*\)/', '<?php echo $view->yieldSection(\'$1\', \'$2\'); ?>', $template);
+        // @yield('section', 'default') - with string default
+        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*[\'"]([^\'"]*)[\'"])?\s*\)/', '<?php echo $this->yieldSection(\'$1\', \'$2\'); ?>', $template);
 
-        // @yield('section', $variable)
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*([^,\)\'\"]+))?\s*\)/', '<?php echo $view->yieldSection(\'$1\', $2 ?? \'\'); ?>', $template);
+        // @yield('section', $variable) - with variable default
+        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*([^,\)\'\"]+))?\s*\)/', '<?php echo $this->yieldSection(\'$1\', isset($2) ? $2 : \'\'); ?>', $template);
+
+        // @yield('section') - no default
+        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php echo $this->yieldSection(\'$1\', \'\'); ?>', $template);
 
         return $template;
+    }
+
+    /**
+     * Compile X-Components (<x-component-name>)
+     * 
+     * @param string $template
+     * @return string
+     */
+    private function compileXComponents(string $template): string
+    {
+        // Handle self-closing x-components first: <x-component />
+        $template = $this->compileSelfClosingXComponents($template);
+
+        // Handle x-components with content: <x-component>content</x-component>
+        $template = $this->compileXComponentsWithContent($template);
+
+        return $template;
+    }
+
+    /**
+     * Compile self-closing x-components: <x-component />
+     */
+    private function compileSelfClosingXComponents(string $template): string
+    {
+        $pattern = '/<x-([a-zA-Z0-9\-_.]+)([^>]*?)\/>/';
+
+        return preg_replace_callback($pattern, function ($matches) {
+            $componentName = $matches[1];
+            $attributesString = trim($matches[2]);
+
+            // Parse attributes
+            $attributes = $this->parseXComponentAttributes($attributesString);
+            $attributesArray = $this->buildAttributesArray($attributes);
+
+            return "<?php echo \$this->component('{$componentName}', {$attributesArray}); ?>";
+        }, $template);
+    }
+
+    /**
+     * Compile x-components with content: <x-component>content</x-component>
+     */
+    private function compileXComponentsWithContent(string $template): string
+    {
+        // Use a more robust pattern to find x-components
+        $pattern = '/<x-([a-zA-Z0-9\-_.]+)([^>]*?)>(.*?)<\/x-\1>/s';
+
+        return preg_replace_callback($pattern, function ($matches) {
+            $componentName = $matches[1];
+            $attributesString = trim($matches[2]);
+            $slotContent = $matches[3];
+
+            // Parse attributes
+            $attributes = $this->parseXComponentAttributes($attributesString);
+
+            // Process slot content - handle nested components first
+            $processedSlotContent = $this->processSlotContent($slotContent);
+
+            // Add slot content to attributes if not empty
+            if (!empty(trim($processedSlotContent))) {
+                $attributes['slot'] = $processedSlotContent;
+            }
+
+            $attributesArray = $this->buildAttributesArray($attributes);
+
+            return "<?php echo \$this->component('{$componentName}', {$attributesArray}); ?>";
+        }, $template);
+    }
+
+    /**
+     * Process slot content, handling nested components and PHP expressions
+     */
+    private function processSlotContent(string $content): string
+    {
+        // Trim the content
+        $content = trim($content);
+
+        if (empty($content)) {
+            return '';
+        }
+
+        // Check if content contains PHP expressions or nested components
+        if ($this->containsPHPOrComponents($content)) {
+            // If it contains PHP or components, we need to capture it as a closure
+            return "function() { ob_start(); ?>{$content}<?php return ob_get_clean(); }";
+        }
+
+        // For simple HTML content, escape and quote it properly
+        return $this->escapeSlotContent($content);
+    }
+
+    /**
+     * Check if content contains PHP expressions or x-components
+     */
+    private function containsPHPOrComponents(string $content): bool
+    {
+        // Check for PHP tags
+        if (strpos($content, '<?php') !== false || strpos($content, '<?=') !== false) {
+            return true;
+        }
+
+        // Check for template expressions {{ }} or {!! !!}
+        if (preg_match('/\{\{.*?\}\}|\{!!.*?!!\}/', $content)) {
+            return true;
+        }
+
+        // Check for x-components
+        if (preg_match('/<x-[a-zA-Z0-9\-_.]+/', $content)) {
+            return true;
+        }
+
+        // Check for template directives
+        if (preg_match('/@[a-zA-Z]+/', $content)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Escape slot content for safe inclusion in PHP string
+     */
+    private function escapeSlotContent(string $content): string
+    {
+        // Remove extra whitespace while preserving structure
+        $content = preg_replace('/\s+/', ' ', $content);
+        $content = trim($content);
+
+        // Escape single quotes and backslashes for PHP string
+        $escaped = str_replace(['\\', "'"], ['\\\\', "\\'"], $content);
+
+        return $escaped;
+    }
+
+    /**
+     * Parse attributes from x-component tag
+     */
+    private function parseXComponentAttributes(string $attributesString): array
+    {
+        if (empty(trim($attributesString))) {
+            return [];
+        }
+
+        $attributes = [];
+
+        // Match attributes in the format: name="value", name='value', name=value, :name="value", :name='value', :name=value
+        // Also handle dynamic attributes with colon prefix (e.g. :$alertMessage)
+        $pattern = '/(?:^|\s+)(:)?\$?([\w\-]+)(?:=(["\'])((?:[^"\'\\\\]|\\\\.)*)\3)?/';
+
+        preg_match_all($pattern, $attributesString, $matches, PREG_SET_ORDER);
+
+        foreach ($matches as $match) {
+            $isDynamic = $match[1] === ':';
+            $name = $match[2];
+            $rawValue = $match[4] ?? null;
+
+            if ($isDynamic) {
+                // If the developer wrote :$alertMessage without ="…", 
+                // give it the variable name as the value.
+                $value = $rawValue !== null ? $rawValue : "\$$name";
+            } else {
+                $value = $rawValue !== null ? $rawValue : true;
+            }
+
+            $attributes[$name] = $value;
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Build PHP array string from attributes
+     */
+    private function buildAttributesArray(array $attributes): string
+    {
+        if (empty($attributes)) {
+            return '[]';
+        }
+
+        $pairs = [];
+        foreach ($attributes as $key => $value) {
+            $escapedKey = addslashes($key);
+
+            if ($value === true) {
+                $pairs[] = "'{$escapedKey}' => true";
+            } elseif ($value === false) {
+                $pairs[] = "'{$escapedKey}' => false";
+            } elseif ($key === 'slot') {
+                // Special handling for slot content
+                if (is_string($value) && strpos($value, 'function()') === 0) {
+                    // It's a closure for dynamic content
+                    $pairs[] = "'{$escapedKey}' => ({$value})()";
+                } else {
+                    // It's a simple string
+                    $pairs[] = "'{$escapedKey}' => '{$value}'";
+                }
+            } elseif (is_string($value)) {
+                // Check if it's a PHP variable or expression
+                if ($this->isPHPExpression($value)) {
+                    $pairs[] = "'{$escapedKey}' => {$value}";
+                } else {
+                    $escapedValue = addslashes($value);
+                    $pairs[] = "'{$escapedKey}' => '{$escapedValue}'";
+                }
+            } else {
+                $pairs[] = "'{$escapedKey}' => {$value}";
+            }
+        }
+
+        return '[' . implode(', ', $pairs) . ']';
+    }
+
+    /**
+     * Check if a value is a PHP expression
+     */
+    private function isPHPExpression(string $value): bool
+    {
+        $value = trim($value);
+
+        return preg_match('/^\$[a-zA-Z_][\w]*(?:->[a-zA-Z_][\w]*|\[[^\]]*\])*$/', $value) ||
+            preg_match('/^[a-zA-Z_][\w]*\s*\(.*\)$/', $value) ||
+            preg_match('/^\[.*\]$/', $value) ||
+            is_numeric($value) ||
+            in_array(strtolower($value), ['true', 'false', 'null']);
     }
 
     /**
@@ -175,73 +409,29 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileIncludes(string $template): string
     {
-        // @include('template', ['data' => 'value'])
-        $template = preg_replace(
-            '/\@include\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*(\[.*?\]))?\s*\)/',
-            '<?php echo $view->include(\'$1\', $2 ?? []); ?>',
+        return preg_replace_callback(
+            '/\@include\s*\(\s*([^,)]+)(?:\s*,\s*(.+))?\s*\)/s',
+            function ($matches) {
+                $viewExpr = trim($matches[1]);
+                $dataExpr = isset($matches[2]) ? trim($matches[2]) : '[]';
+                return "<?php echo \$this->include($viewExpr, $dataExpr); ?>";
+            },
             $template
         );
-
-        return $template;
     }
 
     /**
-     * Compile components <x-component>
+     * Compile Blade comments {{-- --}}
+     * Remove them completely from the template
      * 
      * @param string $template
      * @return string
      */
-    private function compileComponents(string $template): string
+    private function compileComments(string $template): string
     {
-        // Self-closing components: <x-alert message="hello" />
-        $template = preg_replace_callback('/<x-([a-zA-Z0-9\-_]+)([^>]*?)\/?>/', function ($matches) {
-            $component = $matches[1];
-            $attributes = $this->parseComponentAttributes($matches[2]);
-            return "<?php echo \$view->component('$component', $attributes); ?>";
-        }, $template);
-
-        // Opening and closing components: <x-card>content</x-card>
-        $template = preg_replace_callback('/<x-([a-zA-Z0-9\-_]+)([^>]*?)>(.*?)<\/x-\1>/s', function ($matches) {
-            $component = $matches[1];
-            $attributes = $this->parseComponentAttributes($matches[2]);
-            $slot = trim($matches[3]);
-
-            // Add slot to attributes
-            $attributes = rtrim($attributes, ']') . ", 'slot' => '" . addslashes($slot) . "']";
-
-            return "<?php echo \$view->component('$component', $attributes); ?>";
-        }, $template);
-
-        return $template;
+        return preg_replace('/\{\{--.*?--\}\}/s', '', $template);
     }
 
-    /**
-     * Parse component attributes
-     * 
-     * @param string $attributeString
-     * @return string
-     */
-    private function parseComponentAttributes(string $attributeString): string
-    {
-        $attributes = [];
-
-        // Match attribute="value" or :attribute="$variable"
-        preg_match_all('/\s*([a-zA-Z0-9\-_]+)\s*=\s*[\'"]([^\'"]*)[\'"]/', $attributeString, $matches, PREG_SET_ORDER);
-
-        foreach ($matches as $match) {
-            $key = $match[1];
-            $value = $match[2];
-
-            // Check if it's a variable binding :attribute
-            if (strpos($attributeString, ":$key") !== false) {
-                $attributes[] = "'$key' => $value";
-            } else {
-                $attributes[] = "'$key' => '" . addslashes($value) . "'";
-            }
-        }
-
-        return '[' . implode(', ', $attributes) . ']';
-    }
 
     /**
      * Compile echo statements {{ }} and {!! !!}
@@ -251,14 +441,18 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileEchos(string $template): string
     {
-        // Raw echo {!! !!}
-        $template = preg_replace('/\{\!\!\s*(.+?)\s*\!\!\}/', '<?php echo $1; ?>', $template);
+        // Raw echo {!! !!} - don't escape HTML
+        $template = preg_replace('/\{\!\!\s*(.+?)\s*\!\!\}/s', '<?php echo $1; ?>', $template);
 
-        // Escaped echo {{ }}
-        $template = preg_replace('/\{\{\s*(.+?)\s*\}\}/', '<?php echo htmlspecialchars($1, ENT_QUOTES, \'UTF-8\'); ?>', $template);
+        // Escaped echo {{ }} - escape HTML for security
+        $template = preg_replace_callback('/\{\{\s*(.+?)\s*\}\}/s', function ($matches) {
+            $expression = trim($matches[1]);
+            return "<?php echo htmlspecialchars($expression, ENT_QUOTES, 'UTF-8', true); ?>";
+        }, $template);
 
         return $template;
     }
+
 
     /**
      * Compile directives (@if, @foreach, etc.)
@@ -268,56 +462,273 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileDirectives(string $template): string
     {
-        // @if, @elseif, @else, @endif
-        $template = preg_replace('/\@if\s*\(\s*(.+?)\s*\)/', '<?php if($1): ?>', $template);
-        $template = preg_replace('/\@elseif\s*\(\s*(.+?)\s*\)/', '<?php elseif($1): ?>', $template);
-        $template = preg_replace('/\@else/', '<?php else: ?>', $template);
-        $template = preg_replace('/\@endif/', '<?php endif; ?>', $template);
+        // Define directive configurations to reduce duplication
+        $conditionalDirectives = [
+            'if' => ['open' => 'if(%s):', 'close' => 'endif;'],
+            'elseif' => ['open' => 'elseif(%s):', 'close' => null],
+            'unless' => ['open' => 'if(!(%s)):', 'close' => 'endif;'],
+            'isset' => ['open' => 'if(isset(%s)):', 'close' => 'endif;'],
+            'empty' => ['open' => 'if(empty(%s)):', 'close' => 'endif;'],
+            'can' => ['open' => 'if(can(%s)):', 'close' => 'endif;'],
+            'cannot' => ['open' => 'if(cannot(%s)):', 'close' => 'endif;']
+        ];
 
-        // @unless, @endunless
-        $template = preg_replace('/\@unless\s*\(\s*(.+?)\s*\)/', '<?php if(!($1)): ?>', $template);
-        $template = preg_replace('/\@endunless/', '<?php endif; ?>', $template);
+        $loopDirectives = [
+            'foreach' => ['open' => 'foreach(%s):', 'close' => 'endforeach;'],
+            'for' => ['open' => 'for(%s):', 'close' => 'endfor;'],
+            'while' => ['open' => 'while(%s):', 'close' => 'endwhile;']
+        ];
 
-        // @isset, @endisset
-        $template = preg_replace('/\@isset\s*\(\s*(.+?)\s*\)/', '<?php if(isset($1)): ?>', $template);
-        $template = preg_replace('/\@endisset/', '<?php endif; ?>', $template);
+        $outputDirectives = [
+            'dump' => 'dump(%s);',
+            'dd' => 'dd(%s);',
+            'abort' => 'abort(%s);',
+            'old' => 'echo e(old(%s));',
+            'share' => '$this->share(%s);',
+            'authorize' => 'authorize(%s);'
+        ];
 
-        // @empty, @endempty
-        $template = preg_replace('/\@empty\s*\(\s*(.+?)\s*\)/', '<?php if(empty($1)): ?>', $template);
-        $template = preg_replace('/\@endempty/', '<?php endif; ?>', $template);
+        // Compile conditional directives
+        foreach ($conditionalDirectives as $directive => $config) {
+            $template = $this->compileDirectiveWithExpression($template, $directive, $config['open'], $config['close']);
+        }
 
-        // @foreach, @endforeach
-        $template = preg_replace('/\@foreach\s*\(\s*(.+?)\s*\)/', '<?php foreach($1): ?>', $template);
-        $template = preg_replace('/\@endforeach/', '<?php endforeach; ?>', $template);
+        // Compile loop directives
+        foreach ($loopDirectives as $directive => $config) {
+            $template = $this->compileDirectiveWithExpression($template, $directive, $config['open'], $config['close']);
+        }
 
-        // @for, @endfor
-        $template = preg_replace('/\@for\s*\(\s*(.+?)\s*\)/', '<?php for($1): ?>', $template);
-        $template = preg_replace('/\@endfor/', '<?php endfor; ?>', $template);
+        // Compile output directives
+        foreach ($outputDirectives as $directive => $phpCode) {
+            $template = $this->compileDirectiveWithExpression($template, $directive, $phpCode);
+        }
 
-        // @while, @endwhile
-        $template = preg_replace('/\@while\s*\(\s*(.+?)\s*\)/', '<?php while($1): ?>', $template);
-        $template = preg_replace('/\@endwhile/', '<?php endwhile; ?>', $template);
-
-        // @share
-        $template = preg_replace('/\@share\s*\(\s*(.+?)\s*\)/', '<?php $view->share($1); ?>', $template);
-
-        // @errors
-        $template = preg_replace('/\@errors\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php if($errors->has(\'$1\')): ?>', $template);
-        $template = preg_replace('/\@enderrors/', '<?php endif; ?>', $template);
-
-        // @error (single error)
-        $template = preg_replace('/\@error\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php if($errors->has(\'$1\')): ?>', $template);
-        $template = preg_replace('/\@enderror/', '<?php endif; ?>', $template);
-
-        // @csrf
-        $template = preg_replace('/\@csrf/', '<?php echo csrf(); ?>', $template);
-
-        // @method
-        $template = preg_replace('/\@method\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php echo method(\'$1\'); ?>', $template);
+        // Handle special cases that don't fit the pattern
+        $template = $this->compileSpecialDirectives($template);
 
         // Compile custom directives
+        $template = $this->compileCustomDirectives($template);
+
+        return $template;
+    }
+
+    /**
+     * Compile directive with expression using proper parentheses matching
+     */
+    private function compileDirectiveWithExpression(string $template, string $directive, string $openTemplate, ?string $closeTemplate = null): string
+    {
+        // Find all occurrences of @directive(
+        $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
+        $offset = 0;
+
+        while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $matchStart = $matches[0][1];
+            $parenStart = $matchStart + strlen($matches[0][0]) - 1; // Position of opening (
+
+            // Find the matching closing parenthesis
+            $expression = $this->extractBalancedExpression($template, $parenStart);
+
+            if ($expression === false) {
+                throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
+            }
+
+            // Build the replacement
+            $replacement = sprintf('<?php %s ?>', sprintf($openTemplate, $expression));
+
+            // Replace the directive with compiled PHP
+            $directiveLength = $parenStart - $matchStart + strlen($expression) + 2; // +2 for opening and closing parentheses
+            $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
+
+            // Update offset for next search
+            $offset = $matchStart + strlen($replacement);
+        }
+
+        // Handle closing directive if it exists
+        if ($closeTemplate) {
+            $closeDirective = "end$directive";
+            $template = preg_replace(
+                '/\@' . preg_quote($closeDirective, '/') . '\b/',
+                sprintf('<?php %s ?>', $closeTemplate),
+                $template
+            );
+        }
+
+        return $template;
+    }
+
+    /**
+     * Extract expression between balanced parentheses
+     */
+    private function extractBalancedExpression(string $template, int $startPos): string|false
+    {
+        $length = strlen($template);
+
+        if ($startPos >= $length || $template[$startPos] !== '(') {
+            return false;
+        }
+
+        $depth = 0;
+        $inString = false;
+        $stringChar = null;
+        $escaped = false;
+
+        for ($i = $startPos; $i < $length; $i++) {
+            $char = $template[$i];
+
+            // Handle string literals
+            if (!$escaped && ($char === '"' || $char === "'")) {
+                if (!$inString) {
+                    $inString = true;
+                    $stringChar = $char;
+                } elseif ($char === $stringChar) {
+                    $inString = false;
+                    $stringChar = null;
+                }
+            }
+
+            // Handle escape sequences
+            if ($char === '\\' && !$escaped) {
+                $escaped = true;
+                continue;
+            }
+            $escaped = false;
+
+            // Only count parentheses outside of strings
+            if (!$inString) {
+                if ($char === '(') {
+                    $depth++;
+                } elseif ($char === ')') {
+                    $depth--;
+
+                    if ($depth === 0) {
+                        // Found the matching closing parenthesis
+                        return substr($template, $startPos + 1, $i - $startPos - 1);
+                    }
+                }
+            }
+        }
+
+        // Unbalanced parentheses
+        return false;
+    }
+
+    /**
+     * Compile special directives that don't follow standard patterns
+     */
+    private function compileSpecialDirectives(string $template): string
+    {
+        // @else (no parameters)
+        $template = preg_replace('/\@else\b/', '<?php else: ?>', $template);
+
+        // @endif (no parameters) - only if not already handled
+        $template = preg_replace('/\@endif\b/', '<?php endif; ?>', $template);
+
+        // @errors with field parameter
+        $template = preg_replace_callback(
+            '/\@errors\s*\(\s*([\'"])([^\1]+?)\1\s*\)/',
+            function ($matches) {
+                $field = $matches[2];
+                return "<?php if(\$errors->any() && \$errors->has('{$field}')): foreach(\$errors->get('{$field}') as \$message): ?>";
+            },
+            $template
+        );
+        $template = preg_replace('/\@enderrors\b/', '<?php endforeach; endif; ?>', $template);
+
+        // @error with field parameter
+        $template = preg_replace_callback(
+            '/\@error\s*\(\s*([\'"])([^\1]+?)\1\s*\)/',
+            function ($matches) {
+                $field = $matches[2];
+                return "<?php if(\$errors->any() && \$errors->has('{$field}')): \$message = \$errors->first('{$field}'); ?>";
+            },
+            $template
+        );
+        $template = preg_replace('/\@enderror\b/', '<?php endif; ?>', $template);
+
+        // @csrf (no parameters)
+        $template = preg_replace('/\@csrf\b/', '<?php echo csrf(); ?>', $template);
+
+        // @method with HTTP method parameter
+        $template = preg_replace_callback(
+            '/\@method\s*\(\s*([\'"])([^\1]+?)\1\s*\)/',
+            function ($matches) {
+                $method = strtoupper($matches[2]);
+                return "<?php echo method('{$method}'); ?>";
+            },
+            $template
+        );
+
+        // @auth / @endauth
+        $template = preg_replace('/\@auth\b/', '<?php if(!is_guest()): ?>', $template);
+        $template = preg_replace('/\@endauth\b/', '<?php endif; ?>', $template);
+
+        // @guest / @endguest
+        $template = preg_replace('/\@guest\b/', '<?php if(is_guest()): ?>', $template);
+        $template = preg_replace('/\@endguest\b/', '<?php endif; ?>', $template);
+
+        // @vite - handle both with and without parameters
+        $template = $this->compileViteDirective($template);
+
+        return $template;
+    }
+
+    /**
+     * Compile @vite directive (special case because it can have optional parameters)
+     */
+    private function compileViteDirective(string $template): string
+    {
+        // Handle @vite with parameters using our balanced expression extractor
+        $pattern = '/\@vite\s*\(/';
+        $offset = 0;
+
+        while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $matchStart = $matches[0][1];
+            $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+
+            $expression = $this->extractBalancedExpression($template, $parenStart);
+
+            if ($expression === false) {
+                throw new InvalidArgumentException("Unbalanced parentheses in @vite directive");
+            }
+
+            $replacement = "<?php echo vite({$expression}); ?>";
+            $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+            $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
+
+            $offset = $matchStart + strlen($replacement);
+        }
+
+        // Handle @vite without parameters (make sure we don't match @vite( which was already handled)
+        $template = preg_replace('/\@vite\b(?!\s*\()/', '<?php echo vite(); ?>', $template);
+
+        return $template;
+    }
+
+    /**
+     * Compile custom directives
+     */
+    private function compileCustomDirectives(string $template): string
+    {
         foreach ($this->customDirectives as $directive => $callback) {
-            $template = preg_replace_callback('/\@' . $directive . '\s*\(\s*(.+?)\s*\)/', fn($matches) => $callback($matches[1]), $template);
+            $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
+            $offset = 0;
+
+            while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                $matchStart = $matches[0][1];
+                $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+
+                $expression = $this->extractBalancedExpression($template, $parenStart);
+
+                if ($expression === false) {
+                    throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
+                }
+
+                $replacement = $callback($expression);
+                $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+                $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
+
+                $offset = $matchStart + strlen($replacement);
+            }
         }
 
         return $template;
@@ -331,7 +742,8 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compilePhpBlocks(string $template): string
     {
-        return preg_replace('/\@php\s*\(\s*(.+?)\s*\)/', '<?php $1; ?>', $template);
+        // Only match single-line @php() directives
+        return preg_replace('/\@php\s*\(\s*(.+?)\s*\)(?!\s*@endphp)/', '<?php $1; ?>', $template);
     }
 
     /**
@@ -344,18 +756,6 @@ class BladeCompiler implements BladeCompilerContract
     public function directive(string $name, callable $callback): void
     {
         $this->customDirectives[$name] = $callback;
-    }
-
-    /**
-     * Register a component alias
-     * 
-     * @param string $alias
-     * @param string $component
-     * @return void
-     */
-    public function component(string $alias, string $component): void
-    {
-        $this->componentAliases[$alias] = $component;
     }
 
     /**
@@ -404,7 +804,7 @@ class BladeCompiler implements BladeCompilerContract
      */
     public function clearCache(): void
     {
-        $files = glob($this->cachePath . '/*.php');
+        $files = glob("{$this->cachePath}/*.php");
         foreach ($files as $file) {
             unlink($file);
         }

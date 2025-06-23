@@ -5,7 +5,7 @@ namespace Spark\Utils;
 use PHPMailer\PHPMailer\PHPMailer;
 use Spark\Contracts\Utils\MailUtilContract;
 use Spark\Support\Traits\Macroable;
-use Spark\View;
+use Spark\View\View;
 
 /**
  * Utility class for sending emails.

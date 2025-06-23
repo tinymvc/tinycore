@@ -84,6 +84,10 @@ class CommandsServiceProvider
         $commands->addCommand('migrate:run', [Migration::class, 'up'])
             ->description('Run the database migrations');
 
+        // Clear the view caches
+        $commands->addCommand('view:clear', [PrimaryCommandsHandler::class, 'clearViewCaches'])
+            ->description('Clear the view caches');
+
         // Add the migrate:rollback command
         $commands->addCommand('migrate:rollback', function (array $args) {
             $step = $args['step'] ?? ($args['_args'][0] ?? 1);
@@ -127,5 +131,10 @@ class CommandsServiceProvider
         // Make a view file
         $commands->addCommand('make:view', [MakeStubCommandsHandler::class, 'makeView'])
             ->description('Create a new view file');
+
+
+        // Make a view component file
+        $commands->addCommand('make:component', [MakeStubCommandsHandler::class, 'makeViewComponent'])
+            ->description('Create a new view component file');
     }
 }

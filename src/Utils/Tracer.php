@@ -5,7 +5,7 @@ namespace Spark\Utils;
 use Spark\Console\Prompt;
 use Spark\Contracts\Utils\TracerUtilContract;
 use Spark\Support\Traits\Macroable;
-use Spark\View;
+use Spark\View\View;
 use Throwable;
 
 /**

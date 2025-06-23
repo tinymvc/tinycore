@@ -148,6 +148,24 @@ class PrimaryCommandsHandler
     }
 
     /**
+     * Clears the view caches.
+     *
+     * This method clears the cached views in the application, ensuring that
+     * the latest view files are used when rendering views.
+     * 
+     * @param Prompt $prompt
+     *   An instance of the Prompt class for displaying messages in the console.
+     *
+     * @return void
+     */
+    public function clearViewCaches(Prompt $prompt)
+    {
+        view()->clearCache();
+
+        $prompt->message("View caches cleared.", "success");
+    }
+
+    /**
      * Generates a new application key and updates the environment file.
      *
      * This method generates a random application key and replaces the placeholder

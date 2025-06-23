@@ -34,7 +34,7 @@ use Spark\Http\Session;
 use Spark\Utils\Tracer;
 use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
-use Spark\View;
+use Spark\View\View;
 use Throwable;
 
 /**

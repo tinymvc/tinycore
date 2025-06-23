@@ -142,8 +142,27 @@ class MakeStubCommandsHandler
             $args['_args'][0] ?? null,
             'What is the name of the view?',
             [
-                'stub' => __DIR__ . '/stubs/view.stub',
-                'destination' => 'resources/views/::subfolder:lowercase/::name:lowercase.php',
+                'stub' => __DIR__ . '/stubs/view.blade.stub',
+                'destination' => 'resources/views/::subfolder:lowercase/::name:lowercase.blade.php',
+            ]
+        );
+    }
+
+    /**
+     * Create a view component stub.
+
+     * @param array $args
+     *  The arguments passed to the command.
+     * @return void
+     */
+    public function makeViewComponent(array $args)
+    {
+        StubCreation::make(
+            $args['_args'][0] ?? null,
+            'What is the name of the view component?',
+            [
+                'stub' => __DIR__ . '/stubs/component.blade.stub',
+                'destination' => 'resources/views/components/::subfolder:lowercase/::name:lowercase.blade.php',
             ]
         );
     }

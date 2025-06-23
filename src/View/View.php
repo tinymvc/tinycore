@@ -105,7 +105,6 @@ class View implements ViewContract
             'request' => Application::$app->get(Request::class),
             'session' => Application::$app->get(Session::class),
             'errors' => Application::$app->get(Request::class)->getErrorObject(),
-            'view' => $this,
         ], self::$shared);
     }
 
@@ -195,10 +194,6 @@ class View implements ViewContract
      */
     public function render(string $template, array $context = []): string
     {
-        // Reset extends for this render
-        $this->extendsTemplate = null;
-        $this->sections = [];
-
         // Run view composers
         $this->runComposers($template);
 
@@ -213,16 +208,18 @@ class View implements ViewContract
         // Merge shared data with the context
         $context = array_merge(self::$shared, $context);
 
+        // Reset state for this render
+        $this->extendsTemplate = null;
+        $this->sections = [];
+        $this->currentSection = null;
+
         // Render compiled template
         $content = $this->renderCompiledTemplate($compiledPath, $context);
 
         // Handle extends - if this template extends another template
         if ($this->extendsTemplate) {
-            // Pass sections to parent template
-            $parentContext = array_merge($context, [
-                'sections' => $this->sections,
-                'content' => $content
-            ]);
+            // Merge current sections with parent context
+            $parentContext = array_merge($context, ['sections' => $this->sections]);
             return $this->render($this->extendsTemplate, $parentContext);
         }
 
@@ -324,6 +321,12 @@ class View implements ViewContract
      */
     public function yieldSection(string $name, string $default = ''): string
     {
+        // Check if sections are passed from child template
+        if (isset($GLOBALS['sections']) && isset($GLOBALS['sections'][$name])) {
+            return $GLOBALS['sections'][$name];
+        }
+
+        // Check local sections
         return $this->sections[$name] ?? $default;
     }
 
@@ -356,11 +359,20 @@ class View implements ViewContract
     private function renderCompiledTemplate(string $compiledPath, array $context): string
     {
         extract($context);
-        $view = $this; // Make sure $view is available in template
+
+        // Make sections available globally for @yield to access
+        if (isset($context['sections'])) {
+            $GLOBALS['sections'] = $context['sections'];
+        }
 
         ob_start();
         include $compiledPath;
         $content = ob_get_clean();
+
+        // Clean up global sections
+        if (isset($GLOBALS['sections'])) {
+            unset($GLOBALS['sections']);
+        }
 
         return $content;
     }
