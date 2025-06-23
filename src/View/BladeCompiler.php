@@ -37,7 +37,7 @@ class BladeCompiler implements BladeCompilerContract
 
     public function __construct(string $cachePath)
     {
-        $this->cachePath = rtrim($cachePath, '/');
+        $this->cachePath = dir_path($cachePath);
         $this->ensureCacheDirectoryExists();
     }
 
@@ -67,8 +67,14 @@ class BladeCompiler implements BladeCompilerContract
         // Remove Blade comments first
         $template = $this->compileComments($template);
 
+        // Preserve verbatim blocks (add this line)
+        $template = $this->preserveVerbatimBlocks($template);
+
         // Preserve raw PHP blocks
         $template = $this->preserveRawBlocks($template);
+
+        // Compile @use directive
+        $template = $this->compileUseDirective($template);
 
         // Compile structural directives
         $template = $this->compileExtends($template);
@@ -76,6 +82,9 @@ class BladeCompiler implements BladeCompilerContract
         $template = $this->compileYields($template);
         $template = $this->compileIncludes($template);
         $template = $this->compileXComponents($template);
+
+        // Compile class & style directives
+        $template = $this->compileClassAndStyleDirectives($template);
 
         // Compile control flow directives
         $template = $this->compileDirectives($template);
@@ -90,6 +99,22 @@ class BladeCompiler implements BladeCompilerContract
         $template = $this->restoreRawBlocks($template);
 
         return $template;
+    }
+
+    /**
+     * Preserve verbatim blocks
+     * 
+     * @param string $template
+     * @return string
+     */
+    private function preserveVerbatimBlocks(string $template): string
+    {
+        return preg_replace_callback('/\@verbatim(.*?)\@endverbatim/s', function ($matches) {
+            $key = '__VERBATIM_BLOCK_' . count($this->rawBlocks) . '__';
+            $content = $matches[1];
+            $this->rawBlocks[$key] = $content; // Store as-is, no PHP tags
+            return $key;
+        }, $template);
     }
 
     /**
@@ -321,7 +346,7 @@ class BladeCompiler implements BladeCompilerContract
         $attributes = [];
 
         // Match attributes in the format: name="value", name='value', name=value, :name="value", :name='value', :name=value
-        // Also handle dynamic attributes with colon prefix (e.g. :$alertMessage)
+        // Also handle dynamic attributes with colon prefix (e.g. :$variable)
         $pattern = '/(?:^|\s+)(:)?\$?([\w\-]+)(?:=(["\'])((?:[^"\'\\\\]|\\\\.)*)\3)?/';
 
         preg_match_all($pattern, $attributesString, $matches, PREG_SET_ORDER);
@@ -332,7 +357,7 @@ class BladeCompiler implements BladeCompilerContract
             $rawValue = $match[4] ?? null;
 
             if ($isDynamic) {
-                // If the developer wrote :$alertMessage without ="…", 
+                // If the developer wrote :$variable without ="…", 
                 // give it the variable name as the value.
                 $value = $rawValue !== null ? $rawValue : "\$$name";
             } else {
@@ -409,12 +434,66 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileIncludes(string $template): string
     {
+        // Compile @includeWhen directive
+        $template = preg_replace_callback(
+            '/\@includeWhen\s*\(\s*([^,)]+)\s*,\s*([^,)]+)(?:\s*,\s*(.+))?\s*\)/s',
+            function ($matches) {
+                $condition = trim($matches[1]);
+                $viewExpr = trim($matches[2]);
+                $dataExpr = isset($matches[3]) ? trim($matches[3]) : '[]';
+                return "<?php if({$condition}): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
+            },
+            $template
+        );
+
+        // Compile @includeIf directive
+        $template = preg_replace_callback(
+            '/\@includeIf\s*\(\s*([^,)]+)(?:\s*,\s*(.+))?\s*\)/s',
+            function ($matches) {
+                $viewExpr = trim($matches[1]);
+                $dataExpr = isset($matches[2]) ? trim($matches[2]) : '[]';
+                return "<?php if(\$this->templateExists({$viewExpr})): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
+            },
+            $template
+        );
+
+        // Compile @include directive
         return preg_replace_callback(
             '/\@include\s*\(\s*([^,)]+)(?:\s*,\s*(.+))?\s*\)/s',
             function ($matches) {
                 $viewExpr = trim($matches[1]);
                 $dataExpr = isset($matches[2]) ? trim($matches[2]) : '[]';
                 return "<?php echo \$this->include($viewExpr, $dataExpr); ?>";
+            },
+            $template
+        );
+    }
+
+    /**
+     * Compile @use directive
+     * 
+     * @param string $template
+     * @return string
+     */
+    private function compileUseDirective(string $template): string
+    {
+        // Pattern to match @use('namespace\Class') or @use('namespace\Class', 'alias')
+        return preg_replace_callback(
+            '/\@use\s*\(\s*([^,)]+)(?:\s*,\s*([^,)]+))?\s*\)/s',
+            function ($matches) {
+                $classExpr = trim($matches[1]);
+                $aliasExpr = isset($matches[2]) ? trim($matches[2]) : null;
+
+                // Remove quotes from class name for use statement
+                $className = trim($classExpr, '\'"');
+
+                if ($aliasExpr) {
+                    // Remove quotes from alias
+                    $alias = trim($aliasExpr, '\'"');
+                    return "<?php use {$className} as {$alias}; ?>";
+                } else {
+                    return "<?php use {$className}; ?>";
+                }
             },
             $template
         );
@@ -453,6 +532,28 @@ class BladeCompiler implements BladeCompilerContract
         return $template;
     }
 
+    /**
+     * Compile @class and @style directives
+     * 
+     * @param string $template
+     * @return string
+     */
+    private function compileClassAndStyleDirectives(string $template): string
+    {
+        // Compile @class directive
+        $template = preg_replace_callback('/\@class\s*\(\s*\[([^\]]*)\]\s*\)/', function ($matches) {
+            $arrayContent = trim($matches[1]);
+            return "<?php echo 'class=\"' . \$this->compileClassArray([{$arrayContent}]) . '\"'; ?>";
+        }, $template);
+
+        // Compile @style directive
+        $template = preg_replace_callback('/\@style\s*\(\s*\[([^\]]*)\]\s*\)/', function ($matches) {
+            $arrayContent = trim($matches[1]);
+            return "<?php echo 'style=\"' . \$this->compileStyleArray([{$arrayContent}]) . '\"'; ?>";
+        }, $template);
+
+        return $template;
+    }
 
     /**
      * Compile directives (@if, @foreach, etc.)
@@ -470,7 +571,11 @@ class BladeCompiler implements BladeCompilerContract
             'isset' => ['open' => 'if(isset(%s)):', 'close' => 'endif;'],
             'empty' => ['open' => 'if(empty(%s)):', 'close' => 'endif;'],
             'can' => ['open' => 'if(can(%s)):', 'close' => 'endif;'],
-            'cannot' => ['open' => 'if(cannot(%s)):', 'close' => 'endif;']
+            'cannot' => ['open' => 'if(cannot(%s)):', 'close' => 'endif;'],
+            'hasSection' => ['open' => 'if($this->hasSection(%s)):', 'close' => 'endif;'],
+            'sectionMissing' => ['open' => 'if(!$this->hasSection(%s)):', 'close' => 'endif;'],
+            'session' => ['open' => 'if(session()->has(%s)):', 'close' => 'endif;'],
+            'switch' => ['open' => 'switch(%s):case 1.9996931348623157e+308:break;', 'close' => 'endswitch;'],
         ];
 
         $loopDirectives = [
@@ -486,7 +591,19 @@ class BladeCompiler implements BladeCompilerContract
             'old' => 'echo e(old(%s));',
             'share' => '$this->share(%s);',
             'authorize' => 'authorize(%s);',
-            'json' => 'echo \Spark\Support\Js::from(%s);'
+            'json' => 'echo \Spark\Support\Js::from(%s);',
+            'case' => 'case %s:',
+            'checked' => "echo (%s) ? 'checked=\"true\"' : '';",
+            'disabled' => "echo (%s) ? 'disabled=\"true\"' : '';",
+            'selected' => "echo (%s) ? 'selected=\"true\"' : '';",
+            'readonly' => "echo (%s) ? 'readonly=\"true\"' : '';",
+            'required' => "echo (%s) ? 'required=\"true\"' : '';",
+        ];
+
+        $singleLineDirectives = [
+            'break' => '<?php break; ?>',
+            'continue' => '<?php continue; ?>',
+            'default' => '<?php default: ?>',
         ];
 
         // Compile conditional directives
@@ -509,6 +626,11 @@ class BladeCompiler implements BladeCompilerContract
 
         // Compile custom directives
         $template = $this->compileCustomDirectives($template);
+
+        //  Compile single-line directives
+        foreach ($singleLineDirectives as $directive => $phpCode) {
+            $template = $this->compileSingleLineDirective($template, $directive, $phpCode);
+        }
 
         return $template;
     }
@@ -670,6 +792,20 @@ class BladeCompiler implements BladeCompilerContract
         // @vite - handle both with and without parameters
         $template = $this->compileViteDirective($template);
 
+        return $template;
+    }
+
+    /**
+     * Compile single-line directives like @break, @continue, etc.
+     * 
+     * @param string $template
+     * @param string $directive
+     * @param string $phpCode
+     * @return string
+     */
+    public function compileSingleLineDirective(string $template, string $directive, string $phpCode): string
+    {
+        $template = preg_replace('/\@' . preg_quote($directive, '/') . '\b/', $phpCode, $template);
         return $template;
     }
 

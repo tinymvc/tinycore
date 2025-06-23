@@ -116,7 +116,7 @@ class View implements ViewContract
      */
     public function setPath(string $path): self
     {
-        $this->path = rtrim($path, '/');
+        $this->path = dir_path($path);
         return $this;
     }
 
@@ -128,7 +128,7 @@ class View implements ViewContract
      */
     public function setCachePath(string $cachePath): self
     {
-        $this->cachePath = rtrim($cachePath, '/');
+        $this->cachePath = dir_path($cachePath);
         return $this;
     }
 
@@ -258,7 +258,7 @@ class View implements ViewContract
      */
     public function component(string $component, array $context = []): string
     {
-        $componentPath = $this->path . '/components/' . str_replace('.', '/', $component) . '.blade.php';
+        $componentPath = dir_path($this->path . '/components/' . str_replace('.', '/', $component) . '.blade.php');
 
         if (!file_exists($componentPath)) {
             throw new ViewException("Component [$component] not found at path [$componentPath]");
@@ -331,6 +331,23 @@ class View implements ViewContract
     }
 
     /**
+     * Check if a section exists
+     *
+     * @param string $name
+     * @return bool
+     */
+    public function hasSection(string $name): bool
+    {
+        // Check if sections are passed from child template
+        if (isset($GLOBALS['sections']) && isset($GLOBALS['sections'][$name])) {
+            return true;
+        }
+
+        // Check local sections
+        return isset($this->sections[$name]);
+    }
+
+    /**
      * Get the full template path
      * 
      * @param string $template
@@ -340,8 +357,8 @@ class View implements ViewContract
     {
         $template = str_replace('.', '/', $template);
 
-        // Try .blade.php first
-        $bladePath = $this->path . '/' . $template . '.blade.php';
+        // Check if the template is exists then return it
+        $bladePath = dir_path("{$this->path}/$template.blade.php");
         if (file_exists($bladePath)) {
             return $bladePath;
         }
@@ -366,7 +383,7 @@ class View implements ViewContract
         }
 
         ob_start();
-        include $compiledPath;
+        include dir_path($compiledPath);
         $content = ob_get_clean();
 
         // Clean up global sections
@@ -435,5 +452,61 @@ class View implements ViewContract
     public function directive(string $name, callable $callback): void
     {
         $this->compiler->directive($name, $callback);
+    }
+
+    /**
+     * Helper method for compiling class arrays
+     * This should be available in your view context
+     * 
+     * @param array $classes
+     * @return string
+     */
+    public function compileClassArray(array $classes): string
+    {
+        $compiledClasses = [];
+
+        foreach ($classes as $key => $value) {
+            if (is_numeric($key)) {
+                // Simple class name like 'p-4'
+                if ($value) {
+                    $compiledClasses[] = $value;
+                }
+            } else {
+                // Conditional class like 'font-bold' => $isActive
+                if ($value) {
+                    $compiledClasses[] = $key;
+                }
+            }
+        }
+
+        return implode(' ', $compiledClasses);
+    }
+
+    /**
+     * Helper method for compiling style arrays
+     * This should be available in your view context
+     * 
+     * @param array $styles
+     * @return string
+     */
+    public function compileStyleArray(array $styles): string
+    {
+        $compiledStyles = [];
+
+        foreach ($styles as $key => $value) {
+            if (is_numeric($key)) {
+                // Simple style like 'background-color: red'
+                if ($value) {
+                    $compiledStyles[] = $value;
+                }
+            } else {
+                // Conditional style like 'font-weight: bold' => $isActive
+                if ($value) {
+                    $compiledStyles[] = $key;
+                }
+            }
+        }
+
+        return implode('; ', $compiledStyles);
     }
 }
