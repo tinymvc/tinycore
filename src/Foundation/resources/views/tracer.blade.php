@@ -5,8 +5,9 @@
 @section('content')
     <div class="tracer">
         <div class="error-box">
-            <h1>{{ $type }}: {{ e($message) }}</h1>
-            <p><span class="file">{{ e($file) }}</span> at line <span class="line">{{ e($line) }}</span></p>
+            <h1>{!! $type !!}: {!! $message !!}</h1>
+            <p><span class="file">{!! $file !!}</span> at line <span class="line">{!! $line !!}</span>
+            </p>
         </div>
         @if (isset($trace) && !empty($trace))
             <div class="trace-box">

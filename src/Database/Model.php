@@ -3,16 +3,25 @@
 namespace Spark\Database;
 
 use ArrayAccess;
+use ArrayIterator;
+use IteratorAggregate;
 use PDO;
 use Spark\Contracts\Database\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
-use Spark\Database\Traits\HasOrm;
+use Spark\Database\Orm\ManageOrm;
 use Spark\Support\Traits\Macroable;
+use Traversable;
 
 /**
  * Class Model
+ * 
+ * @template TKey of array-key
+ *
+ * @template-covariant TValue
+ *
+ * @implements \ArrayAccess<TKey, TValue>
  * 
  * @method static int|array insert(array $data, array $config = [])
  * @method static int|array bulkUpdate(array $data, array $config = [])
@@ -21,6 +30,8 @@ use Spark\Support\Traits\Macroable;
  * @method static QueryBuilder whereNotNull($where)
  * @method static QueryBuilder in(string $column, array $values)
  * @method static QueryBuilder notIn(string $column, array $values)
+ * @method static QueryBuilder whereIn(string $column, array $values)
+ * @method static QueryBuilder whereNotIn(string $column, array $values)
  * @method static QueryBuilder findInSet($field, $key, $type = '', $andOr = 'AND')
  * @method static QueryBuilder notFindInSet($field, $key)
  * @method static QueryBuilder between($field, $value1, $value2, $type = '', $andOr = 'AND')
@@ -66,9 +77,9 @@ use Spark\Support\Traits\Macroable;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-abstract class Model implements ModelContract, Arrayable, ArrayAccess
+abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate
 {
-    use HasOrm, Macroable {
+    use ManageOrm, Macroable {
         __call as macroCall;
         __callStatic as staticMacroCall;
     }
@@ -396,7 +407,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function __get($name)
     {
-        return $this->attributes[$name] ?? $this->getFromOrm($name);
+        return $this->attributes[$name] ?? $this->getRelationshipAttribute($name);
     }
 
     /**
@@ -407,7 +418,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function __isset($name)
     {
-        return isset($this->attributes[$name]) || $this->existsInOrm($name);
+        return isset($this->attributes[$name]) || $this->relationshipExists($name);
     }
 
     /**
@@ -421,7 +432,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
         if (isset($this->attributes[$name])) {
             unset($this->attributes[$name]);
         } else {
-            $this->removeFromOrm($name);
+            $this->forgetRelation($name);
         }
     }
 
@@ -432,7 +443,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function toArray()
     {
-        return array_merge($this->attributes, $this->getOrm());
+        return array_merge($this->attributes, $this->getRelations());
     }
 
     /**
@@ -443,7 +454,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function offsetExists(mixed $offset): bool
     {
-        return isset($this->attributes[$offset]) || $this->existsInOrm($offset);
+        return isset($this->attributes[$offset]) || $this->relationshipExists($offset);
     }
 
     /**
@@ -454,7 +465,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->attributes[$offset] ?? $this->getFromOrm($offset);
+        return $this->attributes[$offset] ?? $this->getRelationshipAttribute($offset);
     }
 
     /**
@@ -480,8 +491,18 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess
         if (isset($this->attributes[$offset])) {
             unset($this->attributes[$offset]);
         } else {
-            $this->removeFromOrm($offset);
+            $this->forgetRelation($offset);
         }
+    }
+
+    /**
+     * Get an iterator for the items.
+     *
+     * @return \ArrayIterator<TKey, TValue>
+     */
+    public function getIterator(): Traversable
+    {
+        return new ArrayIterator($this->attributes);
     }
 
     /**

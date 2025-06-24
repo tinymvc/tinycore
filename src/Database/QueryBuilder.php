@@ -93,7 +93,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @var array
      */
-    private array $query = ['sql' => '', 'alias' => '', 'joins' => ''];
+    private array $query = ['sql' => '', 'select' => '', 'from' => null, 'alias' => '', 'joins' => ''];
 
     /**
      * Array to store data mappers for processing retrieved data.
@@ -499,7 +499,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function in(string $column, array $values): self
+    public function whereIn(string $column, array $values): self
     {
         return $this->where([$column => $values]);
     }
@@ -514,7 +514,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notIn(string $column, array $values): self
+    public function whereNotIn(string $column, array $values): self
     {
         return $this->where(column: [$column => $values], not: true);
     }
@@ -529,7 +529,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orIn($column, array $values): self
+    public function orWhereIn($column, array $values): self
     {
         return $this->where(column: [$column => $values], andOr: 'OR');
     }
@@ -544,9 +544,69 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotIn($column, array $values): self
+    public function orWhereNotIn($column, array $values): self
     {
         return $this->where(column: [$column => $values], andOr: 'OR ', not: true);
+    }
+
+    /**
+     * Add a WHERE condition that the given column is in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function in(string $column, array $values): self
+    {
+        return $this->whereIn($column, $values);
+    }
+
+    /**
+     * Add a WHERE condition that the given column is not in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function notIn(string $column, array $values): self
+    {
+        return $this->whereNotIn($column, $values);
+    }
+
+    /**
+     * Add an OR WHERE condition that the given column is in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orIn($column, array $values): self
+    {
+        return $this->orWhereIn($column, $values);
+    }
+
+    /**
+     * Add an OR WHERE condition that the given column is not in the given array of values.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param array $values
+     *   The array of values to query.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orNotIn($column, array $values): self
+    {
+        return $this->orWhereNotIn($column, $values);
     }
 
     /**
@@ -904,22 +964,44 @@ class QueryBuilder implements QueryBuilderContract
      * @param array|string $fields A string or an array of column names to select.
      * @return self The current instance for method chaining.
      */
-    public function select(array|string $fields = '*'): self
+    public function select(array|string $fields = '*', ...$args): self
     {
+        // Merge additional arguments into the fields array if provided.
+        // This allows for additional fields to be specified after the initial $fields parameter.
+        if (is_string($fields) && !empty($args)) {
+            $fields = array_merge((array) $fields, $args);
+        }
+
         // Convert array of fields to a comma-separated string if necessary
         if (is_array($fields)) {
             $fields = implode(',', $fields);
         }
 
-        if (stripos($fields, ' FROM ') === false) {
-            // Build the FROM clause
-            $fields .= isset($this->table) ? " FROM {$this->prefix}{$this->table}" : '';
-        }
-
         // Build the initial SELECT SQL query
-        $this->query['sql'] = "SELECT {$fields}";
+        $this->query['select'] = $fields;
 
         // Returns the current instance for method chaining.
+        return $this;
+    }
+
+    /**
+     * Sets the table to select from.
+     * 
+     * This method allows you to specify the table from which to select data.
+     * If the table is already set in the query, it will replace the existing FROM clause
+     * with the new table.
+     * 
+     * @param string $table The name of the table to select from.
+     * @return self The current instance for method chaining.
+     */
+    public function from(string $table, ?string $alias = null): self
+    {
+        $this->query['from'] = $table;
+
+        if (!empty($alias)) {
+            $this->as($alias);
+        }
+
         return $this;
     }
 
@@ -1336,7 +1418,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Count total records from exisitng command only for serverside database driver.
         if ($this->database->isDriver('mysql')) {
-            $this->query['sql'] = preg_replace('/SELECT /', 'SELECT SQL_CALC_FOUND_ROWS ', $this->query['sql'], 1);
+            $this->query['select'] = "SQL_CALC_FOUND_ROWS {$this->query['select']}";
         }
 
         // Set pagination count to limit database records, and execute query.
@@ -1383,8 +1465,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function count(): int
     {
-        // Get table name.
-        $table = $this->prefix . $this->table;
+        $table = $this->getTableName(); // Get the table name with prefix if exists.
 
         // Create sql command to count rows.
         $statement = $this->database->prepare(
@@ -1441,6 +1522,17 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Returns the table name with prefix if exists.
+     * 
+     * @return string
+     */
+    private function getTableName(): string
+    {
+        // Returns the table name with prefix if exists.
+        return $this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']);
+    }
+
+    /**
      * Executes a SELECT query with the built query parts.
      *
      * @return void
@@ -1448,14 +1540,17 @@ class QueryBuilder implements QueryBuilderContract
     private function executeSelectQuery(): void
     {
         // Prepare select command.
-        if (empty($this->query['sql'])) {
+        if (empty($this->query['select'])) {
             $this->select();
         }
 
+        $table = $this->getTableName(); // Get the table name with prefix if exists.
+
         // Build complete select command with condition, order, and limit.
         $statement = $this->database->prepare(
-            $this->query['sql']
+            "SELECT {$this->query['select']} FROM {$table}"
             . $this->query['alias']
+            . $this->query['sql']
             . $this->query['joins']
             . $this->getWhereSql()
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
@@ -1582,7 +1677,7 @@ class QueryBuilder implements QueryBuilderContract
     private function resetQuery(): void
     {
         // Reset Select query parameters.
-        $this->query = ['sql' => '', 'alias' => '', 'joins' => ''];
+        $this->query = ['sql' => '', 'select' => '', 'from' => null, 'alias' => '', 'joins' => ''];
 
         // Reset where query parameters.
         $this->resetWhere();
