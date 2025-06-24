@@ -623,9 +623,6 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function findInSet($field, $key, $type = '', $andOr = 'AND'): self
     {
-        // If the key is not numeric, wrap it with grammar-specific quotes
-        $key = is_numeric($key) ? $key : $this->quote($key);
-
         // Get the SQL column placeholder for binding.
         $columnPlaceholder = $this->getWhereSqlColumn($field);
 
@@ -783,10 +780,9 @@ class QueryBuilder implements QueryBuilderContract
     public function like($field, $data, $type = '', $andOr = 'AND'): self
     {
         $columnPlaceholder = $this->getWhereSqlColumn($field);
-        $like = $this->quote($data);
         $where = "$field {$type}LIKE :$columnPlaceholder";
 
-        $this->where['bind'][$columnPlaceholder] = $like;
+        $this->where['bind'][$columnPlaceholder] = $data;
 
         return $this->where(column: $where, andOr: $andOr);
     }
@@ -1094,7 +1090,7 @@ class QueryBuilder implements QueryBuilderContract
     public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
     {
         $on = $field1;
-        $table = $this->prefix . $table;
+        $table = "{$this->prefix}$table";
 
         if ($operator !== null) {
             if ($field2 === null) {
@@ -1824,17 +1820,6 @@ class QueryBuilder implements QueryBuilderContract
             : [$config['returning']];
 
         return 'RETURNING ' . $this->grammar->columnize($returning);
-    }
-
-    /**
-     * Quotes a value for use in an SQL statement.
-     *
-     * @param string $value The value to quote.
-     * @return string The quoted value.
-     */
-    private function quote(string $value): string
-    {
-        return $this->database->getPdo()->quote($value);
     }
 
     /**

@@ -1,15 +1,14 @@
 <?php
 
-namespace Spark\Database\Orm;
+namespace Spark\Database\Relation;
 
 use Closure;
-use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Exceptions\OrmDisabledLazyLoadingException;
 use Spark\Database\Exceptions\UndefinedOrmException;
-use Spark\Database\Orm\BelongsToMany;
-use Spark\Database\Orm\HasMany;
-use Spark\Database\Orm\HasOne;
+use Spark\Database\Relation\BelongsToMany;
+use Spark\Database\Relation\HasMany;
+use Spark\Database\Relation\HasOne;
 use Spark\Database\QueryBuilder;
 use PDO;
 use Spark\Support\Str;
@@ -21,8 +20,10 @@ use Spark\Support\Str;
  * Supports hasOne, hasMany, belongsTo, belongsToMany relationships with lazy and eager loading.
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
+ * @package Spark\Database\Relation
+ * @version 2.0.0
  */
-trait ManageOrm
+trait ManageRelationship
 {
     /**
      * @var array $relations
@@ -88,7 +89,7 @@ trait ManageOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Orm\HasOne
+     * @return \Spark\Database\Relation\HasOne
      */
     protected function hasOne(
         string $related,
@@ -97,15 +98,16 @@ trait ManageOrm
         bool $lazy = true,
         ?Closure $callback = null
     ): HasOne {
-        $foreignKey = $foreignKey ?? $this->getForeignKey();
-        $localKey = $localKey ?? static::$primaryKey ?? 'id';
+        $foreignKey ??= $this->getForeignKey();
+        $localKey ??= static::$primaryKey ?? 'id';
 
         return new HasOne(
             related: $related,
             foreignKey: $foreignKey,
             localKey: $localKey,
             lazy: $lazy,
-            callback: $callback
+            callback: $callback,
+            model: $this
         );
     }
 
@@ -121,7 +123,7 @@ trait ManageOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Orm\HasMany
+     * @return \Spark\Database\Relation\HasMany
      */
     protected function hasMany(
         string $related,
@@ -130,15 +132,16 @@ trait ManageOrm
         bool $lazy = true,
         ?Closure $callback = null
     ): HasMany {
-        $foreignKey = $foreignKey ?? $this->getForeignKey();
-        $localKey = $localKey ?? static::$primaryKey ?? 'id';
+        $foreignKey ??= $this->getForeignKey();
+        $localKey ??= static::$primaryKey ?? 'id';
 
         return new HasMany(
             related: $related,
             foreignKey: $foreignKey,
             localKey: $localKey,
             lazy: $lazy,
-            callback: $callback
+            callback: $callback,
+            model: $this
         );
     }
 
@@ -154,7 +157,7 @@ trait ManageOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Orm\BelongsTo
+     * @return \Spark\Database\Relation\BelongsTo
      */
     protected function belongsTo(
         string $related,
@@ -165,15 +168,16 @@ trait ManageOrm
     ): BelongsTo {
         $relatedModel = new $related;
         $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($related));
-        $foreignKey = $foreignKey ?? $this->generateForeignKey($relatedTable);
-        $ownerKey = $ownerKey ?? $relatedModel::$primaryKey ?? 'id';
+        $foreignKey ??= $this->generateForeignKey($relatedTable);
+        $ownerKey ??= $relatedModel::$primaryKey ?? 'id';
 
         return new BelongsTo(
             related: $related,
             foreignKey: $foreignKey,
             ownerKey: $ownerKey,
             lazy: $lazy,
-            callback: $callback
+            callback: $callback,
+            model: $this
         );
     }
 
@@ -192,7 +196,7 @@ trait ManageOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Orm\BelongsToMany
+     * @return \Spark\Database\Relation\BelongsToMany
      */
     protected function belongsToMany(
         string $related,
@@ -206,11 +210,11 @@ trait ManageOrm
     ): BelongsToMany {
         $relatedModel = new $related;
         $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($related));
-        $table = $table ?? $this->generatePivotTableName($relatedModel);
-        $foreignPivotKey = $foreignPivotKey ?? $this->getForeignKey();
-        $relatedPivotKey = $relatedPivotKey ?? $this->generateForeignKey($relatedTable);
-        $parentKey = $parentKey ?? static::$primaryKey ?? 'id';
-        $relatedKey = $relatedKey ?? $relatedModel::$primaryKey ?? 'id';
+        $table ??= $this->generatePivotTableName($relatedModel);
+        $foreignPivotKey ??= $this->getForeignKey();
+        $relatedPivotKey ??= $this->generateForeignKey($relatedTable);
+        $parentKey ??= static::$primaryKey ?? 'id';
+        $relatedKey ??= $relatedModel::$primaryKey ?? 'id';
 
         return new BelongsToMany(
             related: $related,
@@ -240,7 +244,7 @@ trait ManageOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Orm\HasManyThrough
+     * @return \Spark\Database\Relation\HasManyThrough
      */
     protected function hasManyThrough(
         string $related,
@@ -255,10 +259,10 @@ trait ManageOrm
         $throughModel = new $through;
         $throughTable = $throughModel::$table ?? Str::snake(class_basename($through));
 
-        $firstKey = $firstKey ?? $this->getForeignKey();
-        $secondKey = $secondKey ?? $this->generateForeignKey($throughTable);
-        $localKey = $localKey ?? static::$primaryKey ?? 'id';
-        $secondLocalKey = $secondLocalKey ?? $throughModel::$primaryKey ?? 'id';
+        $firstKey ??= $this->getForeignKey();
+        $secondKey ??= $this->generateForeignKey($throughTable);
+        $localKey ??= static::$primaryKey ?? 'id';
+        $secondLocalKey ??= $throughModel::$primaryKey ?? 'id';
 
         return new HasManyThrough(
             related: $related,
@@ -268,12 +272,17 @@ trait ManageOrm
             localKey: $localKey,
             secondLocalKey: $secondLocalKey,
             lazy: $lazy,
-            callback: $callback
+            callback: $callback,
+            model: $this
         );
     }
 
     /**
      * Eager load relationships.
+     * 
+     * This method allows you to eager load relationships for the model.
+     * It accepts a string or an array of relationship names,
+     * and returns a QueryBuilder instance with the relationships loaded.
      * 
      * @param array|string $relations
      * @return QueryBuilder
@@ -304,6 +313,9 @@ trait ManageOrm
     /**
      * Load relationships for a collection of models.
      * 
+     * This method allows you to load specified relationships for a collection of models.
+     * It accepts a string or an array of relationship names, and modifies the models in place.
+     * 
      * @param array|string $relations
      * @param array $models
      * @return void
@@ -332,6 +344,10 @@ trait ManageOrm
 
     /**
      * Get relationship data (supports lazy loading).
+     * 
+     * This method retrieves the relationship data for a given relationship name.
+     * It checks if the relationship is already loaded,
+     * and if not, it attempts to lazy load the relationship configuration.
      * 
      * @param string $name
      * @return mixed
@@ -439,6 +455,16 @@ trait ManageOrm
 
     /**
      * Load hasOne relationship.
+     * 
+     * This method loads a hasOne relationship for the given models.
+     * It retrieves the related models based on the foreign key and local key,
+     * and matches them with the original models.
+     * 
+     * @param array $models
+     * @param array $config
+     * @param string $name
+     * @param Closure|null $constraints
+     * @return array
      */
     private function loadHasOne(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
@@ -462,6 +488,16 @@ trait ManageOrm
 
     /**
      * Load hasMany relationship.
+     * 
+     * This method loads a hasMany relationship for the given models.
+     * It retrieves the related models based on the foreign key and local key,
+     * and matches them with the original models.
+     * 
+     * @param array $models
+     * @param array $config
+     * @param string $name
+     * @param Closure|null $constraints
+     * @return array
      */
     private function loadHasMany(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
@@ -485,6 +521,16 @@ trait ManageOrm
 
     /**
      * Load belongsTo relationship.
+     * 
+     * This method loads a belongsTo relationship for the given models.
+     * It retrieves the related models based on the foreign key and owner key,
+     * and matches them with the original models.
+     * 
+     * @param array $models
+     * @param array $config
+     * @param string $name
+     * @param Closure|null $constraints
+     * @return array
      */
     private function loadBelongsTo(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
@@ -508,6 +554,16 @@ trait ManageOrm
 
     /**
      * Load belongsToMany relationship.
+     * 
+     * This method loads a belongsToMany relationship for the given models.
+     * It retrieves the related models based on the pivot table,
+     * and matches them with the original models.
+     * 
+     * @param array $models
+     * @param array $config
+     * @param string $name
+     * @param Closure|null $constraints
+     * @return array
      */
     private function loadBelongsToMany(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
@@ -534,6 +590,16 @@ trait ManageOrm
 
     /**
      * Load hasManyThrough relationship.
+     * 
+     * This method loads a hasManyThrough relationship for the given models.
+     * It retrieves the related models through an intermediate model,
+     * and matches them with the original models.
+     * 
+     * @param array $models
+     * @param array $config
+     * @param string $name
+     * @param Closure|null $constraints
+     * @return array
      */
     private function loadHasManyThrough(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
@@ -562,6 +628,17 @@ trait ManageOrm
 
     /**
      * Match models with their relationships.
+     * 
+     * This method matches the results of a relationship query with the original models.
+     * It iterates through the models and results,
+     * and sets the related models as a relation on each original model.
+     * 
+     * @param array $models
+     * @param array $results
+     * @param array $config
+     * @param string $name
+     * @param string $type
+     * @return array
      */
     private function matchModels(array $models, array $results, array $config, string $name, string $type): array
     {
@@ -593,6 +670,15 @@ trait ManageOrm
 
     /**
      * Match belongsTo relationships.
+     * 
+     * This method matches the results of a belongsTo relationship query
+     * with the original models.
+     * 
+     * @param array $models
+     * @param array $results
+     * @param array $config
+     * @param string $name
+     * @return array
      */
     private function matchBelongsTo(array $models, array $results, array $config, string $name): array
     {
@@ -616,6 +702,15 @@ trait ManageOrm
 
     /**
      * Match belongsToMany relationships.
+     * 
+     * This method matches the results of a belongsToMany relationship query
+     * with the original models.
+     * 
+     * @param array $models
+     * @param array $results
+     * @param array $config
+     * @param string $name
+     * @return array
      */
     private function matchBelongsToMany(array $models, array $results, array $config, string $name): array
     {
@@ -638,6 +733,15 @@ trait ManageOrm
 
     /**
      * Match hasManyThrough relationships.
+     * 
+     * This method matches the results of a hasManyThrough relationship query
+     * with the original models.
+     * 
+     * @param array $models
+     * @param array $results
+     * @param array $config
+     * @param string $name
+     * @return array
      */
     private function matchHasManyThrough(array $models, array $results, array $config, string $name): array
     {
@@ -660,6 +764,14 @@ trait ManageOrm
 
     /**
      * Initialize relationship with default value.
+     * 
+     * This method initializes a relationship for the given models
+     * with a default value.
+     * 
+     * @param array $models
+     * @param string $name
+     * @param mixed $defaultValue
+     * @return array
      */
     private function initializeRelation(array $models, string $name, $defaultValue): array
     {
@@ -671,6 +783,17 @@ trait ManageOrm
 
     /**
      * Apply callback constraints to query.
+     * 
+     * This method applies any additional constraints to the query builder
+     * based on the relationship configuration and optional callback.
+     * 
+     * @param QueryBuilder $query
+     * @param array $config
+     * @param Closure|null $constraints
+     * @return QueryBuilder
+     * 
+     * @throws InvalidOrmException
+     * @throws UndefinedOrmException
      */
     private function applyConstraints(QueryBuilder $query, array $config, ?Closure $constraints = null): QueryBuilder
     {
@@ -687,6 +810,8 @@ trait ManageOrm
 
     /**
      * Get the foreign key for this model.
+     * 
+     * @return string
      */
     private function getForeignKey(): string
     {
@@ -695,6 +820,8 @@ trait ManageOrm
 
     /**
      * Get the table name for this model.
+     * 
+     * @return string
      */
     private function getTable(): string
     {
@@ -703,6 +830,12 @@ trait ManageOrm
 
     /**
      * Generate a foreign key name from a table name.
+     * 
+     * This method generates a foreign key name based on the table name.
+     * It assumes the table name follows a convention where the foreign key is 
+     * the singular form of the table name followed by "_id".
+     * 
+     * @param string $table
      */
     private function generateForeignKey(string $table): string
     {
@@ -711,6 +844,12 @@ trait ManageOrm
 
     /**
      * Generate pivot table name for many-to-many relationships.
+     * 
+     * This method generates a pivot table name based on the related model's table name
+     * and the current model's table name.
+     * 
+     * @param string $relatedModel
+     * @return string
      */
     private function generatePivotTableName($relatedModel): string
     {

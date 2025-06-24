@@ -10,7 +10,7 @@ use Spark\Contracts\Database\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
-use Spark\Database\Orm\ManageOrm;
+use Spark\Database\Relation\ManageRelationship;
 use Spark\Support\Traits\Macroable;
 use Traversable;
 
@@ -79,7 +79,7 @@ use Traversable;
  */
 abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate
 {
-    use ManageOrm, Macroable {
+    use ManageRelationship, Macroable {
         __call as macroCall;
         __callStatic as staticMacroCall;
     }
