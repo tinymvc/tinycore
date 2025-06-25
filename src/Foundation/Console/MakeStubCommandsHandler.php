@@ -2,6 +2,9 @@
 
 namespace Spark\Foundation\Console;
 
+use Spark\Console\Prompt;
+use Spark\Support\Str;
+
 /**
  * Class MakeStubCommandsHandler
  */
@@ -50,6 +53,49 @@ class MakeStubCommandsHandler
                 'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
                 'replacements' => [
                     '{{ table }}' => '::name:pluralize:lowercase',
+                ],
+            ]
+        );
+    }
+
+    public function makePivotMigration(array $args)
+    {
+        $related_table_1 = $args['_args'][0] ?? null;
+        $related_table_2 = $args['_args'][1] ?? null;
+
+        $prompt = get(Prompt::class);
+
+        // Get the name from the arguments or prompt the user
+        if (!$related_table_1) {
+            do {
+                $related_table_1 = $prompt->ask('What is the name of the first related table?');
+            } while (!$related_table_1);
+        }
+
+        // Get the name from the arguments or prompt the user
+        if (!$related_table_2) {
+            do {
+                $related_table_2 = $prompt->ask('What is the name of the second related table?');
+            } while (!$related_table_2);
+        }
+
+        $related_table_1 = Str::snake(Str::plural($related_table_1));
+        $related_table_2 = Str::snake(Str::plural($related_table_2));
+
+        $tables = [Str::lower($related_table_1), Str::lower($related_table_2)];
+        sort($tables);
+        $table = implode('_', $tables);
+
+        StubCreation::make(
+            $table,
+            'What is the name of the pivot migration?',
+            [
+                'stub' => __DIR__ . '/stubs/pivot-migration.stub',
+                'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name.php',
+                'replacements' => [
+                    '{{ table }}' => '::name',
+                    '{{ related_table_1 }}' => $related_table_1,
+                    '{{ related_table_2 }}' => $related_table_2,
                 ],
             ]
         );

@@ -115,6 +115,10 @@ class CommandsServiceProvider
         $commands->addCommand('make:migration', [MakeStubCommandsHandler::class, 'makeMigration'])
             ->description('Create a new database migration file');
 
+        // Make a Migration file
+        $commands->addCommand('make:pivot-migration', [MakeStubCommandsHandler::class, 'makePivotMigration'])
+            ->description('Create a new pivot migration file');
+
         // Make a Model file
         $commands->addCommand('make:model', [MakeStubCommandsHandler::class, 'makeModel'])
             ->description('Create a new model class');

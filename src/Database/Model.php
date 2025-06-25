@@ -11,6 +11,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Relation\ManageRelationship;
+use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 use Traversable;
 
@@ -123,7 +124,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     {
         // Return a new database query builder object.
         return get(QueryBuilder::class)
-            ->table(static::$table)
+            ->table(static::$table ?? Str::snake(Str::plural(class_basename(static::class))))
             ->fetch(PDO::FETCH_CLASS, static::class);
     }
 

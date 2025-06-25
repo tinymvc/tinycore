@@ -825,7 +825,7 @@ trait ManageRelationship
      */
     private function getTable(): string
     {
-        return static::$table ?? Str::snake(class_basename(static::class));
+        return static::$table ?? Str::snake(Str::plural(class_basename(static::class)));
     }
 
     /**
@@ -853,7 +853,7 @@ trait ManageRelationship
      */
     private function generatePivotTableName($relatedModel): string
     {
-        $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($relatedModel));
+        $relatedTable = $relatedModel::$table ?? Str::snake(Str::plural(class_basename($relatedModel)));
         $currentTable = $this->getTable();
 
         $tables = [Str::lower($currentTable), Str::lower($relatedTable)];

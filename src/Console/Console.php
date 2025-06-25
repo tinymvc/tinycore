@@ -40,6 +40,12 @@ class Console implements ConsoleContract
             throw new NotAllowedException('This application is not running in CLI mode.');
         }
 
+        // If application debug mode is disabled, stop further execution
+        if (config('debug', false) !== true) {
+            $this->prompt->message("Debug mode is disabled. No commands will be executed.", "warning");
+            return;
+        }
+
         global $argv;
 
         // Retrieve the command name from the command line arguments
