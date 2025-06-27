@@ -538,7 +538,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function getIterator(): Traversable
     {
-        return new ArrayIterator($this->attributes);
+        return new ArrayIterator($this->toArray());
     }
 
     /**
