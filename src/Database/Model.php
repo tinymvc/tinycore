@@ -497,6 +497,41 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
+     * Set a value for a specific attribute.
+     *
+     * @param string $name The name of the attribute to set.
+     * @param mixed $value The value to set for the attribute.
+     * @return void
+     */
+    public function set(string $name, mixed $value): void
+    {
+        data_set($this->attributes, $name, $value);
+    }
+
+    /**
+     * Get the value of a specific attribute.
+     *
+     * @param string $name The name of the attribute to get.
+     * @param mixed $default The default value to return if the attribute is not set.
+     * @return mixed The value of the attribute or the default value if not set.
+     */
+    public function get(string $name, mixed $default = null): mixed
+    {
+        return data_get($this->toArray(), $name, $default);
+    }
+
+    /**
+     * Check if the model has a specific attribute.
+     *
+     * @param string $name The name of the attribute to check.
+     * @return bool True if the attribute exists, false otherwise.
+     */
+    public function has(string $name): bool
+    {
+        return $this->get($name) !== null;
+    }
+
+    /**
      * Get an iterator for the items.
      *
      * @return \ArrayIterator<TKey, TValue>
