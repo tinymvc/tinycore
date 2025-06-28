@@ -135,7 +135,7 @@ class Vite implements ViteUtilContract
 
         // live check if vite development server is running or not
         $http = new Http();
-        $http->options([CURLOPT_TIMEOUT => 1, CURLOPT_NOBODY => true]);
+        $http->options([CURLOPT_TIMEOUT => 10, CURLOPT_NOBODY => true]);
 
         return $this->config['running'] = $http->get($this->serverUrl($entry))['status'] === 200;
     }
