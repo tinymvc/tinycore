@@ -38,9 +38,9 @@ if (!function_exists('app')) {
      * @param string $abstract [optional] The abstract name or class name of the service or value to retrieve.
      *                          If not provided, the application instance is returned.
      *
-     * @return Application The application instance or the resolved instance of the specified class or interface.
+     * @return mixed|Application The application instance or the resolved instance of the specified class or interface.
      */
-    function app(?string $abstract = null): Application
+    function app(?string $abstract = null): mixed
     {
         if ($abstract !== null) {
             return get($abstract);
