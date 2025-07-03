@@ -83,9 +83,6 @@ class BladeCompiler implements BladeCompilerContract
         $template = $this->compileIncludes($template);
         $template = $this->compileXComponents($template);
 
-        // Compile class & style directives
-        $template = $this->compileClassAndStyleDirectives($template);
-
         // Compile control flow directives
         $template = $this->compileDirectives($template);
 
@@ -533,29 +530,6 @@ class BladeCompiler implements BladeCompilerContract
     }
 
     /**
-     * Compile @class and @style directives
-     * 
-     * @param string $template
-     * @return string
-     */
-    private function compileClassAndStyleDirectives(string $template): string
-    {
-        // Compile @class directive
-        $template = preg_replace_callback('/\@class\s*\(\s*\[([^\]]*)\]\s*\)/', function ($matches) {
-            $arrayContent = trim($matches[1]);
-            return "<?php echo 'class=\"' . \$this->compileClassArray([{$arrayContent}]) . '\"'; ?>";
-        }, $template);
-
-        // Compile @style directive
-        $template = preg_replace_callback('/\@style\s*\(\s*\[([^\]]*)\]\s*\)/', function ($matches) {
-            $arrayContent = trim($matches[1]);
-            return "<?php echo 'style=\"' . \$this->compileStyleArray([{$arrayContent}]) . '\"'; ?>";
-        }, $template);
-
-        return $template;
-    }
-
-    /**
      * Compile directives (@if, @foreach, etc.)
      * 
      * @param string $template
@@ -572,6 +546,8 @@ class BladeCompiler implements BladeCompilerContract
             'empty' => ['open' => 'if(empty(%s)):', 'close' => 'endif;'],
             'can' => ['open' => 'if(can(%s)):', 'close' => 'endif;'],
             'cannot' => ['open' => 'if(cannot(%s)):', 'close' => 'endif;'],
+            'auth' => ['open' => 'if(!is_guest()):', 'close' => 'endif;'],
+            'guest' => ['open' => 'if(is_guest()):', 'close' => 'endif;'],
             'hasSection' => ['open' => 'if($this->hasSection(%s)):', 'close' => 'endif;'],
             'sectionMissing' => ['open' => 'if(!$this->hasSection(%s)):', 'close' => 'endif;'],
             'session' => ['open' => 'if(session()->has(%s)):', 'close' => 'endif;'],
@@ -593,17 +569,29 @@ class BladeCompiler implements BladeCompilerContract
             'authorize' => 'authorize(%s);',
             'json' => 'echo \Spark\Support\Js::from(%s);',
             'case' => 'case %s:',
+            'vite' => 'echo vite(%s);',
+            'method' => 'echo method(%s);',
             'checked' => "echo (%s) ? 'checked=\"true\"' : '';",
             'disabled' => "echo (%s) ? 'disabled=\"true\"' : '';",
             'selected' => "echo (%s) ? 'selected=\"true\"' : '';",
             'readonly' => "echo (%s) ? 'readonly=\"true\"' : '';",
             'required' => "echo (%s) ? 'required=\"true\"' : '';",
+            'style' => "echo 'style=\"' . \$this->compileStyleArray(%s) . '\"';",
+            'class' => "echo 'class=\"' . \$this->compileClassArray(%s) . '\"';",
+            'errors' => "if(\$errors->any() && \$errors->has('%s')): foreach(\$errors->get('%s') as \$message):",
+            'error' => "if(\$errors->any() && \$errors->has('%s')): \$message = \$errors->first('%s');",
         ];
 
         $singleLineDirectives = [
             'break' => '<?php break; ?>',
             'continue' => '<?php continue; ?>',
             'default' => '<?php default: ?>',
+            'vite' => '<?php echo vite(); ?>',
+            'csrf' => '<?php echo csrf(); ?>',
+            'else' => '<?php else: ?>',
+            'endif' => '<?php endif; ?>',
+            'enderrors' => '<?php endif; ?>',
+            'enderror' => '<?php endif; ?>',
         ];
 
         // Compile conditional directives
@@ -620,9 +608,6 @@ class BladeCompiler implements BladeCompilerContract
         foreach ($outputDirectives as $directive => $phpCode) {
             $template = $this->compileDirectiveWithExpression($template, $directive, $phpCode);
         }
-
-        // Handle special cases that don't fit the pattern
-        $template = $this->compileSpecialDirectives($template);
 
         // Compile custom directives
         $template = $this->compileCustomDirectives($template);
@@ -736,66 +721,6 @@ class BladeCompiler implements BladeCompilerContract
     }
 
     /**
-     * Compile special directives that don't follow standard patterns
-     */
-    private function compileSpecialDirectives(string $template): string
-    {
-        // @else (no parameters)
-        $template = preg_replace('/\@else\b/', '<?php else: ?>', $template);
-
-        // @endif (no parameters) - only if not already handled
-        $template = preg_replace('/\@endif\b/', '<?php endif; ?>', $template);
-
-        // @errors with field parameter
-        $template = preg_replace_callback(
-            '/\@errors\s*\(\s*([\'"])([^\1]+?)\1\s*\)/',
-            function ($matches) {
-                $field = $matches[2];
-                return "<?php if(\$errors->any() && \$errors->has('{$field}')): foreach(\$errors->get('{$field}') as \$message): ?>";
-            },
-            $template
-        );
-        $template = preg_replace('/\@enderrors\b/', '<?php endforeach; endif; ?>', $template);
-
-        // @error with field parameter
-        $template = preg_replace_callback(
-            '/\@error\s*\(\s*([\'"])([^\1]+?)\1\s*\)/',
-            function ($matches) {
-                $field = $matches[2];
-                return "<?php if(\$errors->any() && \$errors->has('{$field}')): \$message = \$errors->first('{$field}'); ?>";
-            },
-            $template
-        );
-        $template = preg_replace('/\@enderror\b/', '<?php endif; ?>', $template);
-
-        // @csrf (no parameters)
-        $template = preg_replace('/\@csrf\b/', '<?php echo csrf(); ?>', $template);
-
-        // @method with HTTP method parameter
-        $template = preg_replace_callback(
-            '/\@method\s*\(\s*([\'"])([^\1]+?)\1\s*\)/',
-            function ($matches) {
-                $method = strtoupper($matches[2]);
-                return "<?php echo method('{$method}'); ?>";
-            },
-            $template
-        );
-
-        // @auth / @endauth
-        $template = preg_replace('/\@auth\b/', '<?php if(!is_guest()): ?>', $template);
-        $template = preg_replace('/\@endauth\b/', '<?php endif; ?>', $template);
-
-        // @guest / @endguest
-        $template = preg_replace('/\@guest\b/', '<?php if(is_guest()): ?>', $template);
-        $template = preg_replace('/\@endguest\b/', '<?php endif; ?>', $template);
-
-        // @vite - handle both with and without parameters
-        $template = $this->compileViteDirective($template);
-
-        return $template;
-    }
-
-    /**
      * Compile single-line directives like @break, @continue, etc.
      * 
      * @param string $template
@@ -806,38 +731,6 @@ class BladeCompiler implements BladeCompilerContract
     public function compileSingleLineDirective(string $template, string $directive, string $phpCode): string
     {
         $template = preg_replace('/\@' . preg_quote($directive, '/') . '\b/', $phpCode, $template);
-        return $template;
-    }
-
-    /**
-     * Compile @vite directive (special case because it can have optional parameters)
-     */
-    private function compileViteDirective(string $template): string
-    {
-        // Handle @vite with parameters using our balanced expression extractor
-        $pattern = '/\@vite\s*\(/';
-        $offset = 0;
-
-        while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
-            $matchStart = $matches[0][1];
-            $parenStart = $matchStart + strlen($matches[0][0]) - 1;
-
-            $expression = $this->extractBalancedExpression($template, $parenStart);
-
-            if ($expression === false) {
-                throw new InvalidArgumentException("Unbalanced parentheses in @vite directive");
-            }
-
-            $replacement = "<?php echo vite({$expression}); ?>";
-            $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
-            $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
-
-            $offset = $matchStart + strlen($replacement);
-        }
-
-        // Handle @vite without parameters (make sure we don't match @vite( which was already handled)
-        $template = preg_replace('/\@vite\b(?!\s*\()/', '<?php echo vite(); ?>', $template);
-
         return $template;
     }
 
