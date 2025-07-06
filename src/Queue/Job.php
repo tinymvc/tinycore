@@ -315,10 +315,13 @@ class Job implements JobContract
      * This method will add the job to the queue. It is typically used
      * when the job is created and should be executed at a later time.
      *
+     * @param ?string $id
+     *   An optional identifier for the job. If provided, it will be used
+     *   to identify the job in the queue.
      * @return void
      */
-    public function dispatch(): void
+    public function dispatch(?string $id = null): void
     {
-        Application::$app->get(Queue::class)->addJob($this);
+        Application::$app->get(Queue::class)->addJob($this, $id);
     }
 }
