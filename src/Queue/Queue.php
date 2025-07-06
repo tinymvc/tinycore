@@ -72,10 +72,14 @@ class Queue implements QueueContract
      *
      * @param Job $job The job to be added.
      */
-    public function addJob(Job $job): void
+    public function addJob(Job $job, ?string $id = null): void
     {
         // Add the job to the array of jobs.
-        $this->jobs[] = $this->serializeJob($job);
+        if ($id) {
+            $this->jobs[$id] = $this->serializeJob($job);
+        } else {
+            $this->jobs[] = $this->serializeJob($job);
+        }
         $this->isChanged = true; // Set the changed flag to true.
     }
 
@@ -107,6 +111,46 @@ class Queue implements QueueContract
     }
 
     /**
+     * Gets a job from the queue by its ID.
+     *
+     * This method will return the job with the given ID from the queue. If the
+     * job does not exist, it will return null.
+     *
+     * @param string $id The ID of the job to be retrieved.
+     *
+     * @return Job|null The job with the given ID or null if it does not exist.
+     */
+    public function getJob(string $id): ?Job
+    {
+        // Get the job from the queue by its ID.
+        $job = $this->jobs[$id] ?? null;
+
+        // If there is no job, return null.
+        if (!$job) {
+            return null;
+        }
+
+        // Unserialize the job and return it.
+        return $this->unserializeJob($job);
+    }
+
+    /**
+     * Removes a job from the queue by its ID.
+     *
+     * This method will remove the job with the given ID from the queue and mark
+     * the queue as changed.
+     *
+     * @param string $id The ID of the job to be removed.
+     *
+     * @return void
+     */
+    public function removeJob(string $id): void
+    {
+        unset($this->jobs[$id]);
+        $this->isChanged = true;
+    }
+
+    /**
      * Runs the jobs in the queue.
      *
      * This method will iterate over the jobs in the queue and execute them if
@@ -127,7 +171,7 @@ class Queue implements QueueContract
 
         $ranJobs = 0; // Counter for the number of jobs run.
 
-        foreach ($this->getJobs() as $key => $serializedJob) {
+        foreach ($this->getJobs() as $id => $serializedJob) {
             // If the maximum number of jobs to run has been reached, break the loop.
             if ($ranJobs >= $maxJobs) {
                 break;
@@ -138,7 +182,7 @@ class Queue implements QueueContract
             // If the job is scheduled for the past, execute it.
             if ($job->getScheduledTime() <= $now) {
                 // Otherwise, remove it from the queue.
-                unset($this->jobs[$key]);
+                unset($this->jobs[$id]);
 
                 $this->saveJobs(); // Save the jobs to the queue file.
 
@@ -147,7 +191,7 @@ class Queue implements QueueContract
                 // If the job is repeated, reschedule it for the next time.
                 if ($job->isRepeated()) {
                     $job->schedule(new DateTime($job->getRepeat()));
-                    $this->addJob($job);
+                    $this->addJob($job, $id);
                 }
 
                 $ranJobs++; // Increment the counter for the number of jobs run.
