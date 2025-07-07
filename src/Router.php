@@ -185,6 +185,11 @@ class Router implements RouterContract
      */
     public function middleware(string|array $middleware): self
     {
+        // Merge group middleware with specified route middleware
+        $groupedMiddlewares = array_map(fn($attr) => $attr['middleware'] ?? null, $this->groupAttributes);
+        $middleware = array_unique(array_merge((array) $middleware, array_filter($groupedMiddlewares)));
+
+        // Set the middleware for the last added route
         $this->routes[array_key_last($this->routes)]['middleware'] = $middleware;
         return $this;
     }
@@ -215,6 +220,15 @@ class Router implements RouterContract
      */
     public function name(string $name): self
     {
+        // Check if there are any group attributes to apply to the route name
+        $groupedName = array_map(fn($attr) => $attr['name'] ?? null, $this->groupAttributes);
+        $groupedName = implode('', array_filter($groupedName));
+        if (!empty($groupedName)) {
+            $name ??= '';
+            $name = "$groupedName$name";
+        }
+
+        // Set the name for the last added route
         $key = array_key_last($this->routes);
         $this->routes[$name] = $this->routes[$key];
 
