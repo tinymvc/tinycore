@@ -80,7 +80,10 @@ class Vite implements ViteUtilContract
     public function __toString(): string
     {
         $viteModules = '';
-        if (strpos($this->config('entry'), '.jsx') !== false) {
+        if (
+            strpos($this->config('entry'), '.jsx') !== false ||
+            strpos($this->config('entry'), '.tsx') !== false
+        ) {
             $viteModules = $this->reactRefreshTag($this->config('entry'));
         }
 
