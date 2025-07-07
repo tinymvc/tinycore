@@ -207,7 +207,10 @@ class Router implements RouterContract
      */
     public function redirect(string $from, string $to, int $status = 302): self
     {
-        $this->add($from, 'GET', fn() => header("Location: $to", true, $status) && exit);
+        $this->add($from, 'GET', function () use ($to, $status): never {
+            header("Location: $to", true, $status);
+            exit;
+        });
         return $this;
     }
 
