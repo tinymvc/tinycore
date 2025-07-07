@@ -186,7 +186,7 @@ class Router implements RouterContract
     public function middleware(string|array $middleware): self
     {
         // Merge group middleware with specified route middleware
-        $groupedMiddlewares = array_map(fn($attr) => $attr['middleware'] ?? null, $this->groupAttributes);
+        $groupedMiddlewares = array_merge(...array_map(fn($attr) => (array) ($attr['middleware'] ?? []), $this->groupAttributes));
         $middleware = array_unique(array_merge((array) $middleware, array_filter($groupedMiddlewares)));
 
         // Set the middleware for the last added route
@@ -263,20 +263,20 @@ class Router implements RouterContract
         // Check if there are any group attributes to apply to the route
         if (!empty($this->groupAttributes)) {
             // Prepend the grouped path to the route path if it exists
-            $groupedPath = array_map(fn($attr) => $attr['path'] ?? null, $this->groupAttributes);
+            $groupedPath = array_merge(...array_map(fn($attr) => (array) ($attr['path'] ?? []), $this->groupAttributes));
             $groupedPath = implode('', array_filter($groupedPath));
             $path = "$groupedPath$path";
 
             // Merge grouped methods with specified route methods
-            $groupedMethods = array_map(fn($attr) => $attr['method'] ?? null, $this->groupAttributes);
+            $groupedMethods = array_merge(...array_map(fn($attr) => (array) ($attr['method'] ?? []), $this->groupAttributes));
             $method = array_unique(array_merge((array) $method, array_filter($groupedMethods)));
 
             // Merge group middleware with specified route middleware
-            $groupedMiddlewares = array_map(fn($attr) => $attr['middleware'] ?? null, $this->groupAttributes);
+            $groupedMiddlewares = array_merge(...array_map(fn($attr) => (array) ($attr['middleware'] ?? []), $this->groupAttributes));
             $middleware = array_unique(array_merge((array) $middleware, array_filter($groupedMiddlewares)));
 
             // Append grouped name to the route name if both are set
-            $groupedName = array_map(fn($attr) => $attr['name'] ?? null, $this->groupAttributes);
+            $groupedName = array_merge(...array_map(fn($attr) => (array) ($attr['name'] ?? []), $this->groupAttributes));
             $groupedName = implode('', array_filter($groupedName));
             if (!empty($groupedName)) {
                 $name ??= '';
@@ -284,7 +284,7 @@ class Router implements RouterContract
             }
 
             // Prepend grouped template path to the route template if both are set
-            $groupedTemplate = array_map(fn($attr) => $attr['template'] ?? null, $this->groupAttributes);
+            $groupedTemplate = array_merge(...array_map(fn($attr) => (array) ($attr['template'] ?? []), $this->groupAttributes));
             $groupedTemplate = implode('', array_filter($groupedTemplate));
             if (!empty($groupedTemplate)) {
                 $template ??= '';
