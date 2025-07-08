@@ -78,11 +78,13 @@ class MakeStubCommandsHandler
                 $related_table_2 = $prompt->ask('What is the name of the second related table?');
             } while (!$related_table_2);
         }
+        $related_table_1_singular = Str::snake(Str::singular($related_table_1));
+        $related_table_2_singular = Str::snake(Str::singular($related_table_2));
 
-        $related_table_1 = Str::snake(Str::plural($related_table_1));
-        $related_table_2 = Str::snake(Str::plural($related_table_2));
+        $related_table_1_plural = Str::snake(Str::plural($related_table_1));
+        $related_table_2_plural = Str::snake(Str::plural($related_table_2));
 
-        $tables = [Str::lower($related_table_1), Str::lower($related_table_2)];
+        $tables = [Str::lower($related_table_1_plural), Str::lower($related_table_2_plural)];
         sort($tables);
         $table = implode('_', $tables);
 
@@ -94,8 +96,8 @@ class MakeStubCommandsHandler
                 'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name.php',
                 'replacements' => [
                     '{{ table }}' => '::name',
-                    '{{ related_table_1 }}' => $related_table_1,
-                    '{{ related_table_2 }}' => $related_table_2,
+                    '{{ related_table_1 }}' => $related_table_1_singular,
+                    '{{ related_table_2 }}' => $related_table_2_singular,
                 ],
             ]
         );
