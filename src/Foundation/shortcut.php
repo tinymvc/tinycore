@@ -62,6 +62,25 @@ if (!function_exists('container')) {
     }
 }
 
+if (!function_exists('call')) {
+    /**
+     * Call a method or function with the given parameters.
+     *
+     * This function allows you to call a method or function with the specified
+     * parameters. It can be used to invoke methods on objects, static methods,
+     * or even global functions.
+     *
+     * @param array|string|callable $abstract The method or function to call.
+     * @param array $parameters The parameters to pass to the method or function.
+     *
+     * @return mixed The result of the method or function call.
+     */
+    function call(array|string|callable $abstract, array $parameters = []): mixed
+    {
+        return container()->call($abstract, $parameters);
+    }
+}
+
 if (!function_exists('get')) {
     /**
      * Retrieve an instance of the given class or interface from the application container.
@@ -172,6 +191,27 @@ if (!function_exists('response')) {
 
         // Return the existing Response instance from the container.
         return get(Response::class);
+    }
+}
+
+if (!function_exists('json')) {
+    /**
+     * Create a JSON response with the given data.
+     *
+     * This function returns a JSON response with the provided data, status code,
+     * flags, and depth. It uses the application's response helper to create the
+     * JSON response.
+     *
+     * @param array $data The data to be included in the JSON response.
+     * @param int $statusCode The HTTP status code for the response. Default is 200.
+     * @param int $flags JSON encoding options. Default is 0.
+     * @param int $depth The maximum depth to encode. Default is 512.
+     *
+     * @return Response The JSON response instance.
+     */
+    function json(array $data, int $statusCode = 200, int $flags = 0, int $depth = 512): Response
+    {
+        return response()->json($data, $statusCode, $flags, $depth);
     }
 }
 
@@ -625,7 +665,6 @@ if (!function_exists('config')) {
         return app()->getEnv($key, $default);
     }
 }
-
 
 if (!function_exists('csrf_token')) {
     /**
