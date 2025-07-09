@@ -1155,7 +1155,7 @@ if (!function_exists('mailer')) {
      * @param null|string $reply The email address of the reply to
      * @return Mail The instance of the Mail utility class
      */
-    function mailer(?string $to = null, ?string $subject = null, ?string $body = null, ?bool $isHtml = null, ?string $template = null, ?array $context = null, ?string $from = null, ?string $reply = null): Mail
+    function mailer(null|string|array $to = null, ?string $subject = null, ?string $body = null, ?bool $isHtml = null, ?string $template = null, ?array $context = null, null|string|array $from = null, null|string|array $reply = null): Mail
     {
         $mailer = get(Mail::class);
 
@@ -1183,17 +1183,17 @@ if (!function_exists('mailer')) {
 
         if (isset($to)) {
             // Set the recipient of the email
-            $mailer->to($to);
+            $mailer->to(...array_values((array) $to));
         }
 
         if (isset($form)) {
             // Set the email address of the sender
-            $mailer->mailer($form);
+            $mailer->mailer(...array_values((array) $form));
         }
 
         if (isset($reply)) {
             // Set the email address of the reply to
-            $mailer->reply($reply);
+            $mailer->reply(...array_values((array) $reply));
         }
 
         return $mailer;
