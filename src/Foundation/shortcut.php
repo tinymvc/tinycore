@@ -1145,14 +1145,14 @@ if (!function_exists('mailer')) {
      * This function sends an email using the Mail utility class. The parameters
      * are passed directly to the Mail utility class methods.
      *
-     * @param null|string $to The recipient of the email
+     * @param null|string|array $to The recipient of the email
      * @param null|string $subject The subject of the email
      * @param null|string $content The content of the email
      * @param null|bool $isHtml Whether the content is HTML or plain text
      * @param null|string $template The template to use for the email
      * @param null|array $body The context to pass to the template
-     * @param null|string $form The email address of the sender
-     * @param null|string $reply The email address of the reply to
+     * @param null|string|array $form The email address of the sender
+     * @param null|string|array $reply The email address of the reply to
      * @return Mail The instance of the Mail utility class
      */
     function mailer(null|string|array $to = null, ?string $subject = null, ?string $body = null, ?bool $isHtml = null, ?string $template = null, ?array $context = null, null|string|array $from = null, null|string|array $reply = null): Mail
