@@ -3,6 +3,7 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\InputValidatorContract;
+use Spark\Support\Arr;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 
@@ -18,6 +19,15 @@ use Spark\Support\Traits\Macroable;
 class InputValidator implements InputValidatorContract
 {
     use Macroable;
+
+    /**
+     * @var array $errorMessages Custom error messages for validation rules.
+     * 
+     * This static property holds custom error messages that can be set
+     * for various validation rules. It allows customization of error messages
+     * returned during validation failures.
+     */
+    private static array $errorMessages = [];
 
     /**
      * Constructs a new validator instance.
@@ -122,6 +132,27 @@ class InputValidator implements InputValidatorContract
     }
 
     /**
+     * Sets custom error messages for validation rules.
+     *
+     * @param array $messages Associative array of rule names and their custom error messages.
+     */
+    public static function setErrorMessages(array $messages): void
+    {
+        self::$errorMessages = $messages;
+    }
+
+    /**
+     * Sets a custom error message for a specific validation rule.
+     *
+     * @param string $rule Validation rule name.
+     * @param string $message Custom error message for the rule.
+     */
+    public static function setErrorMessage(string $rule, string $message): void
+    {
+        self::$errorMessages[$rule] = $message;
+    }
+
+    /**
      * Adds an error message for a failed validation rule.
      *
      * @param string $field Field name that failed validation.
@@ -134,22 +165,22 @@ class InputValidator implements InputValidatorContract
 
         // Error messages for each validation rule
         $this->errors[$field][] = match ($rule) {
-            'required' => __("The %s field is required.", $prettyField),
-            'email', 'mail' => __("The %s field must be a valid email address.", $prettyField),
-            'url', 'link' => __("The %s field must be a valid URL.", $prettyField),
-            'number', 'int', 'integer' => __("The %s field must be a number.", $prettyField),
-            'array', 'list' => __("The %s field must be an array.", $prettyField),
-            'text', 'char', 'string' => __("The %s field must be a text.", $prettyField),
-            'min', 'minimum' => __("The %s field must be at least %s characters long.", [$prettyField, $params[0] ?? 0]),
-            'max', 'maximum' => __("The %s field must not exceed %s characters.", [$prettyField, $params[0] ?? 0]),
-            'length', 'size' => __("The %s field must be %s characters.", [$prettyField, $params[0] ?? 0]),
-            'equal', 'same', 'same_as' => __("The %s field must be equal to %s field.", [$prettyField, __(Str::headline($params[0] ?? ''))]),
-            'confirmed' => __("The %s field must be confirmed.", $prettyField),
-            'in', 'exists' => __("The %s field must be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
-            'not_in', 'not_exists' => __("The %s field must not be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
-            'regex' => __("The %s field must match the pattern: %s.", [$prettyField, $params[0] ?? '']),
-            'unique' => __("The %s field must be unique in the %s table.", [$prettyField, $params[0] ?? '']),
-            default => __("The %s field has an invalid value.", $prettyField)
+            'required' => __(self::$errorMessages['required'] ?? 'The %s field is required.', $prettyField),
+            'email', 'mail' => __(self::$errorMessages['email'] ?? 'The %s field must be a valid email address.', $prettyField),
+            'url', 'link' => __(self::$errorMessages['url'] ?? "The %s field must be a valid URL.", $prettyField),
+            'number', 'int', 'integer' => __(self::$errorMessages['number'] ?? "The %s field must be a number.", $prettyField),
+            'array', 'list' => __(self::$errorMessages['array'] ?? "The %s field must be an array.", $prettyField),
+            'text', 'char', 'string' => __(self::$errorMessages['text'] ?? "The %s field must be a text.", $prettyField),
+            'min', 'minimum' => __(self::$errorMessages['min'] ?? "The %s field must be at least %s characters long.", [$prettyField, $params[0] ?? 0]),
+            'max', 'maximum' => __(self::$errorMessages['max'] ?? "The %s field must not exceed %s characters.", [$prettyField, $params[0] ?? 0]),
+            'length', 'size' => __(self::$errorMessages['length'] ?? "The %s field must be %s characters.", [$prettyField, $params[0] ?? 0]),
+            'equal', 'same', 'same_as' => __(self::$errorMessages['equal'] ?? "The %s field must be equal to %s field.", [$prettyField, __(Str::headline($params[0] ?? ''))]),
+            'confirmed' => __(self::$errorMessages['confirmed'] ?? "The %s field must be confirmed.", $prettyField),
+            'in', 'exists' => __(self::$errorMessages['in'] ?? "The %s field must be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
+            'not_in', 'not_exists' => __(self::$errorMessages['not_in'] ?? "The %s field must not be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
+            'regex' => __(self::$errorMessages['regex'] ?? "The %s field must match the pattern: %s.", [$prettyField, $params[0] ?? '']),
+            'unique' => __(self::$errorMessages['unique'] ?? "The %s field must be unique in the %s table.", [$prettyField, $params[0] ?? '']),
+            default => __(self::$errorMessages['default'] ?? "The %s field has an invalid value.", $prettyField)
         };
     }
 }
