@@ -165,6 +165,26 @@ class Uploader implements UploaderUtilContract
         }
     }
 
+    /**
+     * Deletes a file or multiple files.
+     *
+     * @param string|array $file The file(s) to delete.
+     * @return bool Returns true if the file(s) were successfully deleted, false otherwise.
+     */
+    public function delete(string|array $file): bool
+    {
+        if (is_array($file)) {
+            $result = true;
+            foreach ($file as $f) {
+                $result = $result && $this->delete($f);
+            }
+            return $result;
+        } else {
+            $filepath = dir_path($this->uploadDir . DIRECTORY_SEPARATOR . $file);
+            return file_exists($filepath) && unlink($filepath);
+        }
+    }
+
     /** @Add helpers methods for uploader object */
 
     /**
