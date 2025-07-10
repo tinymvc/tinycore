@@ -185,6 +185,21 @@ class Uploader implements UploaderUtilContract
         }
     }
 
+    /**
+     * Removes the upload directory path from a file path or an array of file paths.
+     *
+     * @param string|array $files The file path(s) to process.
+     * @return string|array Returns the file path(s) without the upload directory.
+     */
+    public function removeUploadDir(string|array $files): string|array
+    {
+        if (is_array($files)) {
+            return array_map(fn($file) => $this->removeUploadDir($file), $files);
+        }
+
+        return str_replace(dir_path($this->uploadDir . DIRECTORY_SEPARATOR), '', $files);
+    }
+
     /** @Add helpers methods for uploader object */
 
     /**
