@@ -243,8 +243,9 @@ class View implements ViewContract
             $this->compiler->compile($templatePath, $compiledPath);
         }
 
-        // Merge shared data with the context
+        // Merge shared data with the context and make sections available
         $context = array_merge(self::$shared, $context);
+        $context['sections'] = $this->sections;
 
         return $this->renderCompiledTemplate($compiledPath, $context);
     }
@@ -321,13 +322,17 @@ class View implements ViewContract
      */
     public function yieldSection(string $name, string $default = ''): string
     {
-        // Check if sections are passed from child template
+        // Check if sections are passed from child template first
         if (isset($GLOBALS['sections']) && isset($GLOBALS['sections'][$name])) {
             return $GLOBALS['sections'][$name];
         }
 
         // Check local sections
-        return $this->sections[$name] ?? $default;
+        if (isset($this->sections[$name])) {
+            return $this->sections[$name];
+        }
+
+        return $default;
     }
 
     /**
@@ -377,17 +382,24 @@ class View implements ViewContract
     {
         extract($context);
 
+        // Store current global sections state
+        $previousSections = $GLOBALS['sections'] ?? null;
+
         // Make sections available globally for @yield to access
         if (isset($context['sections'])) {
-            $GLOBALS['sections'] = $context['sections'];
+            $GLOBALS['sections'] = array_merge($this->sections, $context['sections']);
+        } else {
+            $GLOBALS['sections'] = $this->sections;
         }
 
         ob_start();
         include dir_path($compiledPath);
         $content = ob_get_clean();
 
-        // Clean up global sections
-        if (isset($GLOBALS['sections'])) {
+        // Restore previous sections state
+        if ($previousSections !== null) {
+            $GLOBALS['sections'] = $previousSections;
+        } else {
             unset($GLOBALS['sections']);
         }
 
