@@ -328,11 +328,7 @@ class View implements ViewContract
         }
 
         // Check local sections
-        if (isset($this->sections[$name])) {
-            return $this->sections[$name];
-        }
-
-        return $default;
+        return $this->sections[$name] ?? $default;
     }
 
     /**
