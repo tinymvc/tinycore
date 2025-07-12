@@ -189,13 +189,13 @@ class BladeCompiler implements BladeCompilerContract
     private function compileYields(string $template): string
     {
         // @yield('section', 'default') - with string default
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*[\'"]([^\'"]*)[\'"])?\s*\)/', '<?php echo $this->yieldSection(\'$1\', \'$2\'); ?>', $template);
+        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*[\'"]([^\'"]*)[\'"])?\s*\)/', '<?= $this->yieldSection(\'$1\', \'$2\'); ?>', $template);
 
         // @yield('section', $variable) - with variable default
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*([^,\)\'\"]+))?\s*\)/', '<?php echo $this->yieldSection(\'$1\', isset($2) ? $2 : \'\'); ?>', $template);
+        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*([^,\)\'\"]+))?\s*\)/', '<?= $this->yieldSection(\'$1\', isset($2) ? $2 : \'\'); ?>', $template);
 
         // @yield('section') - no default
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php echo $this->yieldSection(\'$1\', \'\'); ?>', $template);
+        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?= $this->yieldSection(\'$1\', \'\'); ?>', $template);
 
         return $template;
     }
@@ -232,7 +232,7 @@ class BladeCompiler implements BladeCompilerContract
             $attributes = $this->parseXComponentAttributes($attributesString);
             $attributesArray = $this->buildAttributesArray($attributes);
 
-            return "<?php echo \$this->component('{$componentName}', {$attributesArray}); ?>";
+            return "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
         }, $template);
     }
 
@@ -262,7 +262,7 @@ class BladeCompiler implements BladeCompilerContract
 
             $attributesArray = $this->buildAttributesArray($attributes);
 
-            return "<?php echo \$this->component('{$componentName}', {$attributesArray}); ?>";
+            return "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
         }, $template);
     }
 
@@ -460,7 +460,7 @@ class BladeCompiler implements BladeCompilerContract
             function ($matches) {
                 $viewExpr = trim($matches[1]);
                 $dataExpr = isset($matches[2]) ? trim($matches[2]) : '[]';
-                return "<?php echo \$this->include($viewExpr, $dataExpr); ?>";
+                return "<?= \$this->include($viewExpr, $dataExpr); ?>";
             },
             $template
         );
@@ -518,12 +518,12 @@ class BladeCompiler implements BladeCompilerContract
     private function compileEchos(string $template): string
     {
         // Raw echo {!! !!} - don't escape HTML
-        $template = preg_replace('/\{\!\!\s*(.+?)\s*\!\!\}/s', '<?php echo $1; ?>', $template);
+        $template = preg_replace('/\{\!\!\s*(.+?)\s*\!\!\}/s', '<?= $1; ?>', $template);
 
         // Escaped echo {{ }} - escape HTML for security
         $template = preg_replace_callback('/\{\{\s*(.+?)\s*\}\}/s', function ($matches) {
             $expression = trim($matches[1]);
-            return "<?php echo htmlspecialchars($expression, ENT_QUOTES, 'UTF-8', true); ?>";
+            return "<?= e($expression); ?>";
         }, $template);
 
         return $template;
@@ -586,8 +586,8 @@ class BladeCompiler implements BladeCompilerContract
             'break' => '<?php break; ?>',
             'continue' => '<?php continue; ?>',
             'default' => '<?php default: ?>',
-            'vite' => '<?php echo vite(); ?>',
-            'csrf' => '<?php echo csrf(); ?>',
+            'vite' => '<?= vite(); ?>',
+            'csrf' => '<?= csrf(); ?>',
             'else' => '<?php else: ?>',
             'endif' => '<?php endif; ?>',
             'enderrors' => '<?php endif; ?>',
