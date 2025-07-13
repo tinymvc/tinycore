@@ -382,6 +382,25 @@ trait ManageRelationship
     }
 
     /**
+     * Attach relationships to the model.
+     * 
+     * This method allows you to attach one or more relationships to the model.
+     * It accepts a string or an array of relationship names and loads them.
+     * 
+     * @param mixed ...$relations
+     * @return void
+     */
+    public function attachRelation(...$relations): void
+    {
+        $relations = array_map(fn($relation) => (array) $relation, $relations);
+        $relations = array_merge(...$relations);
+
+        foreach ((array) $relations as $relation) {
+            $this->getRelationshipAttribute($relation);
+        }
+    }
+
+    /**
      * Check if a relationship exists and has data.
      * 
      * @param string $name
