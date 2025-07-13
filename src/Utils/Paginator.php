@@ -2,6 +2,7 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
 use Spark\Support\Traits\Macroable;
 
@@ -13,7 +14,7 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract
+class Paginator implements PaginatorUtilContract, Arrayable
 {
     use Macroable;
 
@@ -287,6 +288,24 @@ class Paginator implements PaginatorUtilContract
 
         // Returns html output of pagination links.
         return implode('', $output);
+    }
+
+    /**
+     * Converts the paginator instance to an array.
+     * 
+     * @return array
+     */
+    public function toArray(): array
+    {
+        return [
+            'pages' => $this->getPages(),
+            'page' => $this->getPage(),
+            'offset' => $this->getOffset(),
+            'total' => $this->getTotal(),
+            'limit' => $this->getLimit(),
+            'keyword' => $this->getKeyword(),
+            'data' => $this->getData(),
+        ];
     }
 
     /**
