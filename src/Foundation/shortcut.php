@@ -1023,7 +1023,7 @@ if (!function_exists('input')) {
      * the specified filter. The data is then passed through a sanitizer to ensure
      * it is safe for further processing.
      *
-     * @param array $filter An optional array of filters to apply to the input data.
+     * @param string|array $filter An optional array of filters to apply to the input data.
      * @return InputSanitizer An instance of the sanitizer.
      */
     function input(string|array $filter = []): InputSanitizer
