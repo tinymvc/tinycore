@@ -1404,7 +1404,7 @@ class QueryBuilder implements QueryBuilderContract
     public function paginate(int $limit = 10, string $keyword = 'page'): Paginator
     {
         // Select records & Create a paginator object.
-        if (empty($this->query['sql'])) {
+        if (empty($this->query['select'])) {
             $this->select();
         }
 
