@@ -208,11 +208,17 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileXComponents(string $template): string
     {
-        // Handle self-closing x-components first: <x-component />
-        $template = $this->compileSelfClosingXComponents($template);
+        // Process components recursively from innermost to outermost
+        $previousTemplate = '';
+        while ($template !== $previousTemplate) {
+            $previousTemplate = $template;
 
-        // Handle x-components with content: <x-component>content</x-component>
-        $template = $this->compileXComponentsWithContent($template);
+            // Handle self-closing x-components first: <x-component />
+            $template = $this->compileSelfClosingXComponents($template);
+
+            // Handle x-components with content: <x-component>content</x-component>
+            $template = $this->compileXComponentsWithContent($template);
+        }
 
         return $template;
     }
@@ -241,8 +247,8 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileXComponentsWithContent(string $template): string
     {
-        // Use a more robust pattern to find x-components
-        $pattern = '/<x-([a-zA-Z0-9\-_.]+)([^>]*?)>(.*?)<\/x-\1>/s';
+        // First, find the innermost components (those without nested x-components in their content)
+        $pattern = '/<x-([a-zA-Z0-9\-_.]+)([^>]*?)>((?:(?!<x-[a-zA-Z0-9\-_.]+|<\/x-[a-zA-Z0-9\-_.]+>).)*)<\/x-\1>/s';
 
         return preg_replace_callback($pattern, function ($matches) {
             $componentName = $matches[1];
@@ -252,7 +258,7 @@ class BladeCompiler implements BladeCompilerContract
             // Parse attributes
             $attributes = $this->parseXComponentAttributes($attributesString);
 
-            // Process slot content - handle nested components first
+            // Process slot content
             $processedSlotContent = $this->processSlotContent($slotContent);
 
             // Add slot content to attributes if not empty
@@ -278,14 +284,13 @@ class BladeCompiler implements BladeCompilerContract
             return '';
         }
 
-        // Check if content contains PHP expressions or nested components
-        if ($this->containsPHPOrComponents($content)) {
-            // If it contains PHP or components, we need to capture it as a closure
-            return "function() { ob_start(); ?>{$content}<?php return ob_get_clean(); }";
+        // For simple HTML content without PHP or components, escape and quote it
+        if (!$this->containsPHPOrComponents($content)) {
+            return $this->escapeSlotContent($content);
         }
 
-        // For simple HTML content, escape and quote it properly
-        return $this->escapeSlotContent($content);
+        // If it contains PHP or components, we need to capture it as a closure
+        return "function() { ob_start(); ?>{$content}<?php return ob_get_clean(); }";
     }
 
     /**
@@ -300,11 +305,6 @@ class BladeCompiler implements BladeCompilerContract
 
         // Check for template expressions {{ }} or {!! !!}
         if (preg_match('/\{\{.*?\}\}|\{!!.*?!!\}/', $content)) {
-            return true;
-        }
-
-        // Check for x-components
-        if (preg_match('/<x-[a-zA-Z0-9\-_.]+/', $content)) {
             return true;
         }
 
