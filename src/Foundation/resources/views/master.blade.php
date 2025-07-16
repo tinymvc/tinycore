@@ -39,57 +39,9 @@
             height: 2rem;
             background-color: #777;
         }
-
-        .tracer {
-            padding: 20px;
-            margin: auto;
-        }
-
-        .tracer .error-box {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-            padding: 20px;
-        }
-
-        .tracer .trace-box {
-            padding: 10px;
-            border: 1px solid #ccc;
-            margin-top: 10px;
-            margin-top: 20px;
-        }
-
-        .tracer .trace-box pre {
-            padding: 5px;
-            overflow: auto;
-            line-height: 22px;
-            margin: 0;
-        }
-
-        .tracer h1,
-        .tracer h2 {
-            font-size: 24px;
-            margin: 0 0 10px;
-            font-weight: 500;
-        }
-
-        .tracer h2 {
-            font-size: 22px;
-        }
-
-        .tracer p {
-            margin: 0 0 10px;
-        }
-
-        .tracer .file {
-            font-weight: bold;
-        }
-
-        .tracer .line {
-            font-weight: bold;
-            color: #d9534f;
-        }
     </style>
+
+    @yield('head')
 </head>
 
 <body>
