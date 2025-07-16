@@ -71,7 +71,7 @@
                                     : '';
                             @endphp
                             <div class="trace-frame">
-                                <div class="frame-number">#{!! $index !!}</div>
+                                <div class="frame-number">#{!! $index + 1 !!}</div>
                                 <div class="frame-details">
                                     <div class="frame-location">
                                         <span class="frame-file">{!! clear_error_trace_file($file) !!}</span>
