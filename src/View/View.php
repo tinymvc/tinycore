@@ -491,6 +491,34 @@ class View implements ViewContract
     }
 
     /**
+     * Helper method for compiling attributes arrays
+     * This should be available in your view context
+     * 
+     * @param array $attributes
+     * @return string
+     */
+    public function compileAttributesArray(array $attributes): string
+    {
+        $compiledAttributes = [];
+
+        foreach ($attributes as $key => $value) {
+            if (is_numeric($key)) {
+                // Simple attribute like 'data-id="123"'
+                if ($value) {
+                    $compiledAttributes[] = $value;
+                }
+            } else {
+                // Conditional attribute like 'disabled' => $isDisabled
+                if ($value) {
+                    $compiledAttributes[] = "$key=\"$value\"";
+                }
+            }
+        }
+
+        return implode(' ', $compiledAttributes);
+    }
+
+    /**
      * Helper method for compiling style arrays
      * This should be available in your view context
      * 
