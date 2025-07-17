@@ -578,6 +578,7 @@ class BladeCompiler implements BladeCompilerContract
             'required' => "echo (%s) ? 'required=\"true\"' : '';",
             'style' => "echo 'style=\"' . \$this->compileStyleArray(%s) . '\"';",
             'class' => "echo 'class=\"' . \$this->compileClassArray(%s) . '\"';",
+            'attributes' => "echo \$this->compileAttributesArray(%s);",
             'errors' => "if(\$errors->any() && \$errors->has('%s')): foreach(\$errors->get('%s') as \$message):",
             'error' => "if(\$errors->any() && \$errors->has('%s')): \$message = \$errors->first('%s');",
         ];
