@@ -1229,11 +1229,12 @@ if (!function_exists('abort')) {
      * Abort the current request with a given HTTP status code.
      *
      * @param string|int $error The error name of the error view or the HTTP status code.
+     * @param string|null $message An optional message to display in the error view.
      * @param int|null $code The HTTP status code.
      *
      * @return void
      */
-    function abort(string|int $error, ?int $code = null, ?string $message = null): void
+    function abort(string|int $error, ?string $message = null, ?int $code = null): void
     {
         if ($code === null && is_int($error)) {
             // If the error is an integer, use it as the HTTP status code
