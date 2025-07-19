@@ -357,12 +357,12 @@ class Router implements RouterContract
         // Define the resource routes based on the provided path and callback
         $routes = [
             'index' => ['method' => 'GET', 'path' => $path, 'callback' => [$callback, 'index'], 'name' => "$name.index"],
-            'show' => ['method' => 'GET', 'path' => "$path/{id}", 'callback' => [$callback, 'show'], 'name' => "$name.show"],
-            'create' => ['method' => 'GET', 'path' => "$path/create", 'callback' => [$callback, 'create'], 'name' => "$name.create"],
             'store' => ['method' => 'POST', 'path' => $path, 'callback' => [$callback, 'store'], 'name' => "$name.store"],
+            'create' => ['method' => 'GET', 'path' => "$path/create", 'callback' => [$callback, 'create'], 'name' => "$name.create"],
             'edit' => ['method' => 'GET', 'path' => "$path/{id}/edit", 'callback' => [$callback, 'edit'], 'name' => "$name.edit"],
             'update' => ['method' => ['PUT', 'PATCH'], 'path' => "$path/{id}", 'callback' => [$callback, 'update'], 'name' => "$name.update"],
             'destroy' => ['method' => 'DELETE', 'path' => "$path/{id}", 'callback' => [$callback, 'destroy'], 'name' => "$name.destroy"],
+            'show' => ['method' => 'GET', 'path' => "$path/{id}", 'callback' => [$callback, 'show'], 'name' => "$name.show"],
         ];
 
         // Filter routes based on 'only' and 'except' parameters
