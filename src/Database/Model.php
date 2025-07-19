@@ -58,6 +58,7 @@ use Traversable;
  * @method static QueryBuilder limit(?int $offset = null, ?int $limit = null)
  * @method static QueryBuilder fetch(...$fetch)
  * @method static mixed first()
+ * @method static mixed firstOrFail()
  * @method static mixed last()
  * @method static array latest()
  * @method static array all()
@@ -139,6 +140,20 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         return self::query()
             ->where([static::$primaryKey => $value])
             ->first();
+    }
+
+    /**
+     * Finds a model by its primary key ID or throws an exception if not found.
+     *
+     * @param int $value The Unique Identifier of the model to retrieve.
+     * @return static The found model instance.
+     * @throws \Spark\Exceptions\NotFoundException If the model is not found.
+     */
+    public static function findOrFail($value): static
+    {
+        return self::query()
+            ->where([static::$primaryKey => $value])
+            ->firstOrFail();
     }
 
     /**

@@ -8,6 +8,7 @@ use Spark\Contracts\Database\QueryBuilderContract;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Database\Schema\Grammar;
+use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
@@ -1337,6 +1338,29 @@ class QueryBuilder implements QueryBuilderContract
 
         // The first result as an object or false if none found.
         return $result[0] ?? false;
+    }
+
+    /**
+     * Retrieves the first result or throws an exception if not found.
+     *
+     * @param mixed $where Optional WHERE clause to filter results.
+     * @return mixed The first result object or throws NotFoundException.
+     * @throws \Spark\Exceptions\NotFoundException If no results are found.
+     */
+    public function firstOrFail($where = null): mixed
+    {
+        if (!empty($where)) {
+            $this->where($where);
+        }
+
+        // Get the first result, or throw an exception if not found.
+        $result = $this->first();
+
+        if ($result === false) {
+            throw new NotFoundException('No results found for the query.');
+        }
+
+        return $result;
     }
 
     /**

@@ -2,8 +2,9 @@
 
 namespace Spark\Exceptions\Routing;
 
-use Exception;
+use Spark\Exceptions\NotFoundException;
 
-class RouteNotFoundException extends Exception
+
+class RouteNotFoundException extends NotFoundException
 {
 }

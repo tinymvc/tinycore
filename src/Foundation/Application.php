@@ -11,7 +11,7 @@ use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
 use Spark\Exceptions\Http\AuthorizationException;
-use Spark\Exceptions\Routing\RouteNotFoundException;
+use Spark\Exceptions\NotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Hash;
 use Spark\Http\Auth;
@@ -346,7 +346,7 @@ class Application implements ApplicationContract
                     $this->container->get(Request::class),
                 )
                 ->send();
-        } catch (RouteNotFoundException) {
+        } catch (NotFoundException) {
             abort(error: 404, message: 'Not found');
         } catch (AuthorizationException) {
             abort(error: 403, message: 'Forbidden');
