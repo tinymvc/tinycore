@@ -504,7 +504,7 @@ class Router implements RouterContract
      */
     private function matchRoute($routeMethod, $routePath, Request $request): bool
     {
-        if ($routeMethod !== '*') {
+        if ($routeMethod !== '*' && !(is_array($routeMethod) && in_array('*', $routeMethod))) {
             // Convert route method to uppercase
             $routeMethod = array_map('strtoupper', (array) $routeMethod);
 
