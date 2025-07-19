@@ -31,6 +31,7 @@ class HasManyThrough extends Relation
      * @param string|null $localKey The primary key in the current model that the first key references.
      * @param string|null $secondLocalKey The primary key in the related model that the second key references.
      * @param bool $lazy Whether to load the relationship lazily.
+     * @param array $append Additional fields to append to the relationship.
      * @param Closure|null $callback An optional callback to modify the query for the relationship.
      * @param Model|null $model The model instance that this relationship belongs to.
      * 
@@ -43,6 +44,7 @@ class HasManyThrough extends Relation
         private ?string $localKey = null,
         private ?string $secondLocalKey = null,
         private bool $lazy = true,
+        private array $append = [],
         private ?Closure $callback = null,
         ?Model $model = null
     ) {
@@ -73,6 +75,7 @@ class HasManyThrough extends Relation
             'localKey' => $this->localKey,
             'secondLocalKey' => $this->secondLocalKey,
             'lazy' => $this->lazy,
+            'append' => $this->append,
             'callback' => $this->callback,
         ];
     }

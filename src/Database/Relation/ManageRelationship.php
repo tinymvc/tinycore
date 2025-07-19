@@ -194,6 +194,7 @@ trait ManageRelationship
      * @param string|null $parentKey The primary key in the current table
      * @param string|null $relatedKey The primary key in the related table
      * @param bool $lazy Whether to enable lazy loading
+     * @param array $append The additional fields to append to the relationship
      * @param Closure|null $callback Custom query callback
      * 
      * @return \Spark\Database\Relation\BelongsToMany
@@ -206,7 +207,8 @@ trait ManageRelationship
         ?string $parentKey = null,
         ?string $relatedKey = null,
         bool $lazy = true,
-        ?Closure $callback = null
+        array $append = [],
+        ?Closure $callback = null,
     ): BelongsToMany {
         $relatedModel = new $related;
         $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($related));
@@ -225,6 +227,7 @@ trait ManageRelationship
             relatedKey: $relatedKey,
             lazy: $lazy,
             callback: $callback,
+            append: $append,
             model: $this
         );
     }
@@ -242,6 +245,7 @@ trait ManageRelationship
      * @param string|null $localKey Local key on this model
      * @param string|null $secondLocalKey Local key on the intermediate model
      * @param bool $lazy Whether to enable lazy loading
+     * @param array $append Additional fields to append to the relationship
      * @param Closure|null $callback Custom query callback
      * 
      * @return \Spark\Database\Relation\HasManyThrough
@@ -254,6 +258,7 @@ trait ManageRelationship
         ?string $localKey = null,
         ?string $secondLocalKey = null,
         bool $lazy = true,
+        array $append = [],
         ?Closure $callback = null
     ): HasManyThrough {
         $throughModel = new $through;
@@ -273,6 +278,7 @@ trait ManageRelationship
             secondLocalKey: $secondLocalKey,
             lazy: $lazy,
             callback: $callback,
+            append: $append,
             model: $this
         );
     }
@@ -594,8 +600,14 @@ trait ManageRelationship
             return $this->initializeRelation($models, $name, []);
         }
 
+        $appendField = join(
+            ', ',
+            array_map(fn($field) => "p.{$field}", $config['append'] ?? [])
+        );
+        $appendField = !empty($appendField) ? ", {$appendField}" : '';
+
         $query = $relatedModel->query()
-            ->select("r.*, p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}")
+            ->select("r.*, p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}{$appendField}")
             ->fetch(PDO::FETCH_ASSOC)
             ->from($relatedTable, 'r')
             ->join($config['table'] . ' as p', "p.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
@@ -632,8 +644,14 @@ trait ManageRelationship
             return $this->initializeRelation($models, $name, []);
         }
 
+        $appendField = join(
+            ', ',
+            array_map(fn($field) => "t.{$field}", $config['append'] ?? [])
+        );
+        $appendField = !empty($appendField) ? ", {$appendField}" : '';
+
         $query = $relatedModel->query()
-            ->select('r.*', "t.{$config['firstKey']}")
+            ->select('r.*', "t.{$config['firstKey']}{$appendField}")
             ->fetch(PDO::FETCH_ASSOC)
             ->from($relatedTable, 'r')
             ->join("$throughTable as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")

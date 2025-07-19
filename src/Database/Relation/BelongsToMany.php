@@ -27,6 +27,7 @@ class BelongsToMany extends Relation
      * @param string|null $parentKey The primary key in the current model that the foreign pivot key references.
      * @param string|null $relatedKey The primary key in the related model that the related pivot key references.
      * @param bool $lazy Whether to load the relationship lazily.
+     * @param array $append The additional fields to append to the relationship.
      * @param Closure|null $callback An optional callback to modify the query for the relationship.
      * @param Model|null $model The model instance that this relationship belongs to.
      */
@@ -38,8 +39,9 @@ class BelongsToMany extends Relation
         private ?string $parentKey = null,
         private ?string $relatedKey = null,
         private bool $lazy = true,
+        private array $append = [],
         private ?Closure $callback = null,
-        ?Model $model = null
+        ?Model $model = null,
     ) {
         parent::__construct($model);
     }
@@ -68,6 +70,7 @@ class BelongsToMany extends Relation
             'parentKey' => $this->parentKey,
             'relatedKey' => $this->relatedKey,
             'lazy' => $this->lazy,
+            'append' => $this->append,
             'callback' => $this->callback,
         ];
     }
