@@ -820,4 +820,23 @@ class Request implements RequestContract, ArrayAccess
         }
         return false;
     }
+
+    /**
+     * Checks if all of the specified keys exist in the request.
+     * 
+     * This method checks if all of the provided keys exist in the
+     * request data (query parameters, post parameters, file uploads, or route parameters).
+     *
+     * @param string|array $keys The key or array of keys to check for existence.
+     * @return bool True if all of the keys exist, false otherwise.
+     */
+    public function hasAll(string|array $keys): bool
+    {
+        foreach ((array) $keys as $key) {
+            if (!$this->offsetExists($key)) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
