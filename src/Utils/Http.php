@@ -72,11 +72,6 @@ class Http implements HttpUtilContract
             CURLOPT_URL => $url . (!empty($params) ? '?' . http_build_query($params) : '')
         ];
 
-        // Add custom user agent if set
-        if (isset($this->config['useragent'])) {
-            $defaultOptions[CURLOPT_USERAGENT] = $this->config['useragent'];
-        }
-
         // Set up file download if specified
         if ($this->config['download']) {
             $download = fopen($this->config['download'], 'w+');
@@ -138,7 +133,6 @@ class Http implements HttpUtilContract
             'headers' => [],
             'options' => [],
             'download' => null,
-            'useragent' => null,
         ], $config);
     }
 
@@ -175,7 +169,7 @@ class Http implements HttpUtilContract
      */
     public function useragent(string $useragent): self
     {
-        $this->config['useragent'] = $useragent;
+        $this->config['options'][CURLOPT_USERAGENT] = $useragent;
         return $this;
     }
 
@@ -246,6 +240,48 @@ class Http implements HttpUtilContract
         }, array_keys($cookies), $cookies);
 
         $this->config['headers'][] = "Cookie: " . implode('; ', $cookies);
+
+        return $this;
+    }
+
+    /**
+     * Sets the cookie jar file path for storing cookies.
+     *
+     * @param string $cookieJar The file path to the cookie jar.
+     * @return self
+     */
+    public function cookieJar(string $cookieJar): self
+    {
+        if (!file_exists($cookieJar)) {
+            touch($cookieJar);
+        }
+
+        $this->config['options'][CURLOPT_COOKIEJAR] = $cookieJar;
+        $this->config['options'][CURLOPT_COOKIEFILE] = $cookieJar;
+
+        return $this;
+    }
+
+    /**
+     * Sets a proxy for the request.
+     *
+     * @param string $proxy The proxy URL (e.g., 'http://proxy.example.com:8080').
+     * @param string $proxyAuth Optional proxy authentication in the format 'username:password'.
+     * @param array $options Additional cURL options for the proxy.
+     * @return self
+     */
+    public function setProxy(string $proxy, string $proxyAuth = '', array $options = []): self
+    {
+        $this->config['options'][CURLOPT_PROXY] = $proxy;
+
+        if (!empty($proxyAuth)) {
+            $this->config['options'][CURLOPT_PROXYAUTH] = CURLAUTH_BASIC;
+            $this->config['options'][CURLOPT_PROXYUSERPWD] = $proxyAuth;
+        }
+
+        foreach ($options as $option => $value) {
+            $this->config['options'][$option] = $value;
+        }
 
         return $this;
     }
