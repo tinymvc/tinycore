@@ -1029,14 +1029,7 @@ if (!function_exists('input')) {
      */
     function input(string|array $filter = [], $default = null): mixed
     {
-        $sanitizer = get(InputSanitizer::class)
-            ->setData(request()->all((array) $filter));
-
-        if (is_string($filter)) {
-            return $sanitizer->get($filter, $default);
-        }
-
-        return $sanitizer;
+        return request()->input($filter, $default);
     }
 }
 
