@@ -1024,12 +1024,19 @@ if (!function_exists('input')) {
      * it is safe for further processing.
      *
      * @param string|array $filter An optional array of filters to apply to the input data.
-     * @return InputSanitizer An instance of the sanitizer.
+     * @param mixed $default The default value to return if the specified filter does not exist in the input data.
+     * @return InputSanitizer|mixed An instance of the sanitizer.
      */
-    function input(string|array $filter = []): InputSanitizer
+    function input(string|array $filter = [], $default = null): mixed
     {
-        return get(InputSanitizer::class)
+        $sanitizer = get(InputSanitizer::class)
             ->setData(request()->all((array) $filter));
+
+        if (is_string($filter)) {
+            return $sanitizer->get($filter, $default);
+        }
+
+        return $sanitizer;
     }
 }
 
