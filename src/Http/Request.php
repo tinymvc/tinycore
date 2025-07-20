@@ -668,11 +668,17 @@ class Request implements RequestContract, ArrayAccess
      * Creates an InputSanitizer instance with the current request data.
      * 
      * @param string|array $filter Optional filter to apply to the input data.
-     * @return InputSanitizer An instance of InputSanitizer with the request data.
+     * @param mixed $default Default value to return if the filter is a string and the key does not exist.
+     * @return InputSanitizer|mixed An instance of InputSanitizer with the request data.
      */
-    public function input(string|array $filter = []): InputSanitizer
+    public function input(string|array $filter = [], $default = null): mixed
     {
-        return new InputSanitizer($this->all((array) $filter));
+        $sanitizer = new InputSanitizer($this->all((array) $filter));
+        if (is_string($filter)) {
+            $text = $sanitizer->text($filter);
+            return !empty($text) ? $text : $default;
+        }
+        return $sanitizer;
     }
 
     /**
