@@ -138,11 +138,17 @@ class MakeStubCommandsHandler
      */
     public function makeController(array $args)
     {
+        if (isset($args['restful']) && $args['restful']) {
+            $stub = __DIR__ . '/stubs/controller-restful.stub';
+        } else {
+            $stub = __DIR__ . '/stubs/controller.stub';
+        }
+
         StubCreation::make(
             $args['_args'][0] ?? null,
             'What is the name of the controller?',
             [
-                'stub' => __DIR__ . '/stubs/controller.stub',
+                'stub' => $stub,
                 'destination' => 'app/Http/Controllers/::subfolder:ucfirst/::name:ucfirst.php',
                 'replacements' => [
                     '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
