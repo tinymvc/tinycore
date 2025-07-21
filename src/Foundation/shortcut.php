@@ -9,7 +9,7 @@ use Spark\Exceptions\Http\InputValidationFailedException;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
 use Spark\Hash;
-use Spark\Helpers\RouteObject;
+use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
 use Spark\Http\InputSanitizer;
@@ -399,21 +399,32 @@ if (!function_exists('url')) {
      * it will be returned verbatim.
      *
      * @param string $path The path to generate a URL for.
+     * @param array $parameters Optional query parameters to append to the URL.
      *
-     * @return RouteObject The generated URL as a RouteObject containing parsed path and absolute URL.
+     * @return Url The generated URL as a Url object containing parsed path and absolute URL.
      */
-    function url(string $path = ''): RouteObject
+    function url(string $path = '', array $parameters = []): Url
     {
-        $url = home_url($path);
-        return new RouteObject([
-            'parsedPath' => parse_url($url, PHP_URL_PATH) ?: '/',
-            'absoluteUrl' => $url,
-        ]);
+        global $home_url;
+
+        // Check if the path is empty or just a slash
+        // If it is, return the home URL with parameters if provided.
+        if (trim($path, '/') === '') {
+            if (isset($home_url) && !empty($parameters)) {
+                $home_url = $home_url->mergeParameters($parameters);
+            }
+
+            return $home_url ??= new Url(home_url('/'), $parameters);
+        }
+
+        // If the path is not empty, generate the URL based on the provided path and parameters.
+        return new Url(home_url($path), $parameters);
     }
 }
 
 if (!function_exists('home_url')) {
-    /* Generate a URL from a given path relative to the application's root URL.
+    /**
+     * Generate a URL from a given path relative to the application's root URL.
      *
      * The path can be relative or absolute. If it is relative, it will be
      * resolved relative to the application's root URL. If it is absolute,
@@ -511,19 +522,14 @@ if (!function_exists('route')) {
      * @param string $name The name of the route to retrieve.
      * @param null|string|array $context Optional context to include in the route.
      *
-     * @return RouteObject The RouteObject containing route details.
+     * @return Url The RouteObject containing route details.
      */
-    function route(string $name, null|string|array $context = null): RouteObject
+    function route(string $name, null|string|array $context = null): Url
     {
         // Parse the route path and get the route details.
         $parsedPath = router()->route($name, $context);
-        $route = router()->getRoutes()[$name];
 
-        // Add parsed path and absolute URL to the route array.
-        $route['parsedPath'] = $parsedPath;
-        $route['absoluteUrl'] = home_url($parsedPath);
-
-        return new RouteObject($route); // Return a new RouteObject instance with the route details.
+        return new Url(home_url($parsedPath)); // Return a new Url instance with the route details.
     }
 }
 
