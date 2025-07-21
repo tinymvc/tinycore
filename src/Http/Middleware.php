@@ -85,6 +85,14 @@ class Middleware implements MiddlewareContract
     public function process(Container $container, Request $request): mixed
     {
         foreach ($this->stack as $abstract) {
+            // If the middleware key contains a parameter (e.g., role), split it.
+            // This is useful for middleware that requires additional parameters.
+            $parameter = null;
+            if (strpos($abstract, ':') !== false) {
+                // Extract the role from the middleware key.
+                [$abstract, $parameter] = explode(':', $abstract);
+            }
+
             // If the middleware key doesn't exist in the registered list, throw an exception.
             if (!isset($this->registeredMiddlewares[$abstract])) {
                 throw new MiddlewareNotFoundExceptions("Middleware '{$abstract}' not found.");
@@ -94,7 +102,7 @@ class Middleware implements MiddlewareContract
             $middleware = $container->get($this->registeredMiddlewares[$abstract]);
 
             // Execute the middleware and handle the result.
-            $result = $middleware->handle($request);
+            $result = $middleware->handle($request, $parameter);
 
             // If the middleware returns a response, return it and break the loop.
             if ($result) {

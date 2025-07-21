@@ -9,6 +9,7 @@ use Spark\Exceptions\Http\InputValidationFailedException;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
 use Spark\Hash;
+use Spark\Helpers\RouteObject;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
 use Spark\Http\InputSanitizer;
@@ -391,20 +392,43 @@ if (!function_exists('fireline')) {
 
 if (!function_exists('url')) {
     /**
-     * Generate a URL from a given path.
+     * Generate a URL from a given path relative to the application's root URL.
      *
      * The path can be relative or absolute. If it is relative, it will be
-     * resolved relative to the root URL of the application. If it is absolute,
+     * resolved relative to the application's root URL. If it is absolute,
+     * it will be returned verbatim.
+     *
+     * @param string $path The path to generate a URL for.
+     *
+     * @return RouteObject The generated URL as a RouteObject containing parsed path and absolute URL.
+     */
+    function url(string $path = ''): RouteObject
+    {
+        $url = home_url($path);
+        return new RouteObject([
+            'parsedPath' => parse_url($url, PHP_URL_PATH) ?: '/',
+            'absoluteUrl' => $url,
+        ]);
+    }
+}
+
+if (!function_exists('home_url')) {
+    /* Generate a URL from a given path relative to the application's root URL.
+     *
+     * The path can be relative or absolute. If it is relative, it will be
+     * resolved relative to the application's root URL. If it is absolute,
      * it will be returned verbatim.
      *
      * @param string $path The path to generate a URL for.
      *
      * @return string The generated URL.
      */
-    function url(string $path = ''): string
+    function home_url(string $path = ''): string
     {
         $rootUrl = config('root_url', request()->getRootUrl());
-        return rtrim($rootUrl . '/' . ltrim(str_replace('\\', '/', $path), '/'), '/');
+        $url = rtrim($rootUrl . '/' . ltrim(str_replace('\\', '/', $path), '/'), '/');
+
+        return $url; // Return the generated URL
     }
 }
 
@@ -423,7 +447,7 @@ if (!function_exists('asset_url')) {
     function asset_url(string $path = ''): string
     {
         $path = config('asset_url') . ltrim($path, '/');
-        return strpos($path, '/', 0) === 0 ? url($path) : $path;
+        return strpos($path, '/', 0) === 0 ? home_url($path) : $path;
     }
 }
 
@@ -442,7 +466,7 @@ if (!function_exists('media_url')) {
     function media_url(string $path = ''): string
     {
         $path = config('media_url') . ltrim($path, '/');
-        return strpos($path, '/', 0) === 0 ? url($path) : $path;
+        return strpos($path, '/', 0) === 0 ? home_url($path) : $path;
     }
 }
 
@@ -473,7 +497,33 @@ if (!function_exists('route_url')) {
      */
     function route_url(string $name, null|string|array $context = null): string
     {
-        return url(router()->route($name, $context));
+        return home_url(router()->route($name, $context));
+    }
+}
+
+if (!function_exists('route')) {
+    /**
+     * Get a RouteObject for the specified route name and context.
+     *
+     * This function retrieves a RouteObject that contains the parsed path and
+     * absolute URL for the specified route name, optionally including context.
+     *
+     * @param string $name The name of the route to retrieve.
+     * @param null|string|array $context Optional context to include in the route.
+     *
+     * @return RouteObject The RouteObject containing route details.
+     */
+    function route(string $name, null|string|array $context = null): RouteObject
+    {
+        // Parse the route path and get the route details.
+        $parsedPath = router()->route($name, $context);
+        $route = router()->getRoutes()[$name];
+
+        // Add parsed path and absolute URL to the route array.
+        $route['parsedPath'] = $parsedPath;
+        $route['absoluteUrl'] = home_url($parsedPath);
+
+        return new RouteObject($route); // Return a new RouteObject instance with the route details.
     }
 }
 

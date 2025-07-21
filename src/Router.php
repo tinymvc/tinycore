@@ -547,8 +547,8 @@ class Router implements RouterContract
     private function escapeRoutePath(string $routePath): string
     {
         $pattern = preg_replace(
-            ['/\/\{[a-zA-Z]+\?\}/', '/\{[a-zA-Z]+\}/'],
-            ['(?:/([a-zA-Z0-9_-]+))?', '([a-zA-Z0-9_-]+)'],
+            ['/\/\{[a-zA-Z]+\?\}/', '/\{id+\}/', '/\{[a-zA-Z]+\}/'],
+            ['(?:/([a-zA-Z0-9_-]+))?', '([0-9]+)', '([a-zA-Z0-9_-]+)'],
             $routePath
         );
 

@@ -321,6 +321,6 @@ class Vite implements ViteUtilContract
      */
     private function distUrl(string $path = ''): string
     {
-        return url($this->config('dist') . '/' . ltrim($path));
+        return home_url($this->config('dist') . '/' . ltrim($path));
     }
 }

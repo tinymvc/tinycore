@@ -317,7 +317,7 @@ class Paginator implements PaginatorUtilContract, Arrayable
      */
     private function getAnchor(int $page): string
     {
-        return url(
+        return home_url(
             request()->getPath() . '?' . http_build_query(
                 array_merge(request()->getQueryParams(), [$this->getKeyword() => $page])
             )
