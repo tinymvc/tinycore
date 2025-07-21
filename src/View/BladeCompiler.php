@@ -546,8 +546,6 @@ class BladeCompiler implements BladeCompilerContract
             'empty' => ['open' => 'if(empty(%s)):', 'close' => 'endif;'],
             'can' => ['open' => 'if(can(%s)):', 'close' => 'endif;'],
             'cannot' => ['open' => 'if(cannot(%s)):', 'close' => 'endif;'],
-            'auth' => ['open' => 'if(!is_guest()):', 'close' => 'endif;'],
-            'guest' => ['open' => 'if(is_guest()):', 'close' => 'endif;'],
             'hasSection' => ['open' => 'if($this->hasSection(%s)):', 'close' => 'endif;'],
             'sectionMissing' => ['open' => 'if(!$this->hasSection(%s)):', 'close' => 'endif;'],
             'session' => ['open' => 'if(session()->has(%s)):', 'close' => 'endif;'],
@@ -593,6 +591,10 @@ class BladeCompiler implements BladeCompilerContract
             'endif' => '<?php endif; ?>',
             'enderrors' => '<?php endif; ?>',
             'enderror' => '<?php endif; ?>',
+            'auth' => '<?php if(!is_guest()): ?>',
+            'guest' => '<?php if(is_guest()): ?>',
+            'endauth' => '<?php endif; ?>',
+            'endguest' => '<?php endif; ?>',
         ];
 
         // Compile conditional directives
