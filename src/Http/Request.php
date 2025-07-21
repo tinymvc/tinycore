@@ -745,7 +745,7 @@ class Request implements RequestContract, ArrayAccess
      */
     public function offsetExists($name): bool
     {
-        return $this->{$name} !== null;
+        return $this->{$name} !== null && $this->{$name} !== '';
     }
 
     /**
