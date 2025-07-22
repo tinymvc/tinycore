@@ -4,6 +4,7 @@ namespace Spark;
 
 use ArrayAccess;
 use JsonSerializable;
+use Spark\Support\Traits\Macroable;
 use Stringable;
 
 /**
@@ -16,6 +17,8 @@ use Stringable;
  */
 class Url implements ArrayAccess, JsonSerializable, Stringable
 {
+    use Macroable;
+
     private array $components = [];
     private array $parameters = [];
     private string $absoluteUrl;
@@ -129,16 +132,6 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
     public function offsetUnset(mixed $offset): void
     {
         $this->__unset($offset);
-    }
-
-    /**
-     * Merge additional parameters into the existing ones
-     */
-    public function mergeParameters(array $params): self
-    {
-        $new = clone $this;
-        $new->parameters = array_merge($this->parameters, $params);
-        return $new;
     }
 
     /**

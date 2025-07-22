@@ -180,14 +180,16 @@ if (!function_exists('response')) {
      * This function returns the current response instance. If arguments are provided,
      * it creates a new response instance with those arguments.
      *
-     * @param mixed $args Optional arguments to create a new response instance.
+     * @param string $content The content of the response.
+     * @param int $statusCode The HTTP status code for the response. Default is 200.
+     * @param array $headers Optional headers to include in the response.
      * @return Response The response instance.
      */
-    function response(...$args): Response
+    function response(string $content = '', int $statusCode = 200, array $headers = []): Response
     {
-        if (!empty($args)) {
+        if (func_num_args() > 0) {
             // Create and return a new Response with the provided arguments.
-            return new Response(...$args);
+            return new Response($content, $statusCode, $headers);
         }
 
         // Return the existing Response instance from the container.
@@ -411,7 +413,7 @@ if (!function_exists('url')) {
         // If it is, return the home URL with parameters if provided.
         if (trim($path, '/') === '') {
             if (isset($home_url) && !empty($parameters)) {
-                $home_url = $home_url->mergeParameters($parameters);
+                $home_url = $home_url->withParameters($parameters);
             }
 
             return $home_url ??= new Url(home_url('/'), $parameters);

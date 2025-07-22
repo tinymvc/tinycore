@@ -329,6 +329,20 @@ class Request implements RequestContract, ArrayAccess
     }
 
     /**
+     * Retrieves the URI path without the query string.
+     * 
+     * This method returns the URI path of the current request, excluding any
+     * query parameters that may be present in the URL.
+     * 
+     * @return string The URI path of the request.
+     */
+    public function getUri(): string
+    {
+        // Returns the URI path without the query string.
+        return $this->server('request-uri', '/');
+    }
+
+    /**
      * Retrieves the root URL of the application.
      * 
      * @return string The root URL including protocol and host.

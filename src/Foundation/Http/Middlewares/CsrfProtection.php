@@ -2,10 +2,11 @@
 
 namespace Spark\Foundation\Http\Middlewares;
 
+use Closure;
+use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Hash;
 use Spark\Http\Request;
-use Spark\Http\Response;
 use Throwable;
 
 /**
@@ -15,7 +16,7 @@ use Throwable;
  * validating the CSRF token sent in the request. If the token is
  * invalid or missing, it returns a 403 Forbidden response.
  */
-class CsrfProtection
+class CsrfProtection implements MiddlewareInterface
 {
     /**
      * An array of URI paths that should be excluded from CSRF verification.
@@ -35,12 +36,12 @@ class CsrfProtection
      *
      * @param Request $request The current request.
      *
-     * @return Response|null The response when the token is invalid, null otherwise.
+     * @return mixed The response when the token is invalid, current request otherwise.
      */
-    public function handle(Request $request)
+    public function handle(Request $request, Closure $next): mixed
     {
         if ($this->skip($request)) {
-            return;
+            return $next($request);
         }
 
         // Check if the request method is POST
@@ -58,6 +59,8 @@ class CsrfProtection
             // Check the CSRF token
             $this->checkCsrfToken();
         }
+
+        return $next($request); // Proceed to the next middleware or request handler
     }
 
     /**
