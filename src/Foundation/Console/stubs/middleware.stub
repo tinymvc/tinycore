@@ -2,12 +2,16 @@
 
 namespace {{ namespace }};
 
+use Closure;
+use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Http\Request;
 
-class {{ class }}
+class {{ class }} implements MiddlewareInterface
 {
-    public function handle(Request $request)
+    public function handle(Request $request, Closure $next)
     {
         // something
+
+        return $next($request);
     }
 }
