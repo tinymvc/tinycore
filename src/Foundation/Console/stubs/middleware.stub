@@ -8,7 +8,7 @@ use Spark\Http\Request;
 
 class {{ class }} implements MiddlewareInterface
 {
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next): mixed
     {
         // something
 
