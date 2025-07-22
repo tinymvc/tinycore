@@ -3,7 +3,6 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\InputValidatorContract;
-use Spark\Support\Arr;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 
@@ -91,7 +90,7 @@ class InputValidator implements InputValidatorContract
                     'in', 'exists' => ($has_valid_value || $is_required) ? in_array($value, $ruleParams, true) : true,
                     'not_in', 'not_exists' => ($has_valid_value || $is_required) ? !in_array($value, $ruleParams, true) : true,
                     'regex' => ($has_valid_value || $is_required) ? preg_match($ruleParams[0], $value) : true,
-                    'unique' => ($has_valid_value || $is_required) ? query($ruleParams[0])->where($ruleParams[1] ?? $field, $value)->count() === 0 : true,
+                    'unique' => ($has_valid_value || $is_required) ? query($ruleParams[0])->where($ruleParams[1] ?? $field, $value)->where(isset($ruleParams[2]) ? ("id != " . intval($ruleParams[2])) : null)->count() === 0 : true,
                     default => true
                 };
 
