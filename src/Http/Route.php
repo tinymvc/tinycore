@@ -23,6 +23,7 @@ use Spark\Support\Traits\Macroable;
  * @method static Router redirect(string $from, string $to, int $status = 302)
  * @method static Router group(array $attributes, callable $callback)
  * @method static Router view(string $path, string $template)
+ * @method static Router fireline(string $path, string $template)
  * @method static Router resource(string $path, string $callback, string|null $name = null, string|array $middleware = [], array $only = [], array $except = [])
  *
  * @package Spark\Http
@@ -135,6 +136,19 @@ class Route implements HttpRouteContract
     public static function view($path, $template): Router
     {
         return Application::$app->container->get(Router::class)->view($path, $template);
+    }
+
+    /**
+     * Registers a route that renders a Fireline template with the router.
+     *
+     * @param string $path The path for the route.
+     * @param string $template The Fireline template file name.
+     *
+     * @return \Spark\Router The router instance to allow method chaining.
+     */
+    public static function fireline($path, $template): Router
+    {
+        return Application::$app->container->get(Router::class)->fireline($path, $template);
     }
 
     /**
