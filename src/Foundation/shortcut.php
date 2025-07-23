@@ -516,15 +516,15 @@ if (!function_exists('route_url')) {
 
 if (!function_exists('route')) {
     /**
-     * Get a RouteObject for the specified route name and context.
+     * Get a Url for the specified route name and context.
      *
-     * This function retrieves a RouteObject that contains the parsed path and
+     * This function retrieves a Url that contains the parsed path and
      * absolute URL for the specified route name, optionally including context.
      *
      * @param string $name The name of the route to retrieve.
      * @param null|string|array $context Optional context to include in the route.
      *
-     * @return Url The RouteObject containing route details.
+     * @return Url The Url containing route details.
      */
     function route(string $name, null|string|array $context = null): Url
     {
