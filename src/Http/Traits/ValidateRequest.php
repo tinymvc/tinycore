@@ -55,7 +55,7 @@ trait ValidateRequest
                 $errorHtml = '<ul>' // Build the error HTML
                     . collect(array_merge(...array_values($errors)))
                         ->map(fn($error) => "<li>{$error}</li>")
-                        ->toString()
+                        ->join('') // Join the errors into a string
                     . '</ul>';
 
                 // Return the errors as a JSON response
