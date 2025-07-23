@@ -404,6 +404,39 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Adds a raw WHERE clause to the query.
+     *
+     * @param string $sql
+     *   The raw SQL condition to add.
+     * @param array $bindings
+     *   The bindings for the raw SQL condition.
+     * @param string $andOr
+     *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @return self
+     */
+    public function whereRaw(string $sql, array $bindings = [], string $andOr = 'AND'): self
+    {
+        $this->where['sql'] .= sprintf(' %s (%s)', $andOr, $sql);
+        $this->where['bind'] = array_merge($this->where['bind'], $bindings);
+
+        return $this;
+    }
+
+    /**
+     * Adds an OR raw WHERE clause to the query.
+     *
+     * @param string $sql
+     *   The raw SQL condition to add.
+     * @param array $bindings
+     *   The bindings for the raw SQL condition.
+     * @return self
+     */
+    public function orWhereRaw(string $sql, array $bindings = []): self
+    {
+        return $this->whereRaw($sql, $bindings, 'OR');
+    }
+
+    /**
      * Add an OR where clause to the query.
      *
      * @param string|array $column
