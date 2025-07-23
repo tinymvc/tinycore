@@ -424,8 +424,72 @@ class BladeCompiler implements BladeCompilerContract
     }
 
     /**
-     * Compile @include directive
+     * Parse blade directive parameters handling nested parentheses and quotes
      * 
+     * @param string $content
+     * @return array
+     */
+    private function parseBladeParameters(string $content): array
+    {
+        $params = [];
+        $current = '';
+        $depth = 0;
+        $inString = false;
+        $stringChar = null;
+        $escaped = false;
+
+        for ($i = 0; $i < strlen($content); $i++) {
+            $char = $content[$i];
+
+            if ($escaped) {
+                $current .= $char;
+                $escaped = false;
+                continue;
+            }
+
+            if ($char === '\\') {
+                $current .= $char;
+                $escaped = true;
+                continue;
+            }
+
+            if (!$inString && ($char === '"' || $char === "'")) {
+                $inString = true;
+                $stringChar = $char;
+                $current .= $char;
+            } elseif ($inString && $char === $stringChar) {
+                $inString = false;
+                $stringChar = null;
+                $current .= $char;
+            } elseif (!$inString) {
+                if ($char === '(') {
+                    $depth++;
+                    $current .= $char;
+                } elseif ($char === ')') {
+                    $depth--;
+                    $current .= $char;
+                } elseif ($char === ',' && $depth === 0) {
+                    $params[] = trim($current);
+                    $current = '';
+                    continue;
+                } else {
+                    $current .= $char;
+                }
+            } else {
+                $current .= $char;
+            }
+        }
+
+        if ($current !== '') {
+            $params[] = trim($current);
+        }
+
+        return $params;
+    }
+
+    /**
+     * Compile @include directives
+     *
      * @param string $template
      * @return string
      */
@@ -433,34 +497,37 @@ class BladeCompiler implements BladeCompilerContract
     {
         // Compile @includeWhen directive
         $template = preg_replace_callback(
-            '/\@includeWhen\s*\(\s*([^,)]+)\s*,\s*([^,)]+)(?:\s*,\s*(.+))?\s*\)/s',
+            '/@includeWhen\(\s*(.+?)\s*,\s*(.+?)(?:\s*,\s*(.+?))?\s*\)/s',
             function ($matches) {
-                $condition = trim($matches[1]);
-                $viewExpr = trim($matches[2]);
-                $dataExpr = isset($matches[3]) ? trim($matches[3]) : '[]';
-                return "<?php if({$condition}): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
+                $condition = $matches[1];
+                $viewExpr = $matches[2];
+                $dataExpr = isset($matches[3]) && trim($matches[3]) !== '' ? $matches[3] : '[]';
+
+                return "<?php if ({$condition}): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
             },
             $template
         );
 
         // Compile @includeIf directive
         $template = preg_replace_callback(
-            '/\@includeIf\s*\(\s*([^,)]+)(?:\s*,\s*(.+))?\s*\)/s',
+            '/@includeIf\(\s*(.+?)(?:\s*,\s*(.+?))?\s*\)/s',
             function ($matches) {
-                $viewExpr = trim($matches[1]);
-                $dataExpr = isset($matches[2]) ? trim($matches[2]) : '[]';
-                return "<?php if(\$this->templateExists({$viewExpr})): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
+                $viewExpr = $matches[1];
+                $dataExpr = isset($matches[2]) && trim($matches[2]) !== '' ? $matches[2] : '[]';
+
+                return "<?php if (\$this->templateExists({$viewExpr})): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
             },
             $template
         );
 
         // Compile @include directive
         return preg_replace_callback(
-            '/\@include\s*\(\s*([^,)]+)(?:\s*,\s*(.+))?\s*\)/s',
+            '/@include\(\s*(.+?)(?:\s*,\s*(.+?))?\s*\)/s',
             function ($matches) {
-                $viewExpr = trim($matches[1]);
-                $dataExpr = isset($matches[2]) ? trim($matches[2]) : '[]';
-                return "<?= \$this->include($viewExpr, $dataExpr); ?>";
+                $viewExpr = $matches[1];
+                $dataExpr = isset($matches[2]) && trim($matches[2]) !== '' ? $matches[2] : '[]';
+
+                return "<?= \$this->include({$viewExpr}, {$dataExpr}); ?>";
             },
             $template
         );
