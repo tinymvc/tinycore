@@ -624,8 +624,14 @@ class Router implements RouterContract
         }
 
         // If the response is a string, create a new Response object with it
-        if (is_string($response) || is_numeric($response) || is_bool($response)) {
+        if (is_string($response) || $response instanceof \Stringable) {
             return new Response($response);
+        }
+
+        // If the response is an integer, return a Response with that status code
+        // This is useful for returning HTTP status codes directly
+        if (is_int($response)) {
+            return new Response(statusCode: $response);
         }
 
         // If the response is an array, convert it to JSON and return as a Response

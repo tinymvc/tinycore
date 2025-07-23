@@ -2,7 +2,6 @@
 
 namespace Spark\Contracts\Http;
 
-use Closure;
 use Spark\Http\Request;
 
 /**
@@ -22,5 +21,5 @@ interface MiddlewareWithParametersInterface
      * @param mixed ...$parameters Optional parameters
      * @return mixed
      */
-    public function handle(Request $request, Closure $next, ...$parameters): mixed;
+    public function handle(Request $request, \Closure $next, ...$parameters): mixed;
 }

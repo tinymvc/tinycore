@@ -161,9 +161,9 @@ class Middleware
 
         // Handle different response types efficiently
         return match (true) {
-            is_string($response) => new Response($response, 200, ['Content-Type' => 'text/html']),
+            is_string($response) || $response instanceof \Stringable => new Response($response, 200, ['Content-Type' => 'text/html']),
             is_array($response) => new Response(json_encode(toPureArray($response)), 200, ['Content-Type' => 'application/json']),
-            is_int($response) => new Response('', $response), // HTTP status code
+            is_int($response) => new Response(statusCode: $response), // HTTP status code
             $response instanceof Arrayable => new Response(
                 json_encode(toPureArray($response->toArray())),
                 200,

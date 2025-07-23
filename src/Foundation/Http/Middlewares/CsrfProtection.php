@@ -2,12 +2,10 @@
 
 namespace Spark\Foundation\Http\Middlewares;
 
-use Closure;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Hash;
 use Spark\Http\Request;
-use Throwable;
 
 /**
  * Class CsrfProtection
@@ -38,7 +36,7 @@ class CsrfProtection implements MiddlewareInterface
      *
      * @return mixed The response when the token is invalid, current request otherwise.
      */
-    public function handle(Request $request, Closure $next): mixed
+    public function handle(Request $request, \Closure $next): mixed
     {
         if ($this->skip($request)) {
             return $next($request);
@@ -82,7 +80,7 @@ class CsrfProtection implements MiddlewareInterface
         // Decrypt the token using the Hash facade
         try {
             $decryptedToken = get(Hash::class)->decrypt($token);
-        } catch (Throwable $e) {
+        } catch (\Throwable $e) {
             return null;
         }
 

@@ -2,7 +2,6 @@
 
 namespace Spark\Foundation\Http\Middlewares;
 
-use Closure;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Http\Request;
 
@@ -34,7 +33,7 @@ class CorsAccessControl implements MiddlewareInterface
      * @return mixed
      *   The response when the request is a preflight request, or the current request otherwise
      */
-    public function handle(Request $request, Closure $next): mixed
+    public function handle(Request $request, \Closure $next): mixed
     {
         // Retrieve the origin from the request headers
         $origin = $request->header('origin', null);

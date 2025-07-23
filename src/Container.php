@@ -197,15 +197,15 @@ class Container implements ContainerContract
             }
         }
 
-        // Resolve the class instance
-        $instance = $this->get($class);
-
         // If the method is not provided, default to 'handle'
-        if (!method_exists($instance, $method)) {
+        if (!method_exists($class, $method)) {
             throw new MethodDoesNotExistsException(
                 "Method [$method] does not exist on class [$class]."
             );
         }
+
+        // Resolve the class instance
+        $instance = $this->get($class);
 
         // Use reflection to resolve method parameters
         $reflectionMethod = new ReflectionMethod($instance, $method);
