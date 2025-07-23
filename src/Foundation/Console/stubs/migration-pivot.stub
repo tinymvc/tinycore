@@ -8,8 +8,8 @@ return new class {
     {
         Schema::create('{{ table }}', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('{{ related_table_1 }}_id')->constrained('{{ related_table_1 }}')->onDelete('cascade');
-            $table->foreignId('{{ related_table_2 }}_id')->constrained('{{ related_table_2 }}')->onDelete('cascade');
+            $table->foreignId('{{ related_table_1 }}_id')->constrained('{{ related_table_plural_1 }}')->cascadeOnDelete();
+            $table->foreignId('{{ related_table_2 }}_id')->constrained('{{ related_table_plural_2 }}')->cascadeOnDelete();
         });
     }
 

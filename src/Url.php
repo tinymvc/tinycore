@@ -8,8 +8,8 @@ use Spark\Support\Traits\Macroable;
 use Stringable;
 
 /**
- * Enhanced URL object implementation with optimized ArrayAccess and magic methods
- * 
+ * Class Url
+ *
  * This class provides a flexible interface for accessing and manipulating URL data
  * through multiple access patterns while maintaining performance and modern PHP standards.
  * 
@@ -19,10 +19,21 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 {
     use Macroable;
 
+    /** @var array Parsed URL components */
     private array $components = [];
+
+    /** @var array Route parameters */
     private array $parameters = [];
+
+    /** @var string The absolute URL */
     private string $absoluteUrl;
 
+    /**
+     * Constructor to initialize the URL object
+     * 
+     * @param string $absoluteUrl The full URL to parse
+     * @param array $parameters Optional route parameters
+     */
     public function __construct(string $absoluteUrl, array $parameters = [])
     {
         $this->absoluteUrl = $absoluteUrl;
@@ -32,6 +43,8 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Build the parsed path including query and fragment
+     * 
+     * @return string The full parsed path
      */
     private function buildParsedPath(): string
     {
@@ -51,6 +64,9 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
     /**
      * Magic getter for property-style access
      * Provides access to URL components and parameters
+     * 
+     * @param string $name The property name to access
+     * @return mixed The value of the requested property or parameter
      */
     public function __get(string $name): mixed
     {
@@ -70,6 +86,9 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if property exists
+     * 
+     * @param string $name The property name to check
+     * @return bool True if the property or parameter exists, false otherwise
      */
     public function __isset(string $name): bool
     {
@@ -79,6 +98,14 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Set property value
+     * 
+     * This method allows setting both URL components and route parameters.
+     * If 'parameters' is set, it replaces the entire parameters array.
+     * Otherwise, it sets a specific parameter.
+     * 
+     * @param string $name The property name to set
+     * @param mixed $value The value to assign to the property
+     * @return void
      */
     public function __set(string $name, mixed $value): void
     {
@@ -91,6 +118,9 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Unset property
+     * 
+     * @param string $name The property name to unset
+     * @return void
      */
     public function __unset(string $name): void
     {
@@ -99,6 +129,9 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * ArrayAccess: Check if offset exists
+     * 
+     * @param mixed $offset The offset to check
+     * @return bool True if the offset exists, false otherwise
      */
     public function offsetExists(mixed $offset): bool
     {
@@ -107,6 +140,9 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * ArrayAccess: Get value by offset
+     * 
+     * @param mixed $offset The offset to retrieve
+     * @return mixed The value at the specified offset
      */
     public function offsetGet(mixed $offset): mixed
     {
@@ -115,6 +151,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * ArrayAccess: Set value at offset
+     * 
+     * This method allows setting values at specific offsets.
+     * 
+     * @param mixed $offset The offset to set
+     * @param mixed $value The value to assign at the offset
      */
     public function offsetSet(mixed $offset, mixed $value): void
     {
@@ -128,6 +169,8 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * ArrayAccess: Unset offset
+     * 
+     * @param mixed $offset The offset to unset
      */
     public function offsetUnset(mixed $offset): void
     {
@@ -136,6 +179,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Convert URL object to string representation
+     * 
+     * This method allows the URL object to be used as a string,
+     * returning the full absolute URL.
+     * 
+     * @return string The full absolute URL as a string
      */
     public function __toString(): string
     {
@@ -144,6 +192,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the scheme (protocol)
+     * 
+     * This method retrieves the scheme component of the URL.
+     * If the scheme is not set, it defaults to 'https'.
+     * 
+     * @return string The scheme part of the URL, defaulting to 'https' if not set
      */
     public function getScheme(): string
     {
@@ -152,6 +205,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the host/domain
+     * 
+     * This method retrieves the host component of the URL.
+     * If the host is not set, it returns an empty string.
+     * 
+     * @return string The host part of the URL, or an empty string if not set
      */
     public function getHost(): string
     {
@@ -160,6 +218,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the port number
+     * 
+     * This method retrieves the port component of the URL.
+     * If the port is not set, it returns null.
+     * 
+     * @return int|null The port number, or null if not set
      */
     public function getPort(): ?int
     {
@@ -168,6 +231,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the path component (without query or fragment)
+     * 
+     * This method retrieves the path component of the URL,
+     * which is the part after the host and port.
+     * 
+     * @return string The path part of the URL, or '/' if not set
      */
     public function getPath(): string
     {
@@ -176,6 +244,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the query string (without the ?)
+     * 
+     * This method retrieves the query component of the URL,
+     * which is the part after the question mark (?).
+     * 
+     * @return string The query part of the URL, or an empty string if not set
      */
     public function getQuery(): string
     {
@@ -184,6 +257,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get query parameters as associative array
+     * 
+     * This method parses the query string and returns an associative array
+     * where keys are parameter names and values are their corresponding values.
+     * 
+     * @return array An associative array of query parameters
      */
     public function getQueryParams(): array
     {
@@ -198,6 +276,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the fragment/hash (without the #)
+     * 
+     * This method retrieves the fragment component of the URL,
+     * which is the part after the hash (#).
+     * 
+     * @return string The fragment part of the URL, or an empty string if not set
      */
     public function getFragment(): string
     {
@@ -206,6 +289,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the absolute URL
+     * 
+     * This method returns the full absolute URL as a string,
+     * including the scheme, host, port (if not default), path, query, and fragment.
+     * 
+     * @return string The constructed absolute URL
      */
     public function getUrl(): string
     {
@@ -214,6 +302,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Build absolute URL from components
+     * 
+     * This method constructs the absolute URL based on the current components.
+     * It includes the scheme, host, port (if not default), path, query, and fragment.
+     * 
+     * @return string The constructed absolute URL
      */
     private function buildAbsoluteUrl(): string
     {
@@ -221,7 +314,7 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
         $port = $this->getPort();
         if ($port && !in_array($port, [80, 443])) {
-            $url .= ':' . $port;
+            $url .= ":$port";
         }
 
         $url .= $this->getPath();
@@ -239,6 +332,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Update internal state after URL modification
+     * 
+     * This method is called whenever a component of the URL is modified.
+     * It rebuilds the absolute URL based on the current components.
+     * 
+     * @return void
      */
     private function updateUrl(): void
     {
@@ -247,6 +345,14 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Add or modify query parameters
+     * 
+     * This method allows you to add or modify multiple query parameters in the URL.
+     * It accepts an associative array of parameters and a boolean to determine if it should merge with
+     * existing parameters or replace them entirely.
+     * 
+     * @param array $params Associative array of query parameters to add or modify
+     * @param bool $merge Whether to merge with existing parameters (default: true)
+     * @return self A new Url instance with the updated query parameters
      */
     public function withQuery(array $params, bool $merge = true): self
     {
@@ -263,6 +369,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Set query string directly
+     * 
+     * This method allows you to set the entire query string for the URL.
+     * It replaces the existing query string with the new one, ensuring it does not start with a question mark (?).
+     * 
+     * @param string $queryString The query string to set for the URL
+     * @return self A new Url instance with the updated query string
      */
     public function withQueryString(string $queryString): self
     {
@@ -275,6 +387,13 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Add or modify a single query parameter
+     * 
+     * This method allows you to add or modify a single query parameter in the URL.
+     * It accepts a key and a value, and returns a new Url instance with the updated query.
+     * 
+     * @param string $key The query parameter key to add or modify
+     * @param mixed $value The value to set for the query parameter
+     * @return self A new Url instance with the updated query parameter
      */
     public function withQueryParam(string $key, mixed $value): self
     {
@@ -283,6 +402,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Remove query parameters
+     * 
+     * This method allows you to remove specific query parameters from the URL.
+     * It accepts either a single key or an array of keys to remove.
+     * 
+     * @param array|string $keys The key or keys to remove from the query parameters
+     * @return self A new Url instance with the specified query parameters removed
      */
     public function withoutQuery(array|string $keys): self
     {
@@ -298,6 +423,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Add URL fragment/hash to the route
+     * 
+     * This method allows you to set a specific fragment for the URL.
+     * It replaces the existing fragment with the new one, ensuring it does not start with a hash (#).
+     * 
+     * @param string $fragment The fragment to set for the URL
+     * @return self A new Url instance with the updated fragment
      */
     public function withFragment(string $fragment): self
     {
@@ -310,6 +441,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Remove fragment from URL
+     * 
+     * This method allows you to remove the fragment component from the URL.
+     * It sets the fragment to an empty string, effectively removing it.
+     * 
+     * @return self A new Url instance with the fragment removed
      */
     public function withoutFragment(): self
     {
@@ -318,6 +454,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Change the path component
+     * 
+     * This method allows you to set a specific path for the URL.
+     * It replaces the existing path with the new one, ensuring it starts with a slash.
+     * 
+     * @param string $path The path to set for the URL
+     * @return self A new Url instance with the updated path
      */
     public function withPath(string $path): self
     {
@@ -330,6 +472,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Change the scheme
+     * 
+     * This method allows you to set a specific scheme (protocol) for the URL.
+     * It replaces the existing scheme with the new one.
+     * 
+     * @param string $scheme The scheme to set for the URL (e.g., 'http', 'https')
+     * @return self A new Url instance with the updated scheme
      */
     public function withScheme(string $scheme): self
     {
@@ -342,6 +490,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Change the host
+     * 
+     * This method allows you to set a specific host for the URL.
+     * It replaces the existing host with the new one.
+     * 
+     * @param string $host The host to set for the URL
+     * @return self A new Url instance with the updated host
      */
     public function withHost(string $host): self
     {
@@ -354,6 +508,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Change the port
+     * 
+     * This method allows you to set a specific port for the URL.
+     * If the port is null, it removes the port component from the URL.
+     * 
+     * @param int|null $port The port number to set, or null to remove the port
+     * @return self A new Url instance with the updated port
      */
     public function withPort(?int $port): self
     {
@@ -370,6 +530,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get route parameters that were substituted
+     * 
+     * This method retrieves all route parameters that were substituted
+     * during the route matching process. It returns an associative array
+     * where keys are parameter names and values are their corresponding values.
+     * 
+     * @return array The associative array of route parameters
      */
     public function getParameters(): array
     {
@@ -378,6 +544,13 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get a specific route parameter
+     * 
+     * This method retrieves a specific route parameter by its key.
+     * If the parameter does not exist, it returns a default value.
+     * 
+     * @param string $key The parameter key to retrieve
+     * @param mixed $default The default value to return if the parameter does not exist
+     * @return mixed The value of the parameter or the default value
      */
     public function getParameter(string $key, mixed $default = null): mixed
     {
@@ -386,6 +559,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if route has specific parameter
+     * 
+     * This method checks if a specific route parameter exists.
+     * 
+     * @param string $key The parameter key to check
+     * @return bool True if the parameter exists, false otherwise
      */
     public function hasParameter(string $key): bool
     {
@@ -394,6 +572,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Add route parameters
+     * 
+     * This method allows you to add or modify route parameters.
+     * 
+     * @param array $parameters Associative array of parameters to add or modify
+     * @return self A new Url instance with the updated parameters
      */
     public function withParameters(array $parameters): self
     {
@@ -405,6 +588,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Convert route data to array
+     * 
+     * This method converts the URL object to an associative array,
+     * including all components and parameters.
+     * 
+     * @return array The array representation of the URL
      */
     public function toArray(): array
     {
@@ -423,6 +611,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * JsonSerializable implementation
+     * 
+     * This method allows the URL object to be serialized to JSON.
+     * It returns an array representation of the URL,
+     * which includes all relevant components and parameters.
+     * 
+     * @return array The array representation of the URL
      */
     public function jsonSerialize(): array
     {
@@ -431,6 +625,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Generate cache key for this route
+     * 
+     * This method generates a unique cache key based on the route's URL.
+     * It can also append a suffix for more specific caching needs.
+     * 
+     * @param string $suffix Optional suffix to append to the cache key
+     * @return string The generated cache key
      */
     public function getCacheKey(string $suffix = ''): string
     {
@@ -440,6 +640,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if the given path matches this route exactly
+     * 
+     * This method checks if the route's path matches the given path exactly,
+     * ignoring leading and trailing slashes.
+     * 
+     * @param string $path The path to check against the route
+     * @return bool True if the route's path matches the given path, false otherwise
      */
     public function is(string $path): bool
     {
@@ -448,6 +654,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if the given path matches this route (supports wildcards)
+     * 
+     * This method checks if the route matches a given pattern.
+     * It supports exact matches, prefix matches, and wildcard patterns.
+     * 
+     * @param string $pattern The pattern to match against the route
+     * @return bool True if the route matches the pattern, false otherwise
      */
     public function matches(string $pattern): bool
     {
@@ -474,6 +686,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if route matches any of the provided patterns
+     * 
+     * This method checks if the route matches any pattern in the provided array.
+     * It returns true if at least one pattern matches the route.
+     * 
+     * @param array $patterns An array of patterns to match against the route
+     * @return bool True if the route matches any pattern, false otherwise
      */
     public function matchesAny(array $patterns): bool
     {
@@ -488,6 +706,12 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if route matches all of the provided patterns
+     * 
+     * This method checks if the route matches all patterns in the provided array.
+     * It returns true only if every pattern matches the route.
+     * 
+     * @param array $patterns An array of patterns to match against the route
+     * @return bool True if the route matches all patterns, false otherwise
      */
     public function matchesAll(array $patterns): bool
     {
@@ -506,6 +730,13 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if a route path matches a wildcard pattern
+     * 
+     * This method checks if the given route path matches a wildcard pattern,
+     * where wildcards can be represented by * (matches any sequence) and ? (matches a single character).
+     * 
+     * @param string $routePath The route path to check
+     * @param string $pattern The wildcard pattern to match against
+     * @return bool True if the route path matches the pattern, false otherwise
      */
     private function matchesWildcard(string $routePath, string $pattern): bool
     {
@@ -523,6 +754,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Convert wildcard pattern to regular expression
+     * 
+     * This method converts a wildcard pattern (with * and ?) to a regex pattern.
+     * 
+     * @param string $pattern The wildcard pattern to convert
+     * @return string The regex pattern equivalent to the wildcard
      */
     private function wildcardToRegex(string $pattern): string
     {
@@ -542,6 +778,10 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if URL is secure (HTTPS)
+     * 
+     * This method checks if the URL uses the HTTPS scheme.
+     * 
+     * @return bool True if the URL is secure, false otherwise
      */
     public function isSecure(): bool
     {
@@ -550,6 +790,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Check if URL is on default port
+     * 
+     * This method checks if the URL's port is the default for its scheme.
+     * For HTTP, the default port is 80; for HTTPS, it is 443
+     * 
+     * @return bool True if the port is default, false otherwise
      */
     public function isDefaultPort(): bool
     {
@@ -563,6 +808,11 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Get the authority part (host:port)
+     * 
+     * This method constructs the authority part of the URL,
+     * which includes the host and port if it's not the default.
+     * 
+     * @return string The authority part of the URL
      */
     public function getAuthority(): string
     {
@@ -577,6 +827,13 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
 
     /**
      * Create a new instance from components
+     * 
+     * This method allows constructing a URL from its components.
+     * It supports all standard URL components like scheme, host, port, path, query,
+     * and fragment, and constructs a valid URL string.
+     * 
+     * @param array $components Associative array of URL components
+     * @return self A new Url instance with the constructed URL
      */
     public static function fromComponents(array $components): self
     {

@@ -3,6 +3,7 @@
 namespace Spark\Http;
 
 use ArrayAccess;
+use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Http\Traits\ValidateRequest;
 use Spark\Support\Traits\Macroable;
@@ -169,8 +170,18 @@ class Request implements RequestContract, ArrayAccess
     private function parsePath(): string
     {
         $path = $_SERVER['REQUEST_URI'] ?? '/';
+
+        // Remove query parameters
         $position = strpos($path, '?');
-        return $position !== false ? substr($path, 0, $position) : $path;
+        if ($position !== false) {
+            $path = substr($path, 0, $position);
+        }
+
+        // URL decode the path to handle encoded characters
+        $path = urldecode($path);
+
+        // Ensure path starts with /
+        return '/' . ltrim($path, '/');
     }
 
     /**
@@ -180,8 +191,23 @@ class Request implements RequestContract, ArrayAccess
      */
     private function parseRootUrl(): string
     {
-        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-        return $protocol . ($_SERVER['HTTP_HOST'] ?? '');
+        // Reliable HTTPS detection
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+            (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+            (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on') ||
+            (!empty($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+
+        $protocol = $isHttps ? 'https://' : 'http://';
+
+        // Validate and sanitize host
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+
+        // Basic host validation to prevent header injection
+        if (!preg_match('/^[a-zA-Z0-9.-]+(?::[0-9]+)?$/', $host)) {
+            throw new InvalidArgumentException('Invalid host header detected');
+        }
+
+        return "$protocol$host";
     }
 
     /**
@@ -191,7 +217,10 @@ class Request implements RequestContract, ArrayAccess
      */
     private function parseUrl(): string
     {
-        return rtrim($this->rootUrl . '/' . ltrim($_SERVER['REQUEST_URI'] ?? '', '/'), '/');
+        $rootUrl = $this->parseRootUrl();
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+
+        return "$rootUrl$requestUri";
     }
 
     /**

@@ -45,6 +45,13 @@ class MakeStubCommandsHandler
      */
     public function makeMigration(array $args)
     {
+        // Check if the pivot argument is set and true
+        // If so, call the makePivotMigration method
+        if (isset($args['pivot']) && $args['pivot']) {
+            return $this->makePivotMigration($args);
+        }
+
+        // Otherwise, proceed with the regular migration creation
         StubCreation::make(
             $args['_args'][0] ?? null,
             'What is the name of the migration?',
@@ -92,12 +99,14 @@ class MakeStubCommandsHandler
             $table,
             'What is the name of the pivot migration?',
             [
-                'stub' => __DIR__ . '/stubs/pivot-migration.stub',
+                'stub' => __DIR__ . '/stubs/migration-pivot.stub',
                 'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name.php',
                 'replacements' => [
                     '{{ table }}' => '::name',
                     '{{ related_table_1 }}' => $related_table_1_singular,
                     '{{ related_table_2 }}' => $related_table_2_singular,
+                    '{{ related_table_plural_1 }}' => $related_table_1_plural,
+                    '{{ related_table_plural_2 }}' => $related_table_2_plural,
                 ],
             ]
         );
