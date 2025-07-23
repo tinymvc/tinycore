@@ -190,18 +190,17 @@ class Container implements ContainerContract
         } elseif (is_array($abstract)) {
             [$class, $method] = $abstract;
         } else {
-            [$class, $method] = [$abstract, '__invoke'];
+            if (method_exists($abstract, 'handle')) {
+                [$class, $method] = [$abstract, 'handle'];
+            } else {
+                [$class, $method] = [$abstract, '__invoke'];
+            }
         }
 
         // Resolve the class instance
         $instance = $this->get($class);
 
-        // Check if the method exists
-        if (!method_exists($instance, $method)) {
-            $method = 'handle';
-        }
-
-        // Check if the method exists
+        // If the method is not provided, default to 'handle'
         if (!method_exists($instance, $method)) {
             throw new MethodDoesNotExistsException(
                 "Method [$method] does not exist on class [$class]."
