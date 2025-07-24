@@ -146,12 +146,12 @@ class Response implements ResponseContract
      * redirects the user to the URL specified in the referer. It is
      * typically used to navigate back to the last page visited by the user.
      *
-     * @return void
+     * @return self
      */
-    public function back(): void
+    public function back(): self
     {
         $referer = request()->header('referer', '/'); // Get the referer URL
-        $this->redirect($referer);
+        return $this->redirect($referer);
     }
 
     /**
