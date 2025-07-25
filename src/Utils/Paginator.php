@@ -18,38 +18,30 @@ class Paginator implements PaginatorUtilContract, Arrayable
 {
     use Macroable;
 
-    /**
-     * @var int $pages Total number of pages.
-     */
+    /** @var int $pages Total number of pages. */
     private int $pages = 0;
 
-    /**
-     * @var int $page Current page number.
-     */
+    /** @var int $page Current page number. */
     private int $page = 0;
 
-    /**
-     * @var int $offset Offset for paginated data.
-     */
+    /** @var int $offset Offset for paginated data. */
     private int $offset = 0;
 
-    /**
-     * @var array $data The data to be paginated.
-     */
+    /** @var array $data The data to be paginated. */
     private array $data = [];
 
     /**
-     * Constructor
+     * Paginator constructor.
+     * 
+     * Initializes the paginator with total items, limit per page, and 
+     * keyword for page number in the URL.
      * 
      * @param int $total Total number of items.
      * @param int $limit Number of items per page.
      * @param string $keyword The URL parameter keyword for the page.
      */
-    public function __construct(
-        public int $total = 0,
-        public int $limit = 10,
-        public string $keyword = 'page'
-    ) {
+    public function __construct(public int $total = 0, public int $limit = 10, public string $keyword = 'page')
+    {
         $this->resetPaginator();
     }
 

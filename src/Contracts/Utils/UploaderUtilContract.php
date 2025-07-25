@@ -17,4 +17,12 @@ interface UploaderUtilContract
      * @return string|array Returns the file path(s) of the uploaded file(s).
      */
     public function upload(array $files): string|array;
+
+    /**
+     * Deletes a file or multiple files.
+     *
+     * @param string|array $file The file path(s) to delete.
+     * @return bool Returns true if the file(s) were successfully deleted, false otherwise.
+     */
+    public function delete(string|array $file): bool;
 }

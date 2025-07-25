@@ -22,6 +22,14 @@ interface BladeCompilerContract
     public function compileString(string $template): string;
 
     /**
+     * Gets the path to the compiled Blade template.
+     *
+     * @param string $template The path to the Blade template file.
+     * @return string The path to the compiled PHP file.
+     */
+    public function getCompiledPath(string $template): string;
+
+    /**
      * Registers a custom Blade directive.
      *
      * @param string $name The name of the directive.

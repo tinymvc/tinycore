@@ -2,6 +2,7 @@
 
 use Spark\Console\Commands;
 use Spark\Container;
+use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
@@ -313,7 +314,7 @@ if (!function_exists('query')) {
     }
 }
 
-if (!function_exists('external_db')) {
+if (!function_exists('connect_db')) {
     /**
      *  Create a new QueryBuilder instance for an external database.
      *
@@ -324,7 +325,7 @@ if (!function_exists('external_db')) {
      *  @param array $config The configuration array for the external database connection.
      *  @return QueryBuilder The QueryBuilder instance connected to the external database.
      */
-    function external_db(array $config): QueryBuilder
+    function connect_db(array $config): QueryBuilder
     {
         return new QueryBuilder(new DB($config));
     }
@@ -400,18 +401,27 @@ if (!function_exists('url')) {
      * resolved relative to the application's root URL. If it is absolute,
      * it will be returned verbatim.
      *
-     * @param string $path The path to generate a URL for.
+     * @param ?string $path The path to generate a URL for.
      * @param array $parameters Optional query parameters to append to the URL.
      *
      * @return Url The generated URL as a Url object containing parsed path and absolute URL.
      */
-    function url(string $path = '', array $parameters = []): Url
+    function url(?string $path = null, array $parameters = []): Url
     {
-        global $home_url;
+        global $home_url, $request_url;
 
-        // Check if the path is empty or just a slash
-        // If it is, return the home URL with parameters if provided.
-        if (trim($path, '/') === '') {
+        $path ??= ''; // Set empty path if null provided
+
+        // If the path is empty then asume it for current request url
+        // or, if the path is '/' then it is home url
+        if ($path === '') {
+            if (isset($request_url) && !empty($parameters)) {
+                $request_url = $request_url->withParameters($parameters);
+            }
+
+            return $request_url ??= new Url(home_url(request()->getPath()), $parameters);
+
+        } elseif ($path === '/') {
             if (isset($home_url) && !empty($parameters)) {
                 $home_url = $home_url->withParameters($parameters);
             }
@@ -1469,7 +1479,8 @@ if (!function_exists('uploader')) {
         ?int $maxSize = 2097152,
         ?array $resize = null,
         ?array $resizes = null,
-        ?int $compress = null
+        ?int $compress = null,
+        ?UploaderUtilDriverInterface $driver = null
     ): Uploader {
         $uploader = new Uploader;
 
@@ -1480,7 +1491,8 @@ if (!function_exists('uploader')) {
             maxSize: $maxSize,
             resize: $resize,
             resizes: $resizes,
-            compress: $compress
+            compress: $compress,
+            driver: $driver
         );
 
         return $uploader;

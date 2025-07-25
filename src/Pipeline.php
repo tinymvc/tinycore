@@ -5,6 +5,7 @@ namespace Spark;
 use Generator;
 use InvalidArgumentException;
 use Spark\Contracts\PipeInterface;
+use Spark\Support\Traits\Macroable;
 use Throwable;
 use Closure;
 
@@ -18,6 +19,8 @@ use Closure;
  */
 class Pipeline
 {
+    use Macroable;
+
     /** @var array List of pipes to be executed in the pipeline. */
     private array $pipes = [];
 
@@ -44,9 +47,8 @@ class Pipeline
      * 
      * @param mixed $payload The initial payload to be processed by the pipeline.
      */
-    public function __construct(
-        private mixed $payload = null
-    ) {
+    public function __construct(private mixed $payload = null)
+    {
     }
 
     /**

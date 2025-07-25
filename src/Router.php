@@ -278,8 +278,8 @@ class Router implements RouterContract
         string|null $name = null,
         string|array $middleware = []
     ): self {
-        // Set the default method to GET if not provided
-        $method ??= 'GET';
+        $path = '/' . trim($path, '/'); // ensure it starts with a slash
+        $method ??= 'GET'; // Set the default method to GET if not provided
 
         // Check if there are any group attributes to apply to the route
         if (!empty($this->groupAttributes)) {
@@ -368,7 +368,6 @@ class Router implements RouterContract
         array $only = [],
         array $except = [],
     ): self {
-
         $name ??= trim($path, '/');
         $name = str_replace('/', '.', $name);
 

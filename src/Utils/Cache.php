@@ -319,11 +319,10 @@ class Cache implements CacheUtilContract
      * It will create a new directory if the cache directory does not exist,
      * and throws an exception if the cache directory is not writable.
      *
-     * @param int $flags Optional lock flags.
      * @throws FailedToSaveCacheFileException Thrown if the cache directory is not writable.
      * @return void
      */
-    public function saveChanges(int $flags = LOCK_EX): void
+    public function saveChanges(): void
     {
         if ($this->changed) {
             // Set a temp directory to store caches. 
@@ -340,7 +339,7 @@ class Cache implements CacheUtilContract
             file_put_contents(
                 $this->cachePath,
                 json_encode($this->cacheData, JSON_UNESCAPED_UNICODE),
-                $flags
+                LOCK_EX
             );
 
             $this->changed = false;

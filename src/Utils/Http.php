@@ -253,7 +253,7 @@ class Http implements HttpUtilContract
      */
     public function cookieJar(string $cookieJar): self
     {
-        if (!file_exists($cookieJar)) {
+        if (!is_file($cookieJar)) {
             touch($cookieJar);
         }
 

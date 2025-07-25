@@ -144,9 +144,9 @@ class InputValidator implements InputValidatorContract
      * Sets a custom error message for a specific validation rule.
      *
      * @param string $rule Validation rule name.
-     * @param string $message Custom error message for the rule.
+     * @param array|string $message Custom error message for the rule.
      */
-    public static function setErrorMessage(string $rule, string $message): void
+    public static function setErrorMessage(string $rule, array|string $message): void
     {
         self::$errorMessages[$rule] = $message;
     }
@@ -164,22 +164,34 @@ class InputValidator implements InputValidatorContract
 
         // Error messages for each validation rule
         $this->errors[$field][] = match ($rule) {
-            'required' => __(self::$errorMessages['required'] ?? 'The %s field is required.', $prettyField),
-            'email', 'mail' => __(self::$errorMessages['email'] ?? 'The %s field must be a valid email address.', $prettyField),
-            'url', 'link' => __(self::$errorMessages['url'] ?? "The %s field must be a valid URL.", $prettyField),
-            'number', 'int', 'integer' => __(self::$errorMessages['number'] ?? "The %s field must be a number.", $prettyField),
-            'array', 'list' => __(self::$errorMessages['array'] ?? "The %s field must be an array.", $prettyField),
-            'text', 'char', 'string' => __(self::$errorMessages['text'] ?? "The %s field must be a text.", $prettyField),
-            'min', 'minimum' => __(self::$errorMessages['min'] ?? "The %s field must be at least %s characters long.", [$prettyField, $params[0] ?? 0]),
-            'max', 'maximum' => __(self::$errorMessages['max'] ?? "The %s field must not exceed %s characters.", [$prettyField, $params[0] ?? 0]),
-            'length', 'size' => __(self::$errorMessages['length'] ?? "The %s field must be %s characters.", [$prettyField, $params[0] ?? 0]),
-            'equal', 'same', 'same_as' => __(self::$errorMessages['equal'] ?? "The %s field must be equal to %s field.", [$prettyField, __(Str::headline($params[0] ?? ''))]),
-            'confirmed' => __(self::$errorMessages['confirmed'] ?? "The %s field must be confirmed.", $prettyField),
-            'in', 'exists' => __(self::$errorMessages['in'] ?? "The %s field must be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
-            'not_in', 'not_exists' => __(self::$errorMessages['not_in'] ?? "The %s field must not be one of the following values: %s.", [$prettyField, implode(', ', $params)]),
-            'regex' => __(self::$errorMessages['regex'] ?? "The %s field must match the pattern: %s.", [$prettyField, $params[0] ?? '']),
-            'unique' => __(self::$errorMessages['unique'] ?? "The %s field must be unique in the %s table.", [$prettyField, $params[0] ?? '']),
-            default => __(self::$errorMessages['default'] ?? "The %s field has an invalid value.", $prettyField)
+            'required' => __($this->getErrorMessagePlaceholder('required', $field, 'The %s field is required.'), $prettyField),
+            'email', 'mail' => __($this->getErrorMessagePlaceholder('email', $field, 'The %s field must be a valid email address.'), $prettyField),
+            'url', 'link' => __($this->getErrorMessagePlaceholder('url', $field, 'The %s field must be a valid URL.'), $prettyField),
+            'number', 'int', 'integer' => __($this->getErrorMessagePlaceholder('number', $field, 'The %s field must be a number.'), $prettyField),
+            'array', 'list' => __($this->getErrorMessagePlaceholder('array', $field, 'The %s field must be an array.'), $prettyField),
+            'text', 'char', 'string' => __($this->getErrorMessagePlaceholder('text', $field, 'The %s field must be a text.'), $prettyField),
+            'min', 'minimum' => __($this->getErrorMessagePlaceholder('min', $field, 'The %s field must be at least %s characters long.'), [$prettyField, $params[0] ?? 0]),
+            'max', 'maximum' => __($this->getErrorMessagePlaceholder('max', $field, 'The %s field must not exceed %s characters.'), [$prettyField, $params[0] ?? 0]),
+            'length', 'size' => __($this->getErrorMessagePlaceholder('length', $field, 'The %s field must be %s characters.'), [$prettyField, $params[0] ?? 0]),
+            'equal', 'same', 'same_as' => __($this->getErrorMessagePlaceholder('equal', $field, 'The %s field must be equal to %s field.'), [$prettyField, __(Str::headline($params[0] ?? ''))]),
+            'confirmed' => __($this->getErrorMessagePlaceholder('confirmed', $field, 'The %s field must be confirmed.'), $prettyField),
+            'in', 'exists' => __($this->getErrorMessagePlaceholder('in', $field, 'The %s field must be one of the following values: %s.'), [$prettyField, implode(', ', $params)]),
+            'not_in', 'not_exists' => __($this->getErrorMessagePlaceholder('not_in', $field, 'The %s field must not be one of the following values: %s.'), [$prettyField, implode(', ', $params)]),
+            'regex' => __($this->getErrorMessagePlaceholder('regex', $field, 'The %s field must match the pattern: %s.'), [$prettyField, $params[0] ?? '']),
+            'unique' => __($this->getErrorMessagePlaceholder('unique', $field, 'The %s field must be unique in the %s table.'), [$prettyField, $params[0] ?? '']),
+            default => __($this->getErrorMessagePlaceholder('default', $field, 'The %s field has an invalid value.'), $prettyField)
         };
+    }
+
+    private function getErrorMessagePlaceholder(string $rule, string $field, string $default): string
+    {
+        $field = strtolower($field); // make the field name in lowercase
+
+        $placeholder = self::$errorMessages[$rule] ?? null;
+        if (is_array($placeholder)) {
+            return $placeholder[$field] ?? $placeholder['default'] ?? $default;
+        }
+
+        return $placeholder ?? $default;
     }
 }

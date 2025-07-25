@@ -3,6 +3,7 @@
 namespace Spark\Utils;
 
 use Spark\Contracts\Utils\UploaderUtilContract;
+use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Exceptions\Utils\UploaderUtilException;
 use Spark\Support\Traits\Macroable;
 
@@ -19,54 +20,29 @@ class Uploader implements UploaderUtilContract
 {
     use Macroable;
 
-    /**
-     * Upload directory path.
-     *
-     * @var string
-     */
+    /** @var string Upload directory path. */
     public string $uploadDir;
 
-    /**
-     * Supported file extensions.
-     *
-     * @var array
-     */
+    /** @var array Supported file extensions.*/
     public array $extensions;
 
-    /**
-     * Whether to support multiple file uploads.
-     *
-     * @var ?bool
-     */
+    /** @var ?bool Whether to support multiple file uploads. */
     public ?bool $multiple;
 
-    /**
-     * Maximum file size (in bytes).
-     *
-     * @var int|null
-     */
+    /** @var int|null Maximum file size (in bytes). */
     public ?int $maxSize;
 
-    /**
-     * Resize options for images.
-     *
-     * @var array|null
-     */
+    /** @var array|null Resize options for images. */
     public ?array $resize;
 
-    /**
-     * Bulk resize options for images.
-     *
-     * @var array|null
-     */
+    /** @var array|null Bulk resize options for images. */
     public ?array $resizes;
 
-    /**
-     * Compression level for images.
-     *
-     * @var int|null
-     */
+    /** @var int|null Compression level for images. */
     public ?int $compress;
+
+    /** @var ?UploaderUtilDriverInterface File upload driver. */
+    private ?UploaderUtilDriverInterface $driver;
 
     /**
      * Sets up the uploader configuration.
@@ -88,7 +64,8 @@ class Uploader implements UploaderUtilContract
         ?int $maxSize = 2097152,
         ?array $resize = null,
         ?array $resizes = null,
-        ?int $compress = null
+        ?int $compress = null,
+        ?UploaderUtilDriverInterface $driver = null
     ): self {
         $this->extensions = $extensions;
         $this->multiple = $multiple;
@@ -96,13 +73,13 @@ class Uploader implements UploaderUtilContract
         $this->resize = $resize;
         $this->resizes = $resizes;
         $this->compress = $compress;
+        $this->driver = $driver;
 
         $uploadDir ??= config('upload_dir');
 
         if ($uploadTo) {
             $uploadDir = dir_path($uploadDir . DIRECTORY_SEPARATOR . $uploadTo);
         }
-
         // Set the upload directory
         return $this->setUploadDir($uploadDir);
     }
@@ -117,16 +94,12 @@ class Uploader implements UploaderUtilContract
     public function setUploadDir(string $uploadDir): self
     {
         // Ensure the upload directory exists and is writable
-        if (!is_dir($uploadDir)) {
+        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0777, true)) {
             // Create the upload directory
-            if (!mkdir($uploadDir, 0777, true)) {
-                throw new UploaderUtilException(__('Failed to create upload directory.'), 501);
-            }
-        } elseif (!is_writable($uploadDir)) {
+            throw new UploaderUtilException(__('Failed to create upload directory.'), 501);
+        } elseif (!is_writable($uploadDir) && !chmod($uploadDir, 0777)) {
             // Make the upload directory writable
-            if (!chmod($uploadDir, 0777)) {
-                throw new UploaderUtilException(__('Upload directory is not writable.'), 502);
-            }
+            throw new UploaderUtilException(__('Upload directory is not writable.'), 502);
         }
 
         $this->uploadDir = dir_path($uploadDir);
@@ -142,7 +115,7 @@ class Uploader implements UploaderUtilContract
     public function upload(string|array $files): string|array
     {
         if (is_string($files)) {
-            $files = $_FILES[$files] ?? [];
+            $files = request()->file($files, []);
         }
 
         $this->multiple ??= is_array($files['name']) && count($files['name']) > 1;
@@ -173,6 +146,8 @@ class Uploader implements UploaderUtilContract
      */
     public function delete(string|array $file): bool
     {
+        $file = $this->removeUploadDir($file);
+
         if (is_array($file)) {
             $result = true;
             foreach ($file as $f) {
@@ -180,8 +155,12 @@ class Uploader implements UploaderUtilContract
             }
             return $result;
         } else {
-            $filepath = dir_path($this->uploadDir . DIRECTORY_SEPARATOR . $file);
-            return file_exists($filepath) && unlink($filepath);
+            if ($this->driver) {
+                return $this->driver->delete($file);
+            }
+
+            $filepath = upload_dir($file);
+            return is_file($filepath) && unlink($filepath);
         }
     }
 
@@ -197,7 +176,7 @@ class Uploader implements UploaderUtilContract
             return array_map(fn($file) => $this->removeUploadDir($file), $files);
         }
 
-        return str_replace(dir_path($this->uploadDir . DIRECTORY_SEPARATOR), '', $files);
+        return str_replace([upload_dir(), '\\'], ['', '/'], $files);
     }
 
     /** @Add helpers methods for uploader object */
@@ -222,17 +201,27 @@ class Uploader implements UploaderUtilContract
             throw new UploaderUtilException(__('Invalid file extension.'), 504);
         }
 
+        // Check if additional image options are set
+        $additionalImageOptions = (isset($this->compress) || isset($this->resize) || isset($this->resizes)) &&
+            in_array($extension, ['jpg', 'jpeg', 'png']);
+
         // Create a unique file name
         $filename = $this->generateUniqueFileName($file['name']);
         $destination = dir_path("{$this->uploadDir}/$filename");
 
         // Move the uploaded file to the destination
-        if (!move_uploaded_file($file['tmp_name'], $destination)) {
-            throw new UploaderUtilException(__('Failed to move uploaded file.'), 505);
+        if ($this->driver && !$additionalImageOptions) {
+            if (!$this->handleUpload($file['tmp_name'], $destination)) {
+                throw new UploaderUtilException(__('Failed to move uploaded file.'), 505);
+            }
+        } else {
+            if (!move_uploaded_file($file['tmp_name'], $destination)) {
+                throw new UploaderUtilException(__('Failed to move uploaded file.'), 505);
+            }
         }
 
         // Compress, resize, and bulk resize image if options are set and the file is an image
-        if ((isset($this->compress) || isset($this->resize) || isset($this->resizes)) && in_array($extension, ['jpg', 'jpeg', 'png'])) {
+        if ($additionalImageOptions) {
             $image = new Image($destination);
             if (isset($this->compress)) {
                 $image->compress($this->compress);
@@ -244,14 +233,51 @@ class Uploader implements UploaderUtilContract
                 );
             }
             if (isset($this->resizes)) {
-                $destination = array_merge(
-                    [$destination],
-                    $image->bulkResize($this->resizes)
-                );
+                $resizedImgs = $image->bulkResize($this->resizes);
+                $destination = array_merge([$destination], $resizedImgs);
+            }
+
+            if ($this->driver) {
+                foreach ((array) $destination as $k => $file) {
+                    try {
+                        $this->handleUpload($file, $file);
+                        unlink($file); // Remove the original file after upload
+                    } catch (\Exception $e) {
+                        foreach ((array) $destination as $k2 => $file) {
+                            if (is_file($file)) {
+                                unlink($file);
+                            }
+
+                            // Delete the file if it was uploaded by the driver
+                            if ($k > $k2) {
+                                $this->delete($file);
+                            }
+                        }
+
+                        // Throw an exception if the upload failed
+                        throw new UploaderUtilException(__('Failed to upload file using driver: %s', $e->getMessage()), 506);
+                    }
+                }
             }
         }
 
-        return $destination;
+        return $this->removeUploadDir($destination);
+    }
+
+    /**
+     * Handles the file upload process, either using a driver or the default PHP method.
+     *
+     * @param string $tmpName Temporary file name.
+     * @param string $destination Destination path where the file should be moved.
+     * @return bool Returns true if the upload was successful, false otherwise.
+     */
+    private function handleUpload(string $tmpName, string $destination): bool
+    {
+        if ($this->driver) {
+            return $this->driver->upload($tmpName, $this->removeUploadDir($destination));
+        }
+
+        return move_uploaded_file($tmpName, $destination);
     }
 
     /**

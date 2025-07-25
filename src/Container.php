@@ -440,10 +440,6 @@ class Container implements ContainerContract
     {
         $type = $param->getType();
 
-        if (!$type) {
-            throw new FailedToResolveParameterException("Unable to resolve parameter {$param->getName()}.");
-        }
-
         if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
             return $this->get($type->getName());
         }
@@ -459,6 +455,10 @@ class Container implements ContainerContract
 
         if ($type instanceof ReflectionNamedType && $type->isBuiltin() && $default) {
             return $default;
+        }
+
+        if ($default !== null) {
+            return $default; // Return the default value if provided
         }
 
         if ($param->isDefaultValueAvailable()) {

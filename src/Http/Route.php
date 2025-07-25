@@ -44,7 +44,7 @@ class Route implements HttpRouteContract
      */
     public static function get($path, $callback): Router
     {
-        return Application::$app->container->get(Router::class)->get($path, $callback);
+        return Application::$app->get(Router::class)->get($path, $callback);
     }
 
     /**
@@ -57,7 +57,7 @@ class Route implements HttpRouteContract
      */
     public static function post($path, $callback): Router
     {
-        return Application::$app->container->get(Router::class)->post($path, $callback);
+        return Application::$app->get(Router::class)->post($path, $callback);
     }
 
     /**
@@ -70,7 +70,7 @@ class Route implements HttpRouteContract
      */
     public static function put($path, $callback): Router
     {
-        return Application::$app->container->get(Router::class)->put($path, $callback);
+        return Application::$app->get(Router::class)->put($path, $callback);
     }
 
     /**
@@ -83,7 +83,7 @@ class Route implements HttpRouteContract
      */
     public static function patch($path, $callback): Router
     {
-        return Application::$app->container->get(Router::class)->patch($path, $callback);
+        return Application::$app->get(Router::class)->patch($path, $callback);
     }
 
     /**
@@ -96,7 +96,7 @@ class Route implements HttpRouteContract
      */
     public static function delete($path, $callback): Router
     {
-        return Application::$app->container->get(Router::class)->delete($path, $callback);
+        return Application::$app->get(Router::class)->delete($path, $callback);
     }
 
     /**
@@ -109,7 +109,7 @@ class Route implements HttpRouteContract
      */
     public static function options($path, $callback): Router
     {
-        return Application::$app->container->get(Router::class)->options($path, $callback);
+        return Application::$app->get(Router::class)->options($path, $callback);
     }
 
     /**
@@ -122,7 +122,7 @@ class Route implements HttpRouteContract
      */
     public static function any($path, $callback): Router
     {
-        return Application::$app->container->get(Router::class)->any($path, $callback);
+        return Application::$app->get(Router::class)->any($path, $callback);
     }
 
     /**
@@ -135,7 +135,7 @@ class Route implements HttpRouteContract
      */
     public static function view($path, $template): Router
     {
-        return Application::$app->container->get(Router::class)->view($path, $template);
+        return Application::$app->get(Router::class)->view($path, $template);
     }
 
     /**
@@ -148,7 +148,7 @@ class Route implements HttpRouteContract
      */
     public static function fireline($path, $template): Router
     {
-        return Application::$app->container->get(Router::class)->fireline($path, $template);
+        return Application::$app->get(Router::class)->fireline($path, $template);
     }
 
     /**
@@ -165,7 +165,7 @@ class Route implements HttpRouteContract
      */
     public static function match(array $methods, string $path, callable|string|array $callback): Router
     {
-        return Application::$app->container->get(Router::class)->match($methods, $path, $callback);
+        return Application::$app->get(Router::class)->match($methods, $path, $callback);
     }
 
     /**
@@ -191,7 +191,7 @@ class Route implements HttpRouteContract
         array $only = [],
         array $except = [],
     ): Router {
-        return Application::$app->container->get(Router::class)->resource($path, $callback, $name, $middleware, $only, $except);
+        return Application::$app->get(Router::class)->resource($path, $callback, $name, $middleware, $only, $except);
     }
 
     /**
@@ -207,7 +207,7 @@ class Route implements HttpRouteContract
      */
     public static function redirect(string $from, string $to, int $status = 302): Router
     {
-        return Application::$app->container->get(Router::class)->redirect($from, $to, $status);
+        return Application::$app->get(Router::class)->redirect($from, $to, $status);
     }
 
     /**
@@ -220,6 +220,6 @@ class Route implements HttpRouteContract
      */
     public static function group($attributes, $callback): void
     {
-        Application::$app->container->get(Router::class)->group($attributes, $callback);
+        Application::$app->get(Router::class)->group($attributes, $callback);
     }
 }

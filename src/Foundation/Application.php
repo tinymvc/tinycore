@@ -23,17 +23,9 @@ use Spark\Queue\Queue;
 use Spark\Router;
 use Spark\Support\Traits\Macroable;
 use Spark\Translator;
-use Spark\Utils\Cache;
 use Spark\Http\Gate;
-use Spark\Utils\Image;
-use Spark\Http\InputSanitizer;
-use Spark\Http\InputValidator;
-use Spark\Utils\Mail;
-use Spark\Utils\Paginator;
-use Spark\Utils\Http;
 use Spark\Http\Session;
 use Spark\Utils\Tracer;
-use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
 use Spark\View\View;
 use Throwable;
@@ -48,9 +40,7 @@ use Throwable;
  */
 class Application implements ApplicationContract
 {
-    use Macroable {
-        __call as macroCall;
-    }
+    use Macroable;
 
     /** @var Application Singleton instance of the application */
     public static Application $app;
@@ -105,17 +95,7 @@ class Application implements ApplicationContract
             Auth::class,
             fn() => new Auth(session: $this->container->get(Session::class), userModel: User::class)
         );
-
-        // Bind core services
         $this->container->bind(QueryBuilder::class);
-        $this->container->bind(Cache::class);
-        $this->container->bind(Http::class);
-        $this->container->bind(InputValidator::class);
-        $this->container->bind(InputSanitizer::class);
-        $this->container->bind(Uploader::class);
-        $this->container->bind(Image::class);
-        $this->container->bind(Paginator::class);
-        $this->container->bind(Mail::class);
     }
 
     /**
@@ -243,11 +223,12 @@ class Application implements ApplicationContract
      * calling it as a function. The resolved value is then returned.
      *
      * @param string $abstract The abstract name or class name of the service or value to be resolved.
+     * @param array $parameters An array of parameters to be passed to the resolved service or value.
      * @return mixed The resolved service or value.
      */
-    public function resolve(string $abstract): mixed
+    public function resolve(string $abstract, array $parameters = []): mixed
     {
-        return $this->container->call($abstract);
+        return $this->container->call($abstract, $parameters);
     }
 
     /**
@@ -378,81 +359,5 @@ class Application implements ApplicationContract
 
         $console = $this->get(Console::class);
         $console->run();
-    }
-
-    /**
-     * Retrieves a service from the dependency injection container.
-     *
-     * This is a dynamic getter that allows you to access services from the container.
-     * It is equivalent to calling the `get` method on the container.
-     *
-     * @param string $abstract The abs$abstract of the service to be retrieved.
-     * @return mixed The retrieved service.
-     */
-    public function __get(string $abstract)
-    {
-        return $this->container->get($abstract);
-    }
-
-    /**
-     * Registers a service with the dependency injection container.
-     *
-     * This is a dynamic setter that allows you to register services with the container.
-     * It is equivalent to calling the `bind` method on the container.
-     *
-     * @param string $abstract The abstract name or class name of the service to be registered.
-     * @param mixed $concrete The concrete value of the service to be registered.
-     * @return void
-     */
-    public function __set(string $abstract, $concrete = null)
-    {
-        $this->container->bind($abstract, $concrete);
-    }
-
-    /**
-     * Checks if a given abstract has a binding in the container.
-     *
-     * This is a dynamic isset that allows you to check if a service is bound in the container.
-     * It is equivalent to calling the `has` method on the container.
-     *
-     * @param string $name The abstract name or class name of the service to be checked.
-     * @return bool True if the abstract has a binding, false otherwise.
-     */
-    public function __isset(string $name)
-    {
-        return $this->container->has($name);
-    }
-
-    /**
-     * Removes a binding from the dependency injection container.
-     *
-     * This is a dynamic unset that allows you to remove a service from the container.
-     * It is equivalent to calling the `forget` method on the container.
-     *
-     * @param string $name The abstract name or class name of the service to be removed.
-     * @return void
-     */
-    public function __unset(string $name)
-    {
-        $this->container->forget($name);
-    }
-
-    /**
-     * Calls a method on the container.
-     *
-     * This is a dynamic method call that allows you to call any method on the container.
-     * It is equivalent to calling the method directly on the container.
-     *
-     * @param string $method The method to be called on the container.
-     * @param array $arguments The arguments to be passed to the method.
-     * @return mixed The result of the method call.
-     */
-    public function __call(string $method, array $arguments)
-    {
-        if (static::hasMacro($method)) {
-            return $this->macroCall($method, $arguments);
-        }
-
-        return $this->container->{$method}(...$arguments);
     }
 }
