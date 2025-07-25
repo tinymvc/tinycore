@@ -98,7 +98,7 @@ class Console implements ConsoleContract
         $command = $this->commands->getCommand($name);
 
         // Execute the command
-        Application::$app->container->call($command['callback'], ['args' => $args]);
+        Application::$app->resolve($command['callback'], ['args' => $args]);
     }
 
 

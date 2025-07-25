@@ -72,7 +72,7 @@ class Gate implements GateContract
     {
         // Run "before" callbacks; if any return a non-null result, use that.
         foreach ($this->beforeCallbacks as $callback) {
-            $result = Application::$app->container->call($callback, ...$arguments);
+            $result = Application::$app->resolve($callback, ...$arguments);
             if ($result !== null) {
                 return (bool) $result;
             }
@@ -84,7 +84,7 @@ class Gate implements GateContract
         }
 
         // Call the ability callback.
-        $result = Application::$app->container->call($this->definitions[$ability], $arguments);
+        $result = Application::$app->resolve($this->definitions[$ability], $arguments);
 
         return (bool) $result;
     }

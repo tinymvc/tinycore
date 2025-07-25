@@ -90,7 +90,7 @@ class EventDispatcher implements EventDispatcherContract
 
             foreach ($eventListeners as $listener) {
                 // Invoke the callback with the provided arguments
-                Application::$app->container->call($listener['callback'], $args);
+                Application::$app->resolve($listener['callback'], $args);
             }
         }
     }
