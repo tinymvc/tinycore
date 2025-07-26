@@ -222,11 +222,11 @@ class Application implements ApplicationContract
      * This method takes an abstract name or class name and resolves it by
      * calling it as a function. The resolved value is then returned.
      *
-     * @param string $abstract The abstract name or class name of the service or value to be resolved.
+     * @param array|string|callable $abstract The abstract name or class name of the service or value to be resolved.
      * @param array $parameters An array of parameters to be passed to the resolved service or value.
      * @return mixed The resolved service or value.
      */
-    public function resolve(string $abstract, array $parameters = []): mixed
+    public function resolve(array|string|callable $abstract, array $parameters = []): mixed
     {
         return $this->container->call($abstract, $parameters);
     }
