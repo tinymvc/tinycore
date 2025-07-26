@@ -14,7 +14,7 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract, Arrayable
+class Paginator implements PaginatorUtilContract, Arrayable, \IteratorAggregate
 {
     use Macroable;
 
@@ -298,6 +298,22 @@ class Paginator implements PaginatorUtilContract, Arrayable
             'keyword' => $this->getKeyword(),
             'data' => $this->getData(),
         ];
+    }
+
+    /**
+     * Get an iterator for the items.
+     * 
+     * @template TKey of array-key
+     *
+     * @template-covariant TValue
+     *
+     * @implements \ArrayAccess<TKey, TValue>
+     *
+     * @return \ArrayIterator<TKey, TValue>
+     */
+    public function getIterator(): \Traversable
+    {
+        return new \ArrayIterator($this->getData());
     }
 
     /**
