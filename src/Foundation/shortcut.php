@@ -1567,6 +1567,25 @@ if (!function_exists('now')) {
     }
 }
 
+if (!function_exists('carbon')) {
+    /**
+     * Create a Carbon DateTime instance from a given datetime string or timestamp.
+     *
+     * This function accepts either a string representation of a date and time or
+     * a Unix timestamp (as an integer or string). It returns a Carbon DateTime
+     * instance initialized with the provided datetime.
+     *
+     * @param int|string $datetime The datetime string or Unix timestamp to convert.
+     * @return \Spark\Utils\DateTime A Carbon DateTime instance representing the provided datetime.
+     */
+    function carbon(int|string $datetime): \Spark\Utils\DateTime
+    {
+        return new \Spark\Utils\DateTime(
+            is_numeric($datetime) ? "@$datetime" : $datetime
+        );
+    }
+}
+
 if (!function_exists('toPureArray')) {
     /**
      * Recursively converts any Arrayable objects and nested arrays into pure arrays.
