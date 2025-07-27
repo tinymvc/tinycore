@@ -18,12 +18,9 @@ use Traversable;
 /**
  * Class Model
  * 
- * @template TKey of array-key
- *
- * @template-covariant TValue
- *
- * @implements \ArrayAccess<TKey, TValue>
- * 
+ * This class provides a base for models, handling database operations and entity management.
+ * It includes CRUD operations, data decoding, and dynamic method invocation.
+ *  
  * @method static int|array insert(array $data, array $config = [])
  * @method static int|array bulkUpdate(array $data, array $config = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
@@ -124,7 +121,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public static function query(): QueryBuilder
     {
         // Return a new database query builder object.
-        return get(QueryBuilder::class)
+        return app(QueryBuilder::class)
             ->table(static::$table ?? Str::snake(Str::plural(class_basename(static::class))))
             ->fetch(PDO::FETCH_CLASS, static::class);
     }
@@ -160,14 +157,15 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * Loads an array of data into a new model instance.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @return static A model instance populated with the given data.
      */
-    public static function load(array|Arrayable $data): static
+    public static function load(array|Arrayable $data, bool $ignoreEmpty = false): static
     {
         // Create & Hold a new model.
         $model = new static();
 
-        $model->fill($data); // Fill the model with the given data.
+        $model->fill($data, $ignoreEmpty); // Fill the model with the given data.
 
         // Decode model properties from JSON to array if necessary.
         $model->decodeSavedData();
@@ -180,23 +178,25 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * Creates a new model instance from the given data and saves it to the database.
      * 
      * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @return static The saved model instance.
      */
-    public static function create(array|Arrayable $data): static
+    public static function create(array|Arrayable $data, bool $ignoreEmpty = false): static
     {
-        $model = self::load($data);
+        $model = self::load($data, $ignoreEmpty);
         $model->save();
 
-        return $model;
+        return $model; // Return the saved model instance.
     }
 
     /**
      * Fills the model with the given data.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @return static The current model instance.
      */
-    public function fill(array|Arrayable $data): static
+    public function fill(array|Arrayable $data, bool $ignoreEmpty = false): static
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -204,6 +204,10 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
         // Fill the model with the given data.
         foreach ($data as $key => $value) {
+            if ($ignoreEmpty && empty($value)) {
+                continue;
+            }
+
             $this->attributes[$key] = $value;
         }
 
@@ -218,7 +222,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function save(): int|bool
     {
         // Apply events for before save and encode array into json string. 
-        $data = $this->beforeSaveData($this->getFillableData());
+        $data = $this->encodeToSaveData($this->getFillableData());
 
         // Update this records if it has an id, else insert this records into database.
         if (!empty($this->primaryValue())) {
@@ -234,14 +238,8 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
         // Apply model events after saved the record.
         $this->decodeSavedData();
-        $eventStatus = $this->afterSavedData();
 
-        if (!$status && $eventStatus) {
-            $status = true;
-        }
-
-        // Return database operation status.
-        return $status;
+        return $status; // Return database operation status.
     }
 
     /**
@@ -251,19 +249,22 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function remove(): bool
     {
-        // Call events when this model is about to be deleted.
-        $this->beforeRemoveData();
+        return $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
+    }
 
-        // Remove this record from database.
-        $removed = $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
-
-        // Call events when this model is deleted.
-        if ($removed) {
-            $this->afterRemovedData();
-        }
-
-        // Returns database operation status.
-        return $removed;
+    /**
+     * Deletes the model from the database and clears its attributes.
+     *
+     * This method is used to remove the model instance from the database
+     * and reset its attributes, effectively destroying the model instance.
+     *
+     * @return void
+     */
+    public function destroy(): void
+    {
+        $this->delete();
+        $this->attributes = []; // Clear the attributes after deletion.
+        $this->clearRelations(); // Clear any loaded relationships.
     }
 
     /**
@@ -308,13 +309,8 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param array $data The data to prepare.
      * @return array The prepared data for database insertion or update.
      */
-    private function beforeSaveData(array $data): array
+    private function encodeToSaveData(array $data): array
     {
-        // Call beforeSave event
-        if (method_exists($this, 'beforeSave')) {
-            $data = $this->beforeSave($data);
-        }
-
         // Parse model property into string if the are in array.
         foreach ($data as $key => $value) {
             $data[$key] = is_array($value) ? json_encode($value) : $value;
@@ -322,49 +318,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
         // returns associative array of model properties.
         return $data;
-    }
-
-    /**
-     * Callback after saving data to handle post-save tasks.
-     * 
-     * @return bool
-     */
-    private function afterSavedData(): bool
-    {
-        $status = false;
-
-        // Call afterSave event
-        if (method_exists($this, 'afterSave')) {
-            $status = $this->afterSave();
-        }
-
-        return $status;
-    }
-
-    /**
-     * Called before removing the model from the database.
-     * 
-     * @return void
-     */
-    private function beforeRemoveData(): void
-    {
-        // Call beforeRemove event
-        if (method_exists($this, 'beforeRemove')) {
-            $this->beforeRemove();
-        }
-    }
-
-    /**
-     * Callback after removing data to handle post-remove tasks.
-     * 
-     * @return void
-     */
-    private function afterRemovedData(): void
-    {
-        // Call afterRemove event
-        if (method_exists($this, 'afterRemove')) {
-            $this->afterRemove();
-        }
     }
 
     /**
@@ -412,7 +365,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function __set($name, $value)
     {
-        $this->attributes[$name] = $value;
+        $this->offsetSet($name, $value);
     }
 
     /**
@@ -423,7 +376,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function __get($name)
     {
-        return $this->attributes[$name] ?? $this->getRelationshipAttribute($name);
+        return $this->offsetGet($name);
     }
 
     /**
@@ -434,7 +387,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function __isset($name)
     {
-        return isset($this->attributes[$name]) || $this->relationshipExists($name);
+        return $this->offsetExists($name);
     }
 
     /**
@@ -445,11 +398,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function __unset($name)
     {
-        if (isset($this->attributes[$name])) {
-            unset($this->attributes[$name]);
-        } else {
-            $this->forgetRelation($name);
-        }
+        $this->offsetUnset($name);
     }
 
     /**
@@ -493,7 +442,11 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function offsetSet(mixed $offset, mixed $value): void
     {
-        $this->attributes[$offset] = $value;
+        if ($this->relationLoaded($offset)) {
+            $this->setRelation($offset, $value);
+        } else {
+            $this->attributes[$offset] = $value;
+        }
     }
 
     /**
@@ -504,10 +457,10 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function offsetUnset(mixed $offset): void
     {
-        if (isset($this->attributes[$offset])) {
-            unset($this->attributes[$offset]);
-        } else {
+        if ($this->relationLoaded($offset)) {
             $this->forgetRelation($offset);
+        } else {
+            unset($this->attributes[$offset]);
         }
     }
 
@@ -521,6 +474,17 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function set(string $name, mixed $value): void
     {
         data_set($this->attributes, $name, $value);
+    }
+
+    /**
+     * Unset a specific attribute.
+     *
+     * @param string $name The name of the attribute to unset.
+     * @return void
+     */
+    public function unset(string $name): void
+    {
+        data_forget($this->attributes, $name);
     }
 
     /**
@@ -548,6 +512,14 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
     /**
      * Get an iterator for the items.
+     * 
+     * This method allows the model to be iterated over like an array.
+     * 
+     * @template TKey of array-key
+     *
+     * @template-covariant TValue
+     *
+     * @implements \ArrayAccess<TKey, TValue>
      *
      * @return \ArrayIterator<TKey, TValue>
      */

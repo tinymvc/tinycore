@@ -846,6 +846,39 @@ class Request implements RequestContract, ArrayAccess
     }
 
     /**
+     * Checks if a specific key exists in the request.
+     * 
+     * This method checks if the specified key exists in the request data
+     * (query parameters, post parameters, file uploads, or route parameters).
+     *
+     * @param string $key The key to check for existence.
+     * @return bool True if the key exists, false otherwise.
+     */
+    public function has(string $key): bool
+    {
+        return $this->offsetExists($key);
+    }
+
+    /**
+     * Retrieves a request value by key, returning a default value if the key does not exist.
+     * 
+     * This method retrieves the value associated with the specified key from the request data.
+     * If the key does not exist, it returns the provided default value.
+     *
+     * @param string $key The key to retrieve the value for.
+     * @param mixed $default The default value to return if the key does not exist.
+     * @return mixed The retrieved value or the default value if the key does not exist.
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        if ($this->has($key) === false) {
+            return $default;
+        }
+
+        return $this->offsetGet($key);
+    }
+
+    /**
      * Checks if any of the specified keys exist in the request.
      * 
      * This method checks if at least one of the provided keys exists in the

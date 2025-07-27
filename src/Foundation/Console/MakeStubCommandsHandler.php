@@ -47,7 +47,7 @@ class MakeStubCommandsHandler
     {
         // Check if the pivot argument is set and true
         // If so, call the makePivotMigration method
-        if (isset($args['pivot']) && $args['pivot']) {
+        if ($this->hasFlag($args, ['pivot', 'p'])) {
             return $this->makePivotMigration($args);
         }
 
@@ -65,6 +65,14 @@ class MakeStubCommandsHandler
         );
     }
 
+    /**
+     * Create a pivot migration stub.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     *
+     * @return void
+     */
     public function makePivotMigration(array $args)
     {
         $related_table_1 = $args['_args'][0] ?? null;
@@ -135,6 +143,24 @@ class MakeStubCommandsHandler
                 ],
             ]
         );
+
+        if (!isset($args['_args'][0])) {
+            return; // If no model name is provided, exit early
+        }
+
+        if ($this->hasFlag($args, ['migration', 'm', 'mc', 'mcr'])) {
+            $this->makeMigration($args);
+        }
+
+        if ($this->hasFlag($args, ['controller', 'c', 'cr', 'mc', 'mcr'])) {
+            if ($this->hasFlag($args, ['cr', 'mcr'])) {
+                $args['restful'] = true; // Set the restful flag if 'cr' or 'mcr' is present
+            }
+
+            $args['_args'][0] .= 'Controller'; // Append 'Controller' to the model name
+
+            $this->makeController($args);
+        }
     }
 
     /**
@@ -147,7 +173,7 @@ class MakeStubCommandsHandler
      */
     public function makeController(array $args)
     {
-        if (isset($args['restful']) && $args['restful']) {
+        if ($this->hasFlag($args, ['restful', 'resource', 'rest', 'r'])) {
             $stub = __DIR__ . '/stubs/controller-restful.stub';
         } else {
             $stub = __DIR__ . '/stubs/controller.stub';
@@ -228,5 +254,27 @@ class MakeStubCommandsHandler
                 'destination' => 'resources/views/components/::subfolder:lowercase/::name:lowercase.blade.php',
             ]
         );
+    }
+
+    /**
+     * Check if the command has any of the specified flags.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     * @param array $flags
+     *   The flags to check for.
+     *
+     * @return bool
+     *   True if any of the flags are present, false otherwise.
+     */
+    private function hasFlag(array $args, array $flags): bool
+    {
+        foreach ($flags as $flag) {
+            if (isset($args[$flag]) && $args[$flag]) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

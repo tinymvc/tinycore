@@ -88,6 +88,10 @@ class CommandsServiceProvider
         $commands->addCommand('view:clear', [PrimaryCommandsHandler::class, 'clearViewCaches'])
             ->description('Clear the view caches');
 
+        // Clear all cache files
+        $commands->addCommand('cache:clear', [PrimaryCommandsHandler::class, 'clearCache'])
+            ->description('Clear all cache files');
+
         // Add the migrate:rollback command
         $commands->addCommand('migrate:rollback', function (array $args) {
             $step = $args['step'] ?? ($args['_args'][0] ?? 1);

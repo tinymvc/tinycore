@@ -404,6 +404,18 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * This method allows you to add additional bindings to the WHERE clause.
+     * It is an alias for `addWhereBinding` method.
+     * 
+     * @param array $args
+     * @return QueryBuilder
+     */
+    public function addBinding(array $args): self
+    {
+        return $this->addWhereBinding($args);
+    }
+
+    /**
      * Adds a raw WHERE clause to the query.
      *
      * @param string $sql
@@ -1538,6 +1550,16 @@ class QueryBuilder implements QueryBuilderContract
 
         // Returns number of found rows.
         return $statement->fetch(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Checks if any records exist based on the current query conditions.
+     *
+     * @return bool True if at least one record exists, false otherwise.
+     */
+    public function exists(): bool
+    {
+        return $this->count() > 0;
     }
 
     /**

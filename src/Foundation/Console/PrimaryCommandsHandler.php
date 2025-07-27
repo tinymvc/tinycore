@@ -166,6 +166,39 @@ class PrimaryCommandsHandler
     }
 
     /**
+     * Clears all cache files in the application.
+     *
+     * This method removes all cache files from the storage/cache directory,
+     * except for the .gitignore file. It provides feedback on the success
+     * or failure of the operation.
+     *
+     * @param Prompt $prompt
+     *   An instance of the Prompt class for displaying messages in the console.
+     *
+     * @return void
+     */
+    public function clearCache(Prompt $prompt)
+    {
+        $this->clearViewCaches($prompt); // Also clear view caches
+
+        $cacheDir = storage_dir('cache');
+
+        if (is_dir($cacheDir)) {
+            foreach (scandir($cacheDir) as $item) {
+                if (in_array($item, ['.', '..', '.gitignore'])) {
+                    continue;
+                }
+
+                deleteDirectoryOrFile($item);
+            }
+        } else {
+            $prompt->message("Cache directory does not exist.", "warning");
+        }
+
+        $prompt->message("All cache contents cleared.", "success");
+    }
+
+    /**
      * Generates a new application key and updates the environment file.
      *
      * This method generates a random application key and replaces the placeholder

@@ -59,23 +59,22 @@ trait ValidateRequest
                     . '</ul>';
 
                 // Return the errors as a JSON response
-                response()
-                    ->json(['status' => 'error', 'message' => $errorHtml])
+                json(['status' => 'error', 'message' => $errorHtml])
                     ->send();
-                exit;
             } elseif ($this->expectsJson()) {
                 // Return the errors as a JSON response
-                response()
-                    ->json(['message' => __('Validation failed'), 'errors' => $errors])
-                    ->setStatusCode(422)
+                json([
+                    'message' => rtrim($validator->getFirstError(), '.') . '.' . (count($errors) > 1 ? ' (and ' . count($errors) . ' more errors)' : ''),
+                    'errors' => $errors
+                ], 422)
                     ->send();
-                exit;
+            } else {
+                // Store the errors in the session flash data
+                back()
+                    ->with('errors', ['attributes' => $attributes, 'messages' => $errors])
+                    ->send(); // Redirect the user back to the previous page
             }
-
-            // Store the errors in the session flash data
-            response()
-                ->with('errors', ['attributes' => $attributes, 'messages' => $errors])
-                ->back(); // Redirect the user back to the previous page
+            exit; // Exit the script to prevent further execution
         }
 
         return new InputSanitizer($attributes); // Return the validated attributes

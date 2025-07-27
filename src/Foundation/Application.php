@@ -2,7 +2,6 @@
 
 namespace Spark\Foundation;
 
-use App\Models\User;
 use Spark\Console\Commands;
 use Spark\Console\Console;
 use Spark\Container;
@@ -93,7 +92,7 @@ class Application implements ApplicationContract
         $this->container->singleton(Queue::class);
         $this->container->singleton(
             Auth::class,
-            fn() => new Auth(session: $this->container->get(Session::class), userModel: User::class)
+            fn() => new Auth(session: $this->container->get(Session::class), userModel: \App\Models\User::class)
         );
         $this->container->bind(QueryBuilder::class);
     }

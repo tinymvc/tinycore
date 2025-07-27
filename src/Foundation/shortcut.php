@@ -233,6 +233,22 @@ if (!function_exists('redirect')) {
     }
 }
 
+if (!function_exists('back')) {
+    /**
+     * Redirect back to the previous page.
+     *
+     * This function returns a response that redirects the user back to the
+     * previous page they were on. It uses the application's response helper
+     * to create the redirect response.
+     *
+     * @return Response The response instance for the redirect back action.
+     */
+    function back(): Response
+    {
+        return response()->back();
+    }
+}
+
 if (!function_exists('session')) {
     /**
      * Manage session data by setting or retrieving values.
@@ -734,6 +750,44 @@ if (!function_exists('config')) {
     }
 }
 
+if (!function_exists('env')) {
+    /**
+     * Get the value of the specified environment variable.
+     *
+     * This function retrieves the value of the specified environment variable
+     * from the application environment. If the variable is not set, it returns
+     * the provided default value.
+     *
+     * @param string $key The name of the environment variable to retrieve.
+     * @param mixed $default The default value to return if the variable is not set.
+     *
+     * @return mixed The value of the specified environment variable, or the default value if it is not set.
+     */
+    function env(string $key, $default = null)
+    {
+        return app()->getEnv($key, $default);
+    }
+}
+
+if (!function_exists('envs')) {
+    /**
+     * Set multiple environment variables.
+     *
+     * This function takes an associative array of environment variables and sets
+     * them in the application environment. Each key-value pair in the array
+     * represents an environment variable and its value.
+     *
+     * @param array $envs An associative array of environment variables to set.
+     */
+    function envs(array $envs): void
+    {
+        foreach ($envs as $key => $value) {
+            app()->setEnv($key, $value);
+        }
+    }
+}
+
+
 if (!function_exists('csrf_token')) {
     /**
      * Get the CSRF token.
@@ -799,6 +853,41 @@ if (!function_exists('auth')) {
     function auth(): Auth
     {
         return get(Auth::class);
+    }
+}
+
+if (!function_exists('is_guest')) {
+    /**
+     * Determine if the current request is made by a guest user.
+     *
+     * This function checks if the user is not set in the current application request,
+     * indicating that the request is made by a guest (unauthenticated) user.
+     *
+     * @return bool True if the request is made by a guest user, false otherwise.
+     */
+    function is_guest(): bool
+    {
+        return auth()->isGuest();
+    }
+}
+
+if (!function_exists('user')) {
+    /**
+     * Get the currently authenticated user.
+     *
+     * If no user is authenticated, this function returns null. If a key is provided,
+     * this function will return the value of the provided key from the user's data.
+     * If the key does not exist in the user's data, the default value will be returned
+     * instead.
+     *
+     * @param string $key The key to retrieve from the user's data.
+     * @param mixed $default The default value to return if the key does not exist.
+     *
+     * @return mixed The user object, or the value of the provided key from the user's data.
+     */
+    function user(?string $key = null, $default = null): mixed
+    {
+        return $key !== null && !is_guest() ? (auth()->getUser()->get($key, $default)) : auth()->getUser();
     }
 }
 
@@ -962,41 +1051,6 @@ if (!function_exists('dispatch')) {
     }
 }
 
-if (!function_exists('is_guest')) {
-    /**
-     * Determine if the current request is made by a guest user.
-     *
-     * This function checks if the user is not set in the current application request,
-     * indicating that the request is made by a guest (unauthenticated) user.
-     *
-     * @return bool True if the request is made by a guest user, false otherwise.
-     */
-    function is_guest(): bool
-    {
-        return auth()->isGuest();
-    }
-}
-
-if (!function_exists('user')) {
-    /**
-     * Get the currently authenticated user.
-     *
-     * If no user is authenticated, this function returns null. If a key is provided,
-     * this function will return the value of the provided key from the user's data.
-     * If the key does not exist in the user's data, the default value will be returned
-     * instead.
-     *
-     * @param string $key The key to retrieve from the user's data.
-     * @param mixed $default The default value to return if the key does not exist.
-     *
-     * @return mixed The user object, or the value of the provided key from the user's data.
-     */
-    function user(?string $key = null, $default = null): mixed
-    {
-        return $key !== null && !is_guest() ? (auth()->getUser()->get($key, $default)) : auth()->getUser();
-    }
-}
-
 if (!function_exists('cache')) {
     /**
      * Retrieve or create a cache instance by name.
@@ -1114,15 +1168,14 @@ if (!function_exists('validator')) {
     {
         $data ??= request()->all();
 
-        $validator = get(InputValidator::class);
+        $validator = new InputValidator;
         $result = $validator->validate($rules, $data);
 
-        if ($result) {
-            return get(InputSanitizer::class)
-                ->setData($result);
+        if (!$result) {
+            throw new InputValidationFailedException($validator->getFirstError() ?? 'Input validation failed');
         }
 
-        throw new InputValidationFailedException($validator->getFirstError() ?? 'Input validation failed');
+        return $result; // Return the sanitized input data
     }
 }
 
@@ -1499,28 +1552,77 @@ if (!function_exists('uploader')) {
     }
 }
 
-/**
- * Recursively converts any Arrayable objects and nested arrays into pure arrays.
- *
- * @param  mixed  $data  An Arrayable, an array of mixed values, or any other value.
- * @return mixed         A pure array if input was Arrayable/array; otherwise the original value.
- */
-function toPureArray(mixed $data): mixed
-{
-    // If it's an object that knows how to cast itself to array, do it and recurse
-    if ($data instanceof Arrayable) {
-        return toPureArray($data->toArray());
+if (!function_exists('now')) {
+    /**
+     * Get the current date and time as a DateTime object.
+     *
+     * This function returns the current date and time as a DateTime object,
+     * which can be used for various date and time operations.
+     *
+     * @return \Spark\Utils\DateTime The current date and time.
+     */
+    function now(): \Spark\Utils\DateTime
+    {
+        return \Spark\Utils\DateTime::now();
     }
+}
 
-    // If it's an array, recurse into each element
-    if (is_array($data)) {
-        return array_map(
-            /** @param mixed $item */
-            fn($item): mixed => toPureArray($item),
-            $data
-        );
+if (!function_exists('toPureArray')) {
+    /**
+     * Recursively converts any Arrayable objects and nested arrays into pure arrays.
+     *
+     * @param  mixed  $data  An Arrayable, an array of mixed values, or any other value.
+     * @return mixed         A pure array if input was Arrayable/array; otherwise the original value.
+     */
+    function toPureArray(mixed $data): mixed
+    {
+        // If it's an object that knows how to cast itself to array, do it and recurse
+        if ($data instanceof Arrayable) {
+            return toPureArray($data->toArray());
+        }
+
+        // If it's an array, recurse into each element
+        if (is_array($data)) {
+            return array_map(
+                /** @param mixed $item */
+                fn($item): mixed => toPureArray($item),
+                $data
+            );
+        }
+
+        // Otherwise return as-is (string/int/etc)
+        return $data;
     }
+}
 
-    // Otherwise return as-is (string/int/etc)
-    return $data;
+if (!function_exists('deleteDirectoryOrFile')) {
+    /**
+     * Deletes a directory or file and all its contents.
+     *
+     * @param string $location The directory path to delete.
+     * @return void
+     */
+    function deleteDirectoryOrFile(string $location): void
+    {
+        if (!is_file($location)) {
+            unlink($location);
+            return;
+        }
+
+        // Check if the directory exists
+        if (!is_dir($location)) {
+            return;
+        }
+
+        foreach (scandir($location) as $item) {
+            if ($item === '.' || $item === '..')
+                continue;
+
+            $path = $location . DIRECTORY_SEPARATOR . $item;
+
+            deleteDirectoryOrFile($path);
+        }
+
+        rmdir($location);
+    }
 }

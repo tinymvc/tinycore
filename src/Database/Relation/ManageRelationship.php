@@ -78,6 +78,16 @@ trait ManageRelationship
     }
 
     /**
+     * Clear all loaded relationships.
+     *
+     * @return $this
+     */
+    public function clearRelations(): void
+    {
+        $this->relations = [];
+    }
+
+    /**
      * Define a one-to-one relationship.
      * 
      * This method allows you to define a one-to-one relationship between 
