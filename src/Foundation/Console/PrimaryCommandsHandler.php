@@ -264,10 +264,10 @@ class PrimaryCommandsHandler
         }
 
         // Attempt to create the symbolic link
-        if (!fm()->link($storageUploadsDir, $publicUploadsDir)) {
+        if (!fm()->link($publicUploadsDir, $storageUploadsDir)) {
             $prompt->message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
         }
 
-        $prompt->message("<info>Success</info> Symbolic link created successfully: $publicUploadsDir → $storageUploadsDir");
+        $prompt->message("<info>Success</info> Symbolic link created successfully: $storageUploadsDir → $publicUploadsDir");
     }
 }
