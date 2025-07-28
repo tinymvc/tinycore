@@ -43,7 +43,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      */
     public function __construct(public int $total = 0, public int $limit = 10, public string $keyword = 'page')
     {
-        $this->resetPaginator();
+        $this->reset();
     }
 
     /**
@@ -51,11 +51,11 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return self
      */
-    public function resetPaginator(): self
+    public function reset(): self
     {
-        $this->pages = (int) ceil($this->getTotal() / $this->getLimit());
-        $this->page = min($this->getPages(), $this->getKeywordValue());
-        $this->offset = (int) ceil($this->getLimit() * ($this->getPage() - 1));
+        $this->pages = (int) ceil($this->total() / $this->limit());
+        $this->page = min($this->pages(), $this->keywordValue());
+        $this->offset = (int) ceil($this->limit() * ($this->page() - 1));
 
         return $this;
     }
@@ -65,7 +65,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return int
      */
-    public function getPages(): int
+    public function pages(): int
     {
         return max($this->pages, 0);
     }
@@ -75,7 +75,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return int
      */
-    public function getPage(): int
+    public function page(): int
     {
         return max($this->page, 0);
     }
@@ -85,7 +85,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return int
      */
-    public function getOffset(): int
+    public function offset(): int
     {
         return max($this->offset, 0);
     }
@@ -95,7 +95,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return int
      */
-    public function getTotal(): int
+    public function total(): int
     {
         return max($this->total, 0);
     }
@@ -105,7 +105,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return int
      */
-    public function getLimit(): int
+    public function limit(): int
     {
         return max($this->limit, 0);
     }
@@ -115,7 +115,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return string
      */
-    public function getKeyword(): string
+    public function keyword(): string
     {
         return $this->keyword;
     }
@@ -125,11 +125,11 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return int
      */
-    public function getKeywordValue(): int
+    public function keywordValue(): int
     {
         return filter_input(
             INPUT_GET,
-            $this->getKeyword(),
+            $this->keyword(),
             FILTER_VALIDATE_INT,
             ['options' => ['default' => 1, 'min_range' => 1]]
         ) ?: 1;
@@ -162,7 +162,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return array The data array or a subset of it.
      */
-    public function getData(bool $lazy = false): array
+    public function data(bool $lazy = false): array
     {
         // Returns sliced items, if lazy mode is enabled. 
         if ($lazy) {
@@ -180,7 +180,17 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      */
     public function hasData(): bool
     {
-        return !empty($this->getData());
+        return !empty($this->data());
+    }
+
+    /**
+     * Checks if the data array is empty.
+     * 
+     * @return bool
+     */
+    public function isEmpty(): bool
+    {
+        return empty($this->data());
     }
 
     /**
@@ -190,7 +200,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      */
     public function hasLinks(): bool
     {
-        return $this->getPages() > 1;
+        return $this->pages() > 1;
     }
 
     /**
@@ -202,24 +212,24 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return string HTML string with pagination links.
      */
-    public function getLinks(int $links = 2, array $classes = [], array $entity = []): string
+    public function links(int $links = 1, array $classes = [], array $entity = []): string
     {
         // Holds html anchors for pagination.
         $output = [];
 
         // Calculate start, end page number.
-        $start = max(1, $this->getPage() - $links);
-        $end = min($this->getPages(), $this->getPage() + $links);
+        $start = max(1, $this->page() - $links);
+        $end = min($this->pages(), $this->page() + $links);
 
         //Add dynamic pagination buttons in unordered list...
         $output[] = sprintf('<ul class="%s">', $classes['ul'] ?? 'pagination');
 
-        if ($this->getPage() > 1) {
+        if ($this->page() > 1) {
             $output[] = sprintf(
                 '<li class="%s"><a class="%s" href="%s">%s</a></li>',
                 $classes['li'] ?? 'page-item',
                 $classes['a'] ?? 'page-link',
-                $this->getAnchor($this->getPage() - 1),
+                $this->getAnchor($this->page() - 1),
                 $entity['prev'] ?? __('Previous')
             );
         }
@@ -243,15 +253,15 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
             $output[] = sprintf(
                 '<li class="%s %s"><a class="%s %s" href="%s">%s</a></li>',
                 $classes['li'] ?? 'page-item',
-                $this->getPage() === $i ? ($classes['li.current'] ?? 'active') : '',
+                $this->page() === $i ? ($classes['li.current'] ?? 'active') : '',
                 $classes['a'] ?? 'page-link',
-                $this->getPage() === $i ? ($classes['a.current'] ?? '') : '',
+                $this->page() === $i ? ($classes['a.current'] ?? '') : '',
                 $this->getAnchor($i),
                 $i
             );
         }
 
-        if ($end < $this->getPages()) {
+        if ($end < $this->pages()) {
             $output[] = sprintf(
                 '<li class="%s disabled"><span class="%s">...</span></li>',
                 $classes['li'] ?? 'page-item',
@@ -262,17 +272,17 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
                 '<li class="%s"><a class="%s" href="%s">%s</a></li>',
                 $classes['li'] ?? 'page-item',
                 $classes['a'] ?? 'page-link',
-                $this->getAnchor($this->getPages()),
-                $this->getPages()
+                $this->getAnchor($this->pages()),
+                $this->pages()
             );
         }
 
-        if ($this->getPage() < $this->getPages()) {
+        if ($this->page() < $this->pages()) {
             $output[] = sprintf(
                 '<li class="%s"><a class="%s" href="%s">%s</a></li>',
                 $classes['li'] ?? 'page-item',
                 $classes['a'] ?? 'page-link',
-                $this->getAnchor($this->getPage() + 1),
+                $this->getAnchor($this->page() + 1),
                 $entity['next'] ?? __('Next')
             );
         }
@@ -291,13 +301,15 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
     public function toArray(): array
     {
         return [
-            'pages' => $this->getPages(),
-            'page' => $this->getPage(),
-            'offset' => $this->getOffset(),
-            'total' => $this->getTotal(),
-            'limit' => $this->getLimit(),
-            'keyword' => $this->getKeyword(),
-            'data' => $this->getData(),
+            'pages' => $this->pages(),
+            'page' => $this->page(),
+            'offset' => $this->offset(),
+            'limit' => $this->limit(),
+            'first_item' => $this->firstItem(),
+            'last_item' => $this->lastItem(),
+            'total' => $this->total(),
+            'keyword' => $this->keyword(),
+            'data' => $this->data(),
         ];
     }
 
@@ -314,7 +326,27 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      */
     public function getIterator(): \Traversable
     {
-        return new \ArrayIterator($this->getData());
+        return new \ArrayIterator($this->data());
+    }
+
+    /**
+     * Get the first item number in the current page.
+     * 
+     * @return int The first item number.
+     */
+    public function firstItem(): int
+    {
+        return max($this->offset(), 1);
+    }
+
+    /**
+     * Get the last item number in the current page.
+     * 
+     * @return int The last item number.
+     */
+    public function lastItem(): int
+    {
+        return min($this->offset() + $this->limit(), $this->total());
     }
 
     /**
@@ -383,7 +415,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
     {
         return home_url(
             request()->getPath() . '?' . http_build_query(
-                array_merge(request()->getQueryParams(), [$this->getKeyword() => $page])
+                array_merge(request()->getQueryParams(), [$this->keyword() => $page])
             )
         );
     }

@@ -1477,9 +1477,7 @@ class QueryBuilder implements QueryBuilderContract
             $this->select();
         }
 
-        $paginator = get(Paginator::class);
-        $paginator->limit = $limit;
-        $paginator->keyword = $keyword;
+        $paginator = new Paginator(limit: $limit, keyword: $keyword);
 
         // Count total records from exisitng command only for serverside database driver.
         if ($this->database->isDriver('mysql')) {
@@ -1488,7 +1486,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Set pagination count to limit database records, and execute query.
         $this->limit(
-            ceil($limit * ($paginator->getKeywordValue() - 1)),
+            ceil($limit * ($paginator->keywordValue() - 1)),
             $limit
         )
             ->executeSelectQuery();
@@ -1514,7 +1512,7 @@ class QueryBuilder implements QueryBuilderContract
         );
 
         // Re-initialize paginator pages.
-        $paginator->resetPaginator();
+        $paginator->reset();
 
         // Reset current query builder.
         $this->resetQuery();

@@ -16,7 +16,7 @@ interface PaginatorUtilContract
      * @param bool $lazy Whether to use lazy loading or not.
      * @return array The data collection.
      */
-    public function getData(bool $lazy = false): array;
+    public function data(bool $lazy = false): array;
 
     /**
      * Checks if the data collection is not empty.
@@ -40,5 +40,5 @@ interface PaginatorUtilContract
      * @param array $entity The text entities for the 'previous' and 'next' links.
      * @return string The pagination links as an HTML string.
      */
-    public function getLinks(int $links = 2, array $classes = [], array $entity = []): string;
+    public function links(int $links = 2, array $classes = [], array $entity = []): string;
 }
