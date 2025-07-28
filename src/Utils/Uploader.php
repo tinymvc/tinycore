@@ -29,7 +29,7 @@ class Uploader implements UploaderUtilContract
     /** @var ?bool Whether to support multiple file uploads. */
     public ?bool $multiple;
 
-    /** @var int|null Maximum file size (in bytes). */
+    /** @var int|null Maximum file size (in KB). */
     public ?int $maxSize;
 
     /** @var array|null Resize options for images. */
@@ -51,7 +51,7 @@ class Uploader implements UploaderUtilContract
      * @param ?string $uploadDir Upload directory path.
      * @param array $extensions Supported file extensions.
      * @param ?bool $multiple Whether to support multiple file uploads.
-     * @param int|null $maxSize Maximum file size (in bytes).
+     * @param int|null $maxSize Maximum file size (in KB).
      * @param array|null $resize Resize options for images.
      * @param array|null $resizes Bulk resize options for images.
      * @param int|null $compress Compression level for images.
@@ -61,7 +61,7 @@ class Uploader implements UploaderUtilContract
         ?string $uploadDir = null,
         array $extensions = [],
         ?bool $multiple = null,
-        ?int $maxSize = 2097152,
+        ?int $maxSize = 2048, // Default to 2MB
         ?array $resize = null,
         ?array $resizes = null,
         ?int $compress = null,
@@ -187,7 +187,7 @@ class Uploader implements UploaderUtilContract
     protected function processUpload(array $file): array|string
     {
         // Validate file size
-        if (isset($this->maxSize) && $file['size'] > $this->maxSize) {
+        if (isset($this->maxSize) && $file['size'] > ($this->maxSize * 1024)) {
             throw new UploaderUtilException(__('File size exceeds the maximum limit.'), 503);
         }
 

@@ -1375,8 +1375,7 @@ if (!function_exists('abort')) {
         // return a JSON response
         if (request()->expectsJson()) {
             // If the request is an AJAX request, return a JSON response
-            response()
-                ->json(['message' => $message ?? __e('Internal Server Error'), 'code' => $code], $code)
+            json(['message' => $message ?? __e('Internal Server Error'), 'code' => $code], $code)
                 ->send();
 
             exit; // Exit the script
@@ -1461,10 +1460,9 @@ if (!function_exists('http')) {
      */
     function http(?string $url = null, array $params = [], array $config = []): Http|HttpUtilResponse
     {
-        $http = get(Http::class);
+        $http = new Http($config);
 
         if ($url !== null) {
-            $http->resetConfig($config);
             return $http->send($url, $params);
         }
 
@@ -1521,7 +1519,7 @@ if (!function_exists('uploader')) {
      * @param string|null $uploadTo Optional. The upload destination path. Default is null.
      * @param string|null $uploadDir Optional. The upload directory path. Default is the value of the 'upload_dir' configuration.
      * @param array $extensions Optional. The array of allowed file extensions. Default is an empty array.
-     * @param int|null $maxSize Optional. The maximum allowed file size in bytes. Default is 2097152 (2MB).
+     * @param int|null $maxSize Optional. The maximum allowed file size in KB. Default is 2048 (2MB).
      * @param array|null $resize Optional. The resize configuration array. Default is an empty array.
      * @param array|null $resizes Optional. The resizes configuration array. Default is an empty array.
      * @param int|null $compress Optional. The compression ratio for images. Default is null.
@@ -1531,7 +1529,7 @@ if (!function_exists('uploader')) {
         ?string $uploadTo = null,
         ?string $uploadDir = null,
         array $extensions = [],
-        ?int $maxSize = 2097152,
+        ?int $maxSize = 2048, // Default to 2MB
         ?array $resize = null,
         ?array $resizes = null,
         ?int $compress = null,

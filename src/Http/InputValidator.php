@@ -78,12 +78,12 @@ class InputValidator implements InputValidatorContract
                     'required' => $has_valid_value,
                     'email', 'mail' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_EMAIL) : true,
                     'url', 'link' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_URL) : true,
-                    'number', 'int', 'integer' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
+                    'number', 'numeric', 'int', 'integer' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
                     'array', 'list' => ($has_valid_value || $is_required) ? is_array($value) : true,
                     'text', 'char', 'string' => ($has_valid_value || $is_required) ? is_string($value) : true,
-                    'min', 'minimum' => ($has_valid_value || $is_required) ? strlen($value ?? '') >= (int) $ruleParams[0] : true,
-                    'max', 'maximum' => ($has_valid_value || $is_required) ? strlen($value ?? '') <= (int) $ruleParams[0] : true,
-                    'length', 'size' => ($has_valid_value || $is_required) ? strlen($value ?? '') == (int) $ruleParams[0] : true,
+                    'min', 'minimum' => ($has_valid_value || $is_required) ? $this->compareMin($value, $ruleParams[0]) : true,
+                    'max', 'maximum' => ($has_valid_value || $is_required) ? $this->compareMax($value, $ruleParams[0]) : true,
+                    'length', 'size' => ($has_valid_value || $is_required) ? $this->compareSize($value, $ruleParams[0]) : true,
                     'equal', 'same', 'same_as' => ($has_valid_value || $is_required) ? $value == ($inputData[$ruleParams[0]] ?? null) : true,
                     'confirmed' => ($has_valid_value || $is_required) ? $value == ($inputData["{$field}_confirmation"] ?? null) : true,
                     'in', 'exists' => ($has_valid_value || $is_required) ? in_array($value, $ruleParams, true) : true,
@@ -95,7 +95,6 @@ class InputValidator implements InputValidatorContract
                     'alpha' => ($has_valid_value || $is_required) ? ctype_alpha($value) : true,
                     'alpha_num', 'alphanumeric' => ($has_valid_value || $is_required) ? ctype_alnum($value) : true,
                     'alpha_dash' => ($has_valid_value || $is_required) ? preg_match('/^[a-zA-Z0-9_-]+$/', $value) : true,
-                    'numeric' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
                     'digits' => ($has_valid_value || $is_required) ? ctype_digit($value) && strlen($value) == (int) $ruleParams[0] : true,
                     'digits_between' => ($has_valid_value || $is_required) ? ctype_digit($value) && strlen($value) >= (int) $ruleParams[0] && strlen($value) <= (int) $ruleParams[1] : true,
                     'min_digits' => ($has_valid_value || $is_required) ? ctype_digit($value) && strlen($value) >= (int) $ruleParams[0] : true,
@@ -130,7 +129,6 @@ class InputValidator implements InputValidatorContract
                     'max_value' => ($has_valid_value || $is_required) ? is_numeric($value) && (float) $value <= (float) $ruleParams[0] : true,
                     'distinct' => $this->validateDistinct($value),
                     'password' => ($has_valid_value || $is_required) ? $this->validatePassword($value, $ruleParams) : true,
-
                     default => true // Default to true if rule is not recognized
                 };
 
@@ -148,6 +146,79 @@ class InputValidator implements InputValidatorContract
 
         // Return validated data or false if there are errors
         return empty($this->errors) ? new InputSanitizer($validData) : false;
+    }
+
+    /** 
+     * Compare value against minimum size
+     * 
+     * Compares a value against a minimum size, which can be numeric, string length,
+     * or array size.
+     * 
+     * @param mixed $value The value to compare.
+     * @param mixed $min The minimum size to compare against.
+     * @return bool True if the value meets or exceeds the minimum size, false otherwise.
+     */
+    private function compareMin($value, $min): bool
+    {
+        if (is_numeric($value)) {
+            return (float) $value >= (float) $min;
+        } elseif (is_array($value) && isset($value['size'])) {
+            return (int) $value['size'] >= ((int) $min * 1024); // Assuming size is in KB
+        } elseif (is_array($value)) {
+            return count($value) >= (int) $min;
+        } elseif (is_string($value)) {
+            return strlen($value) >= (int) $min;
+        }
+
+        return false;
+    }
+
+    /** 
+     * Compare value against maximum size
+     * 
+     * Compares a value against a maximum size, which can be numeric, string length,
+     * or array size.
+     * 
+     * @param mixed $value The value to compare.
+     * @param mixed $max The maximum size to compare against.
+     * @return bool True if the value is less than or equal to the maximum size, false otherwise.
+     */
+    private function compareMax($value, $max): bool
+    {
+        if (is_numeric($value)) {
+            return (float) $value <= (float) $max;
+        } elseif (is_array($value) && isset($value['size'])) {
+            return (int) $value['size'] <= ((int) $max * 1024); // Assuming size is in KB
+        } elseif (is_array($value)) {
+            return count($value) <= (int) $max;
+        } elseif (is_string($value)) {
+            return strlen($value) <= (int) $max;
+        }
+        return false;
+    }
+
+    /** 
+     * Compare value against size
+     * 
+     * Compares a value against a specific size, which can be numeric, string length,
+     * or array size.
+     * 
+     * @param mixed $value The value to compare.
+     * @param mixed $size The size to compare against.
+     * @return bool True if the value is equal to the specified size, false otherwise.
+     */
+    private function compareSize($value, $size): bool
+    {
+        if (is_numeric($value)) {
+            return (float) $value == (float) $size;
+        } elseif (is_array($value) && isset($value['size'])) {
+            return (int) $value['size'] == ((int) $size * 1024); // Assuming size is in KB
+        } elseif (is_array($value)) {
+            return count($value) == (int) $size;
+        } elseif (is_string($value)) {
+            return strlen($value) == (int) $size;
+        }
+        return false;
     }
 
     /**
@@ -343,7 +414,7 @@ class InputValidator implements InputValidatorContract
             'required' => __($this->getErrorMessagePlaceholder('required', $field, 'The %s field is required.'), $prettyField),
             'email', 'mail' => __($this->getErrorMessagePlaceholder('email', $field, 'The %s field must be a valid email address.'), $prettyField),
             'url', 'link' => __($this->getErrorMessagePlaceholder('url', $field, 'The %s field must be a valid URL.'), $prettyField),
-            'number', 'int', 'integer' => __($this->getErrorMessagePlaceholder('number', $field, 'The %s field must be a number.'), $prettyField),
+            'number', 'numeric', 'int', 'integer' => __($this->getErrorMessagePlaceholder('number', $field, 'The %s field must be a number.'), $prettyField),
             'array', 'list' => __($this->getErrorMessagePlaceholder('array', $field, 'The %s field must be an array.'), $prettyField),
             'text', 'char', 'string' => __($this->getErrorMessagePlaceholder('text', $field, 'The %s field must be a text.'), $prettyField),
             'min', 'minimum' => __($this->getErrorMessagePlaceholder('min', $field, 'The %s field must be at least %s characters long.'), [$prettyField, $params[0] ?? 0]),
@@ -360,7 +431,6 @@ class InputValidator implements InputValidatorContract
             'alpha' => __($this->getErrorMessagePlaceholder('alpha', $field, 'The %s field must contain only letters.'), $prettyField),
             'alpha_num', 'alphanumeric' => __($this->getErrorMessagePlaceholder('alpha_num', $field, 'The %s field must contain only letters and numbers.'), $prettyField),
             'alpha_dash' => __($this->getErrorMessagePlaceholder('alpha_dash', $field, 'The %s field must contain only letters, numbers, dashes, and underscores.'), $prettyField),
-            'numeric' => __($this->getErrorMessagePlaceholder('numeric', $field, 'The %s field must be numeric.'), $prettyField),
             'digits' => __($this->getErrorMessagePlaceholder('digits', $field, 'The %s field must be %s digits.'), [$prettyField, $params[0] ?? 0]),
             'digits_between' => __($this->getErrorMessagePlaceholder('digits_between', $field, 'The %s field must be between %s and %s digits.'), [$prettyField, $params[0] ?? 0, $params[1] ?? 0]),
             'min_digits' => __($this->getErrorMessagePlaceholder('min_digits', $field, 'The %s field must be at least %s digits.'), [$prettyField, $params[0] ?? 0]),

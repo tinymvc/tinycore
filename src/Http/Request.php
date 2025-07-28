@@ -2,7 +2,7 @@
 
 namespace Spark\Http;
 
-use ArrayAccess;
+use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Helpers\RequestErrors;
@@ -16,7 +16,7 @@ use Spark\Support\Traits\Macroable;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Request implements RequestContract, ArrayAccess
+class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 {
     use Macroable;
 
@@ -850,6 +850,24 @@ class Request implements RequestContract, ArrayAccess
     }
 
     /**
+     * Get an iterator for the items.
+     * 
+     * This method allows the model to be iterated over like an array.
+     * 
+     * @template TKey of array-key
+     *
+     * @template-covariant TValue
+     *
+     * @implements \ArrayAccess<TKey, TValue>
+     *
+     * @return ArrayIterator<TKey, TValue>
+     */
+    public function getIterator(): \Traversable
+    {
+        return new ArrayIterator($this->all());
+    }
+
+    /**
      * Checks if a specific key exists in the request.
      * 
      * This method checks if the specified key exists in the request data
@@ -954,11 +972,12 @@ class Request implements RequestContract, ArrayAccess
                 // Return the errors as a JSON response
                 json(['status' => 'error', 'message' => $errorHtml])->send();
             } elseif ($this->expectsJson()) {
+                // Validate error message
+                $message = $validator->getFirstError()
+                    . (count($errors) > 1 ? ' (and ' . count($errors) . ' more errors)' : '');
+
                 // Return the errors as a JSON response
-                json([
-                    'message' => rtrim($validator->getFirstError(), '.') . '.' . (count($errors) > 1 ? ' (and ' . count($errors) . ' more errors)' : ''),
-                    'errors' => $errors
-                ], 422)->send();
+                json(['message' => $message, 'errors' => $errors], 422)->send();
             } else {
                 // Store the errors in the session flash data
                 back()
