@@ -31,6 +31,13 @@ class View implements ViewContract
     private string $path;
 
     /**
+     * Array of paths to use for template resolution
+     * 
+     * @var array
+     */
+    private array $usePath = [];
+
+    /**
      * Path to store compiled templates
      * 
      * @var string
@@ -121,6 +128,16 @@ class View implements ViewContract
     }
 
     /**
+     * Get the base path for templates.
+     *
+     * @return string The directory path for the template files.
+     */
+    public function getPath(): string
+    {
+        return $this->path;
+    }
+
+    /**
      * Sets the cache path for compiled templates.
      *
      * @param string $cachePath The directory path for compiled templates.
@@ -129,6 +146,28 @@ class View implements ViewContract
     public function setCachePath(string $cachePath): self
     {
         $this->cachePath = dir_path($cachePath);
+        return $this;
+    }
+
+    /**
+     * Get the cache path for compiled templates.
+     *
+     * @return string The directory path for compiled templates.
+     */
+    public function getCachePath(): string
+    {
+        return $this->cachePath;
+    }
+
+    /**
+     * Set the paths to use for template resolution
+     * 
+     * @param string|array $paths
+     * @return self
+     */
+    public function setUsePath(string|array $paths): self
+    {
+        $this->usePath = array_map('dir_path', (array) $paths);
         return $this;
     }
 
@@ -259,12 +298,7 @@ class View implements ViewContract
      */
     public function component(string $component, array $context = []): string
     {
-        $componentPath = dir_path($this->path . '/components/' . str_replace('.', '/', $component) . '.blade.php');
-
-        if (!file_exists($componentPath)) {
-            throw new ViewException("Component [$component] not found at path [$componentPath]");
-        }
-
+        $componentPath = $this->getTemplatePath("components/$component");
         $compiledPath = $this->compiler->getCompiledPath("components/$component");
 
         // Compile component if needed
@@ -360,8 +394,16 @@ class View implements ViewContract
 
         // Check if the template is exists then return it
         $bladePath = dir_path("{$this->path}/$template.blade.php");
-        if (file_exists($bladePath)) {
+        if (is_file($bladePath)) {
             return $bladePath;
+        }
+
+        // Check in additional paths if set
+        foreach ($this->usePath as $path) {
+            $bladePath = dir_path("$path/$template.blade.php");
+            if (is_file($bladePath)) {
+                return $bladePath;
+            }
         }
 
         throw new ViewException("Template [$template] not found in path [{$this->path}]");

@@ -12,7 +12,7 @@ use Spark\Http\Session;
  *
  * @package Spark\Helpers
  */
-class HttpRequestErrors
+class RequestErrors
 {
     /**
      * @var array Stores error messages for fields

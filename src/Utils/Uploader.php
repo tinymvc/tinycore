@@ -94,10 +94,7 @@ class Uploader implements UploaderUtilContract
     public function setUploadDir(string $uploadDir): self
     {
         // Ensure the upload directory exists and is writable
-        if (!is_dir($uploadDir) && !mkdir($uploadDir, 0777, true)) {
-            // Create the upload directory
-            throw new UploaderUtilException(__('Failed to create upload directory.'), 501);
-        } elseif (!is_writable($uploadDir) && !chmod($uploadDir, 0777)) {
+        if (!fm()->ensureDirectoryWritable($uploadDir)) {
             // Make the upload directory writable
             throw new UploaderUtilException(__('Upload directory is not writable.'), 502);
         }
@@ -159,8 +156,7 @@ class Uploader implements UploaderUtilContract
                 return $this->driver->delete($file);
             }
 
-            $filepath = upload_dir($file);
-            return is_file($filepath) && unlink($filepath);
+            return fm()->delete(upload_dir($file));
         }
     }
 

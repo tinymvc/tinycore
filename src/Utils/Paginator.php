@@ -2,6 +2,7 @@
 
 namespace Spark\Utils;
 
+use ArrayAccess;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
 use Spark\Support\Traits\Macroable;
@@ -14,7 +15,7 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract, Arrayable, \IteratorAggregate
+class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \IteratorAggregate
 {
     use Macroable;
 
@@ -314,6 +315,61 @@ class Paginator implements PaginatorUtilContract, Arrayable, \IteratorAggregate
     public function getIterator(): \Traversable
     {
         return new \ArrayIterator($this->getData());
+    }
+
+    /**
+     * Check if the response was a success (2xx status code).
+     *
+     * @param mixed $offset The offset to check.
+     * @return bool True if success, false otherwise.
+     */
+    public function offsetExists(mixed $offset): bool
+    {
+        return property_exists($this, $offset) || isset($this->data[$offset]);
+    }
+
+    /**
+     * Get the value at the specified offset.
+     *
+     * @param mixed $offset The offset to retrieve.
+     * @return mixed The value at the specified offset or null if not set.
+     */
+    public function offsetGet(mixed $offset): mixed
+    {
+        if (property_exists($this, $offset)) {
+            return $this->{$offset};
+        }
+
+        return $this->data[$offset] ?? null;
+    }
+
+    /**
+     * Set the value at the specified offset.
+     *
+     * @param mixed $offset The offset to set.
+     * @param mixed $value The value to set at the specified offset.
+     */
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        if (property_exists($this, $offset)) {
+            $this->{$offset} = $value;
+        } else {
+            $this->data[$offset] = $value;
+        }
+    }
+
+    /**
+     * Unset the value at the specified offset.
+     *
+     * @param mixed $offset The offset to unset.
+     */
+    public function offsetUnset(mixed $offset): void
+    {
+        if (property_exists($this, $offset)) {
+            unset($this->{$offset});
+        } else {
+            unset($this->data[$offset]);
+        }
     }
 
     /**

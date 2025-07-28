@@ -459,7 +459,7 @@ class Router implements RouterContract
         }
 
         // Remove unresolved optional parameters
-        $route = preg_replace('/\{[a-zA-Z]+\?\}/', '', $route);
+        $route = preg_replace('/\{[a-zA-Z]+\??\}/', '', $route);
 
         // Remove trailing wildcard
         return rtrim($route, '*/');
@@ -622,28 +622,12 @@ class Router implements RouterContract
             return $response;
         }
 
-        // If the response is a string, create a new Response object with it
-        if (is_string($response) || $response instanceof \Stringable) {
-            return new Response($response);
-        }
-
         // If the response is an integer, return a Response with that status code
         // This is useful for returning HTTP status codes directly
         if (is_int($response)) {
             return new Response(statusCode: $response);
         }
 
-        // If the response is an array, convert it to JSON and return as a Response
-        if (is_array($response)) {
-            return new Response(json_encode(toPureArray($response)), 200, ['Content-Type' => 'application/json']);
-        }
-
-        // If the response implements Arrayable, convert it to an array and return as JSON
-        if ($response instanceof Arrayable) {
-            return new Response(json_encode(toPureArray($response->toArray())), 200, ['Content-Type' => 'application/json']);
-        }
-
-        // Otherwise, return an empty response
-        return new Response();
+        return new Response($response); // Otherwise, convert the response to a string
     }
 }

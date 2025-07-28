@@ -2,10 +2,9 @@
 
 namespace Spark\Utils;
 
-use ArrayAccess;
 use Spark\Contracts\Utils\HttpUtilContract;
 use Spark\Exceptions\Utils\PingUtilException;
-use Spark\Helpers\HttpResponse;
+use Spark\Helpers\HttpUtilResponse;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -14,11 +13,11 @@ use Spark\Support\Traits\Macroable;
  * A helper class for making HTTP requests in PHP using cURL. Supports GET, POST, PUT, PATCH, and DELETE methods,
  * as well as custom headers, options, user agents, and file downloads.
  * 
- * @method static ArrayAccess get(string $url, array $params = [])
- * @method static ArrayAccess post(string $url, array $params = [])
- * @method static ArrayAccess put(string $url, array $params = [])
- * @method static ArrayAccess patch(string $url, array $params = [])
- * @method static ArrayAccess delete(string $url, array $params = [])
+ * @method static HttpUtilResponse get(string $url, array $params = [])
+ * @method static HttpUtilResponse post(string $url, array $params = [])
+ * @method static HttpUtilResponse put(string $url, array $params = [])
+ * @method static HttpUtilResponse patch(string $url, array $params = [])
+ * @method static HttpUtilResponse delete(string $url, array $params = [])
  * 
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
@@ -49,10 +48,10 @@ class Http implements HttpUtilContract
      *
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
-     * @return ArrayAccess The response data, including body, status code, final URL, and content length.
+     * @return HttpUtilResponse The response data, including body, status code, final URL, and content length.
      * @throws PingUtilException If cURL initialization fails.
      */
-    public function send(string $url, array $params = []): ArrayAccess
+    public function send(string $url, array $params = []): HttpUtilResponse
     {
         $curl = curl_init();
         if ($curl === false) {
@@ -117,7 +116,7 @@ class Http implements HttpUtilContract
         $this->resetConfig();
 
         // The response data, including body, status code, final URL, and content length.
-        return new HttpResponse($response);
+        return new HttpUtilResponse($response);
     }
 
     /**
@@ -236,9 +235,11 @@ class Http implements HttpUtilContract
      */
     public function cookie(array $cookies): self
     {
-        $cookies = array_map(function ($key, $value) {
-            return "$key=$value";
-        }, array_keys($cookies), $cookies);
+        $cookies = array_map(
+            fn($key, $value) => "$key=$value",
+            array_keys($cookies),
+            $cookies
+        );
 
         $this->config['headers'][] = "Cookie: " . implode('; ', $cookies);
 

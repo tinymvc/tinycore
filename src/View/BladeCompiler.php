@@ -38,7 +38,9 @@ class BladeCompiler implements BladeCompilerContract
     public function __construct(string $cachePath)
     {
         $this->cachePath = dir_path($cachePath);
-        $this->ensureCacheDirectoryExists();
+
+        // Ensure the cache directory exists and is writable
+        fm()->ensureDirectoryWritable($this->cachePath);
     }
 
     /**
@@ -819,18 +821,6 @@ class BladeCompiler implements BladeCompilerContract
         }
 
         return filemtime($templatePath) > filemtime($compiledPath);
-    }
-
-    /**
-     * Ensure cache directory exists
-     * 
-     * @return void
-     */
-    private function ensureCacheDirectoryExists(): void
-    {
-        if (!is_dir($this->cachePath)) {
-            mkdir($this->cachePath, 0755, true);
-        }
     }
 
     /**

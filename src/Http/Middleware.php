@@ -4,10 +4,9 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Contracts\Http\MiddlewareWithParametersInterface;
-use Spark\Contracts\Support\Arrayable;
+use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
 use Spark\Http\Response;
-use Spark\Http\Exceptions\MiddlewareNotFoundExceptions;
 use Spark\Support\Traits\Macroable;
 use Closure;
 
@@ -161,15 +160,8 @@ class Middleware
 
         // Handle different response types efficiently
         return match (true) {
-            is_string($response) || $response instanceof \Stringable => new Response($response, 200, ['Content-Type' => 'text/html']),
-            is_array($response) => new Response(json_encode(toPureArray($response)), 200, ['Content-Type' => 'application/json']),
             is_int($response) => new Response(statusCode: $response), // HTTP status code
-            $response instanceof Arrayable => new Response(
-                json_encode(toPureArray($response->toArray())),
-                200,
-                ['Content-Type' => 'application/json']
-            ),
-            default => new Response((string) $response, 200)
+            default => new Response($response, 200)
         };
     }
 

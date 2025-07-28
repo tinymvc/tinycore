@@ -3,7 +3,9 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\ResponseContract;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Support\Traits\Macroable;
+use Stringable;
 
 /**
  * Class Response
@@ -31,21 +33,23 @@ class Response implements ResponseContract
      * 
      * Initializes a new response instance with the provided content, status code, and headers.
      * 
-     * @param string $content The response content.
+     * @param array|string|Arrayable|Stringable $content The response content.
+     *   This can be a string, an array, or an Arrayable object that will be converted to a string.
+     *   If an array is provided, it will be converted to a JSON string.
      * @param int $statusCode The HTTP status code.
      * @param array $headers An associative array of headers to send with the response.
      */
-    public function __construct(private string $content = '', private int $statusCode = 200, private array $headers = [])
+    public function __construct(private mixed $content = '', private int $statusCode = 200, private array $headers = [])
     {
     }
 
     /**
      * Sets the response content to a specified string, replacing any existing content.
      *
-     * @param string $content The content to set in the response body.
+     * @param array|string|Arrayable|Stringable $content The content to set in the response body.
      * @return $this Current response instance for method chaining.
      */
-    public function setContent(string $content): self
+    public function setContent(array|string|Arrayable|Stringable $content): self
     {
         $this->content = $content;
         return $this;
@@ -59,6 +63,10 @@ class Response implements ResponseContract
      */
     public function write(string $content): self
     {
+        if (!is_string($this->content)) {
+            $this->content = '';
+        }
+
         $this->content .= $content;
         return $this;
     }
@@ -66,17 +74,17 @@ class Response implements ResponseContract
     /**
      * Sends a JSON response to the client.
      *
-     * @param array $data The data to be encoded as JSON.
+     * @param array|Arrayable $data The data to be encoded as JSON.
      * @param int $statusCode The HTTP status code to send with the response. Defaults to 200.
      * @param int $flags The JSON encoding flags. Defaults to 0.
      * @return $this Current response instance for method chaining.
      */
-    public function json(array $data, int $statusCode = 200, int $flags = 0, int $depth = 512): self
+    public function json(array|Arrayable $data, int $statusCode = 200, int $flags = 0, int $depth = 512): self
     {
         $this->setStatusCode($statusCode);
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         $this->setContent(
-            json_encode($data, $flags, $depth)
+            json_encode($this->toPureArray($data), $flags, $depth)
         );
 
         return $this;
@@ -190,26 +198,48 @@ class Response implements ResponseContract
             exit; // Terminate script execution after redirect
         }
 
+        // Convert content to string if it's an array, Arrayable, or Stringable.
+        if (is_array($this->content) || $this->content instanceof Arrayable) {
+            $this->setHeader('Content-Type', 'application/json; charset=utf-8');
+            $this->setContent(
+                json_encode($this->toPureArray($this->content))
+            );
+        } elseif (!is_string($this->content)) {
+            $this->setContent((string) $this->content); // Ensure content is a string
+        }
+
         // Set http response code and headers.
         http_response_code($this->statusCode);
         foreach ($this->headers as $key => $value) {
             header("$key: $value");
         }
 
-        // send output to client.
-        echo $this->content;
+        echo $this->content; // send output to client.
     }
 
     /**
-     * Converts the response to a string by returning the response content.
+     * Recursively converts any Arrayable objects and nested arrays into pure arrays.
      *
-     * This method is automatically called when the response is used in a string context.
-     * For example, when echo-ing the response or when using the response in a concatenation.
-     *
-     * @return string The response content as a string.
+     * @param  mixed  $data  An Arrayable, an array of mixed values, or any other value.
+     * @return mixed         A pure array if input was Arrayable/array; otherwise the original value.
      */
-    public function __toString(): string
+    private function toPureArray(mixed $data): mixed
     {
-        return $this->content;
+        // If it's an object that knows how to cast itself to array, do it and recurse
+        if ($data instanceof Arrayable) {
+            return $this->toPureArray($data->toArray());
+        }
+
+        // If it's an array, recurse into each element
+        if (is_array($data)) {
+            return array_map(
+                /** @param mixed $item */
+                fn($item): mixed => $this->toPureArray($item),
+                $data
+            );
+        }
+
+        // Otherwise return as-is (string/int/etc)
+        return $data;
     }
 }

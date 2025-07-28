@@ -326,13 +326,11 @@ class Cache implements CacheUtilContract
     {
         if ($this->changed) {
             // Set a temp directory to store caches. 
-            $cacheDir = config('cache_dir');
+            $cacheDir = dir_path(config('cache_dir'));
 
-            // Check if cache directory exists, else create a new direcotry.
-            if (!is_dir($cacheDir) && !mkdir($cacheDir, 0777, true)) {
-                throw new FailedToSaveCacheFileException("Failed to create temp directory to store caches.");
-            } elseif (!is_writable($cacheDir) && !chmod($cacheDir, 0777)) {
-                throw new FailedToSaveCacheFileException("Temp directory is not writable.");
+            // Check if cache directory exists, else create a new directory.
+            if (!fm()->ensureDirectoryWritable($cacheDir)) {
+                throw new FailedToSaveCacheFileException("Cache directory is not writable.");
             }
 
             // Save updated cache data into local filesystem.

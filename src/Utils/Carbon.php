@@ -2,6 +2,11 @@
 
 namespace Spark\Utils;
 
+use DateTime;
+use DateTimeZone;
+use InvalidArgumentException;
+use Spark\Contracts\Support\Arrayable;
+
 /**
  * Custom DateTime Utility Class
  *  
@@ -11,10 +16,10 @@ namespace Spark\Utils;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class DateTime
+class Carbon implements Arrayable, \Stringable
 {
-    /** @var \DateTime */
-    private \DateTime $dateTime;
+    /** @var DateTime */
+    private DateTime $dateTime;
 
     /** @var string|null */
     private static ?string $defaultTimezone = null;
@@ -23,20 +28,20 @@ class DateTime
      * Constructor to create a new DateTime instance
      *
      * @param string $time The time string to parse, defaults to 'now'
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      */
-    public function __construct(string $time = 'now', ?\DateTimeZone $timezone = null)
+    public function __construct(string $time = 'now', ?DateTimeZone $timezone = null)
     {
-        $this->dateTime = new \DateTime($time, $timezone ?? $this->getDefaultTimezone());
+        $this->dateTime = new DateTime($time, $timezone ?? $this->getDefaultTimezone());
     }
 
     /**
      * Create a new DateTime instance for the current time
      * 
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function now(?\DateTimeZone $timezone = null): self
+    public static function now(?DateTimeZone $timezone = null): self
     {
         return new self('now', $timezone);
     }
@@ -44,10 +49,10 @@ class DateTime
     /**
      * Create a new DateTime instance for today at midnight
      * 
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function today(?\DateTimeZone $timezone = null): self
+    public static function today(?DateTimeZone $timezone = null): self
     {
         return new self('today', $timezone);
     }
@@ -55,10 +60,10 @@ class DateTime
     /**
      * Create a new DateTime instance for tomorrow at midnight
      * 
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function tomorrow(?\DateTimeZone $timezone = null): self
+    public static function tomorrow(?DateTimeZone $timezone = null): self
     {
         return new self('tomorrow', $timezone);
     }
@@ -66,10 +71,10 @@ class DateTime
     /**
      * Create a new DateTime instance for yesterday at midnight
      * 
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function yesterday(?\DateTimeZone $timezone = null): self
+    public static function yesterday(?DateTimeZone $timezone = null): self
     {
         return new self('yesterday', $timezone);
     }
@@ -79,14 +84,14 @@ class DateTime
      * 
      * @param string $format The format to use for parsing the datetime string
      * @param string $datetime The datetime string to parse
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function createFromFormat(string $format, string $datetime, ?\DateTimeZone $timezone = null): self
+    public static function createFromFormat(string $format, string $datetime, ?DateTimeZone $timezone = null): self
     {
-        $dt = \DateTime::createFromFormat($format, $datetime, $timezone ?? static::getDefaultTimezone());
+        $dt = DateTime::createFromFormat($format, $datetime, $timezone ?? static::getDefaultTimezone());
         if ($dt === false) {
-            throw new \InvalidArgumentException("Could not parse datetime: {$datetime} with format: {$format}");
+            throw new InvalidArgumentException("Could not parse datetime: {$datetime} with format: {$format}");
         }
 
         $instance = new self();
@@ -98,13 +103,13 @@ class DateTime
      * Create DateTime from timestamp
      * 
      * @param int $timestamp The Unix timestamp to create the DateTime from
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function createFromTimestamp(int $timestamp, ?\DateTimeZone $timezone = null): self
+    public static function createFromTimestamp(int $timestamp, ?DateTimeZone $timezone = null): self
     {
         $instance = new self();
-        $instance->dateTime = new \DateTime('@' . $timestamp);
+        $instance->dateTime = new DateTime("@$timestamp");
         if ($timezone) {
             $instance->dateTime->setTimezone($timezone);
         }
@@ -115,10 +120,10 @@ class DateTime
      * Parse a datetime string
      * 
      * @param string $datetime The datetime string to parse
-     * @param \DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function parse(string $datetime, ?\DateTimeZone $timezone = null): self
+    public static function parse(string $datetime, ?DateTimeZone $timezone = null): self
     {
         return new self($datetime, $timezone);
     }
@@ -126,14 +131,14 @@ class DateTime
     /**
      * Set default timezone for all instances
      * 
-     * @param string|\DateTimeZone $timezone The timezone to set as default
-     * @throws \InvalidArgumentException if the timezone is invalid
+     * @param string|DateTimeZone $timezone The timezone to set as default
+     * @throws InvalidArgumentException if the timezone is invalid
      * @return void
      */
-    public static function setDefaultTimezone(string|\DateTimeZone $timezone): void
+    public static function setDefaultTimezone(string|DateTimeZone $timezone): void
     {
         if (is_string($timezone)) {
-            $timezone = new \DateTimeZone($timezone);
+            $timezone = new DateTimeZone($timezone);
         }
         self::$defaultTimezone = $timezone->getName();
     }
@@ -144,11 +149,11 @@ class DateTime
      * This method returns the default timezone set for the class.
      * If no default timezone has been set, it returns the system's default timezone.
      * 
-     * @return \DateTimeZone
+     * @return DateTimeZone
      */
-    private static function getDefaultTimezone(): \DateTimeZone
+    private static function getDefaultTimezone(): DateTimeZone
     {
-        return new \DateTimeZone(self::$defaultTimezone ?? date_default_timezone_get());
+        return new DateTimeZone(self::$defaultTimezone ?? date_default_timezone_get());
     }
 
     /**
@@ -778,7 +783,7 @@ class DateTime
      */
     public function diffForHumans(self $other = null): string
     {
-        $other = $other ?? self::now();
+        $other ??= self::now();
         $diff = $this->getTimestamp() - $other->getTimestamp();
         $absDiff = abs($diff);
 
@@ -807,14 +812,14 @@ class DateTime
     /**
      * Set the timezone for the DateTime instance
      * 
-     * @param string|\DateTimeZone $timezone The timezone to set
+     * @param string|DateTimeZone $timezone The timezone to set
      * @return self A new DateTime instance with the specified timezone
      */
-    public function setTimezone(string|\DateTimeZone $timezone): self
+    public function setTimezone(string|DateTimeZone $timezone): self
     {
         $new = clone $this;
         if (is_string($timezone)) {
-            $timezone = new \DateTimeZone($timezone);
+            $timezone = new DateTimeZone($timezone);
         }
         $new->dateTime->setTimezone($timezone);
         return $new;
@@ -823,9 +828,9 @@ class DateTime
     /**
      * Get the timezone of the DateTime instance
      * 
-     * @return \DateTimeZone The timezone of the DateTime instance
+     * @return DateTimeZone The timezone of the DateTime instance
      */
-    public function getTimezone(): \DateTimeZone
+    public function getTimezone(): DateTimeZone
     {
         return $this->dateTime->getTimezone();
     }
@@ -875,7 +880,7 @@ class DateTime
     public static function maxDate(self ...$dates): self
     {
         if (empty($dates)) {
-            throw new \InvalidArgumentException('At least one date must be provided');
+            throw new InvalidArgumentException('At least one date must be provided');
         }
 
         return array_reduce($dates, function ($max, $current) {
@@ -894,7 +899,7 @@ class DateTime
     public static function minDate(self ...$dates): self
     {
         if (empty($dates)) {
-            throw new \InvalidArgumentException('At least one date must be provided');
+            throw new InvalidArgumentException('At least one date must be provided');
         }
 
         return array_reduce($dates, function ($min, $current) {
@@ -912,7 +917,7 @@ class DateTime
      */
     public function age(self $birthDate = null): int
     {
-        $birthDate = $birthDate ?? $this;
+        $birthDate ??= $this;
         $now = self::now();
 
         return (int) $now->dateTime->diff($birthDate->dateTime)->format('%y');

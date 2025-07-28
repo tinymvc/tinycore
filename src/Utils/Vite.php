@@ -4,7 +4,6 @@ namespace Spark\Utils;
 
 use Spark\Contracts\Utils\ViteUtilContract;
 use Spark\Support\Traits\Macroable;
-use Spark\Utils\Http;
 
 /**
  * Class Vite
@@ -136,11 +135,7 @@ class Vite implements ViteUtilContract
             return $this->config['running'] = false;
         }
 
-        // live check if vite development server is running or not
-        $http = new Http();
-        $http->options([CURLOPT_TIMEOUT => 10, CURLOPT_NOBODY => true]);
-
-        return $this->config['running'] = $http->get($this->serverUrl($entry))['status'] === 200;
+        return $this->config['running'] = http(url: $this->serverUrl($entry), config: [CURLOPT_TIMEOUT => 10, CURLOPT_NOBODY => true])->isOk();
     }
 
     /**
@@ -213,7 +208,7 @@ class Vite implements ViteUtilContract
      */
     public function hasManifest(): bool
     {
-        return file_exists($this->getManifestPath());
+        return is_file($this->getManifestPath());
     }
 
     /**

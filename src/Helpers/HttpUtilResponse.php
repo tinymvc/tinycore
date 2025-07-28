@@ -13,7 +13,7 @@ use ArrayAccess;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class HttpResponse implements ArrayAccess
+class HttpUtilResponse implements ArrayAccess
 {
     public mixed $body = ''; // The response body
     public int $status = 0; // The HTTP status code

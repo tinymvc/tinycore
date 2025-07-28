@@ -5,7 +5,7 @@ namespace Spark\Http;
 use ArrayAccess;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
-use Spark\Http\Traits\ValidateRequest;
+use Spark\Helpers\RequestErrors;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -19,12 +19,6 @@ use Spark\Support\Traits\Macroable;
 class Request implements RequestContract, ArrayAccess
 {
     use Macroable;
-
-    /**
-     * Use the Validator trait to validate request data. If 
-     * it fails, then redirect to previous page with error messages
-     */
-    use ValidateRequest;
 
     /**
      * HTTP request method (e.g., GET, POST).
@@ -79,6 +73,16 @@ class Request implements RequestContract, ArrayAccess
      * @var array
      */
     private array $routeParams;
+
+    /**
+     * The error object.
+     *
+     * This property contains the error messages
+     * when the validation fails.
+     *
+     * @var object
+     */
+    private object $errorObject;
 
     /**
      * request constructor.
@@ -914,5 +918,103 @@ class Request implements RequestContract, ArrayAccess
             }
         }
         return true;
+    }
+
+    /**
+     * Validates the request with given rules.
+     * 
+     * The method gets the input attributes from the current request and
+     * validates them with the given rules. If the validation fails, the
+     * method redirects the user back to the previous page with the
+     * validation errors. If the request wants a JSON response, the method
+     * returns the validation errors as a JSON response.
+     * 
+     * @param array $rules
+     *   The validation rules.
+     *
+     * @return InputSanitizer
+     *   Returns the validated attributes as an InputSanitizer instance.
+     */
+    public function validate(array $rules): InputSanitizer
+    {
+        $attributes = $this->all(array_keys($rules)); // Get the attributes from the current request
+        $validator = new InputValidator(); // Get the validator instance
+
+        if (!$validator->validate($rules, $this->all())) { // Validate the request
+            $errors = $validator->getErrors(); // Get the errors as an array
+
+            // If the request wants a JSON response
+            if ($this->isFirelineRequest()) {
+                $errorHtml = '<ul>' // Build the error HTML
+                    . collect(array_merge(...array_values($errors)))
+                        ->map(fn($error) => "<li>{$error}</li>")
+                        ->join('') // Join the errors into a string
+                    . '</ul>';
+
+                // Return the errors as a JSON response
+                json(['status' => 'error', 'message' => $errorHtml])->send();
+            } elseif ($this->expectsJson()) {
+                // Return the errors as a JSON response
+                json([
+                    'message' => rtrim($validator->getFirstError(), '.') . '.' . (count($errors) > 1 ? ' (and ' . count($errors) . ' more errors)' : ''),
+                    'errors' => $errors
+                ], 422)->send();
+            } else {
+                // Store the errors in the session flash data
+                back()
+                    ->with('errors', ['attributes' => $attributes, 'messages' => $errors])
+                    ->send(); // Redirect the user back to the previous page
+            }
+            exit; // Exit the script to prevent further execution
+        }
+
+        return new InputSanitizer($attributes); // Return the validated attributes
+    }
+
+    /**
+     * Get the error object.
+     *
+     * The method returns the error object from the session flash data.
+     * The error object contains the error messages and attributes from the previous request.
+     *
+     * @return \Spark\Helpers\RequestErrors
+     *   The error object.
+     */
+    public function getErrorObject(): RequestErrors
+    {
+        return $this->errorObject ??= app(RequestErrors::class);
+    }
+
+    /**
+     * Get the errors from the current request.
+     *
+     * @param null|array|string $field The field name to retrieve the error messages for.
+     *                                  If null, all error object will be returned.
+     * @return object|bool An object containing the error messages from the current request.
+     */
+    public function errors(null|array|string $field = null): mixed
+    {
+        if ($field !== null) {
+            foreach ((array) $field as $name) {
+                if ($this->getErrorObject()->has($name)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return $this->getErrorObject();
+    }
+
+    /**
+     * Get the value of a field from the previous request using the old input.
+     *
+     * @param string $field The name of the field to retrieve.
+     * @param ?string $default The default value to return if the field is not found.
+     * @return string|null The value of the field from the previous request, or the default value if not found.
+     */
+    public function old(string $field, ?string $default = null): ?string
+    {
+        return $this->getErrorObject()->getOld($field, $default);
     }
 }

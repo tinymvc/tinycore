@@ -7,9 +7,9 @@ use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
 use Spark\Exceptions\Http\InputValidationFailedException;
-use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
 use Spark\Hash;
+use Spark\Helpers\HttpUtilResponse;
 use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
@@ -22,6 +22,8 @@ use Spark\Queue\Job;
 use Spark\Router;
 use Spark\Translator;
 use Spark\Utils\Cache;
+use Spark\Utils\Carbon;
+use Spark\Utils\FileManager;
 use Spark\Utils\Http;
 use Spark\Utils\Image;
 use Spark\Utils\Mail;
@@ -1455,9 +1457,9 @@ if (!function_exists('http')) {
      * @param string|null $url Optional. The URL to make the request to.
      * @param array $params Optional. The query parameters for the request.
      * @param array $config Optional. The configuration for the request.
-     * @return mixed The HTTP instance if no URL is provided, otherwise the response.
+     * @return Http|HttpUtilResponse The HTTP instance or the response from the request.
      */
-    function http(?string $url = null, array $params = [], array $config = []): mixed
+    function http(?string $url = null, array $params = [], array $config = []): Http|HttpUtilResponse
     {
         $http = get(Http::class);
 
@@ -1559,11 +1561,11 @@ if (!function_exists('now')) {
      * This function returns the current date and time as a DateTime object,
      * which can be used for various date and time operations.
      *
-     * @return \Spark\Utils\DateTime The current date and time.
+     * @return \Spark\Utils\Carbon The current date and time.
      */
-    function now(): \Spark\Utils\DateTime
+    function now(): Carbon
     {
-        return \Spark\Utils\DateTime::now();
+        return Carbon::now();
     }
 }
 
@@ -1575,73 +1577,44 @@ if (!function_exists('carbon')) {
      * a Unix timestamp (as an integer or string). It returns a Carbon DateTime
      * instance initialized with the provided datetime.
      *
-     * @param int|string $datetime The datetime string or Unix timestamp to convert.
-     * @return \Spark\Utils\DateTime A Carbon DateTime instance representing the provided datetime.
+     * @param int|string $time The datetime string or Unix timestamp to convert.
+     * @param DateTimeZone|null $timezone An optional DateTimeZone instance to set the timezone for the Carbon instance.
+     * @return \Spark\Utils\Carbon A Carbon DateTime instance representing the provided datetime.
      */
-    function carbon(int|string $datetime): \Spark\Utils\DateTime
+    function carbon(int|string $time = 'now', ?DateTimeZone $timezone = null): Carbon
     {
-        return new \Spark\Utils\DateTime(
-            is_numeric($datetime) ? "@$datetime" : $datetime
+        return new Carbon(
+            is_numeric($time) ? "@$time" : $time,
+            $timezone
         );
     }
 }
-
-if (!function_exists('toPureArray')) {
+if (!function_exists('filemanager')) {
     /**
-     * Recursively converts any Arrayable objects and nested arrays into pure arrays.
+     * Retrieves the FileManager instance.
      *
-     * @param  mixed  $data  An Arrayable, an array of mixed values, or any other value.
-     * @return mixed         A pure array if input was Arrayable/array; otherwise the original value.
+     * This function returns the FileManager instance, which provides methods
+     * for managing files and directories.
+     *
+     * @return FileManager The FileManager instance.
      */
-    function toPureArray(mixed $data): mixed
+    function filemanager(): FileManager
     {
-        // If it's an object that knows how to cast itself to array, do it and recurse
-        if ($data instanceof Arrayable) {
-            return toPureArray($data->toArray());
-        }
-
-        // If it's an array, recurse into each element
-        if (is_array($data)) {
-            return array_map(
-                /** @param mixed $item */
-                fn($item): mixed => toPureArray($item),
-                $data
-            );
-        }
-
-        // Otherwise return as-is (string/int/etc)
-        return $data;
+        return new FileManager;
     }
 }
 
-if (!function_exists('deleteDirectoryOrFile')) {
+if (!function_exists('fm')) {
     /**
-     * Deletes a directory or file and all its contents.
+     * Retrieves the FileManager instance.
      *
-     * @param string $location The directory path to delete.
-     * @return void
+     * This function returns the FileManager instance, which provides methods
+     * for managing files and directories. It is an alias for the filemanager() function.
+     *
+     * @return FileManager The FileManager instance.
      */
-    function deleteDirectoryOrFile(string $location): void
+    function fm(): FileManager
     {
-        if (!is_file($location)) {
-            unlink($location);
-            return;
-        }
-
-        // Check if the directory exists
-        if (!is_dir($location)) {
-            return;
-        }
-
-        foreach (scandir($location) as $item) {
-            if ($item === '.' || $item === '..')
-                continue;
-
-            $path = $location . DIRECTORY_SEPARATOR . $item;
-
-            deleteDirectoryOrFile($path);
-        }
-
-        rmdir($location);
+        return filemanager();
     }
 }

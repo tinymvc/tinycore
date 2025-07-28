@@ -126,15 +126,7 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
      */
     public function getIterator(): Traversable
     {
-        $data = $this->getModels();
-
-        if ($data instanceof Collection) {
-            return $data->getIterator();
-        } elseif ($data instanceof Model) {
-            return new ArrayIterator([$data]);
-        }
-
-        return new ArrayIterator($data);
+        return new ArrayIterator($this->toArray());
     }
 
     /**
@@ -148,9 +140,7 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
     {
         $data = $this->getModels();
 
-        if ($data instanceof Collection) {
-            return $data->toArray();
-        } elseif ($data instanceof Model) {
+        if ($data instanceof Arrayable) {
             return $data->toArray();
         }
 

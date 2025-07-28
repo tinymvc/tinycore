@@ -189,7 +189,13 @@ class PrimaryCommandsHandler
                     continue;
                 }
 
-                deleteDirectoryOrFile($item);
+                $item = dir_path("$cacheDir/$item");
+
+                if (is_dir($item)) {
+                    fm()->deleteDirectory($item); // Delete directory
+                } else {
+                    fm()->delete($item); // Delete file
+                }
             }
         } else {
             $prompt->message("Cache directory does not exist.", "warning");
@@ -252,29 +258,16 @@ class PrimaryCommandsHandler
         $publicUploadsDir = root_dir('public/uploads');
 
         // Check if the symbolic link already exists
-        if (is_link($publicUploadsDir) || file_exists($publicUploadsDir)) {
+        if (fm()->isLink($publicUploadsDir)) {
             $prompt->message("The symbolic link is already exists.", "warning");
             return;
         }
 
-        if (stripos(PHP_OS, 'WIN') === 0) {
-            // Use junction on Windows
-            $cmd = sprintf('mklink /J "%s" "%s"', $publicUploadsDir, $storageUploadsDir);
-
-            exec($cmd, $output, $retval);
-
-            if ($retval === 0) {
-                $prompt->message("<info>Success</info> Symbolic link created successfully: $publicUploadsDir → $storageUploadsDir");
-                return;
-            }
-        }
-
         // Attempt to create the symbolic link
-        if (symlink($storageUploadsDir, $publicUploadsDir)) {
-            $prompt->message("<info>Success</info> Symbolic link created successfully: $publicUploadsDir → $storageUploadsDir");
-            return;
+        if (!fm()->link($storageUploadsDir, $publicUploadsDir)) {
+            $prompt->message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
         }
 
-        $prompt->message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
+        $prompt->message("<info>Success</info> Symbolic link created successfully: $publicUploadsDir → $storageUploadsDir");
     }
 }
