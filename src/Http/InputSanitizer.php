@@ -663,6 +663,6 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
             return $this->macroCall($name, $arguments);
         }
 
-        return Str::$name(strval($this->get($arguments[0])), ...array_slice($arguments, 1));
+        return Str::$name(strval($this->text($arguments[0])), ...array_slice($arguments, 1));
     }
 }
