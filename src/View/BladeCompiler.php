@@ -286,22 +286,22 @@ class BladeCompiler implements BladeCompilerContract
             return '';
         }
 
-        // For simple HTML content without PHP or components, escape and quote it
-        if (!$this->containsPHPOrComponents($content)) {
+        // For simple text content, use string directly for better performance
+        if (!$this->containsDynamicContent($content)) {
             return $this->escapeSlotContent($content);
         }
 
-        // If it contains PHP or components, we need to capture it as a closure
+        // If it contains dynamic content, use ob_start() buffering
         return "function() { ob_start(); ?>{$content}<?php return ob_get_clean(); }";
     }
 
     /**
-     * Check if content contains PHP expressions or x-components
+     * Check if content contains dynamic content that needs ob_start() buffering
      */
-    private function containsPHPOrComponents(string $content): bool
+    private function containsDynamicContent(string $content): bool
     {
         // Check for PHP tags
-        if (strpos($content, '<?php') !== false || strpos($content, '<?=') !== false) {
+        if (strpos($content, '<?') !== false) {
             return true;
         }
 
@@ -312,6 +312,16 @@ class BladeCompiler implements BladeCompilerContract
 
         // Check for template directives
         if (preg_match('/@[a-zA-Z]+/', $content)) {
+            return true;
+        }
+
+        // Check for x-components (both self-closing and with content)
+        if (preg_match('/<x-[a-zA-Z0-9\-_.]+/', $content)) {
+            return true;
+        }
+
+        // Check for HTML tags (any tag suggests potential complexity)
+        if (preg_match('/<[a-zA-Z][^>]*>/', $content)) {
             return true;
         }
 
@@ -538,12 +548,12 @@ class BladeCompiler implements BladeCompilerContract
             } elseif ($value === false) {
                 $pairs[] = "'{$escapedKey}' => false";
             } elseif ($key === 'slot') {
-                // Special handling for slot content
+                // Special handling for slot content - always treat as closure
                 if (is_string($value) && strpos($value, 'function()') === 0) {
-                    // It's a closure for dynamic content
+                    // It's already a closure for dynamic content
                     $pairs[] = "'{$escapedKey}' => ({$value})()";
                 } else {
-                    // It's a simple string
+                    // This shouldn't happen now since we always use ob_start, but keep for safety
                     $pairs[] = "'{$escapedKey}' => '{$value}'";
                 }
             } elseif (is_string($value)) {
