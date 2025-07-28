@@ -14,12 +14,106 @@ use Spark\Support\Traits\Macroable;
  * Sanitizer class provides methods to sanitize and validate different data types.
  * It includes methods for emails, URLs, HTML, numbers, booleans, dates, and custom data arrays.
  * 
+ * @method string after($field, $search)
+ * @method string afterLast($field, $search)
+ * @method string ascii($field, $language = 'en')
+ * @method string transliterate($field, $unknown = '?', $strict = false)
+ * @method string before($field, $search)
+ * @method string beforeLast($field, $search)
+ * @method string between($field, $from, $to)
+ * @method string betweenFirst($field, $from, $to)
+ * @method string camel($field)
+ * @method string|false charAt($field, $index)
+ * @method string chopStart($field, $needle)
+ * @method string chopEnd($field, $needle)
+ * @method bool contains($field, $needles, $ignoreCase = false)
+ * @method bool containsAll($field, $needles, $ignoreCase = false)
+ * @method bool doesntContain($field, $needles, $ignoreCase = false)
+ * @method string convertCase($field, int $mode = MB_CASE_FOLD, ?string $encoding = 'UTF-8')
+ * @method string deduplicate($field, $character = ' ')
+ * @method bool endsWith($field, $needles)
+ * @method string|null excerpt($field, $phrase = '', $options = [])
+ * @method string finish($field, $cap)
+ * @method string wrap($field, $before, $after = null)
+ * @method string unwrap($field, $before, $after = null)
+ * @method bool is($pattern, $field, $ignoreCase = false)
+ * @method bool isAscii($field)
+ * @method bool isJson($field)
+ * @method bool isUrl($field, array $protocols = [])
+ * @method bool isUuid($field, $version = null)
+ * @method bool isUlid($field)
+ * @method string kebab($field)
+ * @method int length($field, $encoding = null)
+ * @method string limit($field, $limit = 100, $end = '...', $preserveWords = false)
+ * @method string lower($field)
+ * @method string words($field, $words = 100, $end = '...')
+ * @method string markdown($field, array $options = [], array $extensions = [])
+ * @method string inlineMarkdown($field, array $options = [], array $extensions = [])
+ * @method string mask($field, $character, $index, $length = null, $encoding = 'UTF-8')
+ * @method string match($pattern, $field)
+ * @method bool isMatch($pattern, $field)
+ * @method \Spark\Support\Collection matchAll($pattern, $field)
+ * @method string numbers($field)
+ * @method string padBoth($field, $length, $pad = ' ')
+ * @method string padLeft($field, $length, $pad = ' ')
+ * @method string padRight($field, $length, $pad = ' ')
+ * @method array parseCallback($field, $default = null)
+ * @method string plural($field, $count = 2)
+ * @method string pluralStudly($field, $count = 2)
+ * @method string pluralPascal($field, $count = 2)
+ * @method string password($length = 32, $letters = true, $numbers = true, $symbols = true, $spaces = false)
+ * @method int|false position($field, $needle, $offset = 0, $encoding = null)
+ * @method string random($length = 16)
+ * @method string repeat($field, $times)
+ * @method string replaceArray($search, $replace, $field)
+ * @method string|string[] replace($search, $replace, $field, $caseSensitive = true)
+ * @method string replaceFirst($search, $replace, $field)
+ * @method string replaceStart($search, $replace, $field)
+ * @method string replaceLast($search, $replace, $field)
+ * @method string replaceEnd($search, $replace, $field)
+ * @method string|string[]|null replaceMatches($pattern, $replace, $field, $limit = -1)
+ * @method string remove($search, $field, $caseSensitive = true)
+ * @method string reverse($field)
+ * @method string start($field, $prefix)
+ * @method string upper($field)
+ * @method string title($field)
+ * @method string headline($field)
+ * @method string apa($field)
+ * @method string singular($field)
+ * @method string slug($field, $separator = '-', $language = 'en', $dictionary = ['@' => 'at'])
+ * @method string snake($field, $delimiter = '_')
+ * @method string trim($field, $charlist = null)
+ * @method string ltrim($field, $charlist = null)
+ * @method string rtrim($field, $charlist = null)
+ * @method string squish($field)
+ * @method bool startsWith($field, $needles)
+ * @method string studly($field)
+ * @method string pascal($field)
+ * @method string substr($field, $start, $length = null, $encoding = 'UTF-8')
+ * @method int substrCount($field, $needle, $offset = 0, $length = null)
+ * @method string|string[] substrReplace($field, $replace, $offset = 0, $length = null)
+ * @method string swap(array $map, $field)
+ * @method string take($field, int $limit)
+ * @method string toBase64($field)
+ * @method string|false fromBase64($field, $strict = false)
+ * @method string lcfirst($field)
+ * @method string ucfirst($field)
+ * @method string[] ucsplit($field)
+ * @method int wordCount($field, $characters = null)
+ * @method string wordWrap($field, $characters = 75, $break = "\n", $cutLongWords = false)
+ * @method \Ramsey\Uuid\UuidInterface uuid()
+ * @method \Ramsey\Uuid\UuidInterface uuid7($time = null)
+ * @method \Ramsey\Uuid\UuidInterface orderedUuid()
+ * @method \Symfony\Component\Uid\Ulid ulid($time = null)
+ *
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
 {
-    use Macroable;
+    use Macroable {
+        __call as macroCall;
+    }
 
     /**
      * Constructs a new sanitizer instance with optional initial data.
@@ -217,45 +311,6 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
     }
 
     /**
-     * Sanitizes a slug by converting to lowercase and replacing spaces/special chars with dashes.
-     *
-     * @param string $key Key in the data array to sanitize.
-     * @param string $separator Character to use as separator (default: '-').
-     * @return string|null Sanitized slug or null if invalid.
-     */
-    public function slug(string $key, string $separator = '-'): ?string
-    {
-        $value = $this->get($key);
-        if (!$value)
-            return null;
-
-        return Str::slug($value, $separator);
-    }
-
-    /**
-     * Sanitizes a string by trimming whitespace and optionally converting case.
-     *
-     * @param string $key Key in the data array to sanitize.
-     * @param string $case Case conversion: 'lower', 'upper', 'title', or null for no conversion.
-     * @return string|null Sanitized string or null if invalid.
-     */
-    public function string(string $key, ?string $case = null): ?string
-    {
-        $value = $this->get($key);
-        if (!$value)
-            return null;
-
-        $sanitized = trim($value);
-
-        return match ($case) {
-            'lower' => strtolower($sanitized),
-            'upper' => strtoupper($sanitized),
-            'title' => ucwords($sanitized),
-            default => $sanitized
-        };
-    }
-
-    /**
      * Sanitizes a date string and optionally formats it.
      *
      * @param string $key Key in the data array to sanitize.
@@ -364,28 +419,6 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
         }
 
         return $sanitized;
-    }
-
-    /**
-     * Sanitizes a UUID string.
-     *
-     * @param string $key Key in the data array to sanitize.
-     * @return string|null Sanitized UUID or null if invalid.
-     */
-    public function uuid(string $key): ?string
-    {
-        $value = $this->get($key);
-        if (!$value)
-            return null;
-
-        $sanitized = strtolower(trim($value));
-
-        // Validate UUID format
-        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $sanitized)) {
-            return $sanitized;
-        }
-
-        return null;
     }
 
     /**
@@ -537,9 +570,9 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
      *
      *  @param array $config An associative array where keys are the data keys and values are the types to sanitize.
      *  @return array An associative array with sanitized values based on the provided configuration.
-     *  Supported types: 'email', 'text', 'html', 'number', 'float', 'boolean', 'url', 'ip', 'alpha', 'alpha_num', 
-     *                   'alpha_dash', 'digits', 'phone', 'slug', 'string', 'date', 'json', 'array', 'file', 
-     *                   'password', 'uuid', 'safe'.
+     *  Supported types: 'email', 'text', 'html', 'number', 'float', 'boolean', 'url', 'ip', 'alpha', 'alpha_num',
+     *                   'alpha_dash', 'digits', 'phone', 'slug', 'string', 'date', 'json', 'array', 'file',
+     *                   'password', 'safe'.
      *  If a type is not recognized, it defaults to returning the raw value.
      *  
      *  Example:
@@ -588,7 +621,6 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
                 'array' => $this->array($key),
                 'file' => $this->file($key),
                 'password' => $this->password($key),
-                'uuid' => $this->uuid($key),
                 'safe' => $this->safe($key),
                 default => $this->get($key),
             };
@@ -616,5 +648,21 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
     public function __toString(): string
     {
         return $this->text(array_key_first($this->data), true) ?? '';
+    }
+
+    /**
+     * Handles dynamic method calls to the query instance.
+     *
+     * @param string $name The method name.
+     * @param array $arguments The method arguments.
+     * @return mixed The result of the query method call.
+     */
+    public function __call($name, $arguments)
+    {
+        if (static::hasMacro($name)) {
+            return $this->macroCall($name, $arguments);
+        }
+
+        return Str::$name(strval($this->get($arguments[0])), ...array_slice($arguments, 1));
     }
 }
