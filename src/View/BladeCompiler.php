@@ -343,37 +343,187 @@ class BladeCompiler implements BladeCompilerContract
         }
 
         $attributes = [];
+        $dynamicAttributes = []; // Track which attributes are dynamic
+        $attributesString = trim($attributesString);
+        $length = strlen($attributesString);
+        $i = 0;
 
-        // Match attributes in the format: name="value", name='value', name=value, :name="value", :name='value', :name=value
-        // Also handle dynamic attributes with colon prefix (e.g. :$variable)
-        $pattern = '/(?:^|\s+)(:)?\$?([\w\-]+)(?:=(["\'])((?:[^"\'\\\\]|\\\\.)*)\3)?/';
-
-        preg_match_all($pattern, $attributesString, $matches, PREG_SET_ORDER);
-
-        foreach ($matches as $match) {
-            $isDynamic = $match[1] === ':';
-            $name = $match[2];
-            $rawValue = $match[4] ?? null;
-
-            if ($isDynamic) {
-                // If the developer wrote :$variable without ="…", 
-                // give it the variable name as the value.
-                $value = $rawValue !== null ? $rawValue : "\$$name";
-            } else {
-                $value = $rawValue !== null ? $rawValue : true;
+        while ($i < $length) {
+            // Skip whitespace
+            while ($i < $length && ctype_space($attributesString[$i])) {
+                $i++;
             }
 
-            $attributes[$name] = $value;
+            if ($i >= $length)
+                break;
+
+            // Check for dynamic attribute prefix (:)
+            $isDynamic = false;
+            if ($attributesString[$i] === ':') {
+                $isDynamic = true;
+                $i++;
+            }
+
+            // Parse attribute name
+            $nameStart = $i;
+            while ($i < $length && (ctype_alnum($attributesString[$i]) || $attributesString[$i] === '-' || $attributesString[$i] === '_' || $attributesString[$i] === '$')) {
+                $i++;
+            }
+
+            if ($i === $nameStart) {
+                $i++; // Skip invalid character
+                continue;
+            }
+
+            $name = substr($attributesString, $nameStart, $i - $nameStart);
+
+            // Remove $ prefix from name if present
+            if ($name[0] === '$') {
+                $name = substr($name, 1);
+            }
+
+            // Track if this attribute is dynamic
+            if ($isDynamic) {
+                $dynamicAttributes[$name] = true;
+            }
+
+            // Skip whitespace after name
+            while ($i < $length && ctype_space($attributesString[$i])) {
+                $i++;
+            }
+
+            // Check for equals sign
+            if ($i < $length && $attributesString[$i] === '=') {
+                $i++; // Skip =
+
+                // Skip whitespace after =
+                while ($i < $length && ctype_space($attributesString[$i])) {
+                    $i++;
+                }
+
+                // Parse value
+                $value = $this->parseAttributeValue($attributesString, $i);
+                $attributes[$name] = $value;
+            } else {
+                // Boolean attribute
+                if ($isDynamic) {
+                    // For dynamic boolean attributes like :$variable, use the variable
+                    $attributes[$name] = '$' . $name;
+                } else {
+                    $attributes[$name] = true;
+                }
+            }
         }
 
+        // Store dynamic attribute info for later use
+        $attributes['__dynamic__'] = $dynamicAttributes;
         return $attributes;
     }
+
+    /**
+     * Parse attribute value handling quotes, arrays, functions, etc.
+     */
+    private function parseAttributeValue(string $attributesString, int &$position): string
+    {
+        $length = strlen($attributesString);
+        $i = $position;
+
+        if ($i >= $length) {
+            return '';
+        }
+
+        $char = $attributesString[$i];
+
+        // Handle quoted strings
+        if ($char === '"' || $char === "'") {
+            $quote = $char;
+            $i++; // Skip opening quote
+            $valueStart = $i;
+            $escaped = false;
+
+            while ($i < $length) {
+                $currentChar = $attributesString[$i];
+
+                if ($escaped) {
+                    $escaped = false;
+                } elseif ($currentChar === '\\') {
+                    $escaped = true;
+                } elseif ($currentChar === $quote) {
+                    // Found closing quote
+                    $value = substr($attributesString, $valueStart, $i - $valueStart);
+                    $i++; // Skip closing quote
+                    $position = $i;
+                    return $value;
+                }
+
+                $i++;
+            }
+
+            // If we reach here, quote wasn't closed properly
+            $value = substr($attributesString, $valueStart);
+            $position = $length;
+            return $value;
+        }
+
+        // Handle unquoted values (arrays, function calls, variables, etc.)
+        $valueStart = $i;
+        $depth = 0;
+        $inString = false;
+        $stringChar = null;
+        $escaped = false;
+
+        while ($i < $length) {
+            $currentChar = $attributesString[$i];
+
+            // Handle string literals within unquoted values
+            if (!$escaped && ($currentChar === '"' || $currentChar === "'")) {
+                if (!$inString) {
+                    $inString = true;
+                    $stringChar = $currentChar;
+                } elseif ($currentChar === $stringChar) {
+                    $inString = false;
+                    $stringChar = null;
+                }
+            }
+
+            // Handle escape sequences
+            if ($currentChar === '\\' && !$escaped) {
+                $escaped = true;
+                $i++;
+                continue;
+            }
+            $escaped = false;
+
+            // Only count brackets/parentheses outside of strings
+            if (!$inString) {
+                if ($currentChar === '(' || $currentChar === '[' || $currentChar === '{') {
+                    $depth++;
+                } elseif ($currentChar === ')' || $currentChar === ']' || $currentChar === '}') {
+                    $depth--;
+                } elseif ($depth === 0 && ctype_space($currentChar)) {
+                    // End of unquoted value
+                    break;
+                }
+            }
+
+            $i++;
+        }
+
+        $value = substr($attributesString, $valueStart, $i - $valueStart);
+        $position = $i;
+        return trim($value);
+    }
+
 
     /**
      * Build PHP array string from attributes
      */
     private function buildAttributesArray(array $attributes): string
     {
+        // Extract dynamic attribute info
+        $dynamicAttributes = $attributes['__dynamic__'] ?? [];
+        unset($attributes['__dynamic__']); // Remove from actual attributes
+
         if (empty($attributes)) {
             return '[]';
         }
@@ -381,6 +531,7 @@ class BladeCompiler implements BladeCompilerContract
         $pairs = [];
         foreach ($attributes as $key => $value) {
             $escapedKey = addslashes($key);
+            $isDynamic = isset($dynamicAttributes[$key]);
 
             if ($value === true) {
                 $pairs[] = "'{$escapedKey}' => true";
@@ -396,10 +547,11 @@ class BladeCompiler implements BladeCompilerContract
                     $pairs[] = "'{$escapedKey}' => '{$value}'";
                 }
             } elseif (is_string($value)) {
-                // Check if it's a PHP variable or expression
-                if ($this->isPHPExpression($value)) {
+                if ($isDynamic) {
+                    // Dynamic attribute - treat as PHP expression
                     $pairs[] = "'{$escapedKey}' => {$value}";
                 } else {
+                    // Static attribute - treat as string
                     $escapedValue = addslashes($value);
                     $pairs[] = "'{$escapedKey}' => '{$escapedValue}'";
                 }
@@ -418,11 +570,47 @@ class BladeCompiler implements BladeCompilerContract
     {
         $value = trim($value);
 
-        return preg_match('/^\$[a-zA-Z_][\w]*(?:->[a-zA-Z_][\w]*|\[[^\]]*\])*$/', $value) ||
-            preg_match('/^[a-zA-Z_][\w]*\s*\(.*\)$/', $value) ||
-            preg_match('/^\[.*\]$/', $value) ||
-            is_numeric($value) ||
-            in_array(strtolower($value), ['true', 'false', 'null']);
+        // Empty values are not expressions
+        if (empty($value)) {
+            return false;
+        }
+
+        // Variables (including object properties and array access)
+        if (preg_match('/^\$[a-zA-Z_][\w]*(?:->[a-zA-Z_][\w]*(?:\([^)]*\))?|\[[^\]]*\])*$/', $value)) {
+            return true;
+        }
+
+        // Function calls
+        if (preg_match('/^[a-zA-Z_][\w]*\s*\(.*\)$/s', $value)) {
+            return true;
+        }
+
+        // Arrays
+        if (preg_match('/^\[.*\]$/s', $value)) {
+            return true;
+        }
+
+        // Numeric values
+        if (is_numeric($value)) {
+            return true;
+        }
+
+        // Boolean and null literals
+        if (in_array(strtolower($value), ['true', 'false', 'null'])) {
+            return true;
+        }
+
+        // Complex expressions (containing operators, method chains, etc.)
+        if (preg_match('/[\+\-\*\/\%\=\!\<\>\&\|\?\:\.]+/', $value)) {
+            return true;
+        }
+
+        // Static method calls
+        if (preg_match('/^[a-zA-Z_][\w]*::[a-zA-Z_][\w]*(?:\([^)]*\))?$/', $value)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
