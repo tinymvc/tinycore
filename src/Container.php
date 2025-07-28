@@ -231,12 +231,72 @@ class Container implements ContainerContract
      */
     private function getReflectorDependencies(Reflector $reflector, array $parameters): array
     {
-        $dependencies = array_map(
-            fn(ReflectionParameter $param) => $parameters[$param->getName()] ?? $this->resolveParameter($param, $parameters[$param->getPosition()] ?? null),
-            $reflector->getParameters()
-        );
+        $methodParams = $reflector->getParameters();
+        $dependencies = [];
+        $isAssociative = $this->isAssociativeArray($parameters);
+        $positionalIndex = 0;
+
+        foreach ($methodParams as $param) {
+            $paramName = $param->getName();
+            $type = $param->getType();
+
+            // Check if this parameter is a class dependency (not a built-in type)
+            $isDependency = $type instanceof ReflectionNamedType && !$type->isBuiltin();
+            if ($type instanceof ReflectionUnionType) {
+                $isDependency = false;
+                foreach ($type->getTypes() as $unionType) {
+                    if ($unionType instanceof ReflectionNamedType && !$unionType->isBuiltin()) {
+                        $isDependency = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($isAssociative) {
+                // For associative arrays, check by parameter name first
+                if (array_key_exists($paramName, $parameters)) {
+                    $dependencies[] = $parameters[$paramName];
+                } elseif ($isDependency) {
+                    // Resolve dependency from container
+                    $dependencies[] = $this->resolveParameter($param);
+                } else {
+                    // Try to resolve with default value or throw exception
+                    $dependencies[] = $this->resolveParameter($param);
+                }
+            } else {
+                // For indexed arrays, handle positional mapping intelligently
+                if ($isDependency) {
+                    // This is a dependency, resolve from container
+                    $dependencies[] = $this->resolveParameter($param);
+                } else {
+                    // This is a regular parameter, try to get from positional array
+                    if ($positionalIndex < count($parameters)) {
+                        $dependencies[] = $parameters[$positionalIndex];
+                        $positionalIndex++;
+                    } else {
+                        // No more positional parameters, try default or throw exception
+                        $dependencies[] = $this->resolveParameter($param);
+                    }
+                }
+            }
+        }
 
         return $dependencies;
+    }
+
+    /**
+     * Check if an array is associative.
+     *
+     * @param array $array The array to check.
+     * @return bool True if the array is associative, false otherwise.
+     */
+    private function isAssociativeArray(array $array): bool
+    {
+        if (empty($array)) {
+            return false;
+        }
+
+        return array_keys($array) !== range(0, count($array) - 1);
     }
 
     /**
