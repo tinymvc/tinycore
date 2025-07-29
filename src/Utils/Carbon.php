@@ -781,7 +781,7 @@ class Carbon implements Arrayable, \Stringable
      * @param self $other The other DateTime instance to compare with
      * @return int The difference in months
      */
-    public function diffForHumans(self $other = null): string
+    public function diffForHumans(?self $other = null): string
     {
         $other ??= self::now();
         $diff = $this->getTimestamp() - $other->getTimestamp();
@@ -915,7 +915,7 @@ class Carbon implements Arrayable, \Stringable
      * @param self|null $birthDate The birth date to calculate the age from, defaults to the current instance
      * @return int The age in years
      */
-    public function age(self $birthDate = null): int
+    public function age(?self $birthDate = null): int
     {
         $birthDate ??= $this;
         $now = self::now();
