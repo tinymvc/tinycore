@@ -162,14 +162,14 @@ class InputValidator implements InputValidatorContract
      */
     private function compareMin($value, $min): bool
     {
-        if (is_numeric($value)) {
+        if (is_string($value)) {
+            return strlen($value) >= (int) $min;
+        } elseif (is_numeric($value)) {
             return (float) $value >= (float) $min;
         } elseif (is_array($value) && isset($value['size'])) {
             return (int) $value['size'] >= ((int) $min * 1024); // Assuming size is in KB
         } elseif (is_array($value)) {
             return count($value) >= (int) $min;
-        } elseif (is_string($value)) {
-            return strlen($value) >= (int) $min;
         }
 
         return false;
@@ -187,14 +187,14 @@ class InputValidator implements InputValidatorContract
      */
     private function compareMax($value, $max): bool
     {
-        if (is_numeric($value)) {
+        if (is_string($value)) {
+            return strlen($value) <= (int) $max;
+        } elseif (is_numeric($value)) {
             return (float) $value <= (float) $max;
         } elseif (is_array($value) && isset($value['size'])) {
             return (int) $value['size'] <= ((int) $max * 1024); // Assuming size is in KB
         } elseif (is_array($value)) {
             return count($value) <= (int) $max;
-        } elseif (is_string($value)) {
-            return strlen($value) <= (int) $max;
         }
         return false;
     }
@@ -211,14 +211,14 @@ class InputValidator implements InputValidatorContract
      */
     private function compareSize($value, $size): bool
     {
-        if (is_numeric($value)) {
+        if (is_string($value)) {
+            return strlen($value) == (int) $size;
+        } elseif (is_numeric($value)) {
             return (float) $value == (float) $size;
         } elseif (is_array($value) && isset($value['size'])) {
             return (int) $value['size'] == ((int) $size * 1024); // Assuming size is in KB
         } elseif (is_array($value)) {
             return count($value) == (int) $size;
-        } elseif (is_string($value)) {
-            return strlen($value) == (int) $size;
         }
         return false;
     }
