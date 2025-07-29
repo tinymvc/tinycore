@@ -1303,7 +1303,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function groupBy(string|array $fields): self
     {
-        $this->query['group'] = $this->grammar->columnize($fields);
+        $this->query['group'] = $this->grammar->columnize((array) $fields);
         return $this;
     }
 
