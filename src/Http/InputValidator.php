@@ -164,8 +164,6 @@ class InputValidator implements InputValidatorContract
     {
         if (is_string($value)) {
             return strlen($value) >= (int) $min;
-        } elseif (is_numeric($value)) {
-            return (float) $value >= (float) $min;
         } elseif (is_array($value) && isset($value['size'])) {
             return (int) $value['size'] >= ((int) $min * 1024); // Assuming size is in KB
         } elseif (is_array($value)) {
@@ -189,8 +187,6 @@ class InputValidator implements InputValidatorContract
     {
         if (is_string($value)) {
             return strlen($value) <= (int) $max;
-        } elseif (is_numeric($value)) {
-            return (float) $value <= (float) $max;
         } elseif (is_array($value) && isset($value['size'])) {
             return (int) $value['size'] <= ((int) $max * 1024); // Assuming size is in KB
         } elseif (is_array($value)) {
@@ -213,8 +209,6 @@ class InputValidator implements InputValidatorContract
     {
         if (is_string($value)) {
             return strlen($value) == (int) $size;
-        } elseif (is_numeric($value)) {
-            return (float) $value == (float) $size;
         } elseif (is_array($value) && isset($value['size'])) {
             return (int) $value['size'] == ((int) $size * 1024); // Assuming size is in KB
         } elseif (is_array($value)) {
