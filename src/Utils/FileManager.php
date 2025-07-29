@@ -474,7 +474,7 @@ class FileManager
      * @param int|null $options
      * @return bool
      */
-    public static function copyDirectory(string $from, string $to, int $options = null): bool
+    public static function copyDirectory(string $from, string $to, ?int $options = null): bool
     {
         if (!static::isDirectory($from)) {
             return false;
