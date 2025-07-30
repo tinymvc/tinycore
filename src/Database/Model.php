@@ -254,18 +254,14 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
-     * Deletes the model from the database and clears its attributes.
+     * Deletes the model from the database by its primary key value.
      *
-     * This method is used to remove the model instance from the database
-     * and reset its attributes, effectively destroying the model instance.
-     *
-     * @return void
+     * @param int $value The unique identifier of the model to delete.
+     * @return bool True if deletion was successful, false otherwise.
      */
-    public function destroy(): void
+    public static function destroy($value): bool
     {
-        $this->delete();
-        $this->attributes = []; // Clear the attributes after deletion.
-        $this->clearRelations(); // Clear any loaded relationships.
+        return self::query()->delete([static::$primaryKey => $value]);
     }
 
     /**
@@ -497,7 +493,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function get(string $name, mixed $default = null): mixed
     {
-        return data_get($this->toArray(), $name, $default);
+        return data_get(array_filter($this->toArray()), $name, $default);
     }
 
     /**

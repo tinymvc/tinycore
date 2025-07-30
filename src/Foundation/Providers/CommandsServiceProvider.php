@@ -93,10 +93,7 @@ class CommandsServiceProvider
             ->description('Clear all cache files');
 
         // Add the migrate:rollback command
-        $commands->addCommand('migrate:rollback', function (array $args) {
-            $step = $args['step'] ?? ($args['_args'][0] ?? 1);
-            get(Migration::class)->down($step);
-        })
+        $commands->addCommand('migrate:rollback', [Migration::class, 'down'])
             ->description('Rollback the last database migration');
 
         // Add the migrate:fresh command

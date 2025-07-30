@@ -101,10 +101,6 @@ use Spark\Support\Traits\Macroable;
  * @method string[] ucsplit($field)
  * @method int wordCount($field, $characters = null)
  * @method string wordWrap($field, $characters = 75, $break = "\n", $cutLongWords = false)
- * @method \Ramsey\Uuid\UuidInterface uuid()
- * @method \Ramsey\Uuid\UuidInterface uuid7($time = null)
- * @method \Ramsey\Uuid\UuidInterface orderedUuid()
- * @method \Symfony\Component\Uid\Ulid ulid($time = null)
  *
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>

@@ -19,6 +19,9 @@ class Commands implements CommandsContract
 {
     use Macroable;
 
+    /** @param array<string, bool> The commands are disabled to run */
+    private static array $disabledCommands = [];
+
     /**
      * Constructs a new instance of the Commands class.
      *
@@ -54,17 +57,53 @@ class Commands implements CommandsContract
      *
      * This method allows you to remove a command by its name.
      *
-     * @param string $name
+     * @param array|string $names
      *   The name of the command to remove.
      *
      * @return $this
      *   The Commands instance.
      */
-    public function removeCommand(string $name): self
+    public function removeCommand(array|string $names): self
     {
-        unset($this->commands[$name]);
+        foreach ((array) $names as $name) {
+            unset($this->commands[$name]);
+        }
 
         return $this;
+    }
+
+    /**
+     * Disables a command by adding it to the disabled commands list.
+     *
+     * This method allows you to disable a command by its name, preventing it
+     * from being executed.
+     *
+     * @param array|string $names
+     *   The name(s) of the command(s) to disable.
+     *
+     * @return $this
+     *   The Commands instance.
+     */
+    public static function disableCommand(array|string $names): void
+    {
+        foreach ((array) $names as $name) {
+            self::$disabledCommands[$name] = true;
+        }
+    }
+
+    /**
+     * Check if the specific command is disabled.
+     * 
+     * This method checks if a command is disabled by looking it up in the
+     * static::$disabledCommands array.
+     * 
+     * @param string $name
+     *   The name of the command to check.
+     * @return bool
+     */
+    public function isDisabled(string $name): bool
+    {
+        return isset(self::$disabledCommands[$name]) && self::$disabledCommands[$name];
     }
 
     /**
@@ -177,10 +216,13 @@ class Commands implements CommandsContract
             $description = $config['description'] ?? 'No description';
             $spacing = str_repeat(' ', $maxLength - strlen($name));
 
+            // Check if the command is disabled and set the appropriate message
+            $isDisabled = $this->isDisabled($name) ? ' <warning>(disabled)</warning>' : '';
+
             $prompt->message(
                 // Format the command name and description using ANSI escape
                 // sequences for color and bold formatting.
-                "  <success>{$name}</success>{$spacing}{$description}",
+                "  <success>{$name}</success>{$spacing}{$description}{$isDisabled}",
                 'raw'
             );
         }

@@ -63,8 +63,20 @@ class MakeStubCommandsHandler
                 ],
             ]
         );
+
+        if ($this->hasFlag($args, ['seeder', 'seed', 's'])) {
+            return $this->makeSeeder($args);
+        }
     }
 
+    /**
+     * Create a seeder stub.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     *
+     * @return void
+     */
     public function makeSeeder(array $args)
     {
         StubCreation::make(

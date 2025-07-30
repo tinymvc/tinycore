@@ -94,6 +94,11 @@ class Console implements ConsoleContract
      */
     public function executeCommand(string $name, array $args): void
     {
+        if ($this->commands->isDisabled($name)) {
+            $this->prompt->message("Command '{$name}' is disabled.", "warning");
+            return;
+        }
+
         // Get the command instance
         $command = $this->commands->getCommand($name);
 

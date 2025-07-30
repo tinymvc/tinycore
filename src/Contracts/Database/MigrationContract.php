@@ -18,9 +18,10 @@ interface MigrationContract
      * contain the code to add the tables, fields, and indexes to
      * the database.
      *
+     * @param array $args
      * @return void
      */
-    public function up(): void;
+    public function up(array $args): void;
 
     /**
      * Migrate the database down.
@@ -28,12 +29,11 @@ interface MigrationContract
      * This method is used to migrate the database down. It should
      * contain the code to drop the tables, fields, and indexes from
      * the database.
-     *
-     * @param int $steps The number of steps to migrate down. Defaults to 1.
-     *
+     * 
+     * @param array $args
      * @return void
      */
-    public function down(int $steps = 1): void;
+    public function down(array $args): void;
 
     /**
      * Refresh the database.
@@ -42,7 +42,8 @@ interface MigrationContract
      * contain the code to drop the database and then migrate
      * it up.
      *
+     * @param array $args
      * @return void
      */
-    public function refresh(): void;
+    public function refresh(array $args): void;
 }

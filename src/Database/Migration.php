@@ -86,11 +86,15 @@ class Migration implements MigrationContract
      * Scans the folder for migration files (all PHP files except the JSON record)
      * and executes the up() method on those that haven’t been applied yet.
      * 
+     * @param array $args
+     *  An array containing the arguments for the migration.
      * @return void
      */
-    public function up(): void
+    public function up(array $args): void
     {
         $appliedMigrations = $this->getAppliedMigrations();
+
+        $allowSeeds = (isset($args['seed']) && $args['seed']) || (isset($args['s']) && $args['s']); // Allow seeds if specified in args
 
         // Get all PHP files in the folder (excluding migrations.json)
         $files = glob($this->migrationsFolder . DIRECTORY_SEPARATOR . '*.php');
@@ -105,6 +109,14 @@ class Migration implements MigrationContract
                 }
 
                 $migrationName = basename($file);
+
+                if (
+                    !str_starts_with($migrationName, 'migration_')
+                    && !($allowSeeds && str_starts_with($migrationName, 'seed_'))
+                ) {
+                    // not a migration, and not an allowed seed → skip it
+                    continue;
+                }
 
                 // Skip if this migration has already been applied.
                 if (in_array($migrationName, $appliedMigrations)) {
@@ -131,15 +143,21 @@ class Migration implements MigrationContract
     }
 
     /**
-     * Rolls back the last $steps applied migrations.
+     * Rolls back the last applied migrations.
      *
-     * @param int $steps
-     *   The number of migrations to rollback. Defaults to 1.
-     *
+     * This method rolls back the last $steps applied migrations.
+     * It retrieves the list of applied migrations, reverses the order,
+     * and applies the down() method on the specified number of migrations.
+     * 
+     * @param array $args
+     *   An array containing the number of steps to rollback.
+     *   If 'step' is not provided, it defaults to 1.
      * @return void
      */
-    public function down(int $steps = 1): void
+    public function down(array $args): void
     {
+        $steps = $args['step'] ?? ($args['_args'][0] ?? 1);
+
         $appliedMigrations = $this->getAppliedMigrations();
 
         if (empty($appliedMigrations)) {
@@ -187,16 +205,22 @@ class Migration implements MigrationContract
      * Rolls back all applied migrations and then applies all migrations again.
      *
      * This is useful for quickly setting up a database in a development environment.
-     *
+     * 
+     * @param array $args
+     *  An array containing the number of steps to rollback.
      * @return void
      */
-    public function refresh(): void
+    public function refresh(array $args): void
     {
+        if (!isset($args['step']) && !isset($args['_args'][0])) {
+            $args['step'] = count($this->getAppliedMigrations()); // Default to rolling back all applied migrations
+        }
+
         // Rollback all applied migrations
-        $this->down(count($this->getAppliedMigrations()));
+        $this->down($args);
 
         $this->prompt->newline();
 
-        $this->up();
+        $this->up($args);
     }
 }
