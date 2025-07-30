@@ -50,6 +50,24 @@ class Commands implements CommandsContract
     }
 
     /**
+     * Removes a command from the Commands instance.
+     *
+     * This method allows you to remove a command by its name.
+     *
+     * @param string $name
+     *   The name of the command to remove.
+     *
+     * @return $this
+     *   The Commands instance.
+     */
+    public function removeCommand(string $name): self
+    {
+        unset($this->commands[$name]);
+
+        return $this;
+    }
+
+    /**
      * Sets the description for the most recently added command.
      *
      * This method updates the description of the last command added

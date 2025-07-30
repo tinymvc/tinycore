@@ -119,6 +119,10 @@ class CommandsServiceProvider
         $commands->addCommand('make:migration', [MakeStubCommandsHandler::class, 'makeMigration'])
             ->description('Create a new database migration file');
 
+        // Make a Seeder file
+        $commands->addCommand('make:seeder', [MakeStubCommandsHandler::class, 'makeSeeder'])
+            ->description('Create a new database seeder file');
+
         // Make a Model file
         $commands->addCommand('make:model', [MakeStubCommandsHandler::class, 'makeModel'])
             ->description('Create a new model class');

@@ -1,0 +1,17 @@
+<?php
+
+use App\Models\{{ class }};
+
+return new class {
+    public function up(): void
+    {
+        {{ class }}::insert([
+            // associative array of data
+        ]);
+    }
+
+    public function down(): void
+    {
+        {{ class }}::truncate();
+    }
+};

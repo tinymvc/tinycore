@@ -65,6 +65,22 @@ class MakeStubCommandsHandler
         );
     }
 
+    public function makeSeeder(array $args)
+    {
+        StubCreation::make(
+            $args['_args'][0] ?? null,
+            'What is the name of the seeder?',
+            [
+                'stub' => __DIR__ . '/stubs/seeder.stub',
+                'destination' => 'database/migrations/::subfolder:lowercase/seed_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'Database\Seeders::subfolder:namespace',
+                    '{{ class }}' => '::name:singularize:ucfirst',
+                ],
+            ]
+        );
+    }
+
     /**
      * Create a pivot migration stub.
      *

@@ -1001,6 +1001,35 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Truncates the current table.
+     *
+     * This method removes all records from the table without logging individual row deletions.
+     * It is faster than a DELETE statement and resets any auto-increment counters.
+     *
+     * @return bool Returns true on success, false on failure.
+     * @throws QueryBuilderException If the statement preparation or execution fails.
+     */
+    public function truncate(): bool
+    {
+        // Prepare the table name
+        $table = $this->prefix . $this->table;
+
+        // Prepare the SQL truncate statement
+        $statement = $this->database->prepare("TRUNCATE TABLE {$table}");
+
+        if ($statement === false) {
+            throw new QueryBuilderException('Failed to prepare statement');
+        }
+
+        // Execute the statement
+        if ($statement->execute() === false) {
+            throw new QueryBuilderException('Failed to execute statement');
+        }
+
+        return true;
+    }
+
+    /**
      * Specify the fields to include in the SELECT clause.
      *
      * @param array|string $fields A string or an array of column names to select.

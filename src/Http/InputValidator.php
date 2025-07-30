@@ -60,6 +60,9 @@ class InputValidator implements InputValidatorContract
             // Check if field is required
             $is_required = in_array('required', $fieldRules, true);
 
+            // Check if field has numeric validation rules
+            $is_numeric_field = $this->hasNumericValidation($fieldRules);
+
             // Loop through field rules
             foreach ($fieldRules as $rule) {
                 // Parse rule name and parameters
@@ -71,60 +74,60 @@ class InputValidator implements InputValidatorContract
                 }
 
                 // Check if value is valid
-                $has_valid_value = $value === null ? false : (is_array($value) ? !empty($value) : '' !== $value);
+                $has_valid_value = $this->hasValidValue($value, $is_numeric_field);
 
                 // Apply validation rule
                 $valid = match ($ruleName) {
                     'required' => $has_valid_value,
-                    'email', 'mail' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_EMAIL) : true,
-                    'url', 'link' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_URL) : true,
+                    'email', 'mail' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_EMAIL) !== false : true,
+                    'url', 'link' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_URL) !== false : true,
                     'number', 'numeric', 'int', 'integer' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
                     'array', 'list' => ($has_valid_value || $is_required) ? is_array($value) : true,
                     'text', 'char', 'string' => ($has_valid_value || $is_required) ? is_string($value) : true,
-                    'min', 'minimum' => ($has_valid_value || $is_required) ? $this->compareMin($value, $ruleParams[0]) : true,
-                    'max', 'maximum' => ($has_valid_value || $is_required) ? $this->compareMax($value, $ruleParams[0]) : true,
-                    'length', 'size' => ($has_valid_value || $is_required) ? $this->compareSize($value, $ruleParams[0]) : true,
-                    'equal', 'same', 'same_as' => ($has_valid_value || $is_required) ? $value == ($inputData[$ruleParams[0]] ?? null) : true,
+                    'min', 'minimum' => ($has_valid_value || $is_required) ? $this->compareMin($value, $ruleParams[0], $is_numeric_field) : true,
+                    'max', 'maximum' => ($has_valid_value || $is_required) ? $this->compareMax($value, $ruleParams[0], $is_numeric_field) : true,
+                    'length', 'size' => ($has_valid_value || $is_required) ? $this->compareSize($value, $ruleParams[0], $is_numeric_field) : true,
+                    'equal', 'same', 'same_as' => ($has_valid_value || $is_required) ? $this->validateEqual($value, $inputData[$ruleParams[0]] ?? null) : true,
                     'confirmed' => ($has_valid_value || $is_required) ? $value == ($inputData["{$field}_confirmation"] ?? null) : true,
-                    'in' => ($has_valid_value || $is_required) ? in_array($value, $ruleParams, true) : true,
-                    'not_in' => ($has_valid_value || $is_required) ? !in_array($value, $ruleParams, true) : true,
+                    'in' => ($has_valid_value || $is_required) ? $this->validateIn($value, $ruleParams) : true,
+                    'not_in' => ($has_valid_value || $is_required) ? !$this->validateIn($value, $ruleParams) : true,
                     'regex' => ($has_valid_value || $is_required) ? preg_match($ruleParams[0], $value) : true,
-                    'unique' => ($has_valid_value || $is_required) ? query($ruleParams[0])->where($ruleParams[1] ?? $field, $value)->where(isset($ruleParams[2]) ? ("id != " . intval($ruleParams[2])) : null)->count() === 0 : true,
-                    'exists' => ($has_valid_value || $is_required) ? query($ruleParams[0])->where($ruleParams[1] ?? $field, $value)->count() > 0 : true,
-                    'not_exists' => ($has_valid_value || $is_required) ? query($ruleParams[0])->where($ruleParams[1] ?? $field, $value)->count() === 0 : true,
-                    'boolean', 'bool' => ($has_valid_value || $is_required) ? in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false', 'on', 'off', 'yes', 'no'], true) : true,
-                    'float', 'decimal' => ($has_valid_value || $is_required) ? is_numeric($value) && (float) $value == $value : true,
-                    'alpha' => ($has_valid_value || $is_required) ? ctype_alpha($value) : true,
-                    'alpha_num', 'alphanumeric' => ($has_valid_value || $is_required) ? ctype_alnum($value) : true,
+                    'unique' => ($has_valid_value || $is_required) ? $this->validateUnique($value, $ruleParams, $field) : true,
+                    'exists' => ($has_valid_value || $is_required) ? $this->validateExists($value, $ruleParams, $field) : true,
+                    'not_exists' => ($has_valid_value || $is_required) ? $this->validateNotExists($value, $ruleParams, $field) : true,
+                    'boolean', 'bool' => ($has_valid_value || $is_required) ? in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false', 'TRUE', 'FALSE', 'on', 'off', 'yes', 'no', 'YES', 'NO'], true) : true,
+                    'float', 'decimal' => ($has_valid_value || $is_required) ? is_numeric($value) && is_float((float) $value) : true,
+                    'alpha' => ($has_valid_value || $is_required) ? preg_match('/^[\pL]+$/u', $value) : true,
+                    'alpha_num', 'alphanumeric' => ($has_valid_value || $is_required) ? preg_match('/^[\pL\pN]+$/u', $value) : true,
                     'alpha_dash' => ($has_valid_value || $is_required) ? preg_match('/^[a-zA-Z0-9_-]+$/', $value) : true,
-                    'digits' => ($has_valid_value || $is_required) ? ctype_digit($value) && strlen($value) == (int) $ruleParams[0] : true,
-                    'digits_between' => ($has_valid_value || $is_required) ? ctype_digit($value) && strlen($value) >= (int) $ruleParams[0] && strlen($value) <= (int) $ruleParams[1] : true,
-                    'min_digits' => ($has_valid_value || $is_required) ? ctype_digit($value) && strlen($value) >= (int) $ruleParams[0] : true,
-                    'max_digits' => ($has_valid_value || $is_required) ? ctype_digit($value) && strlen($value) <= (int) $ruleParams[0] : true,
-                    'date' => ($has_valid_value || $is_required) ? strtotime($value) !== false : true,
+                    'digits' => ($has_valid_value || $is_required) ? ctype_digit((string) $value) && strlen((string) $value) == (int) $ruleParams[0] : true,
+                    'digits_between' => ($has_valid_value || $is_required) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] && strlen((string) $value) <= (int) $ruleParams[1] : true,
+                    'min_digits' => ($has_valid_value || $is_required) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] : true,
+                    'max_digits' => ($has_valid_value || $is_required) ? ctype_digit((string) $value) && strlen((string) $value) <= (int) $ruleParams[0] : true,
+                    'date' => ($has_valid_value || $is_required) ? $this->validateDate($value) : true,
                     'date_format' => ($has_valid_value || $is_required) ? $this->validateDateFormat($value, $ruleParams[0] ?? 'Y-m-d') : true,
-                    'before' => ($has_valid_value || $is_required) ? strtotime($value) < strtotime($ruleParams[0] ?? 'now') : true,
-                    'after' => ($has_valid_value || $is_required) ? strtotime($value) > strtotime($ruleParams[0] ?? 'now') : true,
-                    'between' => ($has_valid_value || $is_required) ? $this->validateBetween($value, $ruleParams) : true,
-                    'json' => ($has_valid_value || $is_required) ? json_decode($value) !== null : true,
-                    'ip' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_IP) : true,
-                    'ipv4' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) : true,
-                    'ipv6' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) : true,
-                    'mac_address' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_MAC) : true,
-                    'uuid' => ($has_valid_value || $is_required) ? preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value) : true,
-                    'lowercase' => ($has_valid_value || $is_required) ? $value === strtolower($value) : true,
-                    'uppercase' => ($has_valid_value || $is_required) ? $value === strtoupper($value) : true,
-                    'starts_with' => ($has_valid_value || $is_required) ? str_starts_with($value, $ruleParams[0] ?? '') : true,
-                    'ends_with' => ($has_valid_value || $is_required) ? str_ends_with($value, $ruleParams[0] ?? '') : true,
-                    'contains' => ($has_valid_value || $is_required) ? str_contains($value, $ruleParams[0] ?? '') : true,
-                    'not_contains' => ($has_valid_value || $is_required) ? !str_contains($value, $ruleParams[0] ?? '') : true,
+                    'before' => ($has_valid_value || $is_required) ? $this->validateBefore($value, $ruleParams[0] ?? 'now') : true,
+                    'after' => ($has_valid_value || $is_required) ? $this->validateAfter($value, $ruleParams[0] ?? 'now') : true,
+                    'between' => ($has_valid_value || $is_required) ? $this->validateBetween($value, $ruleParams, $is_numeric_field) : true,
+                    'json' => ($has_valid_value || $is_required) ? json_decode($value) !== null && json_last_error() === JSON_ERROR_NONE : true,
+                    'ip' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_IP) !== false : true,
+                    'ipv4' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false : true,
+                    'ipv6' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false : true,
+                    'mac_address' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_MAC) !== false : true,
+                    'uuid' => ($has_valid_value || $is_required) ? preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $value) : true,
+                    'lowercase' => ($has_valid_value || $is_required) ? (is_string($value) && $value === strtolower($value)) : true,
+                    'uppercase' => ($has_valid_value || $is_required) ? (is_string($value) && $value === strtoupper($value)) : true,
+                    'starts_with' => ($has_valid_value || $is_required) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && str_starts_with((string) $value, $ruleParams[0])) : true,
+                    'ends_with' => ($has_valid_value || $is_required) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && str_ends_with((string) $value, $ruleParams[0])) : true,
+                    'contains' => ($has_valid_value || $is_required) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && str_contains((string) $value, $ruleParams[0])) : true,
+                    'not_contains' => ($has_valid_value || $is_required) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && !str_contains((string) $value, $ruleParams[0])) : true,
                     'nullable' => true, // Always passes, allows null values
                     'present' => array_key_exists($field, $inputData), // Field must be present but can be empty
                     'filled' => $has_valid_value, // Field must be present and not empty if present
-                    'accepted' => in_array($value, [true, 1, '1', 'true', 'on', 'yes'], true),
-                    'declined' => in_array($value, [false, 0, '0', 'false', 'off', 'no'], true),
+                    'accepted' => in_array(strtolower((string) $value), ['1', 'true', 'on', 'yes'], true) || in_array($value, [true, 1], true),
+                    'declined' => in_array(strtolower((string) $value), ['0', 'false', 'off', 'no'], true) || in_array($value, [false, 0], true),
                     'prohibited' => !$has_valid_value, // Field must be empty or not present
-                    'file' => ($has_valid_value || $is_required) ? is_uploaded_file($value['tmp_name'] ?? '') : true,
+                    'file' => ($has_valid_value || $is_required) ? (is_array($value) && isset($value['tmp_name']) && is_uploaded_file($value['tmp_name'])) : true,
                     'image' => ($has_valid_value || $is_required) ? $this->validateImage($value) : true,
                     'mimes' => ($has_valid_value || $is_required) ? $this->validateMimes($value, $ruleParams) : true,
                     'min_value' => ($has_valid_value || $is_required) ? is_numeric($value) && (float) $value >= (float) $ruleParams[0] : true,
@@ -150,6 +153,148 @@ class InputValidator implements InputValidatorContract
         return empty($this->errors) ? new InputSanitizer($validData) : false;
     }
 
+    /**
+     * Check if a value is considered "valid" (not empty)
+     */
+    private function hasValidValue($value, bool $is_numeric_field = false): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_array($value)) {
+            return !empty($value);
+        }
+
+        if ($is_numeric_field) {
+            return is_numeric($value);
+        }
+
+        if (is_string($value)) {
+            return $value !== '';
+        }
+
+        if (is_bool($value)) {
+            return true; // Both true and false are valid values
+        }
+
+        return true; // For other types, consider them valid if not null
+    }
+
+    /**
+     * Check if field has numeric validation rules
+     * 
+     * @param array $rules Array of validation rules for a field
+     * @return bool True if field has numeric validation rules
+     */
+    private function hasNumericValidation(array $rules): bool
+    {
+        $numericRules = ['number', 'numeric', 'int', 'integer', 'float', 'decimal'];
+
+        foreach ($rules as $rule) {
+            $ruleName = explode(':', $rule)[0];
+            if (in_array($ruleName, $numericRules, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Validate 'in' rule with better type handling
+     */
+    private function validateIn($value, array $allowedValues): bool
+    {
+        // Direct comparison first
+        if (in_array($value, $allowedValues, true)) {
+            return true;
+        }
+
+        // Loose comparison for string/numeric values
+        if (is_scalar($value)) {
+            return in_array($value, $allowedValues, false);
+        }
+
+        return false;
+    }
+
+    /**
+     * Validate equal rule with better type handling
+     */
+    private function validateEqual($value1, $value2): bool
+    {
+        // Strict comparison first
+        if ($value1 === $value2) {
+            return true;
+        }
+
+        // Loose comparison for scalar values
+        if (is_scalar($value1) && is_scalar($value2)) {
+            return $value1 == $value2;
+        }
+
+        return false;
+    }
+
+    /**
+     * Validate unique rule with better error handling
+     */
+    private function validateUnique($value, array $params, string $field): bool
+    {
+        if (empty($params[0])) {
+            return false; // Table name is required
+        }
+
+        try {
+            $query = query($params[0])->where($params[1] ?? $field, $value);
+
+            // Handle exclude ID parameter
+            if (isset($params[2]) && is_numeric($params[2])) {
+                $query->where("id != " . intval($params[2]));
+            }
+
+            return $query->count() === 0;
+        } catch (\Exception $e) {
+            // Log error if needed and fail validation
+            return false;
+        }
+    }
+
+    /**
+     * Validate exists rule with better error handling
+     */
+    private function validateExists($value, array $params, string $field): bool
+    {
+        if (empty($params[0])) {
+            return false; // Table name is required
+        }
+
+        try {
+            return query($params[0])->where($params[1] ?? $field, $value)->count() > 0;
+        } catch (\Exception $e) {
+            // Log error if needed and fail validation
+            return false;
+        }
+    }
+
+    /**
+     * Validate not_exists rule with better error handling
+     */
+    private function validateNotExists($value, array $params, string $field): bool
+    {
+        if (empty($params[0])) {
+            return false; // Table name is required
+        }
+
+        try {
+            return query($params[0])->where($params[1] ?? $field, $value)->count() === 0;
+        } catch (\Exception $e) {
+            // Log error if needed and fail validation
+            return false;
+        }
+    }
+
     /** 
      * Compare value against minimum size
      * 
@@ -160,14 +305,26 @@ class InputValidator implements InputValidatorContract
      * @param mixed $min The minimum size to compare against.
      * @return bool True if the value meets or exceeds the minimum size, false otherwise.
      */
-    private function compareMin($value, $min): bool
+    private function compareMin($value, $min, bool $isNumericField = false): bool
     {
-        if (is_string($value)) {
-            return strlen($value) >= (int) $min;
-        } elseif (is_array($value) && isset($value['size'])) {
-            return (int) $value['size'] >= ((int) $min * 1024); // Assuming size is in KB
-        } elseif (is_array($value)) {
+        // ONLY treat as numeric if field explicitly has numeric validation rules
+        if ($isNumericField && is_numeric($value)) {
+            return (float) $value >= (float) $min;
+        }
+
+        // For file uploads (always check this before string check)
+        if (is_array($value) && isset($value['size'])) {
+            return (int) $value['size'] >= ((int) $min * 1024);
+        }
+
+        // For arrays
+        if (is_array($value)) {
             return count($value) >= (int) $min;
+        }
+
+        // For everything else (including numeric strings without numeric rules), treat as string
+        if (is_scalar($value)) {
+            return strlen((string) $value) >= (int) $min;
         }
 
         return false;
@@ -183,16 +340,97 @@ class InputValidator implements InputValidatorContract
      * @param mixed $max The maximum size to compare against.
      * @return bool True if the value is less than or equal to the maximum size, false otherwise.
      */
-    private function compareMax($value, $max): bool
+    private function compareMax($value, $max, bool $isNumericField = false): bool
     {
-        if (is_string($value)) {
-            return strlen($value) <= (int) $max;
-        } elseif (is_array($value) && isset($value['size'])) {
-            return (int) $value['size'] <= ((int) $max * 1024); // Assuming size is in KB
-        } elseif (is_array($value)) {
+        // ONLY treat as numeric if field explicitly has numeric validation rules
+        if ($isNumericField && is_numeric($value)) {
+            return (float) $value <= (float) $max;
+        }
+
+        // For file uploads (always check this before string check)
+        if (is_array($value) && isset($value['size'])) {
+            return (int) $value['size'] <= ((int) $max * 1024);
+        }
+
+        // For arrays
+        if (is_array($value)) {
             return count($value) <= (int) $max;
         }
+
+        // For everything else (including numeric strings without numeric rules), treat as string
+        if (is_scalar($value)) {
+            return strlen((string) $value) <= (int) $max;
+        }
+
         return false;
+    }
+
+    /**
+     * Validate if a value is a valid date
+     * 
+     * @param mixed $value The value to validate
+     * @return bool True if valid date
+     */
+    private function validateDate($value): bool
+    {
+        if (!is_string($value)) {
+            return false;
+        }
+
+        $timestamp = strtotime($value);
+        if ($timestamp === false) {
+            return false;
+        }
+
+        // Additional check to ensure it's a real date
+        $date = date('Y-m-d', $timestamp);
+        return strtotime($date) === strtotime(date('Y-m-d', $timestamp));
+    }
+
+    /**
+     * Validate if a date is before another date
+     * 
+     * @param mixed $value The date value to validate
+     * @param string $beforeDate The date to compare against
+     * @return bool True if value is before the comparison date
+     */
+    private function validateBefore($value, string $beforeDate): bool
+    {
+        if (!$this->validateDate($value)) {
+            return false;
+        }
+
+        $valueTimestamp = strtotime($value);
+        $beforeTimestamp = strtotime($beforeDate);
+
+        if ($valueTimestamp === false || $beforeTimestamp === false) {
+            return false;
+        }
+
+        return $valueTimestamp < $beforeTimestamp;
+    }
+
+    /**
+     * Validate if a date is after another date
+     * 
+     * @param mixed $value The date value to validate  
+     * @param string $afterDate The date to compare against
+     * @return bool True if value is after the comparison date
+     */
+    private function validateAfter($value, string $afterDate): bool
+    {
+        if (!$this->validateDate($value)) {
+            return false;
+        }
+
+        $valueTimestamp = strtotime($value);
+        $afterTimestamp = strtotime($afterDate);
+
+        if ($valueTimestamp === false || $afterTimestamp === false) {
+            return false;
+        }
+
+        return $valueTimestamp > $afterTimestamp;
     }
 
     /** 
@@ -205,15 +443,28 @@ class InputValidator implements InputValidatorContract
      * @param mixed $size The size to compare against.
      * @return bool True if the value is equal to the specified size, false otherwise.
      */
-    private function compareSize($value, $size): bool
+    private function compareSize($value, $size, bool $isNumericField = false): bool
     {
-        if (is_string($value)) {
-            return strlen($value) == (int) $size;
-        } elseif (is_array($value) && isset($value['size'])) {
-            return (int) $value['size'] == ((int) $size * 1024); // Assuming size is in KB
-        } elseif (is_array($value)) {
+        // ONLY treat as numeric if field explicitly has numeric validation rules  
+        if ($isNumericField && is_numeric($value)) {
+            return (float) $value == (float) $size;
+        }
+
+        // For file uploads (always check this before string check)
+        if (is_array($value) && isset($value['size'])) {
+            return (int) $value['size'] == ((int) $size * 1024);
+        }
+
+        // For arrays
+        if (is_array($value)) {
             return count($value) == (int) $size;
         }
+
+        // For everything else (including numeric strings without numeric rules), treat as string
+        if (is_scalar($value)) {
+            return strlen((string) $value) == (int) $size;
+        }
+
         return false;
     }
 
@@ -241,20 +492,33 @@ class InputValidator implements InputValidatorContract
      * @param array $params Array containing two elements: minimum and maximum limits.
      * @return bool True if the value is between the limits, false otherwise.
      */
-    private function validateBetween($value, array $params): bool
+    private function validateBetween($value, array $params, bool $isNumericField = false): bool
     {
-        if (count($params) < 2)
+        if (count($params) < 2) {
             return false;
+        }
 
         $min = $params[0];
         $max = $params[1];
 
-        if (is_numeric($value)) {
+        // ONLY treat as numeric if field explicitly has numeric validation rules
+        if ($isNumericField && is_numeric($value)) {
             return (float) $value >= (float) $min && (float) $value <= (float) $max;
         }
 
-        $length = strlen($value);
-        return $length >= (int) $min && $length <= (int) $max;
+        // For arrays, check count
+        if (is_array($value)) {
+            $count = count($value);
+            return $count >= (int) $min && $count <= (int) $max;
+        }
+
+        // For everything else (including numeric strings without numeric rules), check string length
+        if (is_scalar($value)) {
+            $length = strlen((string) $value);
+            return $length >= (int) $min && $length <= (int) $max;
+        }
+
+        return false;
     }
 
     /**
@@ -267,12 +531,32 @@ class InputValidator implements InputValidatorContract
      */
     private function validateImage($file): bool
     {
-        if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+        if (!is_array($file) || !isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
             return false;
         }
 
+        // Check if file exists and is readable
+        if (!file_exists($file['tmp_name']) || !is_readable($file['tmp_name'])) {
+            return false;
+        }
+
+        // Use getimagesize for better validation
         $imageInfo = getimagesize($file['tmp_name']);
-        return $imageInfo !== false;
+        if ($imageInfo === false) {
+            return false;
+        }
+
+        // Check for valid image MIME types
+        $validImageTypes = [
+            IMAGETYPE_JPEG,
+            IMAGETYPE_PNG,
+            IMAGETYPE_GIF,
+            IMAGETYPE_WEBP,
+            IMAGETYPE_BMP,
+            IMAGETYPE_AVIF
+        ];
+
+        return in_array($imageInfo[2], $validImageTypes, true);
     }
 
     /**
@@ -286,13 +570,27 @@ class InputValidator implements InputValidatorContract
      */
     private function validateMimes($file, array $allowedMimes): bool
     {
-        if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+        if (!is_array($file) || !isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
             return false;
         }
 
+        // Check if file exists
+        if (!file_exists($file['tmp_name']) || !is_readable($file['tmp_name'])) {
+            return false;
+        }
+
+        // Get MIME type using finfo
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo === false) {
+            return false;
+        }
+
         $mimeType = finfo_file($finfo, $file['tmp_name']);
         finfo_close($finfo);
+
+        if ($mimeType === false) {
+            return false;
+        }
 
         return in_array($mimeType, $allowedMimes, true);
     }
@@ -339,16 +637,30 @@ class InputValidator implements InputValidatorContract
         $requireNumbers = in_array('numbers', $params, true);
         $requireSymbols = in_array('symbols', $params, true);
 
-        if (strlen($value) < $minLength)
+        // Check minimum length
+        if (mb_strlen($value, 'UTF-8') < $minLength) {
             return false;
-        if ($requireUppercase && !preg_match('/[A-Z]/', $value))
+        }
+
+        // Check for uppercase letters
+        if ($requireUppercase && !preg_match('/[\p{Lu}]/u', $value)) {
             return false;
-        if ($requireLowercase && !preg_match('/[a-z]/', $value))
+        }
+
+        // Check for lowercase letters  
+        if ($requireLowercase && !preg_match('/[\p{Ll}]/u', $value)) {
             return false;
-        if ($requireNumbers && !preg_match('/\d/', $value))
+        }
+
+        // Check for numbers
+        if ($requireNumbers && !preg_match('/[\p{N}]/u', $value)) {
             return false;
-        if ($requireSymbols && !preg_match('/[^a-zA-Z\d]/', $value))
+        }
+
+        // Check for symbols (any non-letter, non-number character)
+        if ($requireSymbols && !preg_match('/[^\p{L}\p{N}]/u', $value)) {
             return false;
+        }
 
         return true;
     }

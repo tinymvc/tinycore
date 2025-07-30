@@ -38,6 +38,7 @@ use Traversable;
  * @method static QueryBuilder grouped(Closure $callback)
  * @method static bool update(array $data, mixed $where = null)
  * @method static bool delete(mixed $where = null)
+ * @method static bool truncate()
  * @method static QueryBuilder select(array|string $fields = '*')
  * @method static QueryBuilder max($field, $name = null)
  * @method static QueryBuilder min($field, $name = null)
