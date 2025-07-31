@@ -677,7 +677,12 @@ class QueryBuilder implements QueryBuilderContract
         $columnPlaceholder = $this->getWhereSqlColumn($field);
 
         // Construct the FIND_IN_SET condition
-        $where = "{$type}FIND_IN_SET (:$columnPlaceholder, $field)";
+        if ($this->database->isDriver('sqlite')) {
+            $where = "{$field} {$type}LIKE :$columnPlaceholder";
+            $key = "%$key%"; // SQLite uses LIKE for partial matches.
+        } else {
+            $where = "{$type}FIND_IN_SET (:$columnPlaceholder, $field)";
+        }
 
         // Bind the key to the placeholder
         $this->where['bind'][$columnPlaceholder] = $key;
