@@ -244,34 +244,178 @@ class BladeCompiler implements BladeCompilerContract
         }, $template);
     }
 
+
     /**
      * Compile x-components with content: <x-component>content</x-component>
      */
     private function compileXComponentsWithContent(string $template): string
     {
-        // First, find the innermost components (those without nested x-components in their content)
-        $pattern = '/<x-([a-zA-Z0-9\-_.]+)([^>]*?)>((?:(?!<x-[a-zA-Z0-9\-_.]+|<\/x-[a-zA-Z0-9\-_.]+>).)*)<\/x-\1>/s';
+        $offset = 0;
+        $length = strlen($template);
 
-        return preg_replace_callback($pattern, function ($matches) {
-            $componentName = $matches[1];
-            $attributesString = trim($matches[2]);
-            $slotContent = $matches[3];
-
-            // Parse attributes
-            $attributes = $this->parseXComponentAttributes($attributesString);
-
-            // Process slot content
-            $processedSlotContent = $this->processSlotContent($slotContent);
-
-            // Add slot content to attributes if not empty
-            if (!empty(trim($processedSlotContent))) {
-                $attributes['slot'] = $processedSlotContent;
+        while ($offset < $length) {
+            // Find the start of an x-component
+            $pos = strpos($template, '<x-', $offset);
+            if ($pos === false) {
+                break;
             }
 
-            $attributesArray = $this->buildAttributesArray($attributes);
+            // Find the component name
+            $nameStart = $pos + 3; // Skip '<x-'
+            $nameEnd = $nameStart;
+            while ($nameEnd < $length && (ctype_alnum($template[$nameEnd]) || in_array($template[$nameEnd], ['-', '_', '.']))) {
+                $nameEnd++;
+            }
 
-            return "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
-        }, $template);
+            if ($nameEnd === $nameStart) {
+                $offset = $pos + 1;
+                continue;
+            }
+
+            $componentName = substr($template, $nameStart, $nameEnd - $nameStart);
+
+            // Now manually find the end of the opening tag by tracking quotes and brackets
+            $tagEnd = $this->findOpeningTagEnd($template, $nameEnd);
+            if ($tagEnd === false) {
+                $offset = $pos + 1;
+                continue;
+            }
+
+            // Extract attributes string
+            $attributesStart = $nameEnd;
+            while ($attributesStart < $tagEnd && ctype_space($template[$attributesStart])) {
+                $attributesStart++;
+            }
+
+            $attributesEnd = $tagEnd;
+            while ($attributesEnd > $attributesStart && ctype_space($template[$attributesEnd - 1])) {
+                $attributesEnd--;
+            }
+
+            $attributesString = '';
+            if ($attributesEnd > $attributesStart) {
+                $attributesString = substr($template, $attributesStart, $attributesEnd - $attributesStart);
+            }
+
+            // Check if it's self-closing
+            if ($tagEnd > 0 && $template[$tagEnd - 1] === '/') {
+                // Self-closing tag - handle it
+                $attributes = $this->parseXComponentAttributes($attributesString);
+                $attributesArray = $this->buildAttributesArray($attributes);
+                $replacement = "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
+
+                $template = substr_replace($template, $replacement, $pos, $tagEnd - $pos + 1);
+                $offset = $pos + strlen($replacement);
+                continue;
+            }
+
+            // Find the matching closing tag
+            $closeTag = "</x-{$componentName}>";
+            $contentStart = $tagEnd + 1;
+            $depth = 1;
+            $searchPos = $contentStart;
+
+            while ($depth > 0 && $searchPos < $length) {
+                $nextOpen = strpos($template, "<x-{$componentName}", $searchPos);
+                $nextClose = strpos($template, $closeTag, $searchPos);
+
+                if ($nextClose === false) {
+                    break;
+                }
+
+                if ($nextOpen !== false && $nextOpen < $nextClose) {
+                    // Make sure it's actually a complete opening tag, not just text containing the string
+                    $checkPos = $nextOpen + strlen("<x-{$componentName}");
+                    if ($checkPos < $length && (ctype_space($template[$checkPos]) || $template[$checkPos] === '>' || $template[$checkPos] === '/')) {
+                        $depth++;
+                        $searchPos = $nextOpen + strlen("<x-{$componentName}");
+                    } else {
+                        $searchPos = $nextOpen + 1;
+                    }
+                } else {
+                    $depth--;
+                    if ($depth === 0) {
+                        // Found our matching closing tag
+                        $slotContent = substr($template, $contentStart, $nextClose - $contentStart);
+
+                        // Parse attributes
+                        $attributes = $this->parseXComponentAttributes($attributesString);
+
+                        // Process slot content
+                        $processedSlotContent = $this->processSlotContent($slotContent);
+
+                        // Add slot content to attributes if not empty
+                        if (!empty(trim($processedSlotContent))) {
+                            $attributes['slot'] = $processedSlotContent;
+                        }
+
+                        $attributesArray = $this->buildAttributesArray($attributes);
+                        $replacement = "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
+
+                        // Replace the entire component
+                        $totalLength = ($nextClose + strlen($closeTag)) - $pos;
+                        $template = substr_replace($template, $replacement, $pos, $totalLength);
+
+                        $offset = $pos + strlen($replacement);
+                        break;
+                    } else {
+                        $searchPos = $nextClose + strlen($closeTag);
+                    }
+                }
+            }
+
+            if ($depth > 0) {
+                // No matching closing tag found
+                $offset = $pos + 1;
+            }
+        }
+
+        return $template;
+    }
+
+
+    /**
+     * Find the end of an opening tag, properly handling quotes and nested structures
+     */
+    private function findOpeningTagEnd(string $template, int $startPos): int|false
+    {
+        $length = strlen($template);
+        $inQuote = false;
+        $quoteChar = null;
+        $depth = 0;
+        $escaped = false;
+
+        for ($i = $startPos; $i < $length; $i++) {
+            $char = $template[$i];
+
+            if ($escaped) {
+                $escaped = false;
+                continue;
+            }
+
+            if ($char === '\\') {
+                $escaped = true;
+                continue;
+            }
+
+            if (!$inQuote && ($char === '"' || $char === "'")) {
+                $inQuote = true;
+                $quoteChar = $char;
+            } elseif ($inQuote && $char === $quoteChar) {
+                $inQuote = false;
+                $quoteChar = null;
+            } elseif (!$inQuote) {
+                if (in_array($char, ['(', '[', '{'])) {
+                    $depth++;
+                } elseif (in_array($char, [')', ']', '}'])) {
+                    $depth--;
+                } elseif ($char === '>' && $depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -353,7 +497,7 @@ class BladeCompiler implements BladeCompilerContract
         }
 
         $attributes = [];
-        $dynamicAttributes = []; // Track which attributes are dynamic
+        $dynamicAttributes = [];
         $attributesString = trim($attributesString);
         $length = strlen($attributesString);
         $i = 0;
@@ -376,23 +520,21 @@ class BladeCompiler implements BladeCompilerContract
 
             // Parse attribute name
             $nameStart = $i;
-            while ($i < $length && (ctype_alnum($attributesString[$i]) || $attributesString[$i] === '-' || $attributesString[$i] === '_' || $attributesString[$i] === '$')) {
+            while ($i < $length && (ctype_alnum($attributesString[$i]) || in_array($attributesString[$i], ['-', '_', '$']))) {
                 $i++;
             }
 
             if ($i === $nameStart) {
-                $i++; // Skip invalid character
+                $i++;
                 continue;
             }
 
             $name = substr($attributesString, $nameStart, $i - $nameStart);
 
-            // Remove $ prefix from name if present
             if ($name[0] === '$') {
                 $name = substr($name, 1);
             }
 
-            // Track if this attribute is dynamic
             if ($isDynamic) {
                 $dynamicAttributes[$name] = true;
             }
@@ -416,16 +558,10 @@ class BladeCompiler implements BladeCompilerContract
                 $attributes[$name] = $value;
             } else {
                 // Boolean attribute
-                if ($isDynamic) {
-                    // For dynamic boolean attributes like :$variable, use the variable
-                    $attributes[$name] = '$' . $name;
-                } else {
-                    $attributes[$name] = true;
-                }
+                $attributes[$name] = $isDynamic ? "\$$name" : true;
             }
         }
 
-        // Store dynamic attribute info for later use
         $attributes['__dynamic__'] = $dynamicAttributes;
         return $attributes;
     }
@@ -449,6 +585,7 @@ class BladeCompiler implements BladeCompilerContract
             $quote = $char;
             $i++; // Skip opening quote
             $valueStart = $i;
+            $depth = 0;
             $escaped = false;
 
             while ($i < $length) {
@@ -458,24 +595,28 @@ class BladeCompiler implements BladeCompilerContract
                     $escaped = false;
                 } elseif ($currentChar === '\\') {
                     $escaped = true;
-                } elseif ($currentChar === $quote) {
-                    // Found closing quote
-                    $value = substr($attributesString, $valueStart, $i - $valueStart);
-                    $i++; // Skip closing quote
-                    $position = $i;
-                    return $value;
+                } else {
+                    if (in_array($currentChar, ['(', '[', '{'])) {
+                        $depth++;
+                    } elseif (in_array($currentChar, [')', ']', '}'])) {
+                        $depth--;
+                    } elseif ($currentChar === $quote && $depth === 0) {
+                        $value = substr($attributesString, $valueStart, $i - $valueStart);
+                        $i++; // Skip closing quote
+                        $position = $i;
+                        return $value;
+                    }
                 }
 
                 $i++;
             }
 
-            // If we reach here, quote wasn't closed properly
             $value = substr($attributesString, $valueStart);
             $position = $length;
             return $value;
         }
 
-        // Handle unquoted values (arrays, function calls, variables, etc.)
+        // Handle unquoted values
         $valueStart = $i;
         $depth = 0;
         $inString = false;
@@ -485,7 +626,6 @@ class BladeCompiler implements BladeCompilerContract
         while ($i < $length) {
             $currentChar = $attributesString[$i];
 
-            // Handle string literals within unquoted values
             if (!$escaped && ($currentChar === '"' || $currentChar === "'")) {
                 if (!$inString) {
                     $inString = true;
@@ -496,7 +636,6 @@ class BladeCompiler implements BladeCompilerContract
                 }
             }
 
-            // Handle escape sequences
             if ($currentChar === '\\' && !$escaped) {
                 $escaped = true;
                 $i++;
@@ -504,14 +643,12 @@ class BladeCompiler implements BladeCompilerContract
             }
             $escaped = false;
 
-            // Only count brackets/parentheses outside of strings
             if (!$inString) {
-                if ($currentChar === '(' || $currentChar === '[' || $currentChar === '{') {
+                if (in_array($currentChar, ['(', '[', '{'])) {
                     $depth++;
-                } elseif ($currentChar === ')' || $currentChar === ']' || $currentChar === '}') {
+                } elseif (in_array($currentChar, [')', ']', '}'])) {
                     $depth--;
                 } elseif ($depth === 0 && ctype_space($currentChar)) {
-                    // End of unquoted value
                     break;
                 }
             }
@@ -524,6 +661,53 @@ class BladeCompiler implements BladeCompilerContract
         return trim($value);
     }
 
+    /**
+     * Check if position is at the start of next attribute
+     */
+    private function isStartOfNextAttribute(string $attributesString, int $position): bool
+    {
+        $length = strlen($attributesString);
+
+        if ($position >= $length) {
+            return true;
+        }
+
+        $char = $attributesString[$position];
+
+        // Check for dynamic attribute prefix (:)
+        if ($char === ':') {
+            $position++;
+            if ($position >= $length) {
+                return false;
+            }
+            $char = $attributesString[$position];
+        }
+
+        // Check if it's a valid attribute name start
+        if (ctype_alpha($char) || $char === '_' || $char === '$') {
+            // Look for attribute name pattern followed by = or space/end
+            $nameEnd = $position;
+            while (
+                $nameEnd < $length &&
+                (ctype_alnum($attributesString[$nameEnd]) ||
+                    in_array($attributesString[$nameEnd], ['-', '_', '$']))
+            ) {
+                $nameEnd++;
+            }
+
+            // Skip whitespace after name
+            while ($nameEnd < $length && ctype_space($attributesString[$nameEnd])) {
+                $nameEnd++;
+            }
+
+            // It's an attribute if followed by = or end of string or another attribute
+            return $nameEnd >= $length ||
+                $attributesString[$nameEnd] === '=' ||
+                $this->isStartOfNextAttribute($attributesString, $nameEnd);
+        }
+
+        return false;
+    }
 
     /**
      * Build PHP array string from attributes
@@ -571,56 +755,6 @@ class BladeCompiler implements BladeCompilerContract
         }
 
         return '[' . implode(', ', $pairs) . ']';
-    }
-
-    /**
-     * Check if a value is a PHP expression
-     */
-    private function isPHPExpression(string $value): bool
-    {
-        $value = trim($value);
-
-        // Empty values are not expressions
-        if (empty($value)) {
-            return false;
-        }
-
-        // Variables (including object properties and array access)
-        if (preg_match('/^\$[a-zA-Z_][\w]*(?:->[a-zA-Z_][\w]*(?:\([^)]*\))?|\[[^\]]*\])*$/', $value)) {
-            return true;
-        }
-
-        // Function calls
-        if (preg_match('/^[a-zA-Z_][\w]*\s*\(.*\)$/s', $value)) {
-            return true;
-        }
-
-        // Arrays
-        if (preg_match('/^\[.*\]$/s', $value)) {
-            return true;
-        }
-
-        // Numeric values
-        if (is_numeric($value)) {
-            return true;
-        }
-
-        // Boolean and null literals
-        if (in_array(strtolower($value), ['true', 'false', 'null'])) {
-            return true;
-        }
-
-        // Complex expressions (containing operators, method chains, etc.)
-        if (preg_match('/[\+\-\*\/\%\=\!\<\>\&\|\?\:\.]+/', $value)) {
-            return true;
-        }
-
-        // Static method calls
-        if (preg_match('/^[a-zA-Z_][\w]*::[a-zA-Z_][\w]*(?:\([^)]*\))?$/', $value)) {
-            return true;
-        }
-
-        return false;
     }
 
     /**

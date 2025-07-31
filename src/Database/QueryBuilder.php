@@ -738,6 +738,86 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Add a WHERE condition using JSON_EXTRACT function.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param string $key
+     *   The key to find in the JSON object.
+     * @param mixed $value
+     *   The value to match against the extracted JSON value.
+     * @param string $type
+     *   Optional type to prepend to the LIKE clause (e.g., 'NOT').
+     * @param string $andOr
+     *   The logical operator to combine with previous conditions, e.g., 'AND' or 'OR'.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function findInJson($field, $key, $value, $type = '', $andOr = 'AND'): self
+    {
+        // Get the SQL column placeholder for binding.
+        $columnPlaceholder = $this->getWhereSqlColumn("{$field}_{$key}");
+
+        // Construct the JSON condition
+        $where = "JSON_EXTRACT($field, '$.{$key}') {$type}LIKE :$columnPlaceholder";
+
+        $this->where['bind'][$columnPlaceholder] = "%$value%";
+
+        return $this->where(column: $where, andOr: $andOr);
+    }
+
+    /**
+     * Add a WHERE condition using JSON_EXTRACT function, negated.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param string $key
+     *   The key to find in the JSON object.
+     * @param mixed $value
+     *   The value to match against the extracted JSON value.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function notFindInJson($field, $key, $value): self
+    {
+        return $this->findInJson($field, $key, $value, 'NOT ');
+    }
+
+    /**
+     * Add an OR WHERE condition using JSON_EXTRACT function.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param string $key
+     *   The key to find in the JSON object.
+     * @param mixed $value
+     *   The value to match against the extracted JSON value.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orFindInJson($field, $key, $value): self
+    {
+        return $this->findInJson($field, $key, $value, '', 'OR');
+    }
+
+    /**
+     * Add an OR WHERE condition using JSON_EXTRACT function, negated.
+     *
+     * @param string $field
+     *   The field name to search within.
+     * @param string $key
+     *   The key to find in the JSON object.
+     * @param mixed $value
+     *   The value to match against the extracted JSON value.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orNotFindInJson($field, $key, $value): self
+    {
+        return $this->findInJson($field, $key, $value, 'NOT ', 'OR');
+    }
+
+    /**
      * Add a WHERE condition that checks if the field is between two values.
      *
      * @param string $field
@@ -1570,7 +1650,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Create sql command to count rows.
         $statement = $this->database->prepare(
-            "SELECT COUNT(1) FROM {$table}"
+            "SELECT COUNT() FROM {$table}"
             . $this->query['alias']
             . $this->query['joins']
             . $this->getWhereSql()
@@ -1596,6 +1676,16 @@ class QueryBuilder implements QueryBuilderContract
     public function exists(): bool
     {
         return $this->count() > 0;
+    }
+
+    /**
+     * Checks if no records exist based on the current query conditions.
+     *
+     * @return bool True if no records exist, false otherwise.
+     */
+    public function notExists(): bool
+    {
+        return $this->count() === 0;
     }
 
     /**

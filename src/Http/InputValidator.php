@@ -271,7 +271,7 @@ class InputValidator implements InputValidatorContract
         }
 
         try {
-            return query($params[0])->where($params[1] ?? $field, $value)->count() > 0;
+            return query($params[0])->where($params[1] ?? $field, $value)->exists();
         } catch (\Exception $e) {
             // Log error if needed and fail validation
             return false;
@@ -288,7 +288,7 @@ class InputValidator implements InputValidatorContract
         }
 
         try {
-            return query($params[0])->where($params[1] ?? $field, $value)->count() === 0;
+            return query($params[0])->where($params[1] ?? $field, $value)->notExists();
         } catch (\Exception $e) {
             // Log error if needed and fail validation
             return false;

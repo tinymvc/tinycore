@@ -4,7 +4,7 @@ namespace {{ namespace }};
 
 use Spark\Http\Request;
 
-class {{ class }}
+class {{ class }} extends Controller
 {
     public function index() {
 
