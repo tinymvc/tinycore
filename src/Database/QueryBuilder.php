@@ -428,7 +428,11 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function whereRaw(string $sql, array $bindings = [], string $andOr = 'AND'): self
     {
-        $this->where['sql'] .= sprintf(' %s (%s)', $andOr, $sql);
+        $this->where['sql'] .= sprintf(
+            ' %s (%s)',
+            !empty($this->where['sql']) ? $andOr : '',
+            $sql
+        );
         $this->where['bind'] = array_merge($this->where['bind'], $bindings);
 
         return $this;
