@@ -439,6 +439,26 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
     }
 
     /**
+     * Collects values from the data array into a Spark\Support\Collection.
+     * 
+     * @template TKey of array-key
+     *
+     * @template-covariant TValue
+     *
+     * @param string $key
+     * @return \Spark\Support\Collection<TKey, TValue>
+     */
+    public function collect(string $key): \Spark\Support\Collection
+    {
+        $value = $this->get($key);
+        if (is_array($value)) {
+            return new \Spark\Support\Collection($value);
+        }
+
+        return new \Spark\Support\Collection([$value]);
+    }
+
+    /**
      * Sets a key-value pair in the sanitizer data array.
      *
      * @param string $key Key in the data array.
