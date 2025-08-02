@@ -447,8 +447,12 @@ if (!function_exists('url')) {
             return $home_url ??= new Url(home_url('/'), $parameters);
         }
 
+        if (strpos($path, '://') === false) {
+            $path = home_url($path); // Resolve relative path to absolute URL
+        }
+
         // If the path is not empty, generate the URL based on the provided path and parameters.
-        return new Url(home_url($path), $parameters);
+        return new Url($path, $parameters);
     }
 }
 
