@@ -1650,7 +1650,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Create sql command to count rows.
         $statement = $this->database->prepare(
-            "SELECT COUNT() FROM {$table}"
+            "SELECT COUNT(1) FROM {$table}"
             . $this->query['alias']
             . $this->query['joins']
             . $this->getWhereSql()
