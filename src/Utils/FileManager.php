@@ -697,7 +697,7 @@ class FileManager
     {
         if (windows_os()) {
             // Use junction on Windows
-            $cmd = sprintf('mklink /J "%s" "%s"', $target, $link);
+            $cmd = sprintf('mklink /J "%s" "%s"', $link, $target);
 
             exec($cmd, $output, $retval);
 
