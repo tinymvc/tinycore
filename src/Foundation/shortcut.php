@@ -884,7 +884,7 @@ if (!function_exists('user')) {
      */
     function user(?string $key = null, $default = null): mixed
     {
-        return $key !== null && !is_guest() ? (auth()->getUser()->get($key, $default)) : auth()->getUser();
+        return $key !== null && !is_guest() ? (auth()->user()->get($key, $default)) : auth()->user();
     }
 }
 

@@ -223,8 +223,6 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
         return filter_var($this->get($key), FILTER_VALIDATE_IP) ?: null;
     }
 
-    // NEW SANITIZATION METHODS
-
     /**
      * Sanitizes a string to contain only alphabetic characters.
      *
@@ -685,10 +683,10 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Filters the sanitizer data array using a callback function.
      *
-     * @param callable $callback Callback function to filter elements.
+     * @param null|callable $callback Callback function to filter elements.
      * @return self Returns a new instance with filtered data.
      */
-    public function filter(callable $callback): self
+    public function filter(null|callable $callback = null): self
     {
         $filteredData = array_filter($this->data, $callback);
         return new self($filteredData);

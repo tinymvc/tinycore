@@ -14,6 +14,13 @@ use Spark\Support\Traits\Macroable;
  * 
  * Manages database connections and provides query execution and statement preparation.
  * 
+ * @method bool beginTransaction()
+ * @method bool commit()
+ * @method bool rollBack()
+ * @method bool inTransaction()
+ * @method bool|string lastInsertId()
+ * @method bool|string quote()
+ * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class DB implements DBContract
@@ -74,6 +81,36 @@ class DB implements DBContract
     public function getDriver(): string
     {
         return $this->config['driver'] ?? 'mysql';
+    }
+
+    /**
+     * Checks if the current database driver is PostgreSQL.
+     *
+     * @return bool True if the current driver is PostgreSQL, false otherwise.
+     */
+    public function isMySQL(): bool
+    {
+        return $this->isDriver('mysql');
+    }
+
+    /**
+     * Checks if the current database driver is SQLite.
+     *
+     * @return bool True if the current driver is SQLite, false otherwise.
+     */
+    public function isSQLite(): bool
+    {
+        return $this->isDriver('sqlite');
+    }
+
+    /**
+     * Checks if the current database driver is PostgreSQL.
+     *
+     * @return bool True if the current driver is PostgreSQL, false otherwise.
+     */
+    public function isPostgreSQL(): bool
+    {
+        return $this->isDriver('pgsql');
     }
 
     /**
@@ -214,6 +251,11 @@ class DB implements DBContract
             $this->config['password'] ?? null,
             $options
         );
+
+        // If the driver is SQLite, enable foreign key support.
+        if ($this->isSQLite()) {
+            $this->pdo->exec('PRAGMA foreign_keys = ON;');
+        }
 
         return $this;
     }

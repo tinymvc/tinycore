@@ -13,7 +13,7 @@ use ArrayAccess;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class HttpUtilResponse implements ArrayAccess
+class HttpUtilResponse implements ArrayAccess, \Stringable
 {
     public mixed $body = ''; // The response body
     public int $status = 0; // The HTTP status code
@@ -40,7 +40,7 @@ class HttpUtilResponse implements ArrayAccess
      *
      * @return string The response body as a string.
      */
-    public function __toString()
+    public function __toString(): string
     {
         return $this->text();
     }

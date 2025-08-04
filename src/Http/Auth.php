@@ -4,6 +4,7 @@ namespace Spark\Http;
 
 use ArrayAccess;
 use Spark\Contracts\Http\AuthContract;
+use Spark\Contracts\Http\AuthDriverContract;
 use Spark\Database\Model;
 use Spark\Hash;
 use Spark\Support\Traits\Macroable;
@@ -51,6 +52,7 @@ class Auth implements AuthContract, ArrayAccess
             'logged_in_route' => 'admin.dashboard',
             'cookie_name' => null,
             'cookie_expire' => '6 months',
+            'driver' => null,
         ], $config);
     }
 
@@ -71,16 +73,19 @@ class Auth implements AuthContract, ArrayAccess
     }
 
     /**
-     * Gets the currently logged in admin user.
+     * Retrieves the currently logged in user.
      *
-     * If the user is already cached, it will be returned from cache. 
-     * Otherwise, it will be fetched from the database and stored in cache 
-     * for the specified cache expiry duration.
+     * This method returns the currently authenticated user model if the user
+     * is logged in, or false if no user is authenticated.
      *
-     * @return false|Model The currently logged in admin user, or false if not found.
+     * @return false|Model The user model or false if no user is logged in.
      */
-    public function getUser(): false|Model
+    public function user(): false|Model
     {
+        if ($this->hasDriver()) {
+            return $this->getDriver()->user(); // If a driver is set, use it to get the user
+        }
+
         // Check if the user's ID is not set and the session has the session key
         if (!isset($this->user)) {
             if ($this->session->has($this->config['session_key']) || $this->hasCookieAuth()) {
@@ -108,19 +113,6 @@ class Auth implements AuthContract, ArrayAccess
 
         // Return the currently logged in user
         return $this->user;
-    }
-
-    /**
-     * Retrieves the currently logged in user.
-     *
-     * This method returns the currently authenticated user model if the user
-     * is logged in, or false if no user is authenticated.
-     *
-     * @return false|Model The user model or false if no user is logged in.
-     */
-    public function user(): false|Model
-    {
-        return $this->getUser();
     }
 
     /**
@@ -197,7 +189,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function isGuest(): bool
     {
-        return $this->getUser() === false;
+        return $this->user() === false;
     }
 
     /**
@@ -209,6 +201,11 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function login(Model $user, bool $remember = false): void
     {
+        if ($this->hasDriver()) {
+            $this->getDriver()->login($user);
+            return; // If a driver is set, use it to handle login
+        }
+
         $this->session->set($this->config['session_key'], $user->id);
         $this->user = $user;
 
@@ -237,6 +234,11 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function logout(): void
     {
+        if ($this->hasDriver()) {
+            $this->getDriver()->logout();
+            return; // If a driver is set, use it to handle logout
+        }
+
         // Erase the cache for the logged in user.
         $this->clearCache();
 
@@ -272,7 +274,7 @@ class Auth implements AuthContract, ArrayAccess
      * Refreshes the user instance if the user is not a guest.
      *
      * If the user is not a guest, this method will refresh the user instance by
-     * deleting the user property and calling the getUser method again.
+     * deleting the user property and calling the user method again.
      *
      * @return void
      */
@@ -284,7 +286,7 @@ class Auth implements AuthContract, ArrayAccess
 
         $this->clearCache();
         unset($this->user);
-        $this->getUser();
+        $this->user();
     }
 
     /**
@@ -295,7 +297,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __get(string $name)
     {
-        return $this->getUser()->{$name};
+        return $this->user()->{$name};
     }
 
     /**
@@ -307,7 +309,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __set(string $name, $value)
     {
-        $this->getUser()->{$name} = $value;
+        $this->user()->{$name} = $value;
     }
 
     /**
@@ -318,7 +320,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __isset(string $name)
     {
-        return isset($this->getUser()->{$name});
+        return isset($this->user()->{$name});
     }
 
     /**
@@ -329,7 +331,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __unset(string $name)
     {
-        unset($this->getUser()->{$name});
+        unset($this->user()->{$name});
     }
 
     /**
@@ -396,6 +398,37 @@ class Auth implements AuthContract, ArrayAccess
             return $this->macroCall($method, $args);
         }
 
-        return $this->getUser()->{$method}(...$args);
+        return $this->user()->{$method}(...$args);
+    }
+
+    /**
+     * Checks if the Auth instance has a valid driver set.
+     *
+     * This method checks if the 'driver' configuration is set and if it is an instance
+     * of AuthDriverContract, indicating that a valid authentication driver is configured.
+     *
+     * @return bool True if a valid driver is set, false otherwise.
+     */
+    private function hasDriver(): bool
+    {
+        return isset($this->config['driver']) && $this->config['driver'] instanceof AuthDriverContract;
+    }
+
+    /**
+     * Retrieves the authentication driver instance.
+     *
+     * This method returns the currently configured authentication driver.
+     * If no valid driver is set, it throws a RuntimeException.
+     *
+     * @return AuthDriverContract The authentication driver instance.
+     * @throws \RuntimeException If no valid authentication driver is set.
+     */
+    public function getDriver(): AuthDriverContract
+    {
+        if (!$this->hasDriver()) {
+            throw new \RuntimeException('No valid authentication driver is set.');
+        }
+
+        return $this->config['driver'];
     }
 }

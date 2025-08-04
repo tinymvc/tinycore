@@ -20,7 +20,7 @@ interface AuthContract
      *
      * @return false|Model The currently logged in user, or false if not found.
      */
-    public function getUser(): false|Model;
+    public function user(): false|Model;
 
     /**
      * Checks if the current user is a guest (not logged in).
