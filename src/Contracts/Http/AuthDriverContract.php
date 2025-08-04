@@ -32,5 +32,5 @@ interface AuthDriverContract
      *
      * @return Model|false
      */
-    public function user(): Model|false;
+    public function getUser(): Model|false;
 }

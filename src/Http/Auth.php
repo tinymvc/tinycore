@@ -80,10 +80,10 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return false|Model The user model or false if no user is logged in.
      */
-    public function user(): false|Model
+    public function getUser(): false|Model
     {
         if ($this->hasDriver()) {
-            return $this->getDriver()->user(); // If a driver is set, use it to get the user
+            return $this->getDriver()->getUser(); // If a driver is set, use it to get the user
         }
 
         // Check if the user's ID is not set and the session has the session key
@@ -113,6 +113,25 @@ class Auth implements AuthContract, ArrayAccess
 
         // Return the currently logged in user
         return $this->user;
+    }
+
+    /**
+     * Retrieves the user model or a specific field from the user model.
+     *
+     * If a key is provided, it will return the value of that key from the user model.
+     * If no key is provided, it will return the entire user model.
+     *
+     * @param string|null $key The key to retrieve from the user model, or null to return the entire model.
+     * @param mixed $default The default value to return if the key does not exist.
+     * @return false|Model The user model or false if not logged in, or the value of the specified key.
+     */
+    public function user(?string $key, $default = null): false|Model
+    {
+        if ($key !== null && !$this->isGuest()) {
+            return $this->getUser()->get($key, $default);
+        }
+
+        return $this->getUser(); // Return the user model or false if not logged in
     }
 
     /**
@@ -189,7 +208,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function isGuest(): bool
     {
-        return $this->user() === false;
+        return $this->getUser() === false;
     }
 
     /**
@@ -286,7 +305,7 @@ class Auth implements AuthContract, ArrayAccess
 
         $this->clearCache();
         unset($this->user);
-        $this->user();
+        $this->getUser();
     }
 
     /**
@@ -297,7 +316,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __get(string $name)
     {
-        return $this->user()->{$name};
+        return $this->getUser()->{$name};
     }
 
     /**
@@ -309,7 +328,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __set(string $name, $value)
     {
-        $this->user()->{$name} = $value;
+        $this->getUser()->{$name} = $value;
     }
 
     /**
@@ -320,7 +339,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __isset(string $name)
     {
-        return isset($this->user()->{$name});
+        return isset($this->getUser()->{$name});
     }
 
     /**
@@ -331,7 +350,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __unset(string $name)
     {
-        unset($this->user()->{$name});
+        unset($this->getUser()->{$name});
     }
 
     /**
@@ -398,7 +417,7 @@ class Auth implements AuthContract, ArrayAccess
             return $this->macroCall($method, $args);
         }
 
-        return $this->user()->{$method}(...$args);
+        return $this->getUser()->{$method}(...$args);
     }
 
     /**

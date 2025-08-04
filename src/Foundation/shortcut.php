@@ -853,21 +853,6 @@ if (!function_exists('auth')) {
     }
 }
 
-if (!function_exists('is_guest')) {
-    /**
-     * Determine if the current request is made by a guest user.
-     *
-     * This function checks if the user is not set in the current application request,
-     * indicating that the request is made by a guest (unauthenticated) user.
-     *
-     * @return bool True if the request is made by a guest user, false otherwise.
-     */
-    function is_guest(): bool
-    {
-        return auth()->isGuest();
-    }
-}
-
 if (!function_exists('user')) {
     /**
      * Get the currently authenticated user.
@@ -884,7 +869,22 @@ if (!function_exists('user')) {
      */
     function user(?string $key = null, $default = null): mixed
     {
-        return $key !== null && !is_guest() ? (auth()->user()->get($key, $default)) : auth()->user();
+        return auth()->user($key, $default);
+    }
+}
+
+if (!function_exists('is_guest')) {
+    /**
+     * Determine if the current request is made by a guest user.
+     *
+     * This function checks if the user is not set in the current application request,
+     * indicating that the request is made by a guest (unauthenticated) user.
+     *
+     * @return bool True if the request is made by a guest user, false otherwise.
+     */
+    function is_guest(): bool
+    {
+        return auth()->isGuest();
     }
 }
 
