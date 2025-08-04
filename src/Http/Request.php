@@ -720,12 +720,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function input(string|array $filter = [], $default = null): mixed
     {
-        $sanitizer = new InputSanitizer($this->all((array) $filter));
+        $input = $this->all((array) $filter);
         if (is_string($filter)) {
-            $text = $sanitizer->text($filter);
-            return !empty($text) ? $text : $default;
+            return $input[$filter] ?? $default;
         }
-        return $sanitizer;
+
+        return new InputSanitizer($input);
     }
 
     /**

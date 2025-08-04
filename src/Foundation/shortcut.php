@@ -159,16 +159,7 @@ if (!function_exists('request')) {
     function request($key = null, $default = null): mixed
     {
         if ($key !== null) {
-            // Retrieve the request input as an array.
-            $input = get(Request::class)->all((array) $key);
-
-            if (is_string($key)) {
-                // Return the value of the specified key if it exists, otherwise the default.
-                return $input[$key] ?? $default;
-            }
-
-            // Return the entire request input array.
-            return $input;
+            return get(Request::class)->input($key, $default);
         }
 
         // Return the current request instance.

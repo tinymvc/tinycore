@@ -105,7 +105,7 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable
+class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, \Stringable
 {
     use Macroable {
         __call as macroCall;
