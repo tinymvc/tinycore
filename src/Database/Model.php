@@ -20,9 +20,9 @@ use Traversable;
  * 
  * This class provides a base for models, handling database operations and entity management.
  * It includes CRUD operations, data decoding, and dynamic method invocation.
- *  
- * @method static int|array insert(array $data, array $config = [])
- * @method static int|array bulkUpdate(array $data, array $config = [])
+ *
+ * @method static int|array insert(array|Arrayable $data, array $config = [])
+ * @method static int|array bulkUpdate(array|Arrayable $data, array $config = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
  * @method static QueryBuilder whereNull($where, $not = false)
  * @method static QueryBuilder whereNotNull($where)
@@ -36,7 +36,7 @@ use Traversable;
  * @method static QueryBuilder notBetween($field, $value1, $value2)
  * @method static QueryBuilder like($field, $data, $type = '', $andOr = 'AND')
  * @method static QueryBuilder grouped(Closure $callback)
- * @method static bool update(array $data, mixed $where = null)
+ * @method static bool update(array|Arrayable $data, mixed $where = null)
  * @method static bool delete(mixed $where = null)
  * @method static bool truncate()
  * @method static QueryBuilder select(array|string $fields = '*')

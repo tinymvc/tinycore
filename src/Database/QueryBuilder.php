@@ -5,6 +5,7 @@ use Closure;
 use PDO;
 use PDOStatement;
 use Spark\Contracts\Database\QueryBuilderContract;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Database\Schema\Grammar;
@@ -213,7 +214,7 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Inserts data into the database with optional configurations.
      *
-     * @param array $data The data to insert (single record or multiple records)
+     * @param array|Arrayable $data The data to insert (single record or multiple records)
      * @param array $config Optional configurations [
      *     'ignore' => bool,      // Skip errors on duplicate
      *     'replace' => bool,     // Replace existing records
@@ -224,8 +225,12 @@ class QueryBuilder implements QueryBuilderContract
      * @return int|array Returns last insert ID or array of returned data (PostgreSQL with returning)
      * @throws QueryBuilderException
      */
-    public function insert(array $data, array $config = []): int|array
+    public function insert(array|Arrayable $data, array $config = []): int|array
     {
+        if ($data instanceof Arrayable) {
+            $data = $data->toArray();
+        }
+
         if (empty($data)) {
             return 0;
         }
@@ -263,12 +268,16 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Update multiple records into the database with optional configurations.
      *
-     * @param array $data
+     * @param array|Arrayable $data
      * @param array $config
      * @return int
      */
-    public function bulkUpdate(array $data, array $config = []): int|array
+    public function bulkUpdate(array|Arrayable $data, array $config = []): int|array
     {
+        if ($data instanceof Arrayable) {
+            $data = $data->toArray();
+        }
+
         // Transform single records into multiple.
         if (!(isset($data[0]) && is_array($data[0]))) {
             $data = [$data];
@@ -999,12 +1008,16 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Updates records in the database based on specified data and conditions.
      *
-     * @param array $data  Key-value pairs of columns and their respective values to update.
+     * @param array|Arrayable $data  Key-value pairs of columns and their respective values to update.
      * @param mixed $where  Optional WHERE clause to specify which records to update.
      * @return bool
      */
-    public function update(array $data, mixed $where = null): bool
+    public function update(array|Arrayable $data, mixed $where = null): bool
     {
+        if ($data instanceof Arrayable) {
+            $data = $data->toArray();
+        }
+
         // Apply WHERE condition if provided
         $this->where($where);
 

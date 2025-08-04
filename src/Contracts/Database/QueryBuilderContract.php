@@ -1,6 +1,8 @@
 <?php
 namespace Spark\Contracts\Database;
 
+use Spark\Contracts\Support\Arrayable;
+
 /**
  * Interface for the query builder contract.
  *
@@ -20,11 +22,11 @@ interface QueryBuilderContract
     /**
      * Insert data into the database.
      *
-     * @param array $data The data to insert.
+     * @param array|Arrayable $data The data to insert.
      * @param array $config Optional configuration for the query.
      * @return int|array Returns last insert ID or array of returned data (PostgreSQL with returning)
      */
-    public function insert(array $data, array $config = []): int|array;
+    public function insert(array|Arrayable $data, array $config = []): int|array;
 
     /**
      * Add a where clause to the query.
@@ -42,11 +44,11 @@ interface QueryBuilderContract
     /**
      * Update data in the database.
      *
-     * @param array $data The data to update.
+     * @param array|Arrayable $data The data to update.
      * @param mixed $where The condition to use for the update.
      * @return bool True if the update was successful, false otherwise.
      */
-    public function update(array $data, mixed $where = null): bool;
+    public function update(array|Arrayable $data, mixed $where = null): bool;
 
     /**
      * Delete data from the database.

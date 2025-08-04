@@ -5,6 +5,7 @@ namespace Spark\Http;
 use ArrayAccess;
 use Spark\Contracts\Http\InputSanitizerContract;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Support\Collection;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 
@@ -448,14 +449,14 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
      * @param string $key
      * @return \Spark\Support\Collection<TKey, TValue>
      */
-    public function collect(string $key): \Spark\Support\Collection
+    public function collect(string $key): Collection
     {
         $value = $this->get($key);
         if (is_array($value)) {
-            return new \Spark\Support\Collection($value);
+            return new Collection($value);
         }
 
-        return new \Spark\Support\Collection([$value]);
+        return new Collection([$value]);
     }
 
     /**
@@ -643,6 +644,64 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
         }
 
         return $result;
+    }
+
+    /**
+     * Filters the sanitizer data array to include only specified keys.
+     *
+     * @param array $keys Keys to include in the filtered data.
+     * @return self Returns a new instance with filtered data.
+     */
+    public function only(array $keys): self
+    {
+        $filteredData = array_intersect_key($this->data, array_flip($keys));
+        return new self($filteredData);
+    }
+
+    /**
+     * Filters the sanitizer data array to exclude specified keys.
+     *
+     * @param array $keys Keys to exclude from the filtered data.
+     * @return self Returns a new instance with filtered data.
+     */
+    public function except(array $keys): self
+    {
+        $filteredData = array_diff_key($this->data, array_flip($keys));
+        return new self($filteredData);
+    }
+
+    /**
+     * Maps the sanitizer data array using a callback function.
+     *
+     * @param callable $callback Callback function to apply to each element.
+     * @return self Returns a new instance with mapped data.
+     */
+    public function map(callable $callback): self
+    {
+        $mappedData = array_map($callback, $this->data);
+        return new self($mappedData);
+    }
+
+    /**
+     * Filters the sanitizer data array using a callback function.
+     *
+     * @param callable $callback Callback function to filter elements.
+     * @return self Returns a new instance with filtered data.
+     */
+    public function filter(callable $callback): self
+    {
+        $filteredData = array_filter($this->data, $callback);
+        return new self($filteredData);
+    }
+
+    /**
+     * Converts the sanitizer data array to a Spark\Support\Collection.
+     *
+     * @return \Spark\Support\Collection The collection containing sanitized data.
+     */
+    public function toCollection(): Collection
+    {
+        return new Collection($this->data);
     }
 
     /**
