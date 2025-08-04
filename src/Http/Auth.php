@@ -442,7 +442,7 @@ class Auth implements AuthContract, ArrayAccess
      * @return AuthDriverContract The authentication driver instance.
      * @throws \RuntimeException If no valid authentication driver is set.
      */
-    public function getDriver(): AuthDriverContract
+    private function getDriver(): AuthDriverContract
     {
         if (!$this->hasDriver()) {
             throw new \RuntimeException('No valid authentication driver is set.');
