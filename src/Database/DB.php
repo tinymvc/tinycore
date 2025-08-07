@@ -266,6 +266,13 @@ class DB implements DBContract
             $this->pdo->exec('PRAGMA foreign_keys = ON;');
         }
 
+        // Set the default collation for the database connection.
+        if (isset($this->config['collation']) && $this->isMySQL()) {
+            $this->pdo->exec(
+                sprintf("SET NAMES '%s';", $this->config['collation'])
+            );
+        }
+
         return $this;
     }
 

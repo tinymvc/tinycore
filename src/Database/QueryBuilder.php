@@ -98,6 +98,13 @@ class QueryBuilder implements QueryBuilderContract
     private array $query = ['sql' => '', 'select' => '', 'from' => null, 'alias' => '', 'joins' => ''];
 
     /**
+     * Holds the collation to be used for string comparisons.
+     *
+     * @var string
+     */
+    private string $collate;
+
+    /**
      * Array to store data mappers for processing retrieved data.
      *
      * @var array
@@ -147,6 +154,21 @@ class QueryBuilder implements QueryBuilderContract
     public function table(string $table): self
     {
         $this->table = $table;
+        return $this;
+    }
+
+    /**
+     * Sets the collation to be used for string comparisons in the query.
+     *
+     * This method allows you to specify a collation for string comparisons,
+     * which can be useful for case sensitivity or locale-specific sorting.
+     *
+     * @param string $collate The collation to set.
+     * @return self
+     */
+    public function collate(string $collate): self
+    {
+        $this->collate = $collate;
         return $this;
     }
 
@@ -244,7 +266,9 @@ class QueryBuilder implements QueryBuilderContract
         $sql = $this->compileInsert($data, $config);
 
         // Prepare the statement
-        $statement = $this->database->prepare($sql);
+        $statement = $this->database->prepare(
+            $this->addCollateToSql($sql)
+        );
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
         }
@@ -1030,13 +1054,13 @@ class QueryBuilder implements QueryBuilderContract
         $table = $this->prefix . $this->table;
 
         // Prepare the SQL update statement
-        $statement = $this->database->prepare(
+        $statement = $this->database->prepare($this->addCollateToSql(
             sprintf(
                 "UPDATE {$table} SET %s %s",
                 implode(', ', array_map(fn($attr) => "$attr = :$attr", array_keys($data))),
                 $this->getWhereSql()
             )
-        );
+        ));
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -1081,7 +1105,7 @@ class QueryBuilder implements QueryBuilderContract
         $table = $this->prefix . $this->table;
 
         // Prepare the SQL delete statement
-        $statement = $this->database->prepare("DELETE FROM {$table} {$this->getWhereSql()}");
+        $statement = $this->database->prepare($this->addCollateToSql("DELETE FROM {$table} {$this->getWhereSql()}"));
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -1663,12 +1687,14 @@ class QueryBuilder implements QueryBuilderContract
 
         // Create sql command to count rows.
         $statement = $this->database->prepare(
-            "SELECT COUNT(1) FROM {$table}"
-            . $this->query['alias']
-            . $this->query['joins']
-            . $this->getWhereSql()
-            . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
-            . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
+            $this->addCollateToSql(
+                "SELECT COUNT(1) FROM {$table}"
+                . $this->query['alias']
+                . $this->query['joins']
+                . $this->getWhereSql()
+                . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
+                . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
+            )
         );
 
         // Apply where statement if exists.
@@ -1762,15 +1788,17 @@ class QueryBuilder implements QueryBuilderContract
 
         // Build complete select command with condition, order, and limit.
         $statement = $this->database->prepare(
-            "SELECT {$this->query['select']} FROM {$table}"
-            . $this->query['alias']
-            . $this->query['sql']
-            . $this->query['joins']
-            . $this->getWhereSql()
-            . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
-            . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
-            . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
-            . (isset($this->query['limit']) ? ' LIMIT ' . trim($this->query['limit']) : '')
+            $this->addCollateToSql(
+                "SELECT {$this->query['select']} FROM {$table}"
+                . $this->query['alias']
+                . $this->query['sql']
+                . $this->query['joins']
+                . $this->getWhereSql()
+                . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
+                . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
+                . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
+                . (isset($this->query['limit']) ? ' LIMIT ' . trim($this->query['limit']) : '')
+            )
         );
 
         if ($statement === false) {
@@ -1895,6 +1923,17 @@ class QueryBuilder implements QueryBuilderContract
 
         // Reset where query parameters.
         $this->resetWhere();
+    }
+
+    /**
+     * Adds a COLLATE clause to the SQL statement if a collation is set.
+     *
+     * @param string $sql The SQL statement to modify.
+     * @return string The modified SQL statement with COLLATE clause if applicable.
+     */
+    private function addCollateToSql(string $sql): string
+    {
+        return isset($this->collate) ? rtrim($sql, ';') . " COLLATE {$this->collate};" : $sql;
     }
 
     /**

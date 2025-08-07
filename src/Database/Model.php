@@ -52,6 +52,7 @@ use Traversable;
  * @method static QueryBuilder orderDesc(string $field = 'id')
  * @method static QueryBuilder groupBy(string|array $fields)
  * @method static QueryBuilder having(string $having)
+ * @method static QueryBuilder collate(string $collation)
  * @method static QueryBuilder take(int $limit)
  * @method static QueryBuilder limit(?int $offset = null, ?int $limit = null)
  * @method static QueryBuilder fetch(...$fetch)
