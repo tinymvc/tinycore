@@ -168,11 +168,11 @@ class Grammar implements GrammarContract
             'id' => ['mysql' => 'INT AUTO_INCREMENT', 'sqlite' => 'INTEGER', 'pgsql' => 'SERIAL'],
             'string' => [
                 'mysql' => "VARCHAR({$parameters['length']})",
-                'sqlite' => 'TEXT',
+                'sqlite' => 'TEXT COLLATE NOCASE',
                 'pgsql' => "VARCHAR({$parameters['length']})"
             ],
             'integer' => ['mysql' => 'INT', 'sqlite' => 'INTEGER', 'pgsql' => 'INTEGER'],
-            'text' => ['mysql' => 'TEXT', 'sqlite' => 'TEXT', 'pgsql' => 'TEXT'],
+            'text' => ['mysql' => 'TEXT', 'sqlite' => 'TEXT COLLATE NOCASE', 'pgsql' => 'TEXT'],
             'timestamp' => ['mysql' => 'TIMESTAMP', 'sqlite' => 'DATETIME', 'pgsql' => 'TIMESTAMP'],
             'boolean' => ['mysql' => 'TINYINT(1)', 'sqlite' => 'INTEGER', 'pgsql' => 'BOOLEAN'],
             'bigIncrements' => [

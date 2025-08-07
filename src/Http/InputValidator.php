@@ -247,7 +247,7 @@ class InputValidator implements InputValidatorContract
         }
 
         try {
-            $query = query($params[0])->where('lower(' . ($params[1] ?? $field) . ')', strtolower($value));
+            $query = query($params[0])->where($params[1] ?? $field, $value);
 
             // Handle exclude ID parameter
             if (isset($params[2]) && is_numeric($params[2])) {
@@ -271,7 +271,7 @@ class InputValidator implements InputValidatorContract
         }
 
         try {
-            return query($params[0])->where('lower(' . ($params[1] ?? $field) . ')', strtolower($value))->exists();
+            return query($params[0])->where($params[1] ?? $field, $value)->exists();
         } catch (\Exception $e) {
             // Log error if needed and fail validation
             return false;
@@ -288,7 +288,7 @@ class InputValidator implements InputValidatorContract
         }
 
         try {
-            return query($params[0])->where('lower(' . ($params[1] ?? $field) . ')', strtolower($value))->notExists();
+            return query($params[0])->where($params[1] ?? $field, $value)->notExists();
         } catch (\Exception $e) {
             // Log error if needed and fail validation
             return false;

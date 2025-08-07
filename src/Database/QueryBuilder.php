@@ -84,6 +84,13 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Holds the collation to be used for string comparisons.
+     *
+     * @var string
+     */
+    public static string $collate;
+
+    /**
      * Holds the SQL and bind parameters for the WHERE clause.
      *
      * @var array
@@ -96,13 +103,6 @@ class QueryBuilder implements QueryBuilderContract
      * @var array
      */
     private array $query = ['sql' => '', 'select' => '', 'from' => null, 'alias' => '', 'joins' => ''];
-
-    /**
-     * Holds the collation to be used for string comparisons.
-     *
-     * @var string
-     */
-    private string $collate;
 
     /**
      * Array to store data mappers for processing retrieved data.
@@ -142,6 +142,10 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function __construct(private DB $database)
     {
+        if ($database->isSQLite()) {
+            self::$collate = 'nocase'; // Set case insensitive collation for SQLite.
+        }
+
         $this->grammar = new Grammar($database->getDriver());
     }
 
@@ -168,7 +172,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function collate(string $collate): self
     {
-        $this->collate = $collate;
+        self::$collate = $collate;
         return $this;
     }
 
@@ -266,9 +270,7 @@ class QueryBuilder implements QueryBuilderContract
         $sql = $this->compileInsert($data, $config);
 
         // Prepare the statement
-        $statement = $this->database->prepare(
-            $this->addCollateToSql($sql)
-        );
+        $statement = $this->database->prepare($sql);
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
         }
@@ -1933,7 +1935,11 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function addCollateToSql(string $sql): string
     {
-        return isset($this->collate) ? rtrim($sql, ';') . " COLLATE {$this->collate};" : $sql;
+        if (isset(self::$collate)) {
+            return rtrim($sql, ';') . " COLLATE " . self::$collate . ";";
+        }
+
+        return $sql; // Return the original SQL if no collation is set.
     }
 
     /**
