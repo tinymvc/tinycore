@@ -1935,7 +1935,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function addCollateToSql(string $sql): string
     {
-        if (isset(self::$collate)) {
+        if (isset(self::$collate) && strpos($sql, 'where') !== false) {
             return rtrim($sql, ';') . " COLLATE " . self::$collate . ";";
         }
 
