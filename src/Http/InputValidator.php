@@ -28,6 +28,9 @@ class InputValidator implements InputValidatorContract
      */
     private static array $errorMessages = [];
 
+    /** @var InputSanitizer */
+    private InputSanitizer $cleanData;
+
     /**
      * Constructs a new validator instance.
      * 
@@ -79,6 +82,8 @@ class InputValidator implements InputValidatorContract
                 // Apply validation rule
                 $valid = match ($ruleName) {
                     'required' => $has_valid_value,
+                    'required_if' => $this->validateRequiredIf($ruleParams, $inputData, $has_valid_value),
+                    'required_unless' => $this->validateRequiredUnless($ruleParams, $inputData, $has_valid_value),
                     'email', 'mail' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_EMAIL) !== false : true,
                     'url', 'link' => ($has_valid_value || $is_required) ? filter_var($value, FILTER_VALIDATE_URL) !== false : true,
                     'number', 'numeric', 'int', 'integer' => ($has_valid_value || $is_required) ? is_numeric($value) : true,
@@ -150,7 +155,83 @@ class InputValidator implements InputValidatorContract
         }
 
         // Return validated data or false if there are errors
-        return empty($this->errors) ? new InputSanitizer($validData) : false;
+        return empty($this->errors) ? $this->cleanData = new InputSanitizer($validData) : false;
+    }
+
+    /**
+     * Validate required_if rule
+     * 
+     * The field is required if another field equals a specific value.
+     * 
+     * @param array $params Array containing [field_name, expected_value, ...]
+     * @param array $inputData All input data
+     * @param bool $hasValidValue Whether the field has a valid value
+     * @return bool True if validation passes
+     */
+    private function validateRequiredIf(array $params, array $inputData, bool $hasValidValue): bool
+    {
+        if (count($params) < 2) {
+            return false; // Need at least field name and value
+        }
+
+        $otherField = $params[0];
+        $expectedValues = array_slice($params, 1); // Support multiple values
+        $otherValue = $inputData[$otherField] ?? null;
+
+        // Check if other field matches any of the expected values
+        $shouldBeRequired = false;
+        foreach ($expectedValues as $expectedValue) {
+            if ($this->validateEqual($otherValue, $expectedValue)) {
+                $shouldBeRequired = true;
+                break;
+            }
+        }
+
+        // If field should be required, check if it has valid value
+        if ($shouldBeRequired) {
+            return $hasValidValue;
+        }
+
+        // If field is not required, it's always valid
+        return true;
+    }
+
+    /**
+     * Validate required_unless rule
+     * 
+     * The field is required unless another field equals a specific value.
+     * 
+     * @param array $params Array containing [field_name, expected_value, ...]
+     * @param array $inputData All input data
+     * @param bool $hasValidValue Whether the field has a valid value
+     * @return bool True if validation passes
+     */
+    private function validateRequiredUnless(array $params, array $inputData, bool $hasValidValue): bool
+    {
+        if (count($params) < 2) {
+            return false; // Need at least field name and value
+        }
+
+        $otherField = $params[0];
+        $expectedValues = array_slice($params, 1); // Support multiple values
+        $otherValue = $inputData[$otherField] ?? null;
+
+        // Check if other field matches any of the expected values
+        $shouldNotBeRequired = false;
+        foreach ($expectedValues as $expectedValue) {
+            if ($this->validateEqual($otherValue, $expectedValue)) {
+                $shouldNotBeRequired = true;
+                break;
+            }
+        }
+
+        // If field should not be required, it's always valid
+        if ($shouldNotBeRequired) {
+            return true;
+        }
+
+        // If field should be required, check if it has valid value
+        return $hasValidValue;
     }
 
     /**
@@ -676,6 +757,23 @@ class InputValidator implements InputValidatorContract
     }
 
     /**
+     * Returns the validated data.
+     * 
+     * Returns the sanitized data after validation has been performed.
+     * Throws an exception if no data has been validated yet.
+     *
+     * @return InputSanitizer
+     */
+    public function validated(): InputSanitizer
+    {
+        if (!isset($this->cleanData)) {
+            throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
+        }
+
+        return $this->cleanData;
+    }
+
+    /**
      * Returns the first error message, if any.
      *
      * @return string|null First error message or null if no errors.
@@ -720,6 +818,8 @@ class InputValidator implements InputValidatorContract
         // Error messages for each validation rule
         $this->errors[$field][] = match ($rule) {
             'required' => __($this->getErrorMessagePlaceholder('required', $field, 'The %s field is required.'), $prettyField),
+            'required_if' => __($this->getErrorMessagePlaceholder('required_if', $field, 'The %s field is required when %s is %s.'), [$prettyField, __(Str::headline($params[0] ?? '')), implode(' or ', array_slice($params, 1))]),
+            'required_unless' => __($this->getErrorMessagePlaceholder('required_unless', $field, 'The %s field is required unless %s is %s.'), [$prettyField, __(Str::headline($params[0] ?? '')), implode(' or ', array_slice($params, 1))]),
             'email', 'mail' => __($this->getErrorMessagePlaceholder('email', $field, 'The %s field must be a valid email address.'), $prettyField),
             'url', 'link' => __($this->getErrorMessagePlaceholder('url', $field, 'The %s field must be a valid URL.'), $prettyField),
             'number', 'numeric', 'int', 'integer' => __($this->getErrorMessagePlaceholder('number', $field, 'The %s field must be a number.'), $prettyField),

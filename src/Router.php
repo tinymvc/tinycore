@@ -2,7 +2,6 @@
 namespace Spark;
 
 use Spark\Contracts\RouterContract;
-use Spark\Contracts\Support\Arrayable;
 use Spark\Exceptions\Routing\InvalidNamedRouteException;
 use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Http\Middleware;
