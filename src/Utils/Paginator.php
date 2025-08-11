@@ -148,7 +148,6 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
         return $this;
     }
 
-
     /**
      * Retrieves the data array or a subset of it, depending on lazy mode.
      * 
@@ -171,6 +170,16 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
 
         // Returns actual array items.
         return $this->data;
+    }
+
+    /**
+     * Retrieves the current items for the current page.
+     * 
+     * @return array
+     */
+    public function items(): array
+    {
+        return $this->data(true);
     }
 
     /**
