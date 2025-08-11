@@ -66,7 +66,7 @@ class Schema implements SchemaContract
      */
     public static function table(string $table, Closure $callback): void
     {
-        $blueprint = new Blueprint($table, true);
+        $blueprint = new Blueprint($table);
         $callback($blueprint);
 
         $sql = $blueprint->compileAlter();

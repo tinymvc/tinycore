@@ -50,7 +50,7 @@ class Blueprint implements BlueprintContract
      *
      * @param string $table The name of the table.
      */
-    public function __construct(private string $table, private bool $isAlter = false)
+    public function __construct(private string $table)
     {
     }
 
@@ -536,6 +536,10 @@ class Blueprint implements BlueprintContract
     {
         $grammar = Schema::getGrammar();
         $statements = [];
+
+        foreach ($this->columns as $column) {
+            $statements[] = $grammar->compileAddColumn($this->table, $column);
+        }
 
         foreach ($this->drops as $drop) {
             $statements[] = $grammar->compileDrop($this->table, $drop);

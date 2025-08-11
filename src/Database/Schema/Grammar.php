@@ -327,6 +327,18 @@ class Grammar implements GrammarContract
     }
 
     /**
+     * Compile an ADD COLUMN statement.
+     *
+     * @param string $table The table name.
+     * @param Column $column The column to add.
+     * @return string The SQL for the ADD COLUMN statement.
+     */
+    public function compileAddColumn(string $table, Column $column): string
+    {
+        return sprintf("ALTER TABLE %s ADD COLUMN %s", $this->wrapTable($table), $column->toSql());
+    }
+
+    /**
      * Compile a drop statement.
      *
      * @param string $table The table name.
