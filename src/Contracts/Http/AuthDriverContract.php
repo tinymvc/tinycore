@@ -15,10 +15,11 @@ interface AuthDriverContract
     /**
      * Log a user in.
      *
-     * @param Model $user
+     * @param \Spark\Database\Model $user
+     * @param bool $remember
      * @return void
      */
-    public function login(Model $user): void;
+    public function login(Model $user, bool $remember = false): void;
 
     /**
      * Log the current user out.
@@ -30,7 +31,7 @@ interface AuthDriverContract
     /**
      * Get the currently logged-in user.
      *
-     * @return Model|false
+     * @return \Spark\Database\Model|false
      */
     public function getUser(): Model|false;
 }

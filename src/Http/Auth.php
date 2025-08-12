@@ -44,13 +44,14 @@ class Auth implements AuthContract, ArrayAccess
     public function __construct(private Session $session, private string $userModel, private array $config = [])
     {
         $this->config = array_merge([
-            'session_key' => 'admin_user_id',
+            'session_key' => 'user_id',
             'cache_enabled' => false,
-            'cache_name' => 'logged_user',
+            'cache_name' => 'auth_cache',
             'cache_expire' => '10 minutes',
-            'guest_route' => 'admin.auth.login',
-            'logged_in_route' => 'admin.dashboard',
-            'cookie_name' => null,
+            'guest_route' => 'login',
+            'logged_in_route' => 'dashboard',
+            'cookie_enabled' => true,
+            'cookie_name' => 'auth',
             'cookie_expire' => '6 months',
             'driver' => null,
         ], $config);
@@ -146,8 +147,8 @@ class Auth implements AuthContract, ArrayAccess
      */
     protected function hasCookieAuth(): bool
     {
-        // Check if a cookie name is configured
-        if (isset($this->config['cookie_name'])) {
+        // Check if cookie authentication is enabled
+        if ($this->config['cookie_enabled']) {
             $token = $_COOKIE[$this->config['cookie_name']] ?? null;
             if (isset($token) && !empty($token) && is_string($token)) {
                 try {
@@ -221,7 +222,7 @@ class Auth implements AuthContract, ArrayAccess
     public function login(Model $user, bool $remember = false): void
     {
         if ($this->hasDriver()) {
-            $this->getDriver()->login($user);
+            $this->getDriver()->login($user, $remember);
             return; // If a driver is set, use it to handle login
         }
 
