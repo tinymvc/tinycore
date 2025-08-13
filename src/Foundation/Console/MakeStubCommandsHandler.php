@@ -2,8 +2,11 @@
 
 namespace Spark\Foundation\Console;
 
-use Spark\Console\Prompt;
 use Spark\Support\Str;
+use Spark\Console\Prompt;
+use Spark\Exceptions\NotFoundException;
+use Spark\Exceptions\Routing\RouteNotFoundException;
+use Spark\Utils\FileManager;
 
 /**
  * Class MakeStubCommandsHandler
@@ -201,10 +204,25 @@ class MakeStubCommandsHandler
      */
     public function makeController(array $args)
     {
+        // Always suffix with Controller
+        if (!isset($args['_args'][0]) || !preg_match('/Controller$/i', $args['_args'][0])) {
+            $args['_args'][0] = ($args['_args'][0] ?? '') . 'Controller';
+        }
+
+        $replacements = [
+            '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
+            '{{ class }}' => '::name:ucfirst',
+        ];
+
         if ($this->hasFlag($args, ['restful', 'resource', 'rest', 'r'])) {
-            $stub = __DIR__ . '/stubs/controller-restful.stub';
+            $stub = __DIR__ . '/stubs/controller/controller-restful.stub';
+        } elseif ($this->hasFlag($args, ['view', 'v'])) {
+            $stub = __DIR__ . '/stubs/controller/controller-view.stub';
+            // View name without the suffix
+            $args['routeName'] = strtolower(preg_replace('/Controller$/i', '', $args['_args'][0]));
+            $replacements['{{ routeName }}'] = $args['routeName'];
         } else {
-            $stub = __DIR__ . '/stubs/controller.stub';
+            $stub = __DIR__ . '/stubs/controller/controller.stub';
         }
 
         StubCreation::make(
@@ -213,12 +231,17 @@ class MakeStubCommandsHandler
             [
                 'stub' => $stub,
                 'destination' => 'app/Http/Controllers/::subfolder:ucfirst/::name:ucfirst.php',
-                'replacements' => [
-                    '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
-                    '{{ class }}' => '::name:ucfirst',
-                ],
+                'replacements' => $replacements,
             ]
         );
+
+        if ($this->hasFlag($args, ['view', 'v'])) {
+            $args['controller'] = true;
+            $args['controllerName'] = $args['_args'][0];
+            $args['_args'][0] = $args['routeName'];
+            $this->makeView($args);
+            $this->makeRoute($args);
+        }
     }
 
     /**
@@ -255,11 +278,16 @@ class MakeStubCommandsHandler
      */
     public function makeView(array $args)
     {
+        if ($this->hasFlag($args, ['controller'])) {
+            $stub = __DIR__ . '/stubs/view/view-controller.blade.stub';
+        } else {
+            $stub = __DIR__ . '/stubs/view.blade.stub';
+        }
         StubCreation::make(
             $args['_args'][0] ?? null,
             'What is the name of the view?',
             [
-                'stub' => __DIR__ . '/stubs/view.blade.stub',
+                'stub' => $stub,
                 'destination' => 'resources/views/::subfolder:lowercase/::name:lowercase.blade.php',
             ]
         );
@@ -305,4 +333,75 @@ class MakeStubCommandsHandler
 
         return false;
     }
+
+    /**
+     * Append a route to web.php.
+     *
+     * @param array $args
+     *  The arguments passed to the command.
+     * @return void
+     */
+    private function makeRoute(array $args)
+    {
+        $routesPath = $this->base_path('routes/web.php');
+
+        if (!FileManager::isFile($routesPath)) {
+            throw new NotFoundException('Routes file not found: ' . $routesPath);
+        }
+
+        $route = FileManager::get(__DIR__ . '/stubs/route.stub');
+        $route = str_replace('{{ routeName }}', $args['routeName'], $route);
+        $route = str_replace('{{ controllerName }}', $args['controllerName'], $route);
+
+        $this->appendUse($routesPath, $args['controllerName']);
+
+        FileManager::append($routesPath, "\n" . $route);
+    }
+
+    /**
+     * Get the base path of the application.
+     *
+     * @param string $path An optional path to append to the base path.
+     * @return string The full base path.
+     */
+    private function base_path(string $path = ''): string
+    {
+        $basePath = rtrim(getcwd(), DIRECTORY_SEPARATOR);
+
+        return $basePath . DIRECTORY_SEPARATOR . ltrim($path, DIRECTORY_SEPARATOR);
+    }
+
+    private function appendUse(string $path, string $use)
+{
+    $content = FileManager::get($path);
+
+    $useLine = "use App\\Http\\Controllers\\" . $use . ";";
+
+    // Vérifie si le use existe déjà (ligne exacte)
+    if (preg_match('/^' . preg_quote($useLine, '/') . '\s*$/m', $content)) {
+        // Le use existe déjà, ne rien faire
+        return;
+    }
+
+    // Trouver toutes les occurrences de "use ...;"
+    $matches = [];
+    preg_match_all('/^use [^;]+;/m', $content, $matches, PREG_OFFSET_CAPTURE);
+
+    $useLineWithNewline = $useLine . "\n";
+
+    if (!empty($matches[0])) {
+        $lastMatch = end($matches[0]);
+        $insertPos = $lastMatch[1] + strlen($lastMatch[0]);
+        $content = substr($content, 0, $insertPos) . "\n" . $useLineWithNewline . substr($content, $insertPos);
+    } else {
+        if (strpos($content, "<?php") !== false) {
+            $insertPos = strpos($content, "<?php") + 5;
+            $content = substr($content, 0, $insertPos) . "\n\n" . $useLineWithNewline . substr($content, $insertPos);
+        } else {
+            $content = $useLineWithNewline . $content;
+        }
+    }
+
+    FileManager::put($path, $content);
+}
 }

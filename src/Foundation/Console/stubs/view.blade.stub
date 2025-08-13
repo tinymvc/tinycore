@@ -1,3 +1,4 @@
 <div>
-    <!-- {{ 'quote' }} -->
+Controller
+    {{ 'quote' }}
 </div>
