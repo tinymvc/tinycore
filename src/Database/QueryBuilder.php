@@ -370,7 +370,13 @@ class QueryBuilder implements QueryBuilderContract
             }
 
             $columnPlaceholder = $this->getWhereSqlColumn($column);
-            $command = sprintf("%s %s %s :%s", $andOr, $column, $operator, $columnPlaceholder);
+            $command = sprintf(
+                "%s %s %s :%s",
+                $andOr,
+                $this->grammar->wrapColumn($column),
+                $operator,
+                $columnPlaceholder
+            );
 
             $this->where['bind'][$columnPlaceholder] = $value;
         } elseif (is_array($column) && $operator === null && $value === null) {
@@ -386,7 +392,7 @@ class QueryBuilder implements QueryBuilderContract
                             $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
                             $this->where['bind'][$columnPlaceholder] = $value; // Bind the value to the placeholder.
             
-                            return $attr . (is_array($value) ?
+                            return $this->grammar->wrapColumn($attr) . (is_array($value) ?
                                 // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
                                 sprintf(
                                     ($not ? ' NOT' : '') . " IN (%s)",
@@ -556,7 +562,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function whereNull($where, $not = false): self
     {
-        $where = $where . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
+        $where = $this->grammar->wrapColumn($where) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
 
         return $this->where($where);
     }
@@ -713,10 +719,10 @@ class QueryBuilder implements QueryBuilderContract
 
         // Construct the FIND_IN_SET condition
         if ($this->database->isDriver('sqlite')) {
-            $where = "{$field} {$type}LIKE :$columnPlaceholder";
+            $where = $this->grammar->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
             $key = "%$key%"; // SQLite uses LIKE for partial matches.
         } else {
-            $where = "{$type}FIND_IN_SET (:$columnPlaceholder, $field)";
+            $where = "{$type}FIND_IN_SET (:$columnPlaceholder, {$this->grammar->wrapColumn($field)})";
         }
 
         // Bind the key to the placeholder
@@ -794,7 +800,7 @@ class QueryBuilder implements QueryBuilderContract
         $columnPlaceholder = $this->getWhereSqlColumn("{$field}_{$key}");
 
         // Construct the JSON condition
-        $where = "JSON_EXTRACT($field, '$.{$key}') {$type}LIKE :$columnPlaceholder";
+        $where = "JSON_EXTRACT({$this->grammar->wrapColumn($field)}, '$.{$key}') {$type}LIKE :$columnPlaceholder";
 
         $this->where['bind'][$columnPlaceholder] = "%$value%";
 
@@ -873,7 +879,7 @@ class QueryBuilder implements QueryBuilderContract
         $columnPlaceholder1 = $this->getWhereSqlColumn("{$field}1");
         $columnPlaceholder2 = $this->getWhereSqlColumn("{$field}2");
 
-        $where = '(' . $field . ' ' . $type . 'BETWEEN '
+        $where = '(' . $this->grammar->wrapColumn($field) . ' ' . $type . 'BETWEEN '
             . (":$columnPlaceholder1 AND :$columnPlaceholder2") . ')';
 
         $this->where['bind'][$columnPlaceholder1] = $value1;
@@ -950,7 +956,7 @@ class QueryBuilder implements QueryBuilderContract
     public function like($field, $data, $type = '', $andOr = 'AND'): self
     {
         $columnPlaceholder = $this->getWhereSqlColumn($field);
-        $where = "$field {$type}LIKE :$columnPlaceholder";
+        $where = $this->grammar->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
 
         $this->where['bind'][$columnPlaceholder] = $data;
 
@@ -1056,13 +1062,20 @@ class QueryBuilder implements QueryBuilderContract
         $table = $this->prefix . $this->table;
 
         // Prepare the SQL update statement
-        $statement = $this->database->prepare($this->addCollateToSql(
+        $sql = $this->addCollateToSql(
             sprintf(
                 "UPDATE {$table} SET %s %s",
-                implode(', ', array_map(fn($attr) => "$attr = :$attr", array_keys($data))),
+                implode(
+                    ', ',
+                    array_map(
+                        fn($attr) => $this->grammar->wrapColumn($attr) . " = :$attr",
+                        array_keys($data)
+                    )
+                ),
                 $this->getWhereSql()
             )
-        ));
+        );
+        $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -1212,7 +1225,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function max($field, $name = null): self
     {
-        $column = 'MAX(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
         return $this;
@@ -1226,7 +1239,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function min($field, $name = null): self
     {
-        $column = 'MIN(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
         return $this;
@@ -1240,7 +1253,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function sum($field, $name = null): self
     {
-        $column = 'SUM(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
         return $this;
@@ -1254,7 +1267,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function avg($field, $name = null): self
     {
-        $column = 'AVG(' . $field . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
         return $this;
