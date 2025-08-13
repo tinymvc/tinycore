@@ -158,6 +158,31 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     }
 
     /**
+     * Sanitizes a string value.
+     *
+     * @param string $key Key in the data array to sanitize.
+     * @param mixed $default Default value to return if key is not found.
+     * @return string|null Sanitized string or null if invalid.
+     */
+    public function string(string $key, $default = null): ?string
+    {
+        $value = $this->get($key, $default);
+        if ($value === null || is_string($value)) {
+            return $value;
+        }
+
+        if ($value instanceof Arrayable) {
+            $value = $value->toArray();
+        }
+
+        if (is_array($value)) {
+            return json_encode($value);
+        }
+
+        return (string) $value;
+    }
+
+    /**
      * Escapes HTML special characters for safe output.
      *
      * @param string $key Key in the data array to sanitize.
@@ -353,8 +378,12 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     public function array(string $key, ?callable $callback = null, bool $removeEmpty = true): ?array
     {
         $value = $this->get($key);
-        if (!is_array($value))
-            return null;
+        if (!is_array($value)) {
+            $value = $this->json($key, true);
+            if (!is_array($value)) {
+                return null;
+            }
+        }
 
         if ($removeEmpty) {
             $value = array_filter($value, fn($item) => !empty($item) || $item === 0 || $item === '0');
