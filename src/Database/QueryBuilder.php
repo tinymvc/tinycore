@@ -91,6 +91,13 @@ class QueryBuilder implements QueryBuilderContract
     public static string $collate;
 
     /**
+     * Holds the SQL parameters for the query.
+     *
+     * @var array
+     */
+    private array $parameters = [];
+
+    /**
      * Holds the SQL and bind parameters for the WHERE clause.
      *
      * @var array
@@ -234,6 +241,20 @@ class QueryBuilder implements QueryBuilderContract
     public function addMapper(callable $callback): self
     {
         $this->dataMapper[] = $callback;
+        return $this;
+    }
+
+    /**
+     * Adds a parameter for a query.
+     *
+     * @param string|array $parameter The parameter name(s) to add.
+     * @param mixed ...$parameters Additional parameter names.
+     * @return self Returns the query object.
+     */
+    public function parameter(string|array $parameter, ...$parameters): self
+    {
+        $placeholders = is_array($parameter) ? $parameter : [$parameter];
+        $this->parameters = array_merge($this->parameters, $placeholders, $parameters);
         return $this;
     }
 
@@ -437,23 +458,11 @@ class QueryBuilder implements QueryBuilderContract
      * @param array $args
      * @return QueryBuilder
      */
-    public function addWhereBinding(array $args): self
+    public function addBinding(array $args): self
     {
         $this->where['bind'] = array_merge($this->where['bind'], $args);
 
         return $this;
-    }
-
-    /**
-     * This method allows you to add additional bindings to the WHERE clause.
-     * It is an alias for `addWhereBinding` method.
-     * 
-     * @param array $args
-     * @return QueryBuilder
-     */
-    public function addBinding(array $args): self
-    {
-        return $this->addWhereBinding($args);
     }
 
     /**
@@ -474,7 +483,12 @@ class QueryBuilder implements QueryBuilderContract
             !empty($this->where['sql']) ? $andOr : '',
             $sql
         );
-        $this->where['bind'] = array_merge($this->where['bind'], $bindings);
+
+        if (strpos($sql, '?') === false && preg_match('/\:(\w+)/', $sql)) {
+            $this->where['bind'] = array_merge($this->where['bind'], $bindings);
+        } else {
+            $this->parameter($bindings);
+        }
 
         return $this;
     }
@@ -1089,6 +1103,9 @@ class QueryBuilder implements QueryBuilderContract
         // Bind the WHERE clause parameters
         $this->bindWhere($statement);
 
+        // Bind positional parameters
+        $this->bindParameters($statement);
+
         // Execute the statement and reset the WHERE clause
         if ($statement->execute() === false) {
             throw new QueryBuilderException('Failed to execute statement');
@@ -1128,6 +1145,9 @@ class QueryBuilder implements QueryBuilderContract
 
         // Bind the WHERE clause parameters
         $this->bindWhere($statement);
+
+        // Bind positional parameters
+        $this->bindParameters($statement);
 
         // Execute the statement and reset the WHERE clause
         if ($statement->execute() === false) {
@@ -1190,7 +1210,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Build the initial SELECT SQL query
-        $this->query['select'] = $fields;
+        $this->query['select'] = $this->wrapAndEscapeColumns($fields);
 
         // Returns the current instance for method chaining.
         return $this;
@@ -1285,7 +1305,7 @@ class QueryBuilder implements QueryBuilderContract
     public function as(string $alias): self
     {
         if (stripos($alias, 'AS ') === false) {
-            $alias = "AS {$alias}";
+            $alias = "AS " . $this->grammar->wrapColumn($alias);
         }
 
         $this->query['alias'] = " {$alias} ";
@@ -1295,7 +1315,7 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Adds a JOIN clause to the query.
      *
-     * @param string      $table The table to join.
+     * @param callable|string $table The table to join.
      * @param string|null $field1 The first field to join on.
      * @param string|null $operator The operator to use for the join.
      * @param string|null $field2 The second field to join on.
@@ -1303,8 +1323,13 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
+    public function join(callable|string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
     {
+        if (is_callable($table)) {
+            $table();
+            return $this;
+        }
+
         $on = $field1;
         $table = "{$this->prefix}$table";
 
@@ -1314,12 +1339,68 @@ class QueryBuilder implements QueryBuilderContract
                 $operator = '=';
             }
 
-            $on = "$field1 $operator $field2";
+            $on = $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapAndValue($field2);
         }
 
-        $this->query['joins'] .= " {$type}JOIN $table ON $on";
+        $this->query['joins'] .= " {$type}JOIN " . $this->wrapAndEscapeColumns($table) . ($on ? " ON $on" : "");
 
         return $this;
+    }
+
+    /**
+     * Adds an ON clause to the query.
+     *
+     * @param string $field1 The field to join on.
+     * @param string $operator The operator to use for the join.
+     * @param string $field2 The value to join with.
+     * @param string|array|null $parameters The parameters to bind to the query.
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function on(string $field1, string $operator, ?string $field2 = null, null|string|array $parameters = null, string $orOn = 'ON', ): self
+    {
+        if ($field2 === null) {
+            $field2 = $operator;
+            $operator = '=';
+        }
+
+        $this->query['joins'] .= " " . $orOn . " " . $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapAndValue($field2);
+
+        if ($parameters) {
+            $this->parameter($parameters);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Adds an OR clause to the current join condition.
+     *
+     * @param string $field1 The first field to join on.
+     * @param string $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     * @param string|array|null $parameters The parameters to bind to the query.
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function orOn(string $field1, string $operator, ?string $field2 = null, null|string|array $parameters = null): self
+    {
+        return $this->on($field1, $operator, $field2, $parameters, 'OR');
+    }
+
+    /**
+     * Adds an AND clause to the current join condition.
+     *
+     * @param string $field1 The first field to join on.
+     * @param string $operator The operator to use for the join.
+     * @param string|null $field2 The second field to join on.
+     * @param string|array|null $parameters The parameters to bind to the query.
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function andOn(string $field1, string $operator, ?string $field2 = null, null|string|array $parameters = null): self
+    {
+        return $this->on($field1, $operator, $field2, $parameters, 'AND');
     }
 
     /**
@@ -1332,7 +1413,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function innerJoin($table, $field1, $operator = '', $field2 = '')
+    public function innerJoin(string $table, $field1 = null, $operator = null, $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'INNER ');
     }
@@ -1347,7 +1428,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function leftJoin($table, $field1, $operator = '', $field2 = '')
+    public function leftJoin(string $table, $field1 = null, $operator = null, $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'LEFT ');
     }
@@ -1362,7 +1443,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function rightJoin($table, $field1, $operator = '', $field2 = '')
+    public function rightJoin(string $table, $field1 = null, $operator = null, $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'RIGHT ');
     }
@@ -1378,7 +1459,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self The current instance for method chaining.
      */
 
-    public function fullOuterJoin($table, $field1, $operator = '', $field2 = '')
+    public function fullOuterJoin(string $table, $field1 = null, $operator = null, $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'FULL OUTER ');
     }
@@ -1393,7 +1474,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function leftOuterJoin($table, $field1, $operator = '', $field2 = '')
+    public function leftOuterJoin(string $table, $field1 = null, $operator = null, $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'LEFT OUTER ');
     }
@@ -1408,7 +1489,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function rightOuterJoin($table, $field1, $operator = '', $field2 = '')
+    public function rightOuterJoin(string $table, $field1 = null, $operator = null, $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'RIGHT OUTER ');
     }
@@ -1715,6 +1796,9 @@ class QueryBuilder implements QueryBuilderContract
         // Apply where statement if exists.
         $this->bindWhere($statement);
 
+        // Bind positional parameters
+        $this->bindParameters($statement);
+
         // Execute sql command.
         $statement->execute();
 
@@ -1784,7 +1868,7 @@ class QueryBuilder implements QueryBuilderContract
     private function getTableName(): string
     {
         // Returns the table name with prefix if exists.
-        return $this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']);
+        return $this->grammar->wrapTable($this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
     }
 
     /**
@@ -1822,6 +1906,9 @@ class QueryBuilder implements QueryBuilderContract
 
         // Bind/Add conditions to filter records.
         $this->bindWhere($statement);
+
+        // Bind positional parameters
+        $this->bindParameters($statement);
 
         // Execute current select command.
         if ($statement->execute() === false) {
@@ -1913,6 +2000,19 @@ class QueryBuilder implements QueryBuilderContract
                 // binds clause values from a string condition, Ex. "id = 1".
                 $statement->bindValue($param, $value, $this->getParameterType($value));
             }
+        }
+    }
+
+    /**
+     * Binds the values of the parameters to the SQL statement.
+     *
+     * @param PDOStatement $statement The prepared PDO statement to bind values.
+     * @return void
+     */
+    private function bindParameters(PDOStatement &$statement): void
+    {
+        foreach ($this->parameters as $key => $param) {
+            $statement->bindValue($key + 1, $param, $this->getParameterType($param));
         }
     }
 
@@ -2142,5 +2242,43 @@ class QueryBuilder implements QueryBuilderContract
             return PDO::PARAM_NULL;
         }
         return PDO::PARAM_STR;
+    }
+
+    /**
+     * Wraps and escapes column names for use in SQL queries.
+     *
+     * @param array|string $columns The column names to wrap and escape.
+     * @return string The wrapped and escaped column names.
+     */
+    private function wrapAndEscapeColumns(array|string $columns): string
+    {
+        if (is_string($columns) && $columns === '*') {
+            return '*';
+        }
+
+        if (is_string($columns)) {
+            $columns = array_map('trim', explode(',', $columns));
+        }
+
+        $columns = array_map(function ($column) {
+            $columns = explode(' as ', str_ireplace(' As ', ' as ', $column));
+            return implode(' as ', array_map([$this->grammar, 'wrapColumn'], $columns));
+        }, $columns);
+
+        return implode(', ', $columns);
+    }
+
+    /**
+     * Wraps and escapes a value for use in SQL queries.
+     *
+     * @param string $value The value to wrap and escape.
+     * @return string The wrapped and escaped value.
+     */
+    private function wrapAndValue(string $value): string
+    {
+        if (strpos($value, '?') === false && preg_match('/\:(\w+)/', $value) === 0) {
+            $value = $this->grammar->wrapColumn($value);
+        }
+        return $value;
     }
 }

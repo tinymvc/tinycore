@@ -69,7 +69,7 @@ interface QueryBuilderContract
     /**
      * Adds a JOIN clause to the query.
      *
-     * @param string      $table    The table to join.
+     * @param string|callable $table    The table to join.
      * @param string|null $field1   The first field to join on.
      * @param string|null $operator The operator to use for the join.
      * @param string|null $field2   The second field to join on.
@@ -77,7 +77,7 @@ interface QueryBuilderContract
      *
      * @return self Returns the query builder instance.
      */
-    public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self;
+    public function join(string|callable $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self;
 
     /**
      * Get the first row of the result set.
