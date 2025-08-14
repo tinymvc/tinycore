@@ -1315,7 +1315,7 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Adds a JOIN clause to the query.
      *
-     * @param callable|string $table The table to join.
+     * @param string $table The table to join.
      * @param string|null $field1 The first field to join on.
      * @param string|null $operator The operator to use for the join.
      * @param string|null $field2 The second field to join on.
@@ -1323,13 +1323,8 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function join(callable|string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
+    public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
     {
-        if (is_callable($table)) {
-            $table();
-            return $this;
-        }
-
         $on = $field1;
         $table = "{$this->prefix}$table";
 
@@ -1339,7 +1334,9 @@ class QueryBuilder implements QueryBuilderContract
                 $operator = '=';
             }
 
-            $on = $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
+            $on = $this->wrapOrValue($field1) . " $operator " . $this->wrapOrValue($field2);
+        } elseif (!empty($on)) {
+            $on = $this->wrapJoinOn($on);
         }
 
         $this->query['joins'] .= " {$type}JOIN " . $this->wrapAndEscapeColumns($table) . ($on ? " ON $on" : "");
@@ -1351,20 +1348,24 @@ class QueryBuilder implements QueryBuilderContract
      * Adds an ON clause to the query.
      *
      * @param string $field1 The field to join on.
-     * @param string $operator The operator to use for the join.
+     * @param null|string $operator The operator to use for the join.
      * @param string $field2 The value to join with.
      * @param string|array|null $parameters The parameters to bind to the query.
      *
      * @return self The current instance for method chaining.
      */
-    public function on(string $field1, string $operator, ?string $field2 = null, null|string|array $parameters = null, string $orOn = 'ON', ): self
+    public function on(string $field1, ?string $operator = null, ?string $field2 = null, null|string|array $parameters = null, string $orOn = 'ON', ): self
     {
-        if ($field2 === null) {
-            $field2 = $operator;
-            $operator = '=';
-        }
+        if ($operator !== null) {
+            if ($field2 === null) {
+                $field2 = $operator;
+                $operator = '=';
+            }
 
-        $this->query['joins'] .= " " . $orOn . " " . $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
+            $this->query['joins'] .= " " . $orOn . " " . $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
+        } else {
+            $this->query['joins'] .= " " . $orOn . " " . $this->wrapJoinOn($field1);
+        }
 
         if ($parameters) {
             $this->parameter($parameters);
@@ -1377,13 +1378,13 @@ class QueryBuilder implements QueryBuilderContract
      * Adds an OR clause to the current join condition.
      *
      * @param string $field1 The first field to join on.
-     * @param string $operator The operator to use for the join.
+     * @param string|null $operator The operator to use for the join.
      * @param string|null $field2 The second field to join on.
      * @param string|array|null $parameters The parameters to bind to the query.
      *
      * @return self The current instance for method chaining.
      */
-    public function orOn(string $field1, string $operator, ?string $field2 = null, null|string|array $parameters = null): self
+    public function orOn(string $field1, ?string $operator = null, ?string $field2 = null, null|string|array $parameters = null): self
     {
         return $this->on($field1, $operator, $field2, $parameters, 'OR');
     }
@@ -1392,13 +1393,13 @@ class QueryBuilder implements QueryBuilderContract
      * Adds an AND clause to the current join condition.
      *
      * @param string $field1 The first field to join on.
-     * @param string $operator The operator to use for the join.
+     * @param string|null $operator The operator to use for the join.
      * @param string|null $field2 The second field to join on.
      * @param string|array|null $parameters The parameters to bind to the query.
      *
      * @return self The current instance for method chaining.
      */
-    public function andOn(string $field1, string $operator, ?string $field2 = null, null|string|array $parameters = null): self
+    public function andOn(string $field1, ?string $operator = null, ?string $field2 = null, null|string|array $parameters = null): self
     {
         return $this->on($field1, $operator, $field2, $parameters, 'AND');
     }
@@ -2285,5 +2286,30 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         return $this->grammar->wrapColumn($value);
+    }
+
+    /**
+     * Wraps and escapes the ON clause for use in SQL queries.
+     *
+     * @param string $on The ON clause to wrap and escape.
+     * @return string The wrapped and escaped ON clause.
+     */
+    private function wrapJoinOn(string $on): string
+    {
+        $hasEqual = strpos($on, '=') !== false;
+        $hasNotEqual = strpos($on, '!=') !== false;
+
+        if ($hasEqual || $hasNotEqual) {
+            // Split the ON clause into its components
+            [$field1, $operator, $field2] = array_map(
+                'trim',
+                explode($on, $hasNotEqual ? '!=' : '=', 3)
+            );
+
+            // Wrap the values for the ON clause
+            $on = $this->wrapOrValue($field1) . " $operator " . $this->wrapOrValue($field2);
+        }
+
+        return $on;
     }
 }
