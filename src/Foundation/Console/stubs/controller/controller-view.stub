@@ -2,7 +2,7 @@
 
 namespace {{ namespace }};
 
-class {{ class }} extends Controller
+class {{ class }}
 {
     /**
      * {{ class }} default route
