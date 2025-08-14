@@ -1339,7 +1339,7 @@ class QueryBuilder implements QueryBuilderContract
                 $operator = '=';
             }
 
-            $on = $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapAndValue($field2);
+            $on = $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
         }
 
         $this->query['joins'] .= " {$type}JOIN " . $this->wrapAndEscapeColumns($table) . ($on ? " ON $on" : "");
@@ -1364,7 +1364,7 @@ class QueryBuilder implements QueryBuilderContract
             $operator = '=';
         }
 
-        $this->query['joins'] .= " " . $orOn . " " . $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapAndValue($field2);
+        $this->query['joins'] .= " " . $orOn . " " . $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
 
         if ($parameters) {
             $this->parameter($parameters);
@@ -2274,11 +2274,16 @@ class QueryBuilder implements QueryBuilderContract
      * @param string $value The value to wrap and escape.
      * @return string The wrapped and escaped value.
      */
-    private function wrapAndValue(string $value): string
+    private function wrapOrValue(string $value): string
     {
-        if (strpos($value, '?') === false && preg_match('/\:(\w+)/', $value) === 0) {
-            $value = $this->grammar->wrapColumn($value);
+        if (
+            strpos($value, '?') !== false ||
+            preg_match('/:\w+/', $value) ||
+            preg_match('/\([^)]*\)/', $value)
+        ) {
+            return $value;
         }
-        return $value;
+
+        return $this->grammar->wrapColumn($value);
     }
 }
