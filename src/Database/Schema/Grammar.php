@@ -110,6 +110,11 @@ class Grammar implements GrammarContract
         };
 
         $value = $maxLength ? substr($value, 0, $maxLength) : $value;
+
+        if (in_array($value, ['*'])) {
+            return $value; // No wrapping needed for wildcard
+        }
+
         return $this->wrapper[0] . $value . $this->wrapper[1];
     }
 
