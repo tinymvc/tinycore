@@ -1,0 +1,16 @@
+<?php
+
+namespace {{ namespace }};
+
+class {{ class }}
+{
+    /**
+     * {{ class }} default route
+     *
+     * @return \Spark\Http\Response
+     */
+    public function default()
+    {
+        return view('{{ routeName }}', ['content' => '{{ class }} index']);
+    }
+}

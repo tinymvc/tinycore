@@ -1,0 +1,1 @@
+Route::get('{{ routeName }}', [{{ controllerName }}::class, 'default']);

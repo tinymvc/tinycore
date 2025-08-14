@@ -2,8 +2,12 @@
 
 namespace Spark\Foundation\Console;
 
-use Spark\Console\Prompt;
 use Spark\Support\Str;
+use Spark\Console\Prompt;
+use Spark\Utils\FileManager;
+use Spark\Support\SuffixHelper;
+use Spark\Support\ClassManipulation;
+use Spark\Exceptions\NotFoundException;
 
 /**
  * Class MakeStubCommandsHandler
@@ -201,23 +205,97 @@ class MakeStubCommandsHandler
      */
     public function makeController(array $args)
     {
-        if ($this->hasFlag($args, ['restful', 'resource', 'rest', 'r'])) {
-            $stub = __DIR__ . '/stubs/controller-restful.stub';
-        } else {
-            $stub = __DIR__ . '/stubs/controller.stub';
+        $prompt = get(Prompt::class);
+        
+        // We ask the question first to be sure that the name is not empty before adding the suffix
+        $name = $args['_args'][0] ?? null;
+        if (!$name) {
+            do {
+                $name = $prompt->ask('What is the name of the controller?');
+            } while (!$name);
         }
 
+        $args['_args'][0] = SuffixHelper::addSuffix($name, SuffixHelper::CONTROLLER);
+
+        $controllerConfig = $this->getControllerConfig($args);
+        
         StubCreation::make(
-            $args['_args'][0] ?? null,
+            $args['_args'][0],
             'What is the name of the controller?',
             [
-                'stub' => $stub,
+                'stub' => $controllerConfig['stub'],
                 'destination' => 'app/Http/Controllers/::subfolder:ucfirst/::name:ucfirst.php',
-                'replacements' => [
-                    '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
-                    '{{ class }}' => '::name:ucfirst',
-                ],
+                'replacements' => $controllerConfig['replacements'],
             ]
+        );
+
+        if ($this->hasFlag($args, ['view', 'v'])) {
+            $this->handleViewControllerActions($args, $controllerConfig);
+        }
+    }
+
+    /**
+     * Get controller configuration based on flags.
+     *
+     * @param array $args The arguments passed to the command
+     * @return array Configuration array with stub path and replacements
+     */
+    private function getControllerConfig(array $args): array
+    {
+        $replacements = [
+            '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
+            '{{ class }}' => '::name:ucfirst',
+        ];
+
+        if ($this->hasFlag($args, ['restful', 'resource', 'rest', 'r'])) {
+            return [
+                'stub' => __DIR__ . '/stubs/controller/controller-restful.stub',
+                'replacements' => $replacements,
+            ];
+        } elseif ($this->hasFlag($args, ['view', 'v'])) {
+            $routeName = strtolower(SuffixHelper::removeSuffix($args['_args'][0], SuffixHelper::CONTROLLER));
+            $replacements['{{ routeName }}'] = $routeName;
+            
+            return [
+                'stub' => __DIR__ . '/stubs/controller/controller-view.stub',
+                'replacements' => $replacements,
+                'routeName' => $routeName,
+                'namespace' => ClassManipulation::buildNamespaceWithSubfolders($args['_args'][0], 'App\Http\Controllers::subfolder:namespace'),
+            ];
+        } else {
+            return [
+                'stub' => __DIR__ . '/stubs/controller/controller.stub',
+                'replacements' => $replacements,
+            ];
+        }
+    }
+
+    /**
+     * Handle additional actions for view controllers (create view and route).
+     *
+     * @param array $args The arguments passed to the command
+     * @param array $controllerConfig The controller configuration
+     * @return void
+     */
+    private function handleViewControllerActions(array &$args, array $controllerConfig): void
+    {
+        // Set up args for view and route creation
+        $args['controller'] = true;
+        $args['controllerName'] = $args['_args'][0];
+        $args['routeName'] = $controllerConfig['routeName'];
+        $args['namespace'] = $controllerConfig['namespace'];
+        $args['_args'][0] = $args['routeName'];
+        
+        // Create view and route
+        $this->makeView($args);
+        $this->makeRoute($args);
+
+        // Show success messages
+        $prompt = get(Prompt::class);
+        $prompt->message("A controller and a route have been created", "info");
+        $prompt->message(
+            "Access to your new route here: <success>/{$args['routeName']}</success>",
+            'raw'
         );
     }
 
@@ -255,11 +333,16 @@ class MakeStubCommandsHandler
      */
     public function makeView(array $args)
     {
+        if ($this->hasFlag($args, ['controller'])) {
+            $stub = __DIR__ . '/stubs/view/view-controller.blade.stub';
+        } else {
+            $stub = __DIR__ . '/stubs/view.blade.stub';
+        }
         StubCreation::make(
             $args['_args'][0] ?? null,
             'What is the name of the view?',
             [
-                'stub' => __DIR__ . '/stubs/view.blade.stub',
+                'stub' => $stub,
                 'destination' => 'resources/views/::subfolder:lowercase/::name:lowercase.blade.php',
             ]
         );
@@ -305,4 +388,32 @@ class MakeStubCommandsHandler
 
         return false;
     }
+
+    /**
+     * Append a route to web.php.
+     *
+     * @param array $args
+     *  The arguments passed to the command.
+     * @return void
+     */
+    private function makeRoute(array $args)
+    {
+        $routesPath = root_dir('routes/web.php');
+
+        if (!FileManager::isFile($routesPath)) {
+            throw new NotFoundException('Routes file not found: ' . $routesPath);
+        }
+
+        $route = FileManager::get(__DIR__ . '/stubs/route.stub');
+        $route = str_replace('{{ routeName }}', $args['routeName'], $route);
+        $controllerNameParts = explode('/', $args['controllerName']);
+        $controllerName = array_pop($controllerNameParts);
+        $route = str_replace('{{ controllerName }}', $controllerName, $route);
+        $useStatement = 'use ' . $args['namespace'] . '\\' . $controllerName . ';';
+
+        ClassManipulation::appendUse($routesPath, $useStatement);
+
+        FileManager::append($routesPath, "\n" . $route);
+    }
+
 }
