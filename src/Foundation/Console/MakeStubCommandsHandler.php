@@ -2,19 +2,14 @@
 
 namespace Spark\Foundation\Console;
 
-use Spark\Support\Str;
 use Spark\Console\Prompt;
-use Spark\Utils\FileManager;
-use Spark\Support\SuffixHelper;
-use Spark\Support\ClassManipulation;
-use Spark\Exceptions\NotFoundException;
+use Spark\Support\Str;
 
 /**
  * Class MakeStubCommandsHandler
  */
 class MakeStubCommandsHandler
 {
-
     /**
      * Create a provider stub.
      *
@@ -25,17 +20,29 @@ class MakeStubCommandsHandler
      */
     public function makeProvider(array $args)
     {
-        StubCreation::make(
-            $args['_args'][0] ?? null,
-            'What is the name of the provider?',
+        // Make sure the name is provided
+        $this->askName($args, 'What is the name of the provider?');
+
+        // Resolve the name with the Provider suffix
+        $name = $this->resolveSuffix($args['_args'][0], 'Provider');
+
+        // Create the provider stub
+        StubCreation::create(
+            $name,
             [
                 'stub' => __DIR__ . '/stubs/provider.stub',
-                'destination' => 'app/Provider/::subfolder:ucfirst/::name:ucfirst.php',
+                'destination' => 'app/Providers/::subfolder:ucfirst/::name:ucfirst.php',
                 'replacements' => [
-                    '{{ namespace }}' => 'App\Provider::subfolder:namespace',
+                    '{{ namespace }}' => 'App\Providers::subfolder:namespace',
                     '{{ class }}' => '::name:ucfirst',
                 ],
             ]
+        );
+
+        // Append the new provider to the providers array
+        StubCreation::appendLineToArray(
+            root_dir('bootstrap/providers.php'),
+            StubCreation::replacement($name, '\App\Providers::subfolder:namespace\::name:ucfirst::class')
         );
     }
 
@@ -55,12 +62,13 @@ class MakeStubCommandsHandler
             return $this->makePivotMigration($args);
         }
 
+        $this->askName($args, 'What is the name of the migration?');
+
         // Otherwise, proceed with the regular migration creation
-        StubCreation::make(
-            $args['_args'][0] ?? null,
-            'What is the name of the migration?',
+        StubCreation::create(
+            $args['_args'][0],
             [
-                'stub' => __DIR__ . '/stubs/migration.stub',
+                'stub' => __DIR__ . '/stubs/database/migration.stub',
                 'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
                 'replacements' => [
                     '{{ table }}' => '::name:pluralize:lowercase',
@@ -83,11 +91,12 @@ class MakeStubCommandsHandler
      */
     public function makeSeeder(array $args)
     {
-        StubCreation::make(
-            $args['_args'][0] ?? null,
-            'What is the name of the seeder?',
+        $this->askName($args, 'What is the name of the seeder?');
+
+        StubCreation::create(
+            $args['_args'][0],
             [
-                'stub' => __DIR__ . '/stubs/seeder.stub',
+                'stub' => __DIR__ . '/stubs/database/seeder.stub',
                 'destination' => 'database/migrations/::subfolder:lowercase/seed_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
                 'replacements' => [
                     '{{ namespace }}' => 'Database\Seeders::subfolder:namespace',
@@ -107,24 +116,14 @@ class MakeStubCommandsHandler
      */
     public function makePivotMigration(array $args)
     {
-        $related_table_1 = $args['_args'][0] ?? null;
-        $related_table_2 = $args['_args'][1] ?? null;
+        $this->askName($args, [
+            'What is the name of the first related table?',
+            'What is the name of the second related table?',
+        ]);
 
-        $prompt = get(Prompt::class);
+        // Get the related table names from the arguments
+        [$related_table_1, $related_table_2] = $args['_args'];
 
-        // Get the name from the arguments or prompt the user
-        if (!$related_table_1) {
-            do {
-                $related_table_1 = $prompt->ask('What is the name of the first related table?');
-            } while (!$related_table_1);
-        }
-
-        // Get the name from the arguments or prompt the user
-        if (!$related_table_2) {
-            do {
-                $related_table_2 = $prompt->ask('What is the name of the second related table?');
-            } while (!$related_table_2);
-        }
         $related_table_1_singular = Str::snake(Str::singular($related_table_1));
         $related_table_2_singular = Str::snake(Str::singular($related_table_2));
 
@@ -135,11 +134,10 @@ class MakeStubCommandsHandler
         sort($tables);
         $table = implode('_', $tables);
 
-        StubCreation::make(
+        StubCreation::create(
             $table,
-            'What is the name of the pivot migration?',
             [
-                'stub' => __DIR__ . '/stubs/migration-pivot.stub',
+                'stub' => __DIR__ . '/stubs/database/migration-pivot.stub',
                 'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name.php',
                 'replacements' => [
                     '{{ table }}' => '::name',
@@ -162,11 +160,12 @@ class MakeStubCommandsHandler
      */
     public function makeModel(array $args)
     {
-        StubCreation::make(
-            $args['_args'][0] ?? null,
-            'What is the name of the model?',
+        $this->askName($args, 'What is the name of the model?');
+
+        StubCreation::create(
+            $args['_args'][0],
             [
-                'stub' => __DIR__ . '/stubs/model.stub',
+                'stub' => __DIR__ . '/stubs/database/model.stub',
                 'destination' => 'app/Models/::subfolder:ucfirst/::name:singularize:ucfirst.php',
                 'replacements' => [
                     '{{ namespace }}' => 'App\Models::subfolder:namespace',
@@ -176,22 +175,24 @@ class MakeStubCommandsHandler
             ]
         );
 
-        if (!isset($args['_args'][0])) {
-            return; // If no model name is provided, exit early
-        }
-
-        if ($this->hasFlag($args, ['migration', 'm', 'mc', 'mcr'])) {
+        if ($this->hasFlag($args, ['migration', 'all', 'm', 'mc', 'mcr'])) {
             $this->makeMigration($args);
         }
 
-        if ($this->hasFlag($args, ['controller', 'c', 'cr', 'mc', 'mcr'])) {
+        if ($this->hasFlag($args, ['seeder', 's', 'all'])) {
+            $this->makeSeeder($args);
+        }
+
+        if ($this->hasFlag($args, ['controller', 'all', 'c', 'cr', 'mc', 'mcr'])) {
             if ($this->hasFlag($args, ['cr', 'mcr'])) {
                 $args['restful'] = true; // Set the restful flag if 'cr' or 'mcr' is present
             }
 
-            $args['_args'][0] .= 'Controller'; // Append 'Controller' to the model name
-
             $this->makeController($args);
+        }
+
+        if ($this->hasFlag($args, ['v', 'view', 'all'])) {
+            $this->makeView($args);
         }
     }
 
@@ -205,97 +206,35 @@ class MakeStubCommandsHandler
      */
     public function makeController(array $args)
     {
-        $prompt = get(Prompt::class);
-        
-        // We ask the question first to be sure that the name is not empty before adding the suffix
-        $name = $args['_args'][0] ?? null;
-        if (!$name) {
-            do {
-                $name = $prompt->ask('What is the name of the controller?');
-            } while (!$name);
-        }
-
-        $args['_args'][0] = SuffixHelper::addSuffix($name, SuffixHelper::CONTROLLER);
-
-        $controllerConfig = $this->getControllerConfig($args);
-        
-        StubCreation::make(
-            $args['_args'][0],
-            'What is the name of the controller?',
-            [
-                'stub' => $controllerConfig['stub'],
-                'destination' => 'app/Http/Controllers/::subfolder:ucfirst/::name:ucfirst.php',
-                'replacements' => $controllerConfig['replacements'],
-            ]
-        );
-
-        if ($this->hasFlag($args, ['view', 'v'])) {
-            $this->handleViewControllerActions($args, $controllerConfig);
-        }
-    }
-
-    /**
-     * Get controller configuration based on flags.
-     *
-     * @param array $args The arguments passed to the command
-     * @return array Configuration array with stub path and replacements
-     */
-    private function getControllerConfig(array $args): array
-    {
-        $replacements = [
-            '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
-            '{{ class }}' => '::name:ucfirst',
-        ];
-
         if ($this->hasFlag($args, ['restful', 'resource', 'rest', 'r'])) {
-            return [
-                'stub' => __DIR__ . '/stubs/controller/controller-restful.stub',
-                'replacements' => $replacements,
-            ];
-        } elseif ($this->hasFlag($args, ['view', 'v'])) {
-            $routeName = strtolower(SuffixHelper::removeSuffix($args['_args'][0], SuffixHelper::CONTROLLER));
-            $replacements['{{ routeName }}'] = $routeName;
-            
-            return [
-                'stub' => __DIR__ . '/stubs/controller/controller-view.stub',
-                'replacements' => $replacements,
-                'routeName' => $routeName,
-                'namespace' => ClassManipulation::buildNamespaceWithSubfolders($args['_args'][0], 'App\Http\Controllers::subfolder:namespace'),
-            ];
+            $stub = __DIR__ . '/stubs/controller/restful.stub';
         } else {
-            return [
-                'stub' => __DIR__ . '/stubs/controller/controller.stub',
-                'replacements' => $replacements,
-            ];
+            $stub = __DIR__ . '/stubs/controller/general.stub';
         }
-    }
 
-    /**
-     * Handle additional actions for view controllers (create view and route).
-     *
-     * @param array $args The arguments passed to the command
-     * @param array $controllerConfig The controller configuration
-     * @return void
-     */
-    private function handleViewControllerActions(array &$args, array $controllerConfig): void
-    {
-        // Set up args for view and route creation
-        $args['controller'] = true;
-        $args['controllerName'] = $args['_args'][0];
-        $args['routeName'] = $controllerConfig['routeName'];
-        $args['namespace'] = $controllerConfig['namespace'];
-        $args['_args'][0] = $args['routeName'];
-        
-        // Create view and route
-        $this->makeView($args);
-        $this->makeRoute($args);
+        $this->askName($args, 'What is the name of the controller?');
 
-        // Show success messages
-        $prompt = get(Prompt::class);
-        $prompt->message("A controller and a route have been created", "info");
-        $prompt->message(
-            "Access to your new route here: <success>/{$args['routeName']}</success>",
-            'raw'
+        $name = $this->resolveSuffix($args['_args'][0], 'Controller');
+
+        $hasSubFolder = false;
+        foreach (['/', '\\', '.'] as $char) {
+            if (strpos($name, $char) !== false) {
+                $hasSubFolder = true;
+                break;
+            }
+        }
+
+        StubCreation::create(
+            $name,
+            [
+                'stub' => $stub,
+                'destination' => 'app/Http/Controllers/::subfolder:ucfirst/::name:ucfirst.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
+                    '{{ class }}' => '::name:ucfirst',
+                    '{{ controllerUse }}' => $hasSubFolder ? "\nuse App\Http\Controllers\Controller;\n" : "\n",
+                ],
+            ]
         );
     }
 
@@ -309,9 +248,12 @@ class MakeStubCommandsHandler
      */
     public function makeMiddleware(array $args)
     {
-        StubCreation::make(
-            $args['_args'][0] ?? null,
-            'What is the name of the middleware?',
+        $this->askName($args, 'What is the name of the middleware?');
+
+        $name = $this->resolveSuffix($args['_args'][0], 'Middleware');
+
+        StubCreation::create(
+            $name,
             [
                 'stub' => __DIR__ . '/stubs/middleware.stub',
                 'destination' => 'app/Http/Middlewares/::subfolder:ucfirst/::name:ucfirst.php',
@@ -320,6 +262,15 @@ class MakeStubCommandsHandler
                     '{{ class }}' => '::name:ucfirst',
                 ],
             ]
+        );
+
+        // Get the snake case version of the middleware name
+        $key = Str::snake($this->removeSuffix($name, 'Middleware'));
+
+        StubCreation::appendLineToArray(
+            root_dir('bootstrap/middlewares.php'),
+            StubCreation::replacement($name, '\App\Http\Middlewares::subfolder:namespace\::name:ucfirst::class'),
+            $key
         );
     }
 
@@ -333,16 +284,12 @@ class MakeStubCommandsHandler
      */
     public function makeView(array $args)
     {
-        if ($this->hasFlag($args, ['controller'])) {
-            $stub = __DIR__ . '/stubs/view/view-controller.blade.stub';
-        } else {
-            $stub = __DIR__ . '/stubs/view.blade.stub';
-        }
-        StubCreation::make(
-            $args['_args'][0] ?? null,
-            'What is the name of the view?',
+        $this->askName($args, 'What is the name of the view?');
+
+        StubCreation::create(
+            $args['_args'][0],
             [
-                'stub' => $stub,
+                'stub' => __DIR__ . '/stubs/views/blank.blade.stub',
                 'destination' => 'resources/views/::subfolder:lowercase/::name:lowercase.blade.php',
             ]
         );
@@ -357,11 +304,12 @@ class MakeStubCommandsHandler
      */
     public function makeViewComponent(array $args)
     {
-        StubCreation::make(
-            $args['_args'][0] ?? null,
-            'What is the name of the view component?',
+        $this->askName($args, 'What is the name of the view component?');
+
+        StubCreation::create(
+            $args['_args'][0],
             [
-                'stub' => __DIR__ . '/stubs/component.blade.stub',
+                'stub' => __DIR__ . '/stubs/views/component.blade.stub',
                 'destination' => 'resources/views/components/::subfolder:lowercase/::name:lowercase.blade.php',
             ]
         );
@@ -390,30 +338,59 @@ class MakeStubCommandsHandler
     }
 
     /**
-     * Append a route to web.php.
+     * Ask for the name(s) of a resource.
      *
-     * @param array $args
-     *  The arguments passed to the command.
+     * @param array &$args
+     *   The arguments array to populate.
+     * @param string|array $questions
+     *   The question(s) to ask.
+     *
      * @return void
      */
-    private function makeRoute(array $args)
+    private function askName(array &$args, string|array $questions): void
     {
-        $routesPath = root_dir('routes/web.php');
-
-        if (!FileManager::isFile($routesPath)) {
-            throw new NotFoundException('Routes file not found: ' . $routesPath);
+        foreach ((array) $questions as $index => $question) {
+            if (!isset($args['_args'][$index])) {
+                do {
+                    $args['_args'][$index] = Prompt::ask($question);
+                } while (!isset($args['_args'][$index]));
+            }
         }
-
-        $route = FileManager::get(__DIR__ . '/stubs/route.stub');
-        $route = str_replace('{{ routeName }}', $args['routeName'], $route);
-        $controllerNameParts = explode('/', $args['controllerName']);
-        $controllerName = array_pop($controllerNameParts);
-        $route = str_replace('{{ controllerName }}', $controllerName, $route);
-        $useStatement = 'use ' . $args['namespace'] . '\\' . $controllerName . ';';
-
-        ClassManipulation::appendUse($routesPath, $useStatement);
-
-        FileManager::append($routesPath, "\n" . $route);
     }
 
+    /**
+     * Resolve the suffix for a given name.
+     *
+     * @param string $name
+     *   The name to resolve the suffix for.
+     * @param string $suffix
+     *   The suffix to append.
+     *
+     * @return string
+     *   The resolved name with the suffix.
+     */
+    private function resolveSuffix(string $name, string $suffix): string
+    {
+        // Remove the suffix if it exists case insensitive
+        $name = $this->removeSuffix($name, $suffix);
+
+        // Otherwise, append the suffix to the name
+        return "$name$suffix";
+    }
+
+    /**
+     * Remove a suffix from a name.
+     *
+     * @param string $name
+     *   The name to remove the suffix from.
+     * @param string $suffix
+     *   The suffix to remove.
+     *
+     * @return string
+     *   The name without the suffix.
+     */
+    public function removeSuffix(string $name, string $suffix): string
+    {
+        return preg_replace('/' . preg_quote($suffix, '/') . '$/i', '', $name);
+    }
 }

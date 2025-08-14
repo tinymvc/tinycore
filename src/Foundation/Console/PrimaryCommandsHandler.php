@@ -6,6 +6,7 @@ use Spark\Console\Commands;
 use Spark\Console\Prompt;
 use Spark\Queue\Queue;
 use Spark\Router;
+use Spark\Utils\FileManager;
 
 /**
  * Class PrimaryCommandsHandler
@@ -192,9 +193,9 @@ class PrimaryCommandsHandler
                 $item = dir_path("$cacheDir/$item");
 
                 if (is_dir($item)) {
-                    fm()->deleteDirectory($item); // Delete directory
+                    FileManager::deleteDirectory($item); // Delete directory
                 } else {
-                    fm()->delete($item); // Delete file
+                    FileManager::delete($item); // Delete file
                 }
             }
         } else {
@@ -258,13 +259,13 @@ class PrimaryCommandsHandler
         $publicUploadsDir = root_dir('public/uploads');
 
         // Check if the symbolic link already exists
-        if (fm()->isLink($publicUploadsDir)) {
+        if (FileManager::isLink($publicUploadsDir)) {
             $prompt->message("The symbolic link is already exists.", "warning");
             return;
         }
 
         // Attempt to create the symbolic link
-        if (!fm()->link($storageUploadsDir, $publicUploadsDir)) {
+        if (!FileManager::link($storageUploadsDir, $publicUploadsDir)) {
             $prompt->message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
         }
 

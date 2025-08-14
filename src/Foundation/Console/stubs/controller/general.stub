@@ -1,7 +1,7 @@
 <?php
 
 namespace {{ namespace }};
-
+{{ controllerUse }}
 class {{ class }} extends Controller
 {
     // new controller

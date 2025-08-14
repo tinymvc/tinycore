@@ -2,8 +2,11 @@
 
 namespace Spark\Foundation\Console;
 
+use RuntimeException;
 use Spark\Console\Prompt;
 use Spark\Support\Pluralizer;
+use Spark\Support\Str;
+use Spark\Utils\FileManager;
 
 /**
  * Class StubCreation
@@ -21,54 +24,57 @@ use Spark\Support\Pluralizer;
 class StubCreation
 {
     /**
-     * Create a new instance of the stub creation class.
-     *
-     * @param  \Spark\Console\Prompt  $prompt
-     *         The prompt service.
-     */
-    public function __construct(private Prompt $prompt)
-    {
-    }
-
-    /**
-     * Create a new stub file from a given stub configuration.
-     *
-     * @param  string  $name
-     *         The name of the stub file.
-     * @param  string  $question
-     *         The question to ask the user for input.
-     * @param  array  $stubConfig
-     *         The configuration for the stub file.
-     * @return void
-     */
-    public static function make(?string $name, string $question, array $stubConfig): void
-    {
-        $stub = new self(new Prompt());
-
-        // Create the stub file based on the provided configuration
-        $stub->create($name, $question, $stubConfig);
-    }
-
-    /**
      * Create a new stub file based on the provided configuration and arguments.
      *
      * @param  string  $name
      *         The name of the stub file.
-     * @param  string  $question
-     *         The question to ask the user if the name is not provided.
      * @param  array  $stubConfig
      *         The configuration for the stub file, including stub path and replacements.
      * @return void
      */
-    public function create(?string $name, string $question, array $stubConfig): void
+    public static function create(string $name, array $stubConfig): void
     {
-        // Get the name from the arguments or prompt the user
-        if (!$name) {
-            do {
-                $name = $this->prompt->ask($question);
-            } while (!$name);
+        // Load the stub file contents
+        $stub = FileManager::get($stubConfig['stub']);
+
+        // Perform replacements in the stub content
+        $stub = self::replacement($name, $stub, $stubConfig['replacements'] ?? []);
+
+        // Determine the destination path and replace placeholders
+        $destination = root_dir(self::replacement($name, $stubConfig['destination']));
+
+        // Check if the file already exists and prompt for override confirmation
+        if (FileManager::isFile($destination)) {
+            $override = Prompt::confirm(
+                "The file: {$destination}\n is already exists. Do you want to override it?",
+                true
+            );
+            if (!$override) {
+                return;
+            }
         }
 
+        // Create directory if it doesn't exist
+        FileManager::ensureDirectoryWritable($dirName = dirname($destination));
+
+        // Write the stub content to the destination file
+        if (FileManager::put($destination, $stub)) {
+            Prompt::message("File: {$destination}\n created successfully.");
+        } else {
+            Prompt::message("File: {$destination}\n could not be created.", 'warning');
+        }
+    }
+
+    /**
+     * Replace placeholders in the stub content with actual values.
+     *
+     * @param  string  $name
+     * @param  string  $stub
+     * @param  ?array  $replacements
+     * @return string
+     */
+    public static function replacement(string $name, string $stub, ?array $replacements = null): string
+    {
         // Determine subfolders from the name using delimiters
         $subFolders = [];
         foreach (['/', '\\', '.'] as $char) {
@@ -78,9 +84,6 @@ class StubCreation
                 break;
             }
         }
-
-        // Load the stub file contents
-        $stub = file_get_contents($stubConfig['stub']);
 
         // Get the plural and singular versions of the name
         $namePlural = Pluralizer::plural($name);
@@ -115,41 +118,54 @@ class StubCreation
         // Function to replace keys in a string with their corresponding values
         $replaceAny = function ($string) use ($replacementValues) {
             foreach ($replacementValues as $search => $replace) {
-                $string = str_replace($search, $replace, $string);
+                $string = Str::replace($search, $replace, $string);
             }
             return $string;
         };
 
         // Perform replacements in the stub content
-        foreach ($stubConfig['replacements'] ?? [] as $search => $replace) {
-            $stub = str_replace($search, $replaceAny($replace), $stub);
-        }
-
-        // Determine the destination path and replace placeholders
-        $destination = root_dir($replaceAny($stubConfig['destination']));
-
-        // Check if the file already exists and prompt for override confirmation
-        if (file_exists($destination)) {
-            $override = $this->prompt->confirm(
-                "The file: {$destination}\n is already exists. Do you want to override it?",
-                true
-            );
-            if (!$override) {
-                return;
+        if (is_array($replacements)) {
+            foreach ($replacements as $search => $replace) {
+                $stub = Str::replace($search, $replaceAny($replace), $stub);
             }
+            return $stub;
         }
 
-        // Create directory if it doesn't exist
-        $dirName = dirname($destination);
-        if (!is_dir($dirName)) {
-            mkdir($dirName, 0755, true);
+        return $replaceAny($stub);
+    }
+
+    /**
+     * Append a line to an array in a PHP file.
+     *
+     * @param string $destination The path to the PHP file.
+     * @param string $element The element to append.
+     * @param string|null $key The key to set (optional).
+     * @return void
+     */
+    public static function appendLineToArray(string $destination, string $element, ?string $key = null): void
+    {
+        $contents = FileManager::get($destination);
+
+        // Find the array start
+        if (!preg_match('/return\s*(\[.*\]);/sU', $contents, $matches)) {
+            throw new RuntimeException("Could not find return array in {$destination}");
         }
 
-        // Write the stub content to the destination file
-        if (file_put_contents($destination, $stub)) {
-            $this->prompt->message("File: {$destination}\n created successfully.");
+        $arrayContent = rtrim($matches[1]);
+        $arrayContent = preg_replace('/\]\s*$/', '', $arrayContent); // remove closing bracket
+
+        // Add new array element to the end
+        if ($key !== null) {
+            $arrayContent .= "    '{$key}' => {$element},";
         } else {
-            $this->prompt->message("File: {$destination}\n could not be created.", 'warning');
+            $arrayContent .= "    {$element},";
         }
+
+        $arrayContent .= "\n]";
+
+        // Replace in original contents
+        $newContents = preg_replace('/return\s*\[.*\];/sU', "return {$arrayContent};", $contents);
+
+        FileManager::put($destination, $newContents);
     }
 }
