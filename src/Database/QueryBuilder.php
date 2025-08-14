@@ -455,12 +455,16 @@ class QueryBuilder implements QueryBuilderContract
      * Adds a WHERE binding to the query.
      * This method allows you to add additional bindings to the WHERE clause.
      *
-     * @param array $args
+     * @param string|array $args
      * @return QueryBuilder
      */
-    public function addBinding(array $args): self
+    public function bind(string|array $args, bool $named = true): self
     {
-        $this->where['bind'] = array_merge($this->where['bind'], $args);
+        if ($named && is_array($args)) {
+            $this->where['bind'] = array_merge($this->where['bind'], $args);
+        } else {
+            $this->parameter($args);
+        }
 
         return $this;
     }
