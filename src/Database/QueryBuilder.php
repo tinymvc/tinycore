@@ -2296,14 +2296,15 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function wrapJoinOn(string $on): string
     {
-        $hasEqual = strpos($on, '=') !== false;
-        $hasNotEqual = strpos($on, '!=') !== false;
+        // Determine the operator used in the ON clause
+        $operator = strpos($on, '=') !== false ? '=' :
+            (strpos($on, '!=') !== false ? '!=' : null);
 
-        if ($hasEqual || $hasNotEqual) {
+        if ($operator) {
             // Split the ON clause into its components
-            [$field1, $operator, $field2] = array_map(
+            [$field1, $field2] = array_map(
                 'trim',
-                explode($on, $hasNotEqual ? '!=' : '=', 3)
+                explode($operator, $on, 2)
             );
 
             // Wrap the values for the ON clause
