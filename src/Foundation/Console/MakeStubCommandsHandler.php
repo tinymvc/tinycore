@@ -4,9 +4,8 @@ namespace Spark\Foundation\Console;
 
 use Spark\Support\Str;
 use Spark\Console\Prompt;
-use Spark\Exceptions\NotFoundException;
-use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Utils\FileManager;
+use Spark\Exceptions\NotFoundException;
 
 /**
  * Class MakeStubCommandsHandler
@@ -241,6 +240,13 @@ class MakeStubCommandsHandler
             $args['_args'][0] = $args['routeName'];
             $this->makeView($args);
             $this->makeRoute($args);
+
+            $prompt = get(Prompt::class);
+            $prompt->message("A controller and a route have been created", "info");
+            $prompt->message(
+                "Access to your new route here: <success>/{$args['routeName']}</success>",
+                'raw'
+            );
         }
     }
 
@@ -343,7 +349,7 @@ class MakeStubCommandsHandler
      */
     private function makeRoute(array $args)
     {
-        $routesPath = $this->base_path('routes/web.php');
+        $routesPath = root_dir('routes/web.php');
 
         if (!FileManager::isFile($routesPath)) {
             throw new NotFoundException('Routes file not found: ' . $routesPath);
@@ -353,55 +359,45 @@ class MakeStubCommandsHandler
         $route = str_replace('{{ routeName }}', $args['routeName'], $route);
         $route = str_replace('{{ controllerName }}', $args['controllerName'], $route);
 
-        $this->appendUse($routesPath, $args['controllerName']);
+        $useStatement = "use App\\Http\\Controllers\\" . $args['controllerName'] . ";";
+        self::appendUse($routesPath, $useStatement);
 
         FileManager::append($routesPath, "\n" . $route);
     }
 
     /**
-     * Get the base path of the application.
+     * Append a use statement to a file.
      *
-     * @param string $path An optional path to append to the base path.
-     * @return string The full base path.
+     * @param string $path
+     *  The path to the file.
+     * @param string $use
+     *  The use statement to append.
+     * @return void
      */
-    private function base_path(string $path = ''): string
+    private static function appendUse(string $path, string $use)
     {
-        $basePath = rtrim(getcwd(), DIRECTORY_SEPARATOR);
+        $content = FileManager::get($path);
 
-        return $basePath . DIRECTORY_SEPARATOR . ltrim($path, DIRECTORY_SEPARATOR);
-    }
-
-    private function appendUse(string $path, string $use)
-{
-    $content = FileManager::get($path);
-
-    $useLine = "use App\\Http\\Controllers\\" . $use . ";";
-
-    // Vérifie si le use existe déjà (ligne exacte)
-    if (preg_match('/^' . preg_quote($useLine, '/') . '\s*$/m', $content)) {
-        // Le use existe déjà, ne rien faire
-        return;
-    }
-
-    // Trouver toutes les occurrences de "use ...;"
-    $matches = [];
-    preg_match_all('/^use [^;]+;/m', $content, $matches, PREG_OFFSET_CAPTURE);
-
-    $useLineWithNewline = $useLine . "\n";
-
-    if (!empty($matches[0])) {
-        $lastMatch = end($matches[0]);
-        $insertPos = $lastMatch[1] + strlen($lastMatch[0]);
-        $content = substr($content, 0, $insertPos) . "\n" . $useLineWithNewline . substr($content, $insertPos);
-    } else {
-        if (strpos($content, "<?php") !== false) {
-            $insertPos = strpos($content, "<?php") + 5;
-            $content = substr($content, 0, $insertPos) . "\n\n" . $useLineWithNewline . substr($content, $insertPos);
-        } else {
-            $content = $useLineWithNewline . $content;
+        if (preg_match('/^' . preg_quote($use, '/') . '\s*$/m', $content)) {
+            return;
         }
-    }
 
-    FileManager::put($path, $content);
-}
+        $matches = [];
+        preg_match_all('/^use [^;]+;/m', $content, $matches, PREG_OFFSET_CAPTURE);
+
+        if (!empty($matches[0])) {
+            $lastMatch = end($matches[0]);
+            $insertPos = $lastMatch[1] + strlen($lastMatch[0]);
+            $content = substr($content, 0, $insertPos) . "\n" . $use . substr($content, $insertPos);
+        } else {
+            if (strpos($content, "<?php") !== false) {
+                $insertPos = strpos($content, "<?php") + 5;
+                $content = substr($content, 0, $insertPos) . "\n\n" . $use . substr($content, $insertPos);
+            } else {
+                $content = $use . "\n" . $content;
+            }
+        }
+
+        FileManager::put($path, $content);
+    }
 }
