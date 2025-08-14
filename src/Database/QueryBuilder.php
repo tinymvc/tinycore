@@ -2262,7 +2262,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $columns = array_map(function ($column) {
             $columns = explode(' as ', str_ireplace(' As ', ' as ', $column));
-            return implode(' as ', array_map([$this->grammar, 'wrapColumn'], $columns));
+            return implode(' as ', array_map([$this, 'wrapOrValue'], $columns));
         }, $columns);
 
         return implode(', ', $columns);
