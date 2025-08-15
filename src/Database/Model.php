@@ -10,7 +10,7 @@ use Spark\Contracts\Database\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
-use Spark\Database\Relation\ManageRelationship;
+use Spark\Database\Relation\HasRelation;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 use Traversable;
@@ -21,6 +21,21 @@ use Traversable;
  * This class provides a base for models, handling database operations and entity management.
  * It includes CRUD operations, data decoding, and dynamic method invocation.
  *
+ * @method static QueryBuilder with($relations)
+ * @method static QueryBuilder has(string $relation, string $operator = '>=', int $count = 1)
+ * @method static QueryBuilder doesntHave(string $relation)
+ * @method static QueryBuilder whereHas(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1)
+ * @method static QueryBuilder whereDoesntHave(string $relation, ?Closure $callback = null)
+ * @method static QueryBuilder whereRelation(string $relation, string $column, string $operator = '=', $value = null)
+ * @method static QueryBuilder whereRelationIn(string $relation, string $column, array $values)
+ * @method static QueryBuilder whereRelationNotIn(string $relation, string $column, array $values)
+ * @method static QueryBuilder whereRelationNull(string $relation, string $column)
+ * @method static QueryBuilder whereRelationNotNull(string $relation, string $column)
+ * @method static QueryBuilder whereRelationLike(string $relation, string $column, string $pattern)
+ * @method static QueryBuilder whereRelationBetween(string $relation, string $column, $min, $max)
+ * @method static QueryBuilder whereRelationFindInSet(string $relation, string $column, $value)
+ * @method static QueryBuilder whereRelationJson(string $relation, string $column, string $key, $value)
+ * @method static QueryBuilder withCount(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1)
  * @method static int|array insert(array|Arrayable $data, array $config = [])
  * @method static int|array bulkUpdate(array|Arrayable $data, array $config = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
@@ -80,7 +95,7 @@ use Traversable;
  */
 abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate
 {
-    use ManageRelationship, Macroable {
+    use HasRelation, Macroable {
         __call as macroCall;
         __callStatic as staticMacroCall;
     }
@@ -503,7 +518,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param string $name The name of the attribute to check.
      * @return bool True if the attribute exists, false otherwise.
      */
-    public function has(string $name): bool
+    public function isset(string $name): bool
     {
         return $this->get($name) !== null;
     }

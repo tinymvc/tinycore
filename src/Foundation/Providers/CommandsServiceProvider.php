@@ -4,7 +4,6 @@ namespace Spark\Foundation\Providers;
 
 use Spark\Console\Commands;
 use Spark\Console\Console;
-use Spark\Console\Prompt;
 use Spark\Container;
 use Spark\Database\Migration;
 use Spark\Foundation\Console\PrimaryCommandsHandler;
@@ -38,9 +37,6 @@ class CommandsServiceProvider
 
         // Register the migration singleton
         $container->singleton(Migration::class);
-
-        // Bind the prompt class
-        $container->bind(Prompt::class);
     }
 
     /**

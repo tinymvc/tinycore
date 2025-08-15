@@ -294,39 +294,6 @@ trait ManageRelationship
     }
 
     /**
-     * Eager load relationships.
-     * 
-     * This method allows you to eager load relationships for the model.
-     * It accepts a string or an array of relationship names,
-     * and returns a QueryBuilder instance with the relationships loaded.
-     * 
-     * @param array|string $relations
-     * @return QueryBuilder
-     */
-    public static function with($relations): QueryBuilder
-    {
-        $model = new static;
-        $relations = is_string($relations) ? [$relations] : $relations;
-        $query = $model->query();
-
-        foreach ($relations as $name => $constraints) {
-            if (is_numeric($name)) {
-                $name = $constraints;
-                $constraints = null;
-            }
-
-            $relationConfig = $model->getRelationshipConfig($name);
-            if ($relationConfig) {
-                $query->addMapper(function ($data) use ($model, $relationConfig, $name, $constraints) {
-                    return $model->loadRelation($data, $relationConfig, $name, $constraints);
-                });
-            }
-        }
-
-        return $query;
-    }
-
-    /**
      * Load relationships for a collection of models.
      * 
      * This method allows you to load specified relationships for a collection of models.
@@ -445,7 +412,7 @@ trait ManageRelationship
      * @param string $name
      * @return array
      */
-    private function getRelationshipConfig(string $name): array
+    protected function getRelationshipConfig(string $name): array
     {
         if (method_exists($this, $name)) {
             $relation = $this->$name();
@@ -476,7 +443,7 @@ trait ManageRelationship
      * @param Closure|null $constraints
      * @return array
      */
-    private function loadRelation(array $models, array $config, string $name, ?Closure $constraints = null): array
+    protected function loadRelation(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
         return match ($config['type']) {
             'hasOne' => $this->loadHasOne($models, $config, $name, $constraints),
