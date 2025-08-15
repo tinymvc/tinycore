@@ -21,7 +21,7 @@ interface PromptContract
      * @return string
      *   The user's input or the default value.
      */
-    public function ask(string $question, string $default = ''): string;
+    public static function ask(string $question, string $default = ''): string;
 
     /**
      * Print a message with a colored style.
@@ -32,5 +32,5 @@ interface PromptContract
      *   The type of message. Supported types are "success", "danger", "warning", "info".
      *   If not provided, the message will be printed as normal text.
      */
-    public function message(string $message, string $type = "normal"): void;
+    public static function message(string $message, string $type = "normal"): void;
 }
