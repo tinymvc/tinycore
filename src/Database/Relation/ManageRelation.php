@@ -1,0 +1,572 @@
+<?php
+
+namespace Spark\Database\Relation;
+
+use Closure;
+use PDO;
+use Spark\Database\Exceptions\InvalidOrmException;
+use Spark\Database\Model;
+use Spark\Database\QueryBuilder;
+use Spark\Support\Str;
+
+/**
+ * ManageRelation Trait
+ * 
+ * Provides relationship filtering and querying capabilities for models.
+ * This trait extends QueryBuilder functionality to work with model relationships.
+ * 
+ * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
+ * @package Spark\Database\Relation
+ */
+trait ManageRelation
+{
+    /**
+     * Eager load relationships.
+     * 
+     * This method allows you to eager load relationships for the model.
+     * It accepts a string or an array of relationship names,
+     * and returns a QueryBuilder instance with the relationships loaded.
+     * 
+     * @param array|string $relations
+     * @return QueryBuilder
+     */
+    public function with($relations): QueryBuilder
+    {
+        $relations = is_string($relations) ? [$relations] : $relations;
+
+        $model = $this->getRelatedModel();
+
+        foreach ($relations as $name => $constraints) {
+            if (is_numeric($name)) {
+                $name = $constraints;
+                $constraints = null;
+            }
+
+            $relationConfig = $model->getRelationshipConfig($name);
+            if ($relationConfig) {
+                $this->addMapper(fn($data) => $model->loadRelation($data, $relationConfig, $name, $constraints));
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Add a constraint based on the existence of a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param string $operator The operator (>=, <, !=, etc.)
+     * @param int $count The count to compare against
+     * @param string $boolean The boolean operator (AND/OR)
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function has(string $relation, string $operator = '>=', int $count = 1, string $boolean = 'AND', ?Closure $callback = null): QueryBuilder
+    {
+        $model = $this->getRelatedModel();
+        $relationConfig = $model->getRelationshipConfig($relation);
+
+        return $this->addHasConstraint($relationConfig, $relation, $operator, $count, $boolean, $callback);
+    }
+
+    /**
+     * Add a constraint based on the non-existence of a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param string $boolean The boolean operator (AND/OR)
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function doesntHave(string $relation, string $boolean = 'AND', ?Closure $callback = null): QueryBuilder
+    {
+        return $this->has($relation, '<', 1, $boolean, $callback);
+    }
+
+    /**
+     * Add an OR constraint based on the existence of a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param string $operator The operator (>=, <, !=, etc.)
+     * @param int $count The count to compare against
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function orHas(string $relation, string $operator = '>=', int $count = 1, ?Closure $callback = null): QueryBuilder
+    {
+        return $this->has($relation, $operator, $count, 'OR', $callback);
+    }
+
+    /**
+     * Add an OR constraint based on the non-existence of a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function orDoesntHave(string $relation, ?Closure $callback = null): QueryBuilder
+    {
+        return $this->doesntHave($relation, 'OR', $callback);
+    }
+
+    /**
+     * Add a constraint based on the existence of a relationship with additional where clauses.
+     * 
+     * @param string $relation The relationship name
+     * @param Closure|null $callback Callback to add constraints to the relationship query
+     * @param string $operator The operator (>=, <, !=, etc.)
+     * @param int $count The count to compare against
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereHas(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->has($relation, $operator, $count, $boolean, $callback);
+    }
+
+    /**
+     * Add a constraint based on the non-existence of a relationship with additional where clauses.
+     * 
+     * @param string $relation The relationship name
+     * @param Closure|null $callback Callback to add constraints to the relationship query
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereDoesntHave(string $relation, ?Closure $callback = null, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->has($relation, '<', 1, $boolean, $callback);
+    }
+
+    /**
+     * Add an OR constraint based on the existence of a relationship with additional where clauses.
+     * 
+     * @param string $relation The relationship name
+     * @param Closure|null $callback Callback to add constraints to the relationship query
+     * @param string $operator The operator (>=, <, !=, etc.)
+     * @param int $count The count to compare against
+     * @return QueryBuilder
+     */
+    public function orWhereHas(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1): QueryBuilder
+    {
+        return $this->whereHas($relation, $callback, $operator, $count, 'OR');
+    }
+
+    /**
+     * Add an OR constraint based on the non-existence of a relationship with additional where clauses.
+     * 
+     * @param string $relation The relationship name
+     * @param Closure|null $callback Callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function orWhereDoesntHave(string $relation, ?Closure $callback = null): QueryBuilder
+    {
+        return $this->whereDoesntHave($relation, $callback, 'OR');
+    }
+
+    /**
+     * Filter results based on relationship field values.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param string $operator The comparison operator
+     * @param mixed $value The value to compare against
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelation(string $relation, string $column, string $operator = '=', $value = null, string $boolean = 'AND'): QueryBuilder
+    {
+        if ($value === null) {
+            $value = $operator;
+            $operator = '=';
+        }
+
+        return $this->whereHas($relation, function ($query) use ($column, $operator, $value) {
+            return $query->where($column, $operator, $value);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results based on relationship field values using OR.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param string $operator The comparison operator
+     * @param mixed $value The value to compare against
+     * @return QueryBuilder
+     */
+    public function orWhereRelation(string $relation, string $column, string $operator = '=', $value = null): QueryBuilder
+    {
+        return $this->whereRelation($relation, $column, $operator, $value, 'OR');
+    }
+
+    /**
+     * Filter results where relationship field is in given values.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param array $values The values array
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationIn(string $relation, string $column, array $values, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column, $values) {
+            return $query->whereIn($column, $values);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results where relationship field is not in given values.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param array $values The values array
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationNotIn(string $relation, string $column, array $values, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column, $values) {
+            return $query->whereNotIn($column, $values);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results where relationship field is null.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationNull(string $relation, string $column, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column) {
+            return $query->whereNull($column);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results where relationship field is not null.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationNotNull(string $relation, string $column, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column) {
+            return $query->whereNotNull($column);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results where relationship field matches a pattern.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param string $pattern The pattern to match
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationLike(string $relation, string $column, string $pattern, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column, $pattern) {
+            return $query->like($column, $pattern);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results where relationship field is between two values.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param mixed $min The minimum value
+     * @param mixed $max The maximum value
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationBetween(string $relation, string $column, $min, $max, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column, $min, $max) {
+            return $query->between($column, $min, $max);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results where relationship field has a value in a set.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column in the related table
+     * @param mixed $value The value to find in the set
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationFindInSet(string $relation, string $column, $value, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column, $value) {
+            return $query->findInSet($column, $value);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Filter results where relationship JSON field contains a value.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The JSON column in the related table
+     * @param string $key The key in the JSON object
+     * @param mixed $value The value to find
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function whereRelationJson(string $relation, string $column, string $key, $value, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereHas($relation, function ($query) use ($column, $key, $value) {
+            return $query->findInJson($column, $key, $value);
+        }, '>=', 1, $boolean);
+    }
+
+    /**
+     * Add OR versions of the relationship filter methods.
+     */
+    public function orWhereRelationIn(string $relation, string $column, array $values): QueryBuilder
+    {
+        return $this->whereRelationIn($relation, $column, $values, 'OR');
+    }
+
+    public function orWhereRelationNotIn(string $relation, string $column, array $values): QueryBuilder
+    {
+        return $this->whereRelationNotIn($relation, $column, $values, 'OR');
+    }
+
+    public function orWhereRelationNull(string $relation, string $column): QueryBuilder
+    {
+        return $this->whereRelationNull($relation, $column, 'OR');
+    }
+
+    public function orWhereRelationNotNull(string $relation, string $column): QueryBuilder
+    {
+        return $this->whereRelationNotNull($relation, $column, 'OR');
+    }
+
+    public function orWhereRelationLike(string $relation, string $column, string $pattern): QueryBuilder
+    {
+        return $this->whereRelationLike($relation, $column, $pattern, 'OR');
+    }
+
+    public function orWhereRelationBetween(string $relation, string $column, $min, $max): QueryBuilder
+    {
+        return $this->whereRelationBetween($relation, $column, $min, $max, 'OR');
+    }
+
+    public function orWhereRelationFindInSet(string $relation, string $column, $value): QueryBuilder
+    {
+        return $this->whereRelationFindInSet($relation, $column, $value, 'OR');
+    }
+
+    public function orWhereRelationJson(string $relation, string $column, string $key, $value): QueryBuilder
+    {
+        return $this->whereRelationJson($relation, $column, $key, $value, 'OR');
+    }
+
+    /**
+     * Filter results based on relationship count with additional conditions.
+     * 
+     * @param string $relation The relationship name
+     * @param Closure $callback Callback to add constraints to the relationship query
+     * @param string $operator The count comparison operator
+     * @param int $count The count to compare against
+     * @param string $boolean The boolean operator (AND/OR)
+     * @return QueryBuilder
+     */
+    public function withCount(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1, string $boolean = 'AND'): QueryBuilder
+    {
+        $model = $this->getRelatedModel();
+        $relationConfig = $model->getRelationshipConfig($relation);
+
+        // Add a custom field to select the count
+        $countAlias = $relation . '_count';
+
+        // Build the subquery for counting
+        $this->addCountSubquery($relationConfig, $relation, $countAlias, $callback);
+
+        return $this;
+    }
+
+    /**
+     * Fetch a model instance with the specified class.
+     * 
+     * This method fetches a model instance using the specified class name.
+     * It returns a QueryBuilder instance with the model data.
+     * 
+     * @param string $model
+     * @return QueryBuilder
+     */
+    public function fetchModel(string $model): QueryBuilder
+    {
+        if (is_string($model) && class_exists($model)) {
+            return $this->fetch(PDO::FETCH_CLASS, $model);
+        }
+
+        throw new InvalidOrmException("Invalid model class: {$model}");
+    }
+
+    /**
+     * Get the related model instance.
+     * 
+     * This method retrieves the related model instance based on the query configuration.
+     * It throws an exception if the model is not a valid instance of Model.
+     * 
+     * @return Model
+     * @throws InvalidOrmException
+     */
+    private function getRelatedModel(): Model
+    {
+        $model = $this->query['fetch'][1] ?? null;
+
+        if (!$model instanceof Model) {
+            throw new InvalidOrmException("The relationship methods must be called on a model instance.");
+        }
+
+        return new $model;
+    }
+
+    /**
+     * Add constraint based on relationship existence.
+     * 
+     * @param array $relationConfig The relationship configuration
+     * @param string $relation The relationship name
+     * @param string $operator The operator (>=, <, !=, etc.)
+     * @param int $count The count to compare against
+     * @param string $boolean The boolean operator (AND/OR)
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    private function addHasConstraint(array $relationConfig, string $relation, string $operator, int $count, string $boolean, ?Closure $callback = null): QueryBuilder
+    {
+        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback);
+
+        $sql = "({$subquery}) {$operator} {$count}";
+
+        return $this->whereRaw($sql, [], $boolean);
+    }
+
+    /**
+     * Build a subquery for relationship constraints.
+     * 
+     * @param array $relationConfig The relationship configuration
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return string The subquery SQL
+     */
+    private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null): string
+    {
+        $relatedModel = new $relationConfig['related'];
+        $relatedTable = $relatedModel::$table ?? $this->getTableFromClass($relationConfig['related']);
+
+        switch ($relationConfig['type']) {
+            case 'hasOne':
+            case 'hasMany':
+                $query = $relatedModel->query()
+                    ->select('COUNT(*)')
+                    ->whereRaw($this->grammar->wrapTable($relatedTable) . ".{$relationConfig['foreignKey']} = " .
+                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['localKey']}");
+                break;
+
+            case 'belongsTo':
+                $query = $relatedModel->query()
+                    ->select('COUNT(*)')
+                    ->whereRaw($this->grammar->wrapTable($relatedTable) . ".{$relationConfig['ownerKey']} = " .
+                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['foreignKey']}");
+                break;
+
+            case 'belongsToMany':
+                $query = $relatedModel->query()
+                    ->select('COUNT(*)')
+                    ->join(
+                        $relationConfig['table'],
+                        $relationConfig['table'] . ".{$relationConfig['relatedPivotKey']}",
+                        '=',
+                        $this->grammar->wrapTable($relatedTable) . ".{$relationConfig['relatedKey']}"
+                    )
+                    ->whereRaw($relationConfig['table'] . ".{$relationConfig['foreignPivotKey']} = " .
+                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['parentKey']}");
+                break;
+
+            case 'hasManyThrough':
+                $throughModel = new $relationConfig['through'];
+                $throughTable = $throughModel::$table ?? $this->getTableFromClass($relationConfig['through']);
+
+                $query = $relatedModel->query()
+                    ->select('COUNT(*)')
+                    ->join(
+                        $throughTable,
+                        $this->grammar->wrapTable($throughTable) . ".{$relationConfig['secondLocalKey']}",
+                        '=',
+                        $this->grammar->wrapTable($relatedTable) . ".{$relationConfig['secondKey']}"
+                    )
+                    ->whereRaw($this->grammar->wrapTable($throughTable) . ".{$relationConfig['firstKey']} = " .
+                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['localKey']}");
+                break;
+
+            default:
+                throw new InvalidOrmException("Unsupported relationship type: {$relationConfig['type']}");
+        }
+
+        if ($callback) {
+            $query = call_user_func($callback, $query);
+        }
+
+        // Get the built SQL from the query
+        return $this->getSubquerySQL($query);
+    }
+
+    /**
+     * Add a count subquery to the main query.
+     * 
+     * @param array $relationConfig The relationship configuration
+     * @param string $relation The relationship name
+     * @param string $alias The alias for the count column
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return void
+     */
+    private function addCountSubquery(array $relationConfig, string $relation, string $alias, ?Closure $callback = null): void
+    {
+        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback);
+
+        // Modify the select to include the count subquery
+        $currentSelect = $this->query['select'] ?: '*';
+        $this->query['select'] = $currentSelect . ", ({$subquery}) as {$alias}";
+    }
+
+    /**
+     * Extract SQL from query builder for subquery use.
+     * 
+     * @param QueryBuilder $query
+     * @return string
+     */
+    private function getSubquerySQL(QueryBuilder $query): string
+    {
+        // This is a simplified approach - in a real implementation, 
+        // you might need to build the SQL string manually or extend QueryBuilder
+        // to expose its internal SQL building methods
+
+        $table = $query->getTableName();
+        $select = $query->query['select'] ?: 'COUNT(*)';
+        $joins = $query->query['joins'] ?? '';
+        $where = $query->getWhereSql();
+
+        return "SELECT {$select} FROM {$table}{$joins}{$where}";
+    }
+
+    /**
+     * Get table name from class name.
+     * 
+     * @param string $class
+     * @return string
+     */
+    private function getTableFromClass(string $class): string
+    {
+        // This should match the logic in your Model class
+        return $class::$table ?? Str::snake(Str::plural(class_basename($class)));
+    }
+}

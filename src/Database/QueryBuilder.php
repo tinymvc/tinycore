@@ -8,7 +8,7 @@ use Spark\Contracts\Database\QueryBuilderContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
-use Spark\Database\Relation\HasRelation;
+use Spark\Database\Relation\ManageRelation;
 use Spark\Database\Schema\Grammar;
 use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
@@ -84,7 +84,7 @@ class QueryBuilder implements QueryBuilderContract
         __call as macroCall;
     }
 
-    use HasRelation;
+    use ManageRelation;
 
     /**
      * Holds the collation to be used for string comparisons.
