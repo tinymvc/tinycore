@@ -28,7 +28,7 @@ class Prompt implements PromptContract
      * @return string
      *   The user's input or the default value.
      */
-    public function ask(string $question, string $default = ''): string
+    public static function ask(string $question, string $default = ''): string
     {
         // Append default value to the question if provided
         $defaultText = $default ? " [{$default}]" : '';
@@ -52,7 +52,7 @@ class Prompt implements PromptContract
      *   The type of message. Supported types are "success", "danger", "warning", "info".
      *   If not provided, the message will be printed as normal text.
      */
-    public function message(string $message, string $type = "normal"): void
+    public static function message(string $message, string $type = "normal"): void
     {
         // Color codes
         $styles = [
@@ -95,11 +95,11 @@ class Prompt implements PromptContract
      * @return bool
      *   The answer to the question (true for yes, false for no).
      */
-    public function confirm(string $question, bool $default = false): bool
+    public static function confirm(string $question, bool $default = false): bool
     {
         $defaultText = $default ? 'Y/n' : 'y/N';
 
-        $response = $this->ask("{$question} ({$defaultText})", $default ? 'Y' : 'N');
+        $response = self::ask("{$question} ({$defaultText})", $default ? 'Y' : 'N');
 
         return strtolower($response) === 'y';
     }
@@ -111,7 +111,7 @@ class Prompt implements PromptContract
      *   The number of times to print a newline character.
      *   If not provided, it defaults to 1.
      */
-    public function newline(int $count = 1): void
+    public static function newline(int $count = 1): void
     {
         echo str_repeat(PHP_EOL, $count);
     }
