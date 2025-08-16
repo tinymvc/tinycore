@@ -5,7 +5,6 @@ namespace Spark\Database;
 use ArrayAccess;
 use ArrayIterator;
 use IteratorAggregate;
-use PDO;
 use Spark\Contracts\Database\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
@@ -74,6 +73,9 @@ use Traversable;
  * @method static mixed first()
  * @method static mixed firstOrFail()
  * @method static mixed last()
+ * @method static false|Model find($value)
+ * @method static Model findOrFail($value)
+ * @method static bool destroy($value)
  * @method static array latest()
  * @method static array all()
  * @method static int count()
@@ -140,34 +142,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         // Return a new database query builder object.
         return app(QueryBuilder::class)
             ->table(static::$table ?? Str::snake(Str::plural(class_basename(static::class))))
-            ->fetch(PDO::FETCH_CLASS, static::class);
-    }
-
-    /**
-     * Finds a model by its primary key ID.
-     *
-     * @param int $value The Unique Identifier of the model to retrieve.
-     * @return false|static The found model instance or false if not found.
-     */
-    public static function find($value): false|static
-    {
-        return self::query()
-            ->where([static::$primaryKey => $value])
-            ->first();
-    }
-
-    /**
-     * Finds a model by its primary key ID or throws an exception if not found.
-     *
-     * @param int $value The Unique Identifier of the model to retrieve.
-     * @return static The found model instance.
-     * @throws \Spark\Exceptions\NotFoundException If the model is not found.
-     */
-    public static function findOrFail($value): static
-    {
-        return self::query()
-            ->where([static::$primaryKey => $value])
-            ->firstOrFail();
+            ->fetchModel(static::class);
     }
 
     /**
@@ -267,17 +242,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function remove(): bool
     {
         return $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
-    }
-
-    /**
-     * Deletes the model from the database by its primary key value.
-     *
-     * @param int $value The unique identifier of the model to delete.
-     * @return bool True if deletion was successful, false otherwise.
-     */
-    public static function destroy($value): bool
-    {
-        return self::query()->delete([static::$primaryKey => $value]);
     }
 
     /**

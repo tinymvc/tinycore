@@ -3,7 +3,6 @@
 namespace Spark\Database\Relation;
 
 use Closure;
-use PDO;
 use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
@@ -49,6 +48,49 @@ trait ManageRelation
         }
 
         return $this;
+    }
+
+    /**
+     * Finds a model by its primary key ID.
+     *
+     * @param int $value The Unique Identifier of the model to retrieve.
+     * @return false|Model The found model instance or false if not found.
+     */
+    public function find($value): false|Model
+    {
+        $model = $this->getRelatedModel();
+
+        return $this
+            ->where([$model::$primaryKey => $value])
+            ->first();
+    }
+
+    /**
+     * Finds a model by its primary key ID or throws an exception if not found.
+     *
+     * @param int $value The Unique Identifier of the model to retrieve.
+     * @return Model The found model instance.
+     * @throws \Spark\Exceptions\NotFoundException If the model is not found.
+     */
+    public function findOrFail($value): Model
+    {
+        $model = $this->getRelatedModel();
+
+        return $this
+            ->where([$model::$primaryKey => $value])
+            ->firstOrFail();
+    }
+
+    /**
+     * Deletes the model from the database by its primary key value.
+     *
+     * @param int $value The unique identifier of the model to delete.
+     * @return bool True if deletion was successful, false otherwise.
+     */
+    public function destroy($value): bool
+    {
+        $model = $this->getRelatedModel();
+        return $this->delete([$model::$primaryKey => $value]);
     }
 
     /**
@@ -207,7 +249,7 @@ trait ManageRelation
      */
     public function whereRelationIn(string $relation, string $column, array $values, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->whereIn($column, $values), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereIn($this->addRelatedTablePrefix($relation, $column), $values), '>=', 1, $boolean);
     }
 
     /**
@@ -221,7 +263,7 @@ trait ManageRelation
      */
     public function whereRelationNotIn(string $relation, string $column, array $values, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->whereNotIn($column, $values), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereNotIn($this->addRelatedTablePrefix($relation, $column), $values), '>=', 1, $boolean);
     }
 
     /**
@@ -234,7 +276,7 @@ trait ManageRelation
      */
     public function whereRelationNull(string $relation, string $column, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->whereNull($column), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereNull($this->addRelatedTablePrefix($relation, $column)), '>=', 1, $boolean);
     }
 
     /**
@@ -247,7 +289,7 @@ trait ManageRelation
      */
     public function whereRelationNotNull(string $relation, string $column, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->whereNotNull($column), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereNotNull($this->addRelatedTablePrefix($relation, $column)), '>=', 1, $boolean);
     }
 
     /**
@@ -261,7 +303,7 @@ trait ManageRelation
      */
     public function whereRelationLike(string $relation, string $column, string $pattern, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->like($column, $pattern), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->like($this->addRelatedTablePrefix($relation, $column), $pattern), '>=', 1, $boolean);
     }
 
     /**
@@ -276,7 +318,7 @@ trait ManageRelation
      */
     public function whereRelationBetween(string $relation, string $column, $min, $max, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->between($column, $min, $max), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->between($this->addRelatedTablePrefix($relation, $column), $min, $max), '>=', 1, $boolean);
     }
 
     /**
@@ -290,7 +332,7 @@ trait ManageRelation
      */
     public function whereRelationFindInSet(string $relation, string $column, $value, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->findInSet($column, $value), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->findInSet($this->addRelatedTablePrefix($relation, $column), $value), '>=', 1, $boolean);
     }
 
     /**
@@ -305,7 +347,7 @@ trait ManageRelation
      */
     public function whereRelationJson(string $relation, string $column, string $key, $value, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, fn($query) => $query->findInJson($column, $key, $value), '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->findInJson($this->addRelatedTablePrefix($relation, $column), $key, $value), '>=', 1, $boolean);
     }
 
     /**
@@ -387,7 +429,7 @@ trait ManageRelation
     public function fetchModel(string $model): QueryBuilder
     {
         if (is_string($model) && class_exists($model)) {
-            return $this->fetch(PDO::FETCH_CLASS, $model);
+            return $this->fetch(\PDO::FETCH_CLASS, $model);
         }
 
         throw new InvalidOrmException("Invalid model class: {$model}");
@@ -551,7 +593,10 @@ trait ManageRelation
 
         // Modify the select to include the count subquery
         $currentSelect = $this->query['select'] ?: '*';
-        $this->query['select'] = $currentSelect . ", ({$subquery}) as {$alias}";
+        $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) as {$alias}";
+
+        $this->where['bind'] = array_merge($this->where['bind'], $subquery['bindings']);
+        $this->parameters = array_merge($this->parameters, $subquery['parameters']);
     }
 
     /**

@@ -101,11 +101,18 @@ class QueryBuilder implements QueryBuilderContract
     private array $parameters = [];
 
     /**
+     * Holds the SQL bind parameters for the query.
+     *
+     * @var array
+     */
+    private array $bindings = [];
+
+    /**
      * Holds the SQL and bind parameters for the WHERE clause.
      *
      * @var array
      */
-    private array $where = ['sql' => '', 'bind' => [], 'grouped' => false];
+    private array $where = ['sql' => '', 'grouped' => false];
 
     /**
      * Holds the SQL structure, join conditions, and join count.
@@ -262,13 +269,25 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Adds a parameter for a query.
+     *
+     * @param string|array $parameter The parameter name(s) to add.
+     * @param mixed ...$parameters Additional parameter names.
+     * @return self Returns the query object.
+     */
+    public function param(string|array $parameter, ...$parameters): self
+    {
+        return $this->parameter($parameter, ...$parameters);
+    }
+
+    /**
      * Returns the query bindings.
      *
      * @return array The query bindings.
      */
     public function getBindings(): array
     {
-        return $this->where['bind'] ?? [];
+        return $this->bindings;
     }
 
     /**
@@ -422,8 +441,7 @@ class QueryBuilder implements QueryBuilderContract
                 $columnPlaceholder
             );
 
-
-            $this->where['bind'][$columnPlaceholder] = $value;
+            $this->bindings[$columnPlaceholder] = $value;
         } elseif (is_array($column) && $operator === null && $value === null) {
             // Create a where clause from array conditions.
             $command = sprintf(
@@ -435,7 +453,7 @@ class QueryBuilder implements QueryBuilderContract
                         function ($attr, $value) use ($not) {
 
                             $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
-                            $this->where['bind'][$columnPlaceholder] = $value; // Bind the value to the placeholder.
+                            $this->bindings[$columnPlaceholder] = $value; // Bind the value to the placeholder.
             
                             return $this->grammar->wrapColumn($attr) . (is_array($value) ?
                                 // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
@@ -485,7 +503,7 @@ class QueryBuilder implements QueryBuilderContract
     public function bind(string|array $args, bool $named = true): self
     {
         if ($named && is_array($args)) {
-            $this->where['bind'] = array_merge($this->where['bind'], $args);
+            $this->bindings = array_merge($this->bindings, $args);
         } else {
             $this->parameter($args);
         }
@@ -512,11 +530,7 @@ class QueryBuilder implements QueryBuilderContract
             $sql
         );
 
-        if (strpos($sql, '?') === false && preg_match('/\:(\w+)/', $sql)) {
-            $this->where['bind'] = array_merge($this->where['bind'], $bindings);
-        } else {
-            $this->parameter($bindings);
-        }
+        $this->addBindings($sql, $bindings);
 
         return $this;
     }
@@ -768,7 +782,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Bind the key to the placeholder
-        $this->where['bind'][$columnPlaceholder] = $key;
+        $this->bindings[$columnPlaceholder] = $key;
 
         // Add the condition to the query's WHERE clause
         return $this->where(column: $where, andOr: $andOr);
@@ -844,7 +858,7 @@ class QueryBuilder implements QueryBuilderContract
         // Construct the JSON condition
         $where = "JSON_EXTRACT({$this->grammar->wrapColumn($field)}, '$.{$key}') {$type}LIKE :$columnPlaceholder";
 
-        $this->where['bind'][$columnPlaceholder] = "%$value%";
+        $this->bindings[$columnPlaceholder] = "%$value%";
 
         return $this->where(column: $where, andOr: $andOr);
     }
@@ -924,8 +938,8 @@ class QueryBuilder implements QueryBuilderContract
         $where = '(' . $this->grammar->wrapColumn($field) . ' ' . $type . 'BETWEEN '
             . (":$columnPlaceholder1 AND :$columnPlaceholder2") . ')';
 
-        $this->where['bind'][$columnPlaceholder1] = $value1;
-        $this->where['bind'][$columnPlaceholder2] = $value2;
+        $this->bindings[$columnPlaceholder1] = $value1;
+        $this->bindings[$columnPlaceholder2] = $value2;
 
         return $this->where(column: $where, andOr: $andOr);
     }
@@ -1000,7 +1014,7 @@ class QueryBuilder implements QueryBuilderContract
         $columnPlaceholder = $this->getWhereSqlColumn($field);
         $where = $this->grammar->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
 
-        $this->where['bind'][$columnPlaceholder] = $data;
+        $this->bindings[$columnPlaceholder] = $data;
 
         return $this->where(column: $where, andOr: $andOr);
     }
@@ -1129,9 +1143,6 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Bind the WHERE clause parameters
-        $this->bindWhere($statement);
-
-        // Bind positional parameters
         $this->bindParameters($statement);
 
         // Execute the statement and reset the WHERE clause
@@ -1172,9 +1183,6 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Bind the WHERE clause parameters
-        $this->bindWhere($statement);
-
-        // Bind positional parameters
         $this->bindParameters($statement);
 
         // Execute the statement and reset the WHERE clause
@@ -1237,10 +1245,29 @@ class QueryBuilder implements QueryBuilderContract
             $fields = implode(',', $fields);
         }
 
+        // Remove any leading "SELECT " from the fields string
+        $fields = preg_replace('/^\s*select\s+/i', '', $fields);
+
         // Build the initial SELECT SQL query
         $this->query['select'] = $this->wrapAndEscapeColumns($fields);
 
         // Returns the current instance for method chaining.
+        return $this;
+    }
+
+    /**
+     * Adds a raw SQL expression to the SELECT clause.
+     *
+     * @param string $sql The raw SQL expression to add.
+     * @param array $bindings Optional bindings for the SQL expression.
+     * @return self The current instance for method chaining.
+     */
+    public function selectRaw(string $sql, array $bindings = []): self
+    {
+        $this->query['select'] = preg_replace('/^\s*select\s+/i', '', $sql);
+
+        $this->addBindings($sql, $bindings);
+
         return $this;
     }
 
@@ -1368,6 +1395,23 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         $this->query['joins'] .= " {$type}JOIN " . $this->wrapAndEscapeColumns($table) . ($on ? " ON $on" : "");
+
+        return $this;
+    }
+
+    /**
+     * Adds a raw JOIN clause to the query.
+     *
+     * @param string $sql The raw SQL join clause.
+     * @param array $bindings The bindings for the raw SQL.
+     *
+     * @return self The current instance for method chaining.
+     */
+    public function joinRaw(string $sql, array $bindings = []): self
+    {
+        $this->query['joins'] .= " $sql";
+
+        $this->addBindings($sql, $bindings);
 
         return $this;
     }
@@ -1823,9 +1867,6 @@ class QueryBuilder implements QueryBuilderContract
         );
 
         // Apply where statement if exists.
-        $this->bindWhere($statement);
-
-        // Bind positional parameters
         $this->bindParameters($statement);
 
         // Execute sql command.
@@ -1934,9 +1975,6 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Bind/Add conditions to filter records.
-        $this->bindWhere($statement);
-
-        // Bind positional parameters
         $this->bindParameters($statement);
 
         // Execute current select command.
@@ -1946,7 +1984,6 @@ class QueryBuilder implements QueryBuilderContract
 
         // Set select statement into query to modify dynamically.
         $this->query['statement'] = $statement;
-
     }
 
     /**
@@ -1998,21 +2035,25 @@ class QueryBuilder implements QueryBuilderContract
         do {
             $x_column = $index === 0 ? $column : "$column$index";
             $index++;
-        } while (isset($this->where['bind'][$x_column]));
+        } while (isset($this->bindings[$x_column]));
 
         return $x_column;
     }
 
     /**
-     * Binds the values of the WHERE clause conditions to the SQL statement.
+     * Binds the values of the parameters to the SQL statement.
      *
      * @param PDOStatement $statement The prepared PDO statement to bind values.
      * @return void
      */
-    private function bindWhere(PDOStatement &$statement): void
+    private function bindParameters(PDOStatement &$statement): void
     {
+        if (!empty($this->bindings) && !empty($this->parameters)) {
+            throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
+        }
+
         // Bind where clause values to filter records.
-        foreach ($this->where['bind'] ?? [] as $param => $value) {
+        foreach ($this->bindings as $param => $value) {
             /**
              * Create a placeholder of the parameter exactly added into the where clause.
              * Ex. "id = :id", ==> :id is the parameter.
@@ -2030,16 +2071,7 @@ class QueryBuilder implements QueryBuilderContract
                 $statement->bindValue($param, $value, $this->getParameterType($value));
             }
         }
-    }
 
-    /**
-     * Binds the values of the parameters to the SQL statement.
-     *
-     * @param PDOStatement $statement The prepared PDO statement to bind values.
-     * @return void
-     */
-    private function bindParameters(PDOStatement &$statement): void
-    {
         foreach ($this->parameters as $key => $param) {
             $statement->bindValue($key + 1, $param, $this->getParameterType($param));
         }
@@ -2052,7 +2084,9 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function resetWhere(): void
     {
-        $this->where = ['sql' => '', 'bind' => [], 'grouped' => false];
+        $this->where = ['sql' => '', 'grouped' => false];
+        $this->bindings = [];
+        $this->parameters = [];
     }
 
     /**
@@ -2340,5 +2374,21 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         return $on;
+    }
+
+    /**
+     * Adds bindings for a SQL query.
+     *
+     * @param string $sql The SQL query string.
+     * @param string|array $bindings The bindings to add.
+     * @return void
+     */
+    private function addBindings(string $sql, string|array $bindings = []): void
+    {
+        if (is_array($bindings) && strpos($sql, '?') === false && preg_match('/\:(\w+)/', $sql)) {
+            $this->bindings = array_merge($this->bindings, $bindings);
+        } else {
+            $this->parameter($bindings);
+        }
     }
 }
