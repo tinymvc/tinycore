@@ -21,14 +21,6 @@ interface ModelContract
     public static function query(): QueryBuilder;
 
     /**
-     * Returns a model instance with the given ID.
-     *
-     * @param mixed $value The ID of the model to retrieve.
-     * @return false|static The found model instance or false if not found.
-     */
-    public static function find($value): false|static;
-
-    /**
      * Creates a new model instance and fills it with the given data.
      *
      * @param array|Arrayable $data The data to fill the model with.

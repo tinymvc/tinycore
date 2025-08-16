@@ -29,7 +29,6 @@ use Spark\Utils\Paginator;
  * @method Collection forget($keys)
  * @method bool contains($key, $operator = null, $value = null)
  * @method bool doesntContain($key, $operator = null, $value = null)
- * @method bool has($key)
  * @method bool hasAny($key)
  * @method string implode($value, $glue = null)
  * @method Collection diff($items)
@@ -516,13 +515,13 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @param string $sql
      *   The raw SQL condition to add.
-     * @param array $bindings
+     * @param string|array $bindings
      *   The bindings for the raw SQL condition.
      * @param string $andOr
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @return self
      */
-    public function whereRaw(string $sql, array $bindings = [], string $andOr = 'AND'): self
+    public function whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND'): self
     {
         $this->where['sql'] .= sprintf(
             ' %s (%s)',
@@ -540,11 +539,11 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @param string $sql
      *   The raw SQL condition to add.
-     * @param array $bindings
+     * @param string|array $bindings
      *   The bindings for the raw SQL condition.
      * @return self
      */
-    public function orWhereRaw(string $sql, array $bindings = []): self
+    public function orWhereRaw(string $sql, string|array $bindings = []): self
     {
         return $this->whereRaw($sql, $bindings, 'OR');
     }

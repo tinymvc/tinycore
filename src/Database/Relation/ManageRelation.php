@@ -476,7 +476,7 @@ trait ManageRelation
 
         $sql = "({$subquery['sql']}) {$operator} {$count}";
 
-        $this->where['bind'] = array_merge($this->where['bind'], $subquery['bindings']);
+        $this->bindings = array_merge($this->bindings, $subquery['bindings']);
         $this->parameters = array_merge($this->parameters, $subquery['parameters']);
 
         return $this->whereRaw($sql, [], $boolean);
@@ -595,7 +595,7 @@ trait ManageRelation
         $currentSelect = $this->query['select'] ?: '*';
         $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) as {$alias}";
 
-        $this->where['bind'] = array_merge($this->where['bind'], $subquery['bindings']);
+        $this->bindings = array_merge($this->bindings, $subquery['bindings']);
         $this->parameters = array_merge($this->parameters, $subquery['parameters']);
     }
 
