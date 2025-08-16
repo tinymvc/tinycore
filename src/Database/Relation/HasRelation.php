@@ -389,7 +389,7 @@ trait HasRelation
      * @param string $name
      * @return bool
      */
-    protected function relationshipExists(string $name): bool
+    public function relationshipExists(string $name): bool
     {
         $relation = $this->getRelationshipAttribute($name);
         return !blank($relation);
@@ -401,7 +401,7 @@ trait HasRelation
      * @param string $name
      * @return void
      */
-    protected function forgetRelation(string $name): void
+    public function forgetRelation(string $name): void
     {
         unset($this->relations[$name]);
     }
@@ -412,7 +412,7 @@ trait HasRelation
      * @param string $name
      * @return array
      */
-    protected function getRelationshipConfig(string $name): array
+    public function getRelationshipConfig(string $name): array
     {
         if (method_exists($this, $name)) {
             $relation = $this->$name();
@@ -443,7 +443,7 @@ trait HasRelation
      * @param Closure|null $constraints
      * @return array
      */
-    protected function loadRelation(array $models, array $config, string $name, ?Closure $constraints = null): array
+    public function loadRelation(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
         return match ($config['type']) {
             'hasOne' => $this->loadHasOne($models, $config, $name, $constraints),

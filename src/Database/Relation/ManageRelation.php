@@ -179,9 +179,7 @@ trait ManageRelation
             $operator = '=';
         }
 
-        return $this->whereHas($relation, function ($query) use ($column, $operator, $value) {
-            return $query->where($column, $operator, $value);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->where($this->addRelatedTablePrefix($relation, $column), $operator, $value), '>=', 1, $boolean);
     }
 
     /**
@@ -209,9 +207,7 @@ trait ManageRelation
      */
     public function whereRelationIn(string $relation, string $column, array $values, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column, $values) {
-            return $query->whereIn($column, $values);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereIn($column, $values), '>=', 1, $boolean);
     }
 
     /**
@@ -225,9 +221,7 @@ trait ManageRelation
      */
     public function whereRelationNotIn(string $relation, string $column, array $values, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column, $values) {
-            return $query->whereNotIn($column, $values);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereNotIn($column, $values), '>=', 1, $boolean);
     }
 
     /**
@@ -240,9 +234,7 @@ trait ManageRelation
      */
     public function whereRelationNull(string $relation, string $column, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column) {
-            return $query->whereNull($column);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereNull($column), '>=', 1, $boolean);
     }
 
     /**
@@ -255,9 +247,7 @@ trait ManageRelation
      */
     public function whereRelationNotNull(string $relation, string $column, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column) {
-            return $query->whereNotNull($column);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->whereNotNull($column), '>=', 1, $boolean);
     }
 
     /**
@@ -271,9 +261,7 @@ trait ManageRelation
      */
     public function whereRelationLike(string $relation, string $column, string $pattern, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column, $pattern) {
-            return $query->like($column, $pattern);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->like($column, $pattern), '>=', 1, $boolean);
     }
 
     /**
@@ -288,9 +276,7 @@ trait ManageRelation
      */
     public function whereRelationBetween(string $relation, string $column, $min, $max, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column, $min, $max) {
-            return $query->between($column, $min, $max);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->between($column, $min, $max), '>=', 1, $boolean);
     }
 
     /**
@@ -304,9 +290,7 @@ trait ManageRelation
      */
     public function whereRelationFindInSet(string $relation, string $column, $value, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column, $value) {
-            return $query->findInSet($column, $value);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->findInSet($column, $value), '>=', 1, $boolean);
     }
 
     /**
@@ -321,9 +305,7 @@ trait ManageRelation
      */
     public function whereRelationJson(string $relation, string $column, string $key, $value, string $boolean = 'AND'): QueryBuilder
     {
-        return $this->whereHas($relation, function ($query) use ($column, $key, $value) {
-            return $query->findInJson($column, $key, $value);
-        }, '>=', 1, $boolean);
+        return $this->whereHas($relation, fn($query) => $query->findInJson($column, $key, $value), '>=', 1, $boolean);
     }
 
     /**
@@ -424,11 +406,15 @@ trait ManageRelation
     {
         $model = $this->query['fetch'][1] ?? null;
 
+        if (is_string($model) && class_exists($model)) {
+            $model = new $model;
+        }
+
         if (!$model instanceof Model) {
             throw new InvalidOrmException("The relationship methods must be called on a model instance.");
         }
 
-        return new $model;
+        return $model;
     }
 
     /**
@@ -446,7 +432,10 @@ trait ManageRelation
     {
         $subquery = $this->buildRelationshipSubquery($relationConfig, $callback);
 
-        $sql = "({$subquery}) {$operator} {$count}";
+        $sql = "({$subquery['sql']}) {$operator} {$count}";
+
+        $this->where['bind'] = array_merge($this->where['bind'], $subquery['bindings']);
+        $this->parameters = array_merge($this->parameters, $subquery['parameters']);
 
         return $this->whereRaw($sql, [], $boolean);
     }
@@ -456,9 +445,9 @@ trait ManageRelation
      * 
      * @param array $relationConfig The relationship configuration
      * @param Closure|null $callback Optional callback to add constraints to the relationship query
-     * @return string The subquery SQL
+     * @return array The subquery SQL
      */
-    private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null): string
+    private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null): array
     {
         $relatedModel = new $relationConfig['related'];
         $relatedTable = $relatedModel::$table ?? $this->getTableFromClass($relationConfig['related']);
@@ -468,15 +457,19 @@ trait ManageRelation
             case 'hasMany':
                 $query = $relatedModel->query()
                     ->select('COUNT(*)')
-                    ->whereRaw($this->grammar->wrapTable($relatedTable) . ".{$relationConfig['foreignKey']} = " .
-                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['localKey']}");
+                    ->whereRaw(
+                        $this->grammar->wrapTable($relatedTable) . "." . $this->grammar->wrapColumn($relationConfig['foreignKey']) . " = " .
+                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['localKey'])
+                    );
                 break;
 
             case 'belongsTo':
                 $query = $relatedModel->query()
                     ->select('COUNT(*)')
-                    ->whereRaw($this->grammar->wrapTable($relatedTable) . ".{$relationConfig['ownerKey']} = " .
-                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['foreignKey']}");
+                    ->whereRaw(
+                        $this->grammar->wrapTable($relatedTable) . "." . $this->grammar->wrapColumn($relationConfig['ownerKey']) . " = " .
+                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['foreignKey'])
+                    );
                 break;
 
             case 'belongsToMany':
@@ -486,10 +479,12 @@ trait ManageRelation
                         $relationConfig['table'],
                         $relationConfig['table'] . ".{$relationConfig['relatedPivotKey']}",
                         '=',
-                        $this->grammar->wrapTable($relatedTable) . ".{$relationConfig['relatedKey']}"
+                        "{$relatedTable}.{$relationConfig['relatedKey']}"
                     )
-                    ->whereRaw($relationConfig['table'] . ".{$relationConfig['foreignPivotKey']} = " .
-                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['parentKey']}");
+                    ->whereRaw(
+                        $this->grammar->wrapTable($relationConfig['table']) . "." . $this->grammar->wrapColumn($relationConfig['relatedPivotKey']) . " = " .
+                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['parentKey'])
+                    );
                 break;
 
             case 'hasManyThrough':
@@ -500,12 +495,14 @@ trait ManageRelation
                     ->select('COUNT(*)')
                     ->join(
                         $throughTable,
-                        $this->grammar->wrapTable($throughTable) . ".{$relationConfig['secondLocalKey']}",
+                        $throughTable . ".{$relationConfig['secondLocalKey']}",
                         '=',
-                        $this->grammar->wrapTable($relatedTable) . ".{$relationConfig['secondKey']}"
+                        $relatedTable . ".{$relationConfig['secondKey']}"
                     )
-                    ->whereRaw($this->grammar->wrapTable($throughTable) . ".{$relationConfig['firstKey']} = " .
-                        $this->grammar->wrapTable($this->getTableName()) . ".{$relationConfig['localKey']}");
+                    ->whereRaw(
+                        $this->grammar->wrapTable($throughTable) . "." . $this->grammar->wrapColumn($relationConfig['firstKey']) . " = " .
+                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['localKey'])
+                    );
                 break;
 
             default:
@@ -518,6 +515,25 @@ trait ManageRelation
 
         // Get the built SQL from the query
         return $this->getSubquerySQL($query);
+    }
+
+    /**
+     * Add the related table prefix to a column name.
+     *
+     * @param string $relation The relationship name
+     * @param string $column The column name
+     * @return string The column name with the related table prefix
+     */
+    private function addRelatedTablePrefix(string $relation, string $column): string
+    {
+        $model = $this->getRelatedModel();
+        $relationConfig = $model->getRelationshipConfig($relation);
+
+        $relatedModel = new $relationConfig['related'];
+        $relatedTable = $relatedModel::$table ?? $this->getTableFromClass($relationConfig['related']);
+
+        // Add the related table prefix to the column
+        return "$relatedTable.$column";
     }
 
     /**
@@ -542,9 +558,9 @@ trait ManageRelation
      * Extract SQL from query builder for subquery use.
      * 
      * @param QueryBuilder $query
-     * @return string
+     * @return array
      */
-    private function getSubquerySQL(QueryBuilder $query): string
+    private function getSubquerySQL(QueryBuilder $query): array
     {
         // This is a simplified approach - in a real implementation, 
         // you might need to build the SQL string manually or extend QueryBuilder
@@ -555,7 +571,11 @@ trait ManageRelation
         $joins = $query->query['joins'] ?? '';
         $where = $query->getWhereSql();
 
-        return "SELECT {$select} FROM {$table}{$joins}{$where}";
+        return [
+            'sql' => "SELECT {$select} FROM {$table}{$joins}{$where}",
+            'bindings' => $query->getBindings(),
+            'parameters' => $query->getParameters()
+        ];
     }
 
     /**

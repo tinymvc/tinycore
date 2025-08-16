@@ -262,6 +262,26 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Returns the query bindings.
+     *
+     * @return array The query bindings.
+     */
+    public function getBindings(): array
+    {
+        return $this->where['bind'] ?? [];
+    }
+
+    /**
+     * Returns the query parameters.
+     *
+     * @return array The query parameters.
+     */
+    public function getParameters(): array
+    {
+        return $this->parameters;
+    }
+
+    /**
      * Inserts data into the database with optional configurations.
      *
      * @param array|Arrayable $data The data to insert (single record or multiple records)
@@ -401,6 +421,7 @@ class QueryBuilder implements QueryBuilderContract
                 $operator,
                 $columnPlaceholder
             );
+
 
             $this->where['bind'][$columnPlaceholder] = $value;
         } elseif (is_array($column) && $operator === null && $value === null) {
