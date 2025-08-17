@@ -144,7 +144,7 @@ class InputValidator implements InputValidatorContract
 
                 // Add error if rule validation fails
                 if (!$valid) {
-                    $this->addError($field, $ruleName, $ruleParams);
+                    $this->addError($field, $ruleName, $ruleParams, $value);
                 }
             }
 
@@ -533,7 +533,10 @@ class InputValidator implements InputValidatorContract
 
         // For file uploads (always check this before string check)
         if (is_array($value) && isset($value['size'])) {
-            return (int) $value['size'] == ((int) $size * 1024);
+            $fileSizeMB = $value['size'] / 1024 / 1024;
+            $targetMB = $size / 1024;
+
+            return $fileSizeMB >= $targetMB && $fileSizeMB < ($targetMB + 1);
         }
 
         // For arrays
@@ -811,10 +814,23 @@ class InputValidator implements InputValidatorContract
      * @param string $field Field name that failed validation.
      * @param string $rule Validation rule that failed.
      * @param array $params Parameters for the rule, if any.
+     * @param array $value The value that failed validation.
      */
-    private function addError(string $field, string $rule, array $params = []): void
+    private function addError(string $field, string $rule, array $params = [], mixed $value = null): void
     {
         $prettyField = __(Str::headline($field));
+
+        if (
+            in_array($rule, ['min', 'minimum', 'max', 'maximum', 'length', 'size']) &&
+            is_array($value) && isset($value['tmp_name']) && is_uploaded_file($value['tmp_name'])
+        ) {
+            $this->errors[$field][] = match ($rule) {
+                'min', 'minimum' => __($this->getErrorMessagePlaceholder('file_min', $field, 'The %s file must be at least %s KB.'), [$prettyField, $params[0] ?? 0]),
+                'max', 'maximum' => __($this->getErrorMessagePlaceholder('file_max', $field, 'The %s file must not exceed %s KB.'), [$prettyField, $params[0] ?? 0]),
+                'length', 'size' => __($this->getErrorMessagePlaceholder('file_size', $field, 'The %s file must be %s KB.'), [$prettyField, $params[0] ?? 0]),
+            };
+            return;
+        }
 
         // Error messages for each validation rule
         $this->errors[$field][] = match ($rule) {
