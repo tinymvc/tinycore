@@ -6,9 +6,6 @@ use Closure;
 use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Exceptions\OrmDisabledLazyLoadingException;
 use Spark\Database\Exceptions\UndefinedOrmException;
-use Spark\Database\Relation\BelongsToMany;
-use Spark\Database\Relation\HasMany;
-use Spark\Database\Relation\HasOne;
 use Spark\Database\QueryBuilder;
 use PDO;
 use Spark\Support\Str;
@@ -294,6 +291,57 @@ trait HasRelation
     }
 
     /**
+     * Define a has-one-through relationship.
+     * 
+     * This method allows you to define a has-one-through relationship,
+     * which is a relationship where you can access a related model through an intermediate model.
+     * 
+     * @param string $related The final related model
+     * @param string $through The intermediate model
+     * @param string|null $firstKey Foreign key on the intermediate table
+     * @param string|null $secondKey Foreign key on the final table
+     * @param string|null $localKey Local key on this model
+     * @param string|null $secondLocalKey Local key on the intermediate model
+     * @param bool $lazy Whether to enable lazy loading
+     * @param array $append Additional fields to append to the relationship
+     * @param Closure|null $callback Custom query callback
+     * 
+     * @return \Spark\Database\Relation\HasOneThrough
+     */
+    protected function hasOneThrough(
+        string $related,
+        string $through,
+        ?string $firstKey = null,
+        ?string $secondKey = null,
+        ?string $localKey = null,
+        ?string $secondLocalKey = null,
+        bool $lazy = true,
+        array $append = [],
+        ?Closure $callback = null
+    ): HasOneThrough {
+        $throughModel = new $through;
+        $throughTable = $throughModel::$table ?? Str::snake(class_basename($through));
+
+        $firstKey ??= $this->getForeignKey();
+        $secondKey ??= $this->generateForeignKey($throughTable);
+        $localKey ??= static::$primaryKey ?? 'id';
+        $secondLocalKey ??= $throughModel::$primaryKey ?? 'id';
+
+        return new HasOneThrough(
+            related: $related,
+            through: $through,
+            firstKey: $firstKey,
+            secondKey: $secondKey,
+            localKey: $localKey,
+            secondLocalKey: $secondLocalKey,
+            lazy: $lazy,
+            callback: $callback,
+            append: $append,
+            model: $this
+        );
+    }
+
+    /**
      * Load relationships for a collection of models.
      * 
      * This method allows you to load specified relationships for a collection of models.
@@ -425,6 +473,7 @@ trait HasRelation
                         $relation instanceof BelongsTo => 'belongsTo',
                         $relation instanceof BelongsToMany => 'belongsToMany',
                         $relation instanceof HasManyThrough => 'hasManyThrough',
+                        $relation instanceof HasOneThrough => 'hasOneThrough',
                         default => throw new InvalidOrmException("Invalid relationship instance: " . get_class($relation))
                     }
                 ]);
@@ -450,7 +499,7 @@ trait HasRelation
             'hasMany' => $this->loadHasMany($models, $config, $name, $constraints),
             'belongsTo' => $this->loadBelongsTo($models, $config, $name, $constraints),
             'belongsToMany' => $this->loadBelongsToMany($models, $config, $name, $constraints),
-            'hasManyThrough' => $this->loadHasManyThrough($models, $config, $name, $constraints),
+            'hasManyThrough', 'hasOneThrough' => $this->loadHasThrough($models, $config, $name, $constraints),
             default => throw new InvalidOrmException("Invalid relationship type: {$config['type']}")
         };
     }
@@ -597,9 +646,9 @@ trait HasRelation
     }
 
     /**
-     * Load hasManyThrough relationship.
+     * Load hasThrough relationship
      * 
-     * This method loads a hasManyThrough relationship for the given models.
+     * This method loads both hasOneThrough and hasManyThrough relationships for the given models.
      * It retrieves the related models through an intermediate model,
      * and matches them with the original models.
      * 
@@ -609,7 +658,7 @@ trait HasRelation
      * @param Closure|null $constraints
      * @return array
      */
-    private function loadHasManyThrough(array $models, array $config, string $name, ?Closure $constraints = null): array
+    private function loadHasThrough(array $models, array $config, string $name, ?Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
         $throughModel = new $config['through'];
@@ -617,8 +666,10 @@ trait HasRelation
         $throughTable = $throughModel::$table ?? Str::snake(class_basename($config['through']));
         $localValues = collect($models)->pluck($config['localKey'])->unique()->filter()->all();
 
+        $isOne = $config['type'] === 'hasOneThrough';
+
         if (empty($localValues)) {
-            return $this->initializeRelation($models, $name, []);
+            return $this->initializeRelation($models, $name, $isOne ? false : []);
         }
 
         $appendField = join(
@@ -637,7 +688,7 @@ trait HasRelation
         $query = $this->applyConstraints($query, $config, $constraints);
         $results = $query->all();
 
-        return $this->matchHasManyThrough($models, $results, $config, $name);
+        return $this->matchHasThrough($models, $results, $config, $name, $isOne);
     }
 
     /**
@@ -746,31 +797,41 @@ trait HasRelation
     }
 
     /**
-     * Match hasManyThrough relationships.
+     * Match hasThrough relationships.
      * 
-     * This method matches the results of a hasManyThrough relationship query
-     * with the original models.
+     * This method matches the results of both hasOneThrough or hasManyThrough
+     * relationship query with the original models.
      * 
      * @param array $models
      * @param array $results
      * @param array $config
      * @param string $name
+     * @param bool $isOne
      * @return array
      */
-    private function matchHasManyThrough(array $models, array $results, array $config, string $name): array
+    private function matchHasThrough(array $models, array $results, array $config, string $name, bool $isOne): array
     {
         $relatedModel = new $config['related'];
 
         foreach ($models as $model) {
-            $related = [];
+            $related = $isOne ? false : [];
 
             foreach ($results as $result) {
                 if ($result[$config['firstKey']] == $model->{$config['localKey']}) {
-                    $related[] = $relatedModel->load($result);
+                    if ($isOne) {
+                        $related = $relatedModel->load($result);
+                        break; // Only get the first match for hasOne
+                    } else {
+                        $related[] = $relatedModel->load($result);
+                    }
                 }
             }
 
-            $model->setRelation($name, collect($related));
+            if (!$isOne) {
+                $related = collect($related);
+            }
+
+            $model->setRelation($name, $related);
         }
 
         return $models;

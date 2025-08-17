@@ -530,6 +530,7 @@ trait ManageRelation
                 break;
 
             case 'hasManyThrough':
+            case 'hasOneThrough':
                 $throughModel = new $relationConfig['through'];
                 $throughTable = $throughModel::$table ?? $this->getTableFromClass($relationConfig['through']);
 
