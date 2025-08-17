@@ -70,7 +70,7 @@ class Uploader implements UploaderUtilContract
         $this->extensions = $extensions;
         $this->multiple = $multiple;
         $this->maxSize = $maxSize;
-        $this->resize = $resize;
+        $this->resize = isset($resize[0]) ? [$resize[0] => $resize[1]] : $resize;
         $this->resizes = $resizes;
         $this->compress = $compress;
         $this->driver = $driver;
