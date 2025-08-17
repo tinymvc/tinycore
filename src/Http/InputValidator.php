@@ -673,7 +673,8 @@ class InputValidator implements InputValidatorContract
             return false;
         }
 
-        return in_array($mimeType, $allowedMimes, true);
+        return in_array($mimeType, $allowedMimes, true) ||
+            in_array(substr($mimeType, strpos($mimeType, '/') + 1), $allowedMimes, true);
     }
 
     /**
