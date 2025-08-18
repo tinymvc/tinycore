@@ -669,7 +669,7 @@ trait HasRelation
         $isOne = $config['type'] === 'hasOneThrough';
 
         if (empty($localValues)) {
-            return $this->initializeRelation($models, $name, $isOne ? false : []);
+            return $this->initializeRelation($models, $name, $isOne ? null : []);
         }
 
         $appendField = join(
@@ -686,6 +686,11 @@ trait HasRelation
             ->whereIn("t.{$config['firstKey']}", $localValues);
 
         $query = $this->applyConstraints($query, $config, $constraints);
+
+        if ($isOne) {
+            $query->take(1);
+        }
+
         $results = $query->all();
 
         return $this->matchHasThrough($models, $results, $config, $name, $isOne);
@@ -814,7 +819,7 @@ trait HasRelation
         $relatedModel = new $config['related'];
 
         foreach ($models as $model) {
-            $related = $isOne ? false : [];
+            $related = $isOne ? null : [];
 
             foreach ($results as $result) {
                 if ($result[$config['firstKey']] == $model->{$config['localKey']}) {
