@@ -477,6 +477,30 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
+     * Get a new instance of the model with only the specified attributes.
+     *
+     * @param array $fields The attributes to include.
+     * @return static
+     */
+    public function only(array $fields): static
+    {
+        $filtered = array_intersect_key($this->attributes, array_flip($fields));
+        return static::load($filtered);
+    }
+
+    /**
+     * Get a new instance of the model with all attributes except the specified ones.
+     *
+     * @param array $fields The attributes to exclude.
+     * @return static
+     */
+    public function except(array $fields): static
+    {
+        $filtered = array_diff_key($this->attributes, array_flip($fields));
+        return static::load($filtered);
+    }
+
+    /**
      * Check if the model has a specific attribute.
      *
      * @param string $name The name of the attribute to check.
