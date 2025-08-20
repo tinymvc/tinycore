@@ -477,7 +477,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     /**
      * Get a new instance of the model with only the specified attributes.
      *
-     * @param array $fields The attributes to include.
+     * @param string|array $fields The attributes to include.
      * @return static
      */
     public function only(string|array $fields): static
@@ -489,7 +489,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     /**
      * Get a new instance of the model with all attributes except the specified ones.
      *
-     * @param array $fields The attributes to exclude.
+     * @param string|array $fields The attributes to exclude.
      * @return static
      */
     public function except(string|array $fields): static
