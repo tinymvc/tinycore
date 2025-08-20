@@ -81,14 +81,12 @@ use Traversable;
  * @method static int count()
  * @method static \Spark\Utils\Paginator paginate(int $limit = 10, string $keyword = 'page')
  * @method static \Spark\Support\Collection get()
- * @method static \Spark\Support\Collection except($keys)
  * @method static \Spark\Support\Collection filter(?callable $callback = null)
  * @method static \Spark\Support\Collection map(callable $callback)
  * @method static \Spark\Support\Collection mapToDictionary(callable $callback)
  * @method static \Spark\Support\Collection mapWithKeys(callable $callback)
  * @method static \Spark\Support\Collection merge($items)
  * @method static \Spark\Support\Collection mergeRecursive($items)
- * @method static \Spark\Support\Collection only($keys)
  *
  * This class provides a base for models, handling database operations and entity management.
  * It includes CRUD operations, data decoding, and dynamic method invocation.
@@ -482,9 +480,9 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param array $fields The attributes to include.
      * @return static
      */
-    public function only(array $fields): static
+    public function only(string|array $fields): static
     {
-        $filtered = array_intersect_key($this->attributes, array_flip($fields));
+        $filtered = array_intersect_key($this->attributes, array_flip((array) $fields));
         return static::load($filtered);
     }
 
@@ -494,9 +492,9 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param array $fields The attributes to exclude.
      * @return static
      */
-    public function except(array $fields): static
+    public function except(string|array $fields): static
     {
-        $filtered = array_diff_key($this->attributes, array_flip($fields));
+        $filtered = array_diff_key($this->attributes, array_flip((array) $fields));
         return static::load($filtered);
     }
 
