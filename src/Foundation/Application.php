@@ -20,6 +20,7 @@ use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Queue\Queue;
 use Spark\Router;
+use Spark\Support\ItemNotFoundException;
 use Spark\Support\Traits\Macroable;
 use Spark\Translator;
 use Spark\Http\Gate;
@@ -52,6 +53,9 @@ class Application implements ApplicationContract
      * @var Container
      */
     private Container $container;
+
+    /** @var array Array to store exception handlers. */
+    private array $exceptions = [];
 
     /**
      * Application constructor.
@@ -306,6 +310,25 @@ class Application implements ApplicationContract
     }
 
     /**
+     * Adds exception handlers to the application.
+     *
+     * This method allows you to register custom exception handlers for specific
+     * exception types. The handlers will be called when the corresponding
+     * exception is thrown.
+     *
+     * @param array $exceptions An associative array of exception types and their handlers.
+     * @return self
+     */
+    public function withExceptions(array $exceptions): self
+    {
+        foreach ($exceptions as $exception => $handler) {
+            $this->exceptions[$exception] = $handler;
+        }
+
+        return $this;
+    }
+
+    /**
      * Runs the application.
      *
      * Bootstraps the application by registering providers and calling the `boot` method
@@ -329,6 +352,8 @@ class Application implements ApplicationContract
                 ->send();
         } catch (RouteNotFoundException) {
             abort(error: 404, message: 'Route not found');
+        } catch (ItemNotFoundException) {
+            abort(error: 404, message: 'Item not found');
         } catch (NotFoundException) {
             abort(error: 404, message: 'Not found');
         } catch (AuthorizationException) {
@@ -336,6 +361,11 @@ class Application implements ApplicationContract
         } catch (InvalidCsrfTokenException) {
             abort(error: 419, message: 'Page Expired');
         } catch (Throwable $e) {
+
+            if (isset($this->exceptions[get_class($e)])) {
+                $this->exceptions[get_class($e)]($e);
+            }
+
             if (config('debug')) {
                 Tracer::$instance->handleException($e);
             }
