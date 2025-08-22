@@ -27,9 +27,29 @@ class Session implements SessionContract
      */
     public function __construct()
     {
+        self::start();
+    }
+
+    /**
+     * Starts the session if it hasn't been started yet.
+     *
+     * @return void
+     */
+    public static function start(): void
+    {
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
             session_start();
         }
+    }
+
+    /**
+     * Checks if the session has been started.
+     *
+     * @return bool True if the session is active, false otherwise.
+     */
+    public static function isStarted(): bool
+    {
+        return session_status() === PHP_SESSION_ACTIVE;
     }
 
     /**
@@ -39,7 +59,7 @@ class Session implements SessionContract
      * @param mixed $default Optional default value to return if the key does not exist.
      * @return mixed The session value if it exists, or the default value.
      */
-    public function get(string $key, $default = null): mixed
+    public static function get(string $key, $default = null): mixed
     {
         return $_SESSION[$key] ?? $default;
     }
@@ -51,7 +71,7 @@ class Session implements SessionContract
      * @param mixed $value The value to store in the session.
      * @return void
      */
-    public function set(string $key, $value): void
+    public static function set(string $key, $value): void
     {
         $_SESSION[$key] = $value;
     }
@@ -62,7 +82,7 @@ class Session implements SessionContract
      * @param string $key The session variable key to check.
      * @return bool True if the session variable exists and is not empty, false otherwise.
      */
-    public function has(string $key): bool
+    public static function has(string $key): bool
     {
         return isset($_SESSION[$key]) && !empty($_SESSION[$key]);
     }
@@ -73,7 +93,7 @@ class Session implements SessionContract
      * @param string $key The session variable key to delete.
      * @return void
      */
-    public function delete(string $key): void
+    public static function delete(string $key): void
     {
         unset($_SESSION[$key]);
     }
@@ -84,7 +104,7 @@ class Session implements SessionContract
      *
      * @return void
      */
-    public function regenerate(bool $deleteOldSession = false): bool
+    public static function regenerate(bool $deleteOldSession = false): bool
     {
         return session_regenerate_id($deleteOldSession);
     }
@@ -94,9 +114,11 @@ class Session implements SessionContract
      *
      * @return void
      */
-    public function destroy(): bool
+    public static function destroy(): void
     {
-        return session_destroy();
+        $_SESSION = [];
+        session_unset();
+        session_destroy();
     }
 
     /**
@@ -104,7 +126,7 @@ class Session implements SessionContract
      *
      * @return string The current session ID.
      */
-    public function id(): string
+    public static function id(): string
     {
         return session_id();
     }
@@ -116,7 +138,7 @@ class Session implements SessionContract
      * @param mixed $value The value to store.
      * @return void
      */
-    public function flash(string $key, $value): void
+    public static function flash(string $key, $value): void
     {
         $_SESSION['_flash'][$key] = $value;
     }
@@ -128,7 +150,7 @@ class Session implements SessionContract
      * @param mixed $default Default value if key does not exist.
      * @return mixed The flash message value or default if not found.
      */
-    public function getFlash(string $key, $default = null): mixed
+    public static function getFlash(string $key, $default = null): mixed
     {
         $value = $_SESSION['_flash'][$key] ?? $default;
         unset($_SESSION['_flash'][$key]);
@@ -141,7 +163,7 @@ class Session implements SessionContract
      * @param string $key The flash message key.
      * @return bool True if the flash message exists, false otherwise.
      */
-    public function hasFlash(string $key): bool
+    public static function hasFlash(string $key): bool
     {
         return isset($_SESSION['_flash'][$key]);
     }
@@ -151,7 +173,7 @@ class Session implements SessionContract
      *
      * @return void
      */
-    public function clearFlash(): void
+    public static function clearFlash(): void
     {
         unset($_SESSION['_flash']);
     }
@@ -159,9 +181,9 @@ class Session implements SessionContract
     /**
      * Checks if the session is started.
      *
-     * @return bool True if the session is started, false otherwise.
+     * @return array<string, mixed> The session data if the session is started, an empty array otherwise.
      */
-    public function all(): array
+    public static function all(): array
     {
         return $_SESSION;
     }
@@ -171,8 +193,10 @@ class Session implements SessionContract
      *
      * @return void
      */
-    public function close(): void
+    public static function close(): void
     {
-        session_write_close();
+        if (self::isStarted()) {
+            session_write_close();
+        }
     }
 }

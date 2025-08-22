@@ -11,7 +11,7 @@ interface SessionContract
      * @param mixed $default Optional default value to return if the key does not exist.
      * @return mixed The session value if it exists, or the default value.
      */
-    public function get(string $key, $default = null): mixed;
+    public static function get(string $key, $default = null): mixed;
 
     /**
      * Sets a session variable with a specified key and value.
@@ -20,7 +20,7 @@ interface SessionContract
      * @param mixed $value The value to store in the session.
      * @return void
      */
-    public function set(string $key, $value): void;
+    public static function set(string $key, $value): void;
 
     /**
      * Checks if a session variable exists and is not empty.
@@ -28,7 +28,7 @@ interface SessionContract
      * @param string $key The session variable key to check.
      * @return bool True if the session variable exists and is not empty, false otherwise.
      */
-    public function has(string $key): bool;
+    public static function has(string $key): bool;
 
     /**
      * Deletes a session variable by key.
@@ -36,7 +36,7 @@ interface SessionContract
      * @param string $key The session variable key to delete.
      * @return void
      */
-    public function delete(string $key): void;
+    public static function delete(string $key): void;
 
     /**
      * Regenerates the session ID to prevent session fixation attacks.
@@ -44,14 +44,14 @@ interface SessionContract
      *
      * @return bool True on success, false on failure.
      */
-    public function regenerate(bool $deleteOldSession = false): bool;
+    public static function regenerate(bool $deleteOldSession = false): bool;
 
     /**
      * Destroys the current session and deletes all session data.
      *
-     * @return bool True on success, false on failure.
+     * @return void
      */
-    public function destroy(): bool;
+    public static function destroy(): void;
 
     /**
      * Sets a flash message that will be available for one request only.
@@ -60,7 +60,7 @@ interface SessionContract
      * @param mixed $value The value to store.
      * @return void
      */
-    public function flash(string $key, $value): void;
+    public static function flash(string $key, $value): void;
 
     /**
      * Retrieves a flash message by key and removes it from the session.
@@ -69,5 +69,5 @@ interface SessionContract
      * @param mixed $default Default value if key does not exist.
      * @return mixed The flash message value or default if not found.
      */
-    public function getFlash(string $key, $default = null): mixed;
+    public static function getFlash(string $key, $default = null): mixed;
 }

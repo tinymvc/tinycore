@@ -35,11 +35,8 @@ class RequestErrors
      */
     public function __construct(Session $session)
     {
-        // Get the error messages and attributes from the session
-        $errors = $session->getFlash('errors', []);
-
-        $this->messages = $errors['messages'] ?? [];
-        $this->attributes = $errors['attributes'] ?? [];
+        $this->messages = $session->getFlash('errors', []);
+        $this->attributes = $session->getFlash('input', []);
     }
 
     /**

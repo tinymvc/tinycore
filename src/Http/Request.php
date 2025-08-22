@@ -496,6 +496,30 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Retrieves only the specified request data.
+     *
+     * @param array|string $filter An array of keys to include in the result.
+     * @return array The filtered request data.
+     */
+    public function only(array|string $filter): array
+    {
+        $filter = is_array($filter) ? $filter : func_get_args();
+        return $this->all($filter);
+    }
+
+    /**
+     * Retrieves all request data except the specified keys.
+     *
+     * @param array|string $filter An array of keys to exclude from the result.
+     * @return array The filtered request data.
+     */
+    public function except(array|string $filter): array
+    {
+        $filter = is_array($filter) ? $filter : func_get_args();
+        return array_diff_key($this->all(), array_flip($filter));
+    }
+
+    /**
      * Retrieves a server parameter by key.
      * 
      * @param string $key The parameter key.
@@ -981,7 +1005,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             } else {
                 // Store the errors in the session flash data
                 back()
-                    ->with('errors', ['attributes' => $attributes, 'messages' => $errors])
+                    ->withErrors($errors)
+                    ->withInput($attributes)
                     ->send(); // Redirect the user back to the previous page
             }
             exit; // Exit the script to prevent further execution

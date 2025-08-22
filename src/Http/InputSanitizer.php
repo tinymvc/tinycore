@@ -62,9 +62,7 @@ use Spark\Support\Traits\Macroable;
  * @method string plural($field, $count = 2)
  * @method string pluralStudly($field, $count = 2)
  * @method string pluralPascal($field, $count = 2)
- * @method string password($length = 32, $letters = true, $numbers = true, $symbols = true, $spaces = false)
  * @method int|false position($field, $needle, $offset = 0, $encoding = null)
- * @method string random($length = 16)
  * @method string repeat($field, $times)
  * @method string replaceArray($search, $replace, $field)
  * @method string|string[] replace($search, $replace, $field, $caseSensitive = true)
@@ -637,36 +635,36 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     {
         $result = [];
 
-        foreach ($config as $key => $type) {
+        foreach ($config as $field => $type) {
             //  If the type is not a string, assume the key itself is the type
             //  This allows for flexibility in specifying types or using the key as the type.
-            if (is_int($type)) {
-                $type = $key;
+            if (is_int($field)) {
+                $field = $type;
             }
 
-            $result[$key] = match ($type) {
-                'email' => $this->email($key),
-                'text' => $this->text($key),
-                'html' => $this->html($key),
-                'number' => $this->number($key),
-                'float' => $this->float($key),
-                'boolean' => $this->boolean($key),
-                'url' => $this->url($key),
-                'ip' => $this->ip($key),
-                'alpha' => $this->alpha($key),
-                'alpha_num' => $this->alphaNum($key),
-                'alpha_dash' => $this->alphaDash($key),
-                'digits' => $this->digits($key),
-                'phone' => $this->phone($key),
-                'slug' => $this->slug($key),
-                'string' => $this->string($key),
-                'date' => $this->date($key),
-                'json' => $this->json($key),
-                'array' => $this->array($key),
-                'file' => $this->file($key),
-                'password' => $this->password($key),
-                'safe' => $this->safe($key),
-                default => $this->get($key),
+            $result[$field] = match ($type) {
+                'email' => $this->email($field),
+                'text' => $this->text($field),
+                'html' => $this->html($field),
+                'number' => $this->number($field),
+                'float' => $this->float($field),
+                'boolean' => $this->boolean($field),
+                'url' => $this->url($field),
+                'ip' => $this->ip($field),
+                'alpha' => $this->alpha($field),
+                'alpha_num' => $this->alphaNum($field),
+                'alpha_dash' => $this->alphaDash($field),
+                'digits' => $this->digits($field),
+                'phone' => $this->phone($field),
+                'slug' => $this->slug($field),
+                'string' => $this->string($field),
+                'date' => $this->date($field),
+                'json' => $this->json($field),
+                'array' => $this->array($field),
+                'file' => $this->file($field),
+                'password' => $this->password($field),
+                'safe' => $this->safe($field),
+                default => $this->get($field),
             };
         }
 

@@ -126,13 +126,44 @@ class Auth implements AuthContract, ArrayAccess
      * @param mixed $default The default value to return if the key does not exist.
      * @return mixed The user model or false if not logged in, or the value of the specified key.
      */
-    public function user(?string $key = null, $default = null): mixed
+    public static function user(?string $key = null, $default = null): mixed
     {
-        if ($key !== null && !$this->isGuest()) {
-            return $this->getUser()->get($key, $default);
+        $auth = auth();
+        if ($key !== null && !$auth->isGuest()) {
+            return $auth->getUser()->get($key, $default);
         }
 
-        return $this->getUser(); // Return the user model or false if not logged in
+        return $auth->getUser(); // Return the user model or false if not logged in
+    }
+
+    /**
+     * Retrieves the ID of the currently logged in user.
+     *
+     * @return int The user ID or 0 if not logged in.
+     */
+    public static function id(): int
+    {
+        return intval(self::user('id'));
+    }
+
+    /**
+     * Attempts to authenticate a user with the given credentials.
+     *
+     * @param array $credentials An array containing the user's credentials (e.g., email and password).
+     * @return bool True if authentication is successful, false otherwise.
+     */
+    public static function attempt(array $credentials): bool
+    {
+        $auth = auth();
+        $identifier = \Spark\Support\Arr::except($credentials, ['password']);
+
+        $user = $auth->userModel::where($identifier)->first();
+        if ($user && hashing()->validatePassword($credentials['password'], $user->password)) {
+            $auth->login($user);
+            return true;
+        }
+
+        return false;
     }
 
     /**

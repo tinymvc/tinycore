@@ -148,6 +148,46 @@ class Response implements ResponseContract
     }
 
     /**
+     * Flash the validation errors to the session.
+     *
+     * This method stores the validation errors in the session flash data,
+     * which is available for the next request. The validation errors are
+     * usually used to display error messages to the user.
+     *
+     * @param array $errors The validation errors to flash to the session.
+     * @return $this Current response instance for method chaining.
+     */
+    public function withErrors(array $errors): self
+    {
+        session()->flash('errors', $errors);
+        return $this;
+    }
+
+    /**
+     * Flash the old input data to the session.
+     *
+     * This method stores the old input data in the session flash data,
+     * which is available for the next request. The old input data is
+     * usually used to repopulate form fields after a validation error.
+     *
+     * @param null|array|Arrayable $input The old input data to flash to the session.
+     * @return $this Current response instance for method chaining.
+     */
+    public function withInput(null|array|Arrayable $input = null): self
+    {
+        if ($input === null) {
+            $input = request()->getPostParams();
+        }
+
+        if ($input instanceof Arrayable) {
+            $input = $input->toArray();
+        }
+
+        session()->flash('input', $input);
+        return $this;
+    }
+
+    /**
      * Redirects the user back to the previous page.
      *
      * This method retrieves the "referer" header from the request and
