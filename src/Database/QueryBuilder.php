@@ -2225,6 +2225,10 @@ class QueryBuilder implements QueryBuilderContract
         $updates = [];
 
         foreach ($config['update'] as $key => $value) {
+            if (is_int($key)) {
+                $key = $value; // If key is an integer, use the value as the key
+            }
+
             if ($this->grammar->isPostgreSQL()) {
                 $updates[] = $this->grammar->wrapColumn($key) . ' = EXCLUDED.' . $this->grammar->wrapColumn($value);
             } elseif ($this->grammar->isMySQL()) {

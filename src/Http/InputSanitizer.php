@@ -636,6 +636,17 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
         $result = [];
 
         foreach ($config as $field => $type) {
+            // Check if the type is a string with multiple options
+            // If so, split it into an array of types
+            if (is_string($type) && strpos($type, '|') !== false) {
+                $type = explode('|', $type);
+            }
+
+            // If the type is an array, use the first element as the type
+            if (is_array($type)) {
+                $type = $type[0] ?? null;
+            }
+
             //  If the type is not a string, assume the key itself is the type
             //  This allows for flexibility in specifying types or using the key as the type.
             if (is_int($field)) {

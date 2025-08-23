@@ -180,6 +180,35 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
+     * Creates a new model instance from the given data and saves it to the database.
+     *
+     * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param bool $ignoreEmpty If true, empty values will be ignored.
+     * @return static The saved model instance.
+     */
+    public static function createOrUpdate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = []): static
+    {
+        $model = self::load($data, $ignoreEmpty);
+
+        $data = $model->encodeToSaveData($model->getFillableData());
+
+        if (empty($uniqueBy)) {
+            $uniqueBy = [static::$primaryKey];
+        }
+
+        $id = self::insert($data, [
+            'conflict' => $uniqueBy,
+            'update' => array_diff_key($data, array_flip($uniqueBy))
+        ]);
+
+        if (is_int($id)) {
+            $model->attributes[static::$primaryKey] = $id;
+        }
+
+        return $model; // Return the saved model instance.
+    }
+
+    /**
      * Fills the model with the given data.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
