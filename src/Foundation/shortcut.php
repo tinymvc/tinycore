@@ -1446,7 +1446,7 @@ if (!function_exists('encrypt')) {
     /**
      * Encrypts a given value.
      *
-     * @param string $value The value to encrypt.
+     * @param string|array|Arrayable $value The value to encrypt.
      * @return string The encrypted value.
      */
     function encrypt(string|array|Arrayable $value): string
@@ -1464,9 +1464,9 @@ if (!function_exists('decrypt')) {
      * Decrypts a given value.
      *
      * @param string $value The value to decrypt.
-     * @return mixed The decrypted value, or an associative array if the decrypted value is JSON.
+     * @return string|array The decrypted value, or an associative array if the decrypted value is JSON.
      */
-    function decrypt(string $value): mixed
+    function decrypt(string $value): string|array
     {
         $decrypted = hashing()->decrypt($value);
 
