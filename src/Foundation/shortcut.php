@@ -2,6 +2,7 @@
 
 use Spark\Console\Commands;
 use Spark\Container;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
@@ -1438,6 +1439,47 @@ if (!function_exists('hashing')) {
     function hashing(): Hash
     {
         return get(Hash::class);
+    }
+}
+
+if (!function_exists('encrypt')) {
+    /**
+     * Encrypts a given value.
+     *
+     * @param string $value The value to encrypt.
+     * @return string The encrypted value.
+     */
+    function encrypt(string|array|Arrayable $value): string
+    {
+        if (!is_string($value)) {
+            $value = json_encode($value instanceof Arrayable ? $value->toArray() : $value);
+        }
+
+        return hashing()->encrypt($value);
+    }
+}
+
+if (!function_exists('decrypt')) {
+    /**
+     * Decrypts a given value.
+     *
+     * @param string $value The value to decrypt.
+     * @return mixed The decrypted value, or an associative array if the decrypted value is JSON.
+     */
+    function decrypt(string $value): mixed
+    {
+        $decrypted = hashing()->decrypt($value);
+
+        // Attempt to decode the decrypted value as JSON
+        $jsonDecoded = json_decode($decrypted, true);
+
+        // If JSON decoding was successful, return the decoded value
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $jsonDecoded;
+        }
+
+        // If not JSON, return the raw decrypted string
+        return $decrypted;
     }
 }
 
