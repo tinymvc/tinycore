@@ -267,9 +267,11 @@ class DB implements DBContract
         }
 
         // Set the default collation for the database connection.
-        if (isset($this->config['collation']) && $this->isMySQL()) {
+        if (isset($this->config['charset'], $this->config['collation']) && $this->isMySQL()) {
             $this->pdo->exec(
-                sprintf("SET NAMES '%s';", $this->config['collation'])
+                sprintf(
+                    "SET NAMES '%s' COLLATE '%s';", $this->config['charset'], $this->config['collation']
+                )
             );
         }
 
