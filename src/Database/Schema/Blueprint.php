@@ -46,6 +46,16 @@ class Blueprint implements BlueprintContract
     private array $renames = [];
 
     /**
+     * @var ?string The character set for the blueprint.
+     */
+    private ?string $charset = null;
+
+    /**
+     * @var ?string The collation for the blueprint.
+     */
+    private ?string $collation = null;
+
+    /**
      * Blueprint constructor.
      *
      * @param string $table The name of the table.
@@ -438,6 +448,35 @@ class Blueprint implements BlueprintContract
     }
 
     /**
+     * Set the character set for the blueprint.
+     *
+     * @param string $charset The character set to use.
+     * @param string|null $collation The collation to use (optional).
+     * @return self
+     */
+    public function charset(string $charset, ?string $collation = null): self
+    {
+        if($collation !== null){
+            $this->collation = $collation;
+        }
+        
+        $this->charset = $charset;
+        return $this;
+    }
+
+    /**
+     * Set the collation for the blueprint.
+     *
+     * @param string $collation The collation to use.
+     * @return self
+     */
+    public function collation(string $collation): self
+    {
+        $this->collation = $collation;
+        return $this;
+    }
+
+    /**
      * Compile the blueprint into a SQL statement.
      *
      * @return string
@@ -462,8 +501,17 @@ class Blueprint implements BlueprintContract
             $elements[] = $grammar->compileForeignKey($foreignKey);
         }
 
+        $collation = '';
+        if ($grammar->isMySQL()) {
+            $collation = sprintf(
+                " DEFAULT CHARSET=%s COLLATE=%s", 
+                $this->charset ?? env('database.charset', 'utf8mb4'), 
+                $this->collation ?? env('database.collation', 'utf8mb4_general_ci')
+            );
+        }
+
         $statements = [
-            "CREATE TABLE " . $grammar->wrapTable($this->table) . " (\n" . implode(",\n", $elements) . "\n);"
+            "CREATE TABLE " . $grammar->wrapTable($this->table) . " (\n" . implode(",\n", $elements) . "\n)$collation;"
         ];
 
         // Add secondary indexes
