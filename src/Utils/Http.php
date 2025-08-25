@@ -36,11 +36,16 @@ class Http implements HttpUtilContract
      * The settings are merged with the default configuration and can be used to customize the cURL options,
      * user agent, and download behavior.
      *
-     * @param array $config Optional configuration settings. See the resetConfig method for available options.
+     * @param array $config Optional configuration settings. See the reset method for available options.
      */
     public function __construct(private array $config = [])
     {
-        $this->resetConfig($config);
+        // Check if cURL extension is loaded
+        if (!extension_loaded('curl')) {
+            throw new PingUtilException('cURL extension is not loaded.');
+        }
+
+        $this->reset($config);
     }
 
     /**
@@ -112,9 +117,6 @@ class Http implements HttpUtilContract
 
         curl_close($curl);
 
-        // Reset current config.
-        $this->resetConfig();
-
         // The response data, including body, status code, final URL, and content length.
         return new HttpUtilResponse($response);
     }
@@ -127,7 +129,7 @@ class Http implements HttpUtilContract
      *
      * @param array $config An associative array of configuration settings.
      */
-    public function resetConfig(array $config = []): void
+    public function reset(array $config = []): void
     {
         $this->config = array_merge([
             'headers' => [],
@@ -306,10 +308,10 @@ class Http implements HttpUtilContract
      * @param array|string $fields The fields to include in the POST body. Can be an array or string.
      * @return self
      */
-    public function postFields(array|string $fields): self
+    public function postFields(array|string $fields, bool $isJson = false): self
     {
-        // Set the Content-Type header based on the type of fields
-        if (is_array($fields)) {
+        // Set the Content-Type header
+        if ($isJson) {
             $this->contentType('application/json');
         } else {
             $this->contentType('application/x-www-form-urlencoded');
@@ -317,7 +319,8 @@ class Http implements HttpUtilContract
 
         return $this->options([
             CURLOPT_POST => 1,
-            CURLOPT_POSTFIELDS => is_array($fields) ? json_encode($fields) : $fields
+            CURLOPT_POSTFIELDS => $isJson && is_array($fields) ? json_encode($fields) :
+                (is_array($fields) ? http_build_query($fields) : $fields)
         ]);
     }
 

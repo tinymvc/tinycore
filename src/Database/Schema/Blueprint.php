@@ -46,14 +46,14 @@ class Blueprint implements BlueprintContract
     private array $renames = [];
 
     /**
-     * @var ?string The character set for the blueprint.
+     * @var string The character set for the blueprint.
      */
-    private ?string $charset = null;
+    private string $charset;
 
     /**
-     * @var ?string The collation for the blueprint.
+     * @var string The collation for the blueprint.
      */
-    private ?string $collation = null;
+    private string $collation;
 
     /**
      * Blueprint constructor.
@@ -451,15 +451,10 @@ class Blueprint implements BlueprintContract
      * Set the character set for the blueprint.
      *
      * @param string $charset The character set to use.
-     * @param string|null $collation The collation to use (optional).
      * @return self
      */
-    public function charset(string $charset, ?string $collation = null): self
+    public function charset(string $charset): self
     {
-        if($collation !== null){
-            $this->collation = $collation;
-        }
-        
         $this->charset = $charset;
         return $this;
     }
@@ -504,8 +499,8 @@ class Blueprint implements BlueprintContract
         $collation = '';
         if ($grammar->isMySQL()) {
             $collation = sprintf(
-                " DEFAULT CHARSET=%s COLLATE=%s", 
-                $this->charset ?? env('database.charset', 'utf8mb4'), 
+                " DEFAULT CHARSET=%s COLLATE=%s",
+                $this->charset ?? env('database.charset', 'utf8mb4'),
                 $this->collation ?? env('database.collation', 'utf8mb4_general_ci')
             );
         }

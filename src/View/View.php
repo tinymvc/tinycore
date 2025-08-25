@@ -162,12 +162,20 @@ class View implements ViewContract
     /**
      * Set the paths to use for template resolution
      * 
-     * @param string|array $paths
+     * @param string $path The directory path to use
+     * @param string $id The identifier for the path
      * @return self
      */
-    public function setUsePath(string|array $paths): self
+    public function setUsePath(string $path, ?string $id = null): self
     {
-        $this->usePath = array_map('dir_path', (array) $paths);
+        $path = dir_path($path);
+
+        if ($id !== null) {
+            $this->usePath[$id] = $path;
+        } else {
+            $this->usePath[] = $path;
+        }
+
         return $this;
     }
 
@@ -391,6 +399,25 @@ class View implements ViewContract
     private function getTemplatePath(string $template): string
     {
         $template = str_replace('.', '/', $template);
+
+        $hasTemplateId = str_contains($template, '::');
+
+        if ($hasTemplateId) {
+            [$id, $templateName] = explode('::', $template, 2);
+
+            // Check if the template ID is registered
+            // If not, throw an exception
+            if (isset($this->usePath[$id])) {
+                $bladePath = dir_path("{$this->usePath[$id]}/$templateName.blade.php");
+                if (is_file($bladePath)) {
+                    return $bladePath;
+                } else {
+                    throw new ViewException("Template [$templateName] not found in path [{$this->usePath[$id]}]");
+                }
+            } else {
+                throw new ViewException("No path registered with identifier [$id]");
+            }
+        }
 
         // Check if the template is exists then return it
         $bladePath = dir_path("{$this->path}/$template.blade.php");

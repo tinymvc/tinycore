@@ -158,7 +158,7 @@ class Container implements ContainerContract
      * 1. Class name and method name as a string with '@' separator.
      *    Example: 'ClassName@methodName'.
      * 2. Class name and method name as an array.
-     *    Example: ['ClassName', 'methodName'].
+     *    Example: ['ClassName', 'methodName'] or [$instance, 'methodName'].
      * 3. A closure or callable.
      *
      * The method resolves the instance of the class if it is not given, and
@@ -175,8 +175,8 @@ class Container implements ContainerContract
      */
     public function call(array|string|callable $abstract, array $parameters = []): mixed
     {
-        // If it's a closure or callable, just call it with dependencies
-        if (is_callable($abstract)) {
+        // If it's a closure or function (but not an array callable), just call it with dependencies
+        if (is_callable($abstract) && !is_array($abstract)) {
             $reflectionFunction = new ReflectionFunction($abstract);
             $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters);
 
@@ -187,25 +187,28 @@ class Container implements ContainerContract
         // Split class and method from the "ClassName@methodName" format
         if (is_string($abstract) && str_contains($abstract, '@')) {
             [$class, $method] = explode('@', $abstract, 2);
+            $instance = $this->get($class);
         } elseif (is_array($abstract)) {
             [$class, $method] = $abstract;
+
+            // Check if $class is already an instantiated object
+            $instance = is_object($class) ? $class : $this->get($class);
         } else {
             if (method_exists($abstract, 'handle')) {
                 [$class, $method] = [$abstract, 'handle'];
             } else {
                 [$class, $method] = [$abstract, '__invoke'];
             }
+            $instance = $this->get($class);
         }
 
         // If the method is not provided, default to 'handle'
-        if (!method_exists($class, $method)) {
+        if (!method_exists($instance, $method)) {
+            $className = is_object($instance) ? get_class($instance) : $instance;
             throw new MethodDoesNotExistsException(
-                "Method [$method] does not exist on class [$class]."
+                "Method [$method] does not exist on class [$className]."
             );
         }
-
-        // Resolve the class instance
-        $instance = $this->get($class);
 
         // Use reflection to resolve method parameters
         $reflectionMethod = new ReflectionMethod($instance, $method);
