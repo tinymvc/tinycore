@@ -196,14 +196,16 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             $uniqueBy = [static::$primaryKey];
         }
 
-        $id = self::insert($data, [
-            'conflict' => $uniqueBy,
-            'update' => array_diff_key($data, array_flip($uniqueBy))
-        ]);
+        $where = array_intersect_key($data, array_flip($uniqueBy));
+        $model = self::query()->where($where)->first();
 
-        if (is_int($id)) {
-            $model->attributes[static::$primaryKey] = $id;
+        if ($model) {
+            $model->fill($data);
+        } else {
+            $model = self::load($data);
         }
+
+        $model->save();
 
         return $model; // Return the saved model instance.
     }
