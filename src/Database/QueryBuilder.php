@@ -511,6 +511,22 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Conditionally execute a callback.
+     *
+     * @param mixed $value
+     * @param callable $callback
+     * @return self
+     */
+    public function when(mixed $value, callable $callback): self
+    {
+        if ($value) {
+            $callback($this);
+        }
+
+        return $this;
+    }
+
+    /**
      * Adds a raw WHERE clause to the query.
      *
      * @param string $sql
