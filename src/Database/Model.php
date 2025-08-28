@@ -54,6 +54,7 @@ use Traversable;
  * @method static bool delete(mixed $where = null)
  * @method static bool truncate()
  * @method static QueryBuilder select(array|string $fields = '*')
+ * @method static QueryBuilder column(string $column)
  * @method static QueryBuilder max($field, $name = null)
  * @method static QueryBuilder min($field, $name = null)
  * @method static QueryBuilder sum($field, $name = null)

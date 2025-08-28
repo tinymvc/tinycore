@@ -1271,6 +1271,18 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Select a single column from the database.
+     * 
+     * @param string $column The name of the column to select.
+     * @return self The current instance for method chaining.
+     */
+    public function column(string $column): self
+    {
+        $this->query['select'] = $this->wrapAndEscapeColumns($column);
+        return $this->fetch(PDO::FETCH_COLUMN);
+    }
+
+    /**
      * Adds a raw SQL expression to the SELECT clause.
      *
      * @param string $sql The raw SQL expression to add.
