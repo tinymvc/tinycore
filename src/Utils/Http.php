@@ -308,8 +308,12 @@ class Http implements HttpUtilContract
      * @param array|string $fields The fields to include in the POST body. Can be an array or string.
      * @return self
      */
-    public function postFields(array|string $fields, bool $isJson = false): self
+    public function postFields(array|string $fields, ?bool $isJson = null): self
     {
+        if ($isJson === null) {
+            $isJson = is_array($fields); // Determine if the fields are JSON based on their type
+        }
+
         // Set the Content-Type header
         if ($isJson) {
             $this->contentType('application/json');
