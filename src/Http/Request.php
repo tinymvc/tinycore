@@ -299,6 +299,46 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Checks if the current request is a GET request.
+     * 
+     * @return bool True if the request is a GET request, false otherwise.
+     */
+    public function isGet(): bool
+    {
+        return $this->method === 'GET';
+    }
+
+    /**
+     * Checks if the current request is a POST request.
+     * 
+     * @return bool True if the request is a POST request, false otherwise.
+     */
+    public function isPost(): bool
+    {
+        return $this->method === 'POST';
+    }
+
+    /**
+     * Checks if the current request is a PUT request.
+     * 
+     * @return bool True if the request is a PUT request, false otherwise.
+     */
+    public function isPut(): bool
+    {
+        return $this->method === 'PUT';
+    }
+
+    /**
+     * Checks if the current request is a DELETE request.
+     * 
+     * @return bool True if the request is a DELETE request, false otherwise.
+     */
+    public function isDelete(): bool
+    {
+        return $this->method === 'DELETE';
+    }
+
+    /**
      * Checks if the current request method matches any of the specified methods.
      * 
      * @param string|array $methods The method or array of methods to check against.
