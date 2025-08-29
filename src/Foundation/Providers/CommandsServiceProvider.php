@@ -81,16 +81,8 @@ class CommandsServiceProvider
             ->description('Display all queue jobs');
 
         // Add the migrate command
-        $commands->addCommand('migrate:run', [Migration::class, 'up'])
+        $commands->addCommand('migrate', [Migration::class, 'up'])
             ->description('Run the database migrations');
-
-        // Clear the view caches
-        $commands->addCommand('view:clear', [PrimaryCommandsHandler::class, 'clearViewCaches'])
-            ->description('Clear the view caches');
-
-        // Clear all cache files
-        $commands->addCommand('cache:clear', [PrimaryCommandsHandler::class, 'clearCache'])
-            ->description('Clear all cache files');
 
         // Add the migrate:rollback command
         $commands->addCommand('migrate:rollback', [Migration::class, 'down'])
@@ -103,6 +95,14 @@ class CommandsServiceProvider
         // Add the key:generate command
         $commands->addCommand('key:generate', [PrimaryCommandsHandler::class, 'generateAppKey'])
             ->description('Generate a new encryption key');
+
+        // Clear the view caches
+        $commands->addCommand('view:clear', [PrimaryCommandsHandler::class, 'clearViewCaches'])
+            ->description('Clear the view caches');
+
+        // Clear all cache files
+        $commands->addCommand('cache:clear', [PrimaryCommandsHandler::class, 'clearCache'])
+            ->description('Clear all cache files');
 
         // Add the storage:link command
         $commands->addCommand('storage:link', [PrimaryCommandsHandler::class, 'createSymbolicLinkForUploads'])
