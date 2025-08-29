@@ -225,13 +225,8 @@ class Middleware
 
             if (
                 $instance instanceof MiddlewareInterface ||
-                $instance instanceof MiddlewareWithParametersInterface
+                method_exists($instance, 'handle')
             ) {
-                return [$instance, 'handle'];
-            }
-
-            // Return handle method as callable
-            if (method_exists($instance, 'handle')) {
                 return [$instance, 'handle'];
             }
 
