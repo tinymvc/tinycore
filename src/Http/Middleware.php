@@ -166,20 +166,6 @@ class Middleware
     }
 
     /**
-     * Resolve middleware stack into Pipeline-compatible callables
-     * 
-     * This converts the middleware stack into a format
-     * that can be used by the Pipeline.
-     * 
-     * @param array $stack The middleware stack to resolve.
-     * @return array The resolved middleware stack as callables.
-     */
-    private function resolveMiddlewareStack(array $stack): array
-    {
-        return array_map([$this, 'resolveMiddleware'], $stack);
-    }
-
-    /**
      * Resolve single middleware into Pipeline-compatible callable
      * 
      * This converts middleware alias or class into a callable

@@ -235,6 +235,21 @@ class Application implements ApplicationContract
     }
 
     /**
+     * Calls a service or a value from the dependency injection container.
+     *
+     * This method takes an abstract name or class name and resolves it by
+     * calling it as a function. The resolved value is then returned.
+     *
+     * @param array|string|callable $abstract The abstract name or class name of the service or value to be resolved.
+     * @param array $parameters An array of parameters to be passed to the resolved service or value.
+     * @return mixed The resolved service or value.
+     */
+    public function call(array|string|callable $abstract, array $parameters = []): mixed
+    {
+        return $this->container->call($abstract, $parameters);
+    }
+
+    /**
      * Checks if a given abstract has a binding in the container.
      *
      * @param string $abstract The abstract name or class name of the service or value to be checked.

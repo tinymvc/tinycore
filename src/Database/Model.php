@@ -212,6 +212,19 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
+     * Updates an existing model or creates a new one if it doesn't exist.
+     *
+     * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param bool $ignoreEmpty If true, empty values will be ignored.
+     * @param array $uniqueBy Array of fields to uniquely identify the model.
+     * @return static The updated or created model instance.
+     */
+    public static function updateOrCreate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = []): static
+    {
+        return self::createOrUpdate($data, $ignoreEmpty, $uniqueBy);
+    }
+
+    /**
      * Fills the model with the given data.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
@@ -262,6 +275,19 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         $this->decodeSavedData();
 
         return $status; // Return database operation status.
+    }
+
+    /**
+     * Updates an existing model with the given data.
+     *
+     * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param bool $ignoreEmpty If true, empty values will be ignored.
+     * @return int|bool The number of affected rows or false on failure.
+     */
+    public function update(array|Arrayable $data, bool $ignoreEmpty = false): int|bool
+    {
+        $this->fill($data, $ignoreEmpty);
+        return $this->save();
     }
 
     /**

@@ -76,6 +76,10 @@ class CommandsServiceProvider
         $commands->addCommand('queue:clear', [PrimaryCommandsHandler::class, 'clearQueueJobs'])
             ->description('Clear all queue jobs');
 
+        // Add the queue:list command
+        $commands->addCommand('queue:list', [PrimaryCommandsHandler::class, 'listQueueJobs'])
+            ->description('Display all queue jobs');
+
         // Add the migrate command
         $commands->addCommand('migrate:run', [Migration::class, 'up'])
             ->description('Run the database migrations');

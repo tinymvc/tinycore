@@ -84,7 +84,7 @@ class Commands implements CommandsContract
      * @return $this
      *   The Commands instance.
      */
-    public static function disableCommand(array|string $names): void
+    public static function disable(array|string $names): void
     {
         foreach ((array) $names as $name) {
             self::$disabledCommands[$name] = true;

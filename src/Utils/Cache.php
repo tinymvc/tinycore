@@ -128,7 +128,7 @@ class Cache implements CacheUtilContract
      */
     public function has(string $key, bool $eraseExpired = false): bool
     {
-        // Relace cache data if not loaded.
+        // Reload cache data if not loaded.
         $this->reload();
 
         // Check if cache is already exists, else store it into cache. 

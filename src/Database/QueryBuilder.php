@@ -39,7 +39,6 @@ use Spark\Utils\Paginator;
  * @method Collection keyBy($keyBy)
  * @method Collection intersect($items)
  * @method Collection intersectAssoc($items)
- * @method Collection pluck($value, $key = null)
  * @method Collection combine($values)
  * @method Collection union($items)
  * @method Collection nth($step, $offset = 0)
@@ -93,6 +92,13 @@ class QueryBuilder implements QueryBuilderContract
     public static string $collate;
 
     /**
+     * Holds the table prefix to be used for the query.
+     *
+     * @var string $prefix
+     */
+    private static string $prefix;
+
+    /**
      * Holds the SQL parameters for the query.
      *
      * @var array
@@ -135,13 +141,6 @@ class QueryBuilder implements QueryBuilderContract
     private string $table;
 
     /**
-     * Holds the table prefix to be used for the query.
-     *
-     * @var string $prefix
-     */
-    private string $prefix = '';
-
-    /**
      * Holds the database schema grammar for the query.
      *
      * @var \Spark\Database\Schema\Grammar
@@ -163,6 +162,8 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         $this->grammar = new Grammar($database->getDriver());
+
+        self::$prefix ??= ''; // Set default prefix if not already set
     }
 
     /**
@@ -237,7 +238,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function prefix(string $prefix): self
     {
-        $this->prefix = $prefix;
+        self::$prefix = $prefix;
         return $this;
     }
 
@@ -520,6 +521,22 @@ class QueryBuilder implements QueryBuilderContract
     public function when(mixed $value, callable $callback): self
     {
         if ($value) {
+            $callback($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Conditionally execute a callback when value is falsy.
+     *
+     * @param mixed $value
+     * @param callable $callback
+     * @return self
+     */
+    public function unless(mixed $value, callable $callback): self
+    {
+        if (!$value) {
             $callback($this);
         }
 
@@ -1083,6 +1100,228 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Add a WHERE clause that checks if a column contains a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @param string $type
+     * @param string $andOr
+     * @return self
+     */
+    public function whereContains(string $column, mixed $value, string $type = '', string $andOr = 'AND'): self
+    {
+        return $this->like($column, "%{$value}%", $type, $andOr);
+    }
+
+    /**
+     * Add an OR WHERE clause that checks if a column contains a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhereContains(string $column, mixed $value): self
+    {
+        return $this->whereContains($column, $value, '', 'OR');
+    }
+
+    /**
+     * Add a WHERE clause that checks if a column does not contain a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @return self
+     */
+    public function whereNotContains(string $column, mixed $value): self
+    {
+        return $this->like($column, "%{$value}%", 'NOT');
+    }
+
+    /**
+     * Add an OR WHERE clause that checks if a column does not contain a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhereNotContains(string $column, mixed $value): self
+    {
+        return $this->like($column, "%{$value}%", 'NOT', 'OR');
+    }
+
+    /**
+     * Add a WHERE clause that checks if a column starts with a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @param string $type
+     * @param string $andOr
+     * @return self
+     */
+    public function whereStartsWith(string $column, mixed $value, string $type = '', string $andOr = 'AND'): self
+    {
+        return $this->like($column, "{$value}%", $type, $andOr);
+    }
+
+    /**
+     * Add an OR WHERE clause that checks if a column starts with a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhereStartsWith(string $column, mixed $value): self
+    {
+        return $this->whereStartsWith($column, $value, '', 'OR');
+    }
+
+    /**
+     * Add a WHERE clause that checks if a column ends with a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @param string $type
+     * @param string $andOr
+     * @return self
+     */
+    public function whereEndsWith(string $column, mixed $value, string $type = '', string $andOr = 'AND'): self
+    {
+        return $this->like($column, "%{$value}", $type, $andOr);
+    }
+
+    /**
+     * Add an OR WHERE clause that checks if a column ends with a value.
+     *
+     * @param string $column
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhereEndsWith(string $column, mixed $value): self
+    {
+        return $this->whereEndsWith($column, $value, '', 'OR');
+    }
+
+    /**
+     * Add a WHERE clause for date comparison.
+     *
+     * @param string $column
+     * @param string $operator
+     * @param mixed $value
+     * @param string $andOr
+     * @return self
+     */
+    public function whereDate(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): self
+    {
+        if ($value === null) {
+            $value = $operator;
+            $operator = '=';
+        }
+
+        $placeholder = $this->getWhereSqlColumn($column);
+
+        if ($this->grammar->isMySQL()) {
+            return $this->whereRaw("DATE({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        } elseif ($this->grammar->isSQLite()) {
+            return $this->whereRaw("date({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        }
+
+        return $this->where($column, $operator, $value, $andOr);
+    }
+
+    /**
+     * Add an OR WHERE clause for date comparison.
+     *
+     * @param string $column
+     * @param string $operator
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhereDate(string $column, string $operator, mixed $value = null): self
+    {
+        return $this->whereDate($column, $operator, $value, 'OR');
+    }
+
+    /**
+     * Add a WHERE clause for year comparison.
+     *
+     * @param string $column
+     * @param string $operator
+     * @param mixed $value
+     * @param string $andOr
+     * @return self
+     */
+    public function whereYear(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): self
+    {
+        if ($value === null) {
+            $value = $operator;
+            $operator = '=';
+        }
+
+        $placeholder = $this->getWhereSqlColumn($column);
+
+        if ($this->grammar->isMySQL()) {
+            return $this->whereRaw("YEAR({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        } elseif ($this->grammar->isSQLite()) {
+            return $this->whereRaw("strftime('%Y', {$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        }
+
+        return $this->where($column, $operator, $value, $andOr);
+    }
+
+    /**
+     * Add an OR WHERE clause for year comparison.
+     *
+     * @param string $column
+     * @param string $operator
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhereYear(string $column, string $operator, mixed $value = null): self
+    {
+        return $this->whereYear($column, $operator, $value, 'OR');
+    }
+
+    /**
+     * Add a WHERE clause for month comparison.
+     *
+     * @param string $column
+     * @param string $operator
+     * @param mixed $value
+     * @param string $andOr
+     * @return self
+     */
+    public function whereMonth(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): self
+    {
+        if ($value === null) {
+            $value = $operator;
+            $operator = '=';
+        }
+
+        $placeholder = $this->getWhereSqlColumn($column);
+
+        if ($this->grammar->isMySQL()) {
+            return $this->whereRaw("MONTH({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        } elseif ($this->grammar->isSQLite()) {
+            return $this->whereRaw("strftime('%m', {$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        }
+
+        return $this->where($column, $operator, $value, $andOr);
+    }
+
+    /**
+     * Add an OR WHERE clause for month comparison.
+     *
+     * @param string $column
+     * @param string $operator
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhereMonth(string $column, string $operator, mixed $value = null): self
+    {
+        return $this->whereMonth($column, $operator, $value, 'OR');
+    }
+
+    /**
      * Add a grouped WHERE condition.
      *
      * This method will execute the given callback with the current instance
@@ -1130,7 +1369,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Prepare the table name
-        $table = $this->prefix . $this->table;
+        $table = self::$prefix . $this->table;
 
         // Prepare the SQL update statement
         $sql = $this->addCollateToSql(
@@ -1188,7 +1427,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Prepare the table name
-        $table = $this->prefix . $this->table;
+        $table = self::$prefix . $this->table;
 
         // Prepare the SQL delete statement
         $statement = $this->database->prepare($this->addCollateToSql("DELETE FROM {$table} {$this->getWhereSql()}"));
@@ -1224,7 +1463,7 @@ class QueryBuilder implements QueryBuilderContract
     public function truncate(): bool
     {
         // Prepare the table name
-        $table = $this->prefix . $this->table;
+        $table = self::$prefix . $this->table;
 
         // Prepare the SQL truncate statement
         $statement = $this->database->prepare("TRUNCATE TABLE {$table}");
@@ -1239,6 +1478,37 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         return true;
+    }
+
+    /**
+     * Execute a raw SQL query and return results.
+     *
+     * @param string $sql The raw SQL query to execute.
+     * @param array $bindings Optional bindings for the SQL query.
+     * @return array
+     */
+    public function raw(string $sql, array $bindings = []): array
+    {
+        $statement = $this->database->prepare($sql);
+
+        if ($statement === false) {
+            throw new QueryBuilderException('Failed to prepare statement');
+        }
+
+        // Bind parameters
+        foreach ($bindings as $key => $value) {
+            if (is_string($key)) {
+                $statement->bindValue($key, $value, $this->getParameterType($value));
+            } else {
+                $statement->bindValue($key + 1, $value, $this->getParameterType($value));
+            }
+        }
+
+        if ($statement->execute() === false) {
+            throw new QueryBuilderException('Failed to execute statement');
+        }
+
+        return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**
@@ -1280,6 +1550,36 @@ class QueryBuilder implements QueryBuilderContract
     {
         $this->query['select'] = $this->wrapAndEscapeColumns($column);
         return $this->fetch(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Get a single column's value from the first result.
+     *
+     * @param string $column The column name to retrieve.
+     * @return mixed
+     */
+    public function value(string $column): mixed
+    {
+        $result = $this->select($column)->first();
+
+        if ($result === false) {
+            return null;
+        }
+
+        return is_object($result) ? $result->$column : $result[$column];
+    }
+
+    /**
+     * Get a single column's values from all matching rows.
+     *
+     * @param string $column The column name to retrieve.
+     * @return array
+     */
+    public function pluck(string $column): array
+    {
+        $results = $this->select($column)->all();
+
+        return array_map(fn($row) => is_object($row) ? $row->$column : $row[$column], $results);
     }
 
     /**
@@ -1408,7 +1708,7 @@ class QueryBuilder implements QueryBuilderContract
     public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
     {
         $on = $field1;
-        $table = "{$this->prefix}$table";
+        $table = self::$prefix . $table;
 
         if ($operator !== null) {
             if ($field2 === null) {
@@ -1673,16 +1973,31 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets a limit and optional offset for the query.
      *
-     * @param int|null $offset Starting point for the query, if specified.
-     * @param int|null $limit Number of records to fetch.
+     * @param int $from Starting point for the query.
+     * @param int|null $to Ending point for the query, if specified.
      * @return self
      */
-    public function limit(?int $offset = null, ?int $limit = null): self
+    public function limit(int $from, ?int $to = null): self
     {
-        if ($offset !== null) {
-            $this->query['limit'] = sprintf(" %s%s", $offset, $limit !== null ? ", $limit" : '');
+        if ($to === null) {
+            $this->query['limit'] = $from;
+        } else {
+            $this->query['offset'] = $from;
+            $this->query['limit'] = $to;
         }
 
+        return $this;
+    }
+
+    /**
+     * Sets the offset for the query.
+     *
+     * @param int $offset The offset for the query.
+     * @return self
+     */
+    public function offset(int $offset): self
+    {
+        $this->query['offset'] = $offset;
         return $this;
     }
 
@@ -1695,7 +2010,18 @@ class QueryBuilder implements QueryBuilderContract
     public function take(int $limit): self
     {
         $this->query['limit'] = $limit;
+        return $this;
+    }
 
+    /**
+     * Skip a number of records.
+     *
+     * @param int $count Number of records to skip.
+     * @return self
+     */
+    public function skip(int $count): self
+    {
+        $this->query['offset'] = $count;
         return $this;
     }
 
@@ -1924,6 +2250,166 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Create or update a record.
+     *
+     * @param array $attributes Attributes to search by.
+     * @param array $values Values to update or create with.
+     * @return int|array Returns last insert ID or array of returned data.
+     */
+    public function updateOrInsert(array $attributes, array $values = []): int|array
+    {
+        // Check if record exists
+        if ($this->where($attributes)->exists()) {
+            // Update existing record
+            $this->where($attributes)->update($values);
+            return 0; // Return 0 for update operations
+        } else {
+            // Insert new record
+            return $this->insert(array_merge($attributes, $values));
+        }
+    }
+
+    /**
+     * Insert a new record and return the model.
+     *
+     * @param array $data
+     * @return mixed
+     */
+    public function create(array $data): mixed
+    {
+        $id = $this->insert($data);
+
+        if ($id) {
+            return $this->where('id', $id)->first();
+        }
+
+        return false;
+    }
+
+    /**
+     * Get distinct values for a column.
+     *
+     * @param string $column
+     * @return self
+     */
+    public function distinct(string $column = null): self
+    {
+        if ($column) {
+            $this->query['select'] = "DISTINCT {$this->wrapAndEscapeColumns($column)}";
+        } else {
+            $this->query['select'] = str_replace('SELECT ', 'SELECT DISTINCT ', $this->query['select'] ?? '*');
+        }
+
+        return $this;
+    }
+
+    /**
+     * Increment a column's value by a given amount.
+     *
+     * @param string $column
+     * @param int $value
+     * @param mixed $where
+     * @return bool
+     */
+    public function increment(string $column, int $value = 1, $where = null): bool
+    {
+        $this->where($where);
+
+        return $this->raw(
+            "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} + :increment " . $this->getWhereSql(),
+            array_merge(['increment' => $value], $this->getBindings())
+        ) !== false;
+    }
+
+    /**
+     * Decrement a column's value by a given amount.
+     *
+     * @param string $column
+     * @param int $value
+     * @param mixed $where
+     * @return bool
+     */
+    public function decrement(string $column, int $value = 1, $where = null): bool
+    {
+        $this->where($where);
+
+        return $this->raw(
+            "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} - :decrement " . $this->getWhereSql(),
+            array_merge(['decrement' => $value], $this->getBindings())
+        ) !== false;
+    }
+
+    /**
+     * Get the SQL representation of the query.
+     *
+     * @return string
+     */
+    public function toSql(): string
+    {
+        if (empty($this->query['select'])) {
+            $this->select();
+        }
+
+        $table = $this->getTableName();
+
+        return $this->addCollateToSql(
+            "SELECT {$this->query['select']} FROM {$table}"
+            . $this->query['alias']
+            . $this->query['sql']
+            . $this->query['joins']
+            . $this->getWhereSql()
+            . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
+            . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
+            . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
+            . (isset($this->query['limit']) || isset($this->query['offset']) ? ' LIMIT ' . (isset($this->query['offset'], $this->query['limit']) ? "{$this->query['offset']}, {$this->query['limit']}" : $this->query['limit']) : '')
+            . (isset($this->query['unions']) ? $this->query['unions'] : '')
+        );
+    }
+
+    /**
+     * Clone the query builder.
+     *
+     * @return self
+     */
+    public function clone(): self
+    {
+        return clone $this;
+    }
+
+    /**
+     * Add a UNION clause to the query.
+     *
+     * @param QueryBuilder|Closure $query
+     * @param bool $all
+     * @return self
+     */
+    public function union(QueryBuilder|Closure $query, bool $all = false): self
+    {
+        $unionType = $all ? 'UNION ALL' : 'UNION';
+
+        if ($query instanceof Closure) {
+            $newQuery = new static($this->database);
+            $newQuery->table($this->table);
+            $query($newQuery);
+            $query = $newQuery;
+        }
+
+        // Build the union query
+        $unionSql = $query->toSql();
+
+        if (!isset($this->query['unions'])) {
+            $this->query['unions'] = '';
+        }
+
+        $this->query['unions'] .= " {$unionType} ({$unionSql})";
+
+        // Merge bindings
+        $this->bindings = array_merge($this->bindings, $query->getBindings());
+
+        return $this;
+    }
+
+    /**
      * Magic method to handle dynamic method calls.
      *
      * @param string $method The name of the method being called.
@@ -1965,7 +2451,7 @@ class QueryBuilder implements QueryBuilderContract
     private function getTableName(): string
     {
         // Returns the table name with prefix if exists.
-        return $this->grammar->wrapTable($this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
+        return $this->grammar->wrapTable(self::$prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
     }
 
     /**
@@ -1975,27 +2461,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function executeSelectQuery(): void
     {
-        // Prepare select command.
-        if (empty($this->query['select'])) {
-            $this->select();
-        }
-
-        $table = $this->getTableName(); // Get the table name with prefix if exists.
-
         // Build complete select command with condition, order, and limit.
-        $statement = $this->database->prepare(
-            $this->addCollateToSql(
-                "SELECT {$this->query['select']} FROM {$table}"
-                . $this->query['alias']
-                . $this->query['sql']
-                . $this->query['joins']
-                . $this->getWhereSql()
-                . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
-                . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
-                . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
-                . (isset($this->query['limit']) ? ' LIMIT ' . trim($this->query['limit']) : '')
-            )
-        );
+        $statement = $this->database->prepare($this->toSql());
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -2154,7 +2621,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function compileInsert(array $data, array $config): string
     {
-        $table = $this->prefix . $this->table;
+        $table = self::$prefix . $this->table;
 
         // Base command (INSERT/REPLACE)
         $command = $this->getInsertCommand($config);

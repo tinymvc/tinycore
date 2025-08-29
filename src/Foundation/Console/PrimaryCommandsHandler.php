@@ -133,6 +133,37 @@ class PrimaryCommandsHandler
     }
 
     /**
+     * Lists all scheduled queue jobs.
+     *
+     * @param Prompt $prompt
+     *   An instance of the Prompt class for displaying messages in the console.
+     * @param Queue $queue
+     *   An instance of the Queue class for managing queue jobs.
+     *
+     * @return void
+     */
+    public function listQueueJobs(Prompt $prompt, Queue $queue)
+    {
+        $jobs = $queue->getJobs();
+
+        foreach ($jobs as $id => $job) {
+            $prompt->message(
+                sprintf(
+                    "Job <bold>#%s</bold> Scheduled <info>%s</info>%s%s",
+                    $id,
+                    carbon($job['scheduledTime'])->toDateTimeString(),
+                    !empty($job['repeat']) ? ' <danger>(Repeats)</danger> ' : '',
+                    carbon($job['scheduledTime'])->isPast() ? ' <warning>(Ready to run)</warning>' : ''
+                ),
+            );
+        }
+
+        if (empty($jobs)) {
+            $prompt->message("No scheduled jobs found.", "info");
+        }
+    }
+
+    /**
      * Clears all the pending jobs in the queue.
      *
      * @param Prompt $prompt
