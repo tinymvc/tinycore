@@ -2289,10 +2289,10 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Get distinct values for a column.
      *
-     * @param string $column
+     * @param null|string $column
      * @return self
      */
-    public function distinct(string $column = null): self
+    public function distinct(?string $column = null): self
     {
         if ($column) {
             $this->query['select'] = "DISTINCT {$this->wrapAndEscapeColumns($column)}";
