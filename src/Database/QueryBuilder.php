@@ -324,6 +324,8 @@ class QueryBuilder implements QueryBuilderContract
             return 0;
         }
 
+        $data = array_values($data); // Re-index the array
+
         // Normalize data to always be an array of records
         $data = !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
 
@@ -1360,6 +1362,11 @@ class QueryBuilder implements QueryBuilderContract
             $data = $data->toArray();
         }
 
+        // Apply related model condition if necessary
+        if ($this->isUsingModel()) {
+            $this->applyModelPrimaryCondition();
+        }
+
         // Apply WHERE condition if provided
         $this->where($where);
 
@@ -1418,6 +1425,11 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function delete(mixed $where = null): bool
     {
+        // Apply related model condition if necessary
+        if ($this->isUsingModel()) {
+            $this->applyModelPrimaryCondition();
+        }
+
         // Apply WHERE condition if provided
         $this->where($where);
 

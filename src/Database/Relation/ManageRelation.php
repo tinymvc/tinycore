@@ -53,7 +53,7 @@ trait ManageRelation
     /**
      * Finds a model by its primary key ID.
      *
-     * @param int $value The Unique Identifier of the model to retrieve.
+     * @param string|int $value The Unique Identifier of the model to retrieve.
      * @return false|Model The found model instance or false if not found.
      */
     public function find($value): false|Model
@@ -68,7 +68,7 @@ trait ManageRelation
     /**
      * Finds a model by its primary key ID or throws an exception if not found.
      *
-     * @param int $value The Unique Identifier of the model to retrieve.
+     * @param string|int $value The Unique Identifier of the model to retrieve.
      * @return Model The found model instance.
      * @throws \Spark\Exceptions\NotFoundException If the model is not found.
      */
@@ -84,7 +84,7 @@ trait ManageRelation
     /**
      * Deletes the model from the database by its primary key value.
      *
-     * @param int $value The unique identifier of the model to delete.
+     * @param string|int $value The unique identifier of the model to delete.
      * @return bool True if deletion was successful, false otherwise.
      */
     public function destroy($value): bool
@@ -436,6 +436,18 @@ trait ManageRelation
     }
 
     /**
+     * Use a specific model instance for the query.
+     *
+     * @param Model $model
+     * @return QueryBuilder
+     */
+    public function useModel(Model $model): QueryBuilder
+    {
+        $this->query['use_model'] = $model;
+        return $this;
+    }
+
+    /**
      * Get the related model instance.
      * 
      * This method retrieves the related model instance based on the query configuration.
@@ -457,6 +469,35 @@ trait ManageRelation
         }
 
         return $model;
+    }
+
+    /**
+     * Check if the model has a related instance.
+     *
+     * @return bool
+     */
+    private function isUsingModel(): bool
+    {
+        return isset($this->query['use_model']) && $this->query['use_model'] instanceof Model;
+    }
+
+    /**
+     * Apply conditions based on the related model.
+     *
+     * @return void
+     */
+    private function applyModelPrimaryCondition(): void
+    {
+        if (!$this->isUsingModel()) {
+            return;
+        }
+
+        $model = $this->query['use_model'];
+        $primaryValue = $model->primaryValue();
+
+        if (!empty($primaryValue)) {
+            $this->where([$model::$primaryKey => $primaryValue]);
+        }
     }
 
     /**

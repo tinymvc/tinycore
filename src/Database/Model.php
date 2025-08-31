@@ -278,26 +278,13 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
-     * Updates an existing model with the given data.
-     *
-     * @param array|Arrayable $data Key-value pairs of model properties.
-     * @param bool $ignoreEmpty If true, empty values will be ignored.
-     * @return int|bool The number of affected rows or false on failure.
-     */
-    public function update(array|Arrayable $data, bool $ignoreEmpty = false): int|bool
-    {
-        $this->fill($data, $ignoreEmpty);
-        return $this->save();
-    }
-
-    /**
      * Removes the model from the database.
      *
      * @return bool True if removal was successful, false otherwise.
      */
     public function remove(): bool
     {
-        return $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
+        return $this->query()->delete();
     }
 
     /**
@@ -598,7 +585,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             return $this->macroCall($name, $arguments);
         }
 
-        return call_user_func([$this->query(), $name], ...$arguments);
+        return call_user_func([$this->query()->useModel($this), $name], ...$arguments);
     }
 
     /**
