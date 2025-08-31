@@ -324,8 +324,6 @@ class QueryBuilder implements QueryBuilderContract
             return 0;
         }
 
-        $data = array_values($data); // Re-index the array
-
         // Normalize data to always be an array of records
         $data = !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
 
