@@ -1633,56 +1633,56 @@ class QueryBuilder implements QueryBuilderContract
      * @param string      $field
      * @param string|null $name
      *
-     * @return $this
+     * @return null|float
      */
-    public function max($field, $name = null): self
+    public function max($field, $name = null)
     {
         $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
-        return $this;
+        return $this->fetch(PDO::FETCH_COLUMN)->first();
     }
 
     /**
      * @param string      $field
      * @param string|null $name
      *
-     * @return $this
+     * @return null|float
      */
-    public function min($field, $name = null): self
+    public function min($field, $name = null)
     {
         $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
-        return $this;
+        return $this->fetch(PDO::FETCH_COLUMN)->first();
     }
 
     /**
      * @param string      $field
      * @param string|null $name
      *
-     * @return $this
+     * @return null|float
      */
-    public function sum($field, $name = null): self
+    public function sum($field, $name = null)
     {
         $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
-        return $this;
+        return $this->fetch(PDO::FETCH_COLUMN)->first();
     }
 
     /**
      * @param string      $field
      * @param string|null $name
      *
-     * @return $this
+     * @return null|float
      */
-    public function avg($field, $name = null): self
+    public function avg($field, $name = null)
     {
         $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
 
-        return $this;
+        return $this->fetch(PDO::FETCH_COLUMN)->first();
     }
 
     /**
