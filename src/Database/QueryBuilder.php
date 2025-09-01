@@ -179,6 +179,16 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Gets the table name used for the query.
+     *
+     * @return string The table name.
+     */
+    public function getTable(): string
+    {
+        return $this->table;
+    }
+
+    /**
      * Sets the collation to be used for string comparisons in the query.
      *
      * This method allows you to specify a collation for string comparisons,
