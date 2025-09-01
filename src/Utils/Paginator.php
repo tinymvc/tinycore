@@ -213,6 +213,97 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
     }
 
     /**
+     * Maps the data array using a callback function.
+     * 
+     * @param callable $callback The callback function.
+     * 
+     * @return self
+     */
+    public function map(callable $callback): self
+    {
+        $this->data = array_map($callback, $this->data);
+        return $this;
+    }
+
+    /**
+     * Filters the data array using a callback function.
+     * 
+     * @param callable $callback The callback function.
+     * 
+     * @return self
+     */
+    public function filter(callable $callback): self
+    {
+        $this->data = array_filter($this->data, $callback);
+        return $this;
+    }
+
+    /**
+     * Reduces the data array to a single value using a callback function.
+     * 
+     * @param callable $callback The callback function.
+     * @param mixed $initial The initial value.
+     * 
+     * @return mixed
+     */
+    public function reduce(callable $callback, mixed $initial = null): mixed
+    {
+        return array_reduce($this->data, $callback, $initial);
+    }
+
+    /**
+     * Iterates over each item in the data array using a callback function.
+     * 
+     * @param callable $callback The callback function.
+     * 
+     * @return self
+     */
+    public function each(callable $callback): self
+    {
+        array_walk($this->data, $callback);
+        return $this;
+    }
+
+    /**
+     * Sorts the data array using a callback function.
+     * 
+     * @param callable $callback The callback function.
+     * 
+     * @return self
+     */
+    public function sort(callable $callback): self
+    {
+        usort($this->data, $callback);
+        return $this;
+    }
+
+    /**
+     * Excludes items from the data array using a callback function.
+     * 
+     * @param callable $callback The callback function.
+     * 
+     * @return self
+     */
+    public function except(callable $callback): self
+    {
+        $this->data = array_filter($this->data, fn($item) => !$callback($item));
+        return $this;
+    }
+
+    /**
+     * Filters the data array using a callback function.
+     * 
+     * @param callable $callback The callback function.
+     * 
+     * @return self
+     */
+    public function only(callable $callback): self
+    {
+        $this->data = array_filter($this->data, $callback);
+        return $this;
+    }
+
+    /**
      * Generates HTML links for pagination.
      * 
      * @param int $links Number of links to show before and after the current page.
