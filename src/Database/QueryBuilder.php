@@ -189,6 +189,45 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Gets the alias used for the query.
+     *
+     * @return string|null The alias or null if not set.
+     */
+    public function getAlias(): ?string
+    {
+        if (isset($this->query['alias']) && !empty($this->query['alias'])) {
+            return trim(str_ireplace('as ', '', $this->query['alias']));
+        }
+
+        return null;
+    }
+
+    /**
+     * Checks if the query has an alias.
+     *
+     * @return bool True if the query has an alias, false otherwise.
+     */
+    public function hasAlias(): bool
+    {
+        return $this->getAlias() !== null;
+    }
+
+    /**
+     * Gets the table name with the column name used for the query.
+     *
+     * @param string $column The column name.
+     * @return string The table name with the column name.
+     */
+    public function getTableDot(string $column): string
+    {
+        if ($this->hasAlias()) {
+            return "{$this->getAlias()}.$column";
+        }
+
+        return "{$this->table}.$column";
+    }
+
+    /**
      * Sets the collation to be used for string comparisons in the query.
      *
      * This method allows you to specify a collation for string comparisons,
