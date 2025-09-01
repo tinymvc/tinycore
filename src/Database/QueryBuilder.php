@@ -218,7 +218,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param string $column The column name.
      * @return string The table name with the column name.
      */
-    public function getTableDot(string $column): string
+    public function withAlias(string $column): string
     {
         if ($this->hasAlias()) {
             return "{$this->getAlias()}.$column";
