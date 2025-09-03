@@ -38,6 +38,7 @@ use Traversable;
  * @method static int|array insert(array|Arrayable $data, array $config = [])
  * @method static int|array bulkUpdate(array|Arrayable $data, array $config = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
+ * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [])
  * @method static QueryBuilder whereNull($where, $not = false)
  * @method static QueryBuilder whereNotNull($where)
  * @method static QueryBuilder in(string $column, array $values)
@@ -86,7 +87,7 @@ use Traversable;
  * @method static \Spark\Support\Collection filter(?callable $callback = null)
  * @method static \Spark\Support\Collection map(callable $callback)
  * @method static \Spark\Support\Collection mapToDictionary(callable $callback)
- * @method static \Spark\Support\Collection mapWithKeys(callable $callback)
+ * @method static \Spark\Support\Collection mapWithKeys(callaseletble $callback)
  * @method static \Spark\Support\Collection merge($items)
  * @method static \Spark\Support\Collection mergeRecursive($items)
  *
