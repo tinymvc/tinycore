@@ -54,6 +54,7 @@ use Traversable;
  * @method static bool delete(mixed $where = null)
  * @method static bool truncate()
  * @method static QueryBuilder select(array|string $fields = '*')
+ * @method static QueryBuilder selectRaw(string $sql, array $bindings = [])
  * @method static QueryBuilder column(string $column)
  * @method static QueryBuilder max($field, $name = null)
  * @method static QueryBuilder min($field, $name = null)
@@ -570,6 +571,16 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function getIterator(): Traversable
     {
         return new ArrayIterator($this->toArray());
+    }
+
+    /**
+     * Create a copy of the model instance.
+     *
+     * @return static
+     */
+    public function copy(): static
+    {
+        return clone $this;
     }
 
     /**

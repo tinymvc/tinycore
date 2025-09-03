@@ -247,4 +247,14 @@ class Mail extends PHPMailer implements MailUtilContract
     {
         return parent::send();
     }
+
+    /**
+     * Create a copy of the mailer instance.
+     *
+     * @return self A new instance that is a copy of the current instance.
+     */
+    public function copy(): self
+    {
+        return clone $this;
+    }
 }

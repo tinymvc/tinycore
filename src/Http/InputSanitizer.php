@@ -751,6 +751,16 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     }
 
     /**
+     * Create a copy of the sanitizer instance.
+     *
+     * @return self A new instance that is a copy of the current instance.
+     */
+    public function copy(): self
+    {
+        return clone $this;
+    }
+
+    /**
      *  Converts the sanitizer data to a string representation.
      * 
      *  @return string The string representation of the first sanitized text value.

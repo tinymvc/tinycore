@@ -1619,7 +1619,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function value(string $column): mixed
     {
-        $result = $this->select($column)->first();
+        $result = $this->first();
 
         if ($result === false) {
             return null;
@@ -2466,6 +2466,16 @@ class QueryBuilder implements QueryBuilderContract
         $this->bindings = array_merge($this->bindings, $query->getBindings());
 
         return $this;
+    }
+
+    /**
+     * Clone the query builder.
+     *
+     * @return self
+     */
+    public function copy(): self
+    {
+        return clone $this;
     }
 
     /**

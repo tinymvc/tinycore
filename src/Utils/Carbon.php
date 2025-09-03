@@ -922,4 +922,16 @@ class Carbon implements Arrayable, \Stringable
 
         return (int) $now->dateTime->diff($birthDate->dateTime)->format('%y');
     }
+
+    /**
+     * Clone the DateTime instance
+     * 
+     * This method creates a new instance that is a clone of the current DateTime instance.
+     * 
+     * @return self A new DateTime instance that is a clone of the current instance
+     */
+    public function copy(): self
+    {
+        return clone $this;
+    }
 }

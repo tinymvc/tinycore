@@ -175,6 +175,16 @@ class Uploader implements UploaderUtilContract
         return str_replace([upload_dir(), '\\'], ['', '/'], $files);
     }
 
+    /**
+     * Create a copy of the uploader instance.
+     *
+     * @return self A new instance that is a copy of the current instance.
+     */
+    public function copy(): self
+    {
+        return clone $this;
+    }
+
     /** @Add helpers methods for uploader object */
 
     /**

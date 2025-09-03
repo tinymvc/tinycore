@@ -505,6 +505,16 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
     }
 
     /**
+     * Create a copy of the paginator instance.
+     *
+     * @return self A new instance that is a copy of the current instance.
+     */
+    public function copy(): self
+    {
+        return clone $this;
+    }
+
+    /**
      * Generates the URL for a specific page.
      * 
      * @param int $page The page number.

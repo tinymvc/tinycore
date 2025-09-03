@@ -324,4 +324,14 @@ class Job implements JobContract
     {
         Application::$app->get(Queue::class)->addJob($this, $id);
     }
+
+    /**
+     * Create a copy of the job instance.
+     *
+     * @return self A new instance that is a copy of the current instance.
+     */
+    public function copy(): self
+    {
+        return clone $this;
+    }
 }
