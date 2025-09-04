@@ -1682,9 +1682,9 @@ class QueryBuilder implements QueryBuilderContract
      * @param string      $field
      * @param string|null $name
      *
-     * @return null|float
+     * @return float
      */
-    public function max($field, $name = null)
+    public function max($field, $name = null): float
     {
         $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
@@ -1696,9 +1696,9 @@ class QueryBuilder implements QueryBuilderContract
      * @param string      $field
      * @param string|null $name
      *
-     * @return null|float
+     * @return float
      */
-    public function min($field, $name = null)
+    public function min($field, $name = null): float
     {
         $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
@@ -1710,9 +1710,9 @@ class QueryBuilder implements QueryBuilderContract
      * @param string      $field
      * @param string|null $name
      *
-     * @return null|float
+     * @return float
      */
-    public function sum($field, $name = null)
+    public function sum($field, $name = null): float
     {
         $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
@@ -1724,9 +1724,9 @@ class QueryBuilder implements QueryBuilderContract
      * @param string      $field
      * @param string|null $name
      *
-     * @return null|float
+     * @return float
      */
-    public function avg($field, $name = null)
+    public function avg($field, $name = null): float
     {
         $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
         $this->select($column);
