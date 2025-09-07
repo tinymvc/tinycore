@@ -295,7 +295,7 @@ class Auth implements AuthContract, ArrayAccess
 
         // Delete the session variable and unset the user property.
         $this->session->delete($this->config['session_key']);
-        unset($this->user);
+        $this->user = false;
 
         // destroy cookue auth if enabled
         if (isset($this->config['cookie_name'])) {
