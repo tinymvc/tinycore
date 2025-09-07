@@ -214,6 +214,44 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
+     * Retrieves the first model matching the given data or creates a new one if none exists.
+     *
+     * @param array|Arrayable $data Key-value pairs of model properties.
+     * @return static The found or newly created model instance.
+     */
+    public static function firstOrCreate(array|Arrayable $data): static
+    {
+        $data = $data instanceof Arrayable ? $data->toArray() : $data;
+
+        $model = self::query()->where($data)->first();
+
+        if ($model) {
+            return $model;
+        }
+
+        return self::create($data);
+    }
+
+    /**
+     * Retrieves the first model matching the given data or returns a new instance if none exists.
+     *
+     * @param array|Arrayable $data Key-value pairs of model properties.
+     * @return static The found model instance or a new instance with the given data.
+     */
+    public static function firstOrNew(array|Arrayable $data): static
+    {
+        $data = $data instanceof Arrayable ? $data->toArray() : $data;
+
+        $model = self::query()->where($data)->first();
+
+        if ($model) {
+            return $model;
+        }
+
+        return self::load($data);
+    }
+
+    /**
      * Updates an existing model or creates a new one if it doesn't exist.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
