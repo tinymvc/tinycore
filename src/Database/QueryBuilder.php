@@ -493,32 +493,48 @@ class QueryBuilder implements QueryBuilderContract
             $this->bindings[$columnPlaceholder] = $value;
         } elseif (is_array($column) && $operator === null && $value === null) {
             // Create a where clause from array conditions.
-            $command = sprintf(
-                "%s %s",
-                $andOr,
-                implode(
-                    " {$andOr} ",
-                    array_map(
-                        function ($attr, $value) use ($not) {
+            $keys = array_keys($column);
+            $values = array_values($column);
 
-                            $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
-                            $this->bindings[$columnPlaceholder] = $value; // Bind the value to the placeholder.
+            if (is_string($keys[0])) {
+                $command = sprintf(
+                    "%s %s",
+                    $andOr,
+                    implode(
+                        " {$andOr} ",
+                        array_map(
+                            function ($attr, $value) use ($not) {
+
+                                $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
+                                $this->bindings[$columnPlaceholder] = $value; // Bind the value to the placeholder.
             
-                            return $this->grammar->wrapColumn($attr) . (is_array($value) ?
-                                // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
-                                sprintf(
-                                    ($not ? ' NOT' : '') . " IN (%s)",
-                                    join(",", array_map(fn($index) => ":{$columnPlaceholder}_$index", array_keys($value)))
-                                )
-                                // Create a where close to match is equal, Ex. "id = :id_0"
-                                : ($not ? ' !=' : ' =') . " :" . $columnPlaceholder
-                            );
-                        },
-                        array_keys($column),
-                        array_values($column)
+                                return $this->grammar->wrapColumn($attr) . (is_array($value) ?
+                                    // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
+                                    sprintf(
+                                        ($not ? ' NOT' : '') . " IN (%s)",
+                                        join(",", array_map(fn($index) => ":{$columnPlaceholder}_$index", array_keys($value)))
+                                    )
+                                    // Create a where close to match is equal, Ex. "id = :id_0"
+                                    : ($not ? ' !=' : ' =') . " :" . $columnPlaceholder
+                                );
+                            },
+                            $keys,
+                            $values
+                        )
                     )
-                )
-            );
+                );
+            } else {
+                if (is_string($values[0])) {
+                    return $this->where($values[0], $values[1] ?? null, $values[2] ?? null, $andOr, $not);
+                }
+
+                foreach ($values as $value) {
+                    $this->where($value[0], $value[1] ?? null, $value[2] ?? null, $andOr, $not);
+                }
+
+                return $this; // Return early as where clauses are already added.
+            }
+
         } elseif (is_string($column) && $operator === null && $value === null) {
             // Simply add a where clause from string.
             $command = "{$andOr} {$column}";
@@ -1984,11 +2000,13 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets ascending order for a specified field.
      *
-     * @param string $field Field to order by in ascending order, defaults to 'id'.
+     * @param ?string $field Field to order by in ascending order, defaults to 'id'.
      * @return self
      */
-    public function orderAsc(string $field = 'id'): self
+    public function orderAsc(?string $field = null): self
     {
+        $field ??= $this->withAlias('id');
+
         $this->query['order'] = "$field ASC";
         return $this;
     }
@@ -1996,11 +2014,13 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets descending order for a specified field.
      *
-     * @param string $field Field to order by in descending order, defaults to 'id'.
+     * @param ?string $field Field to order by in descending order, defaults to 'id'.
      * @return self
      */
-    public function orderDesc(string $field = 'id'): self
+    public function orderDesc(?string $field = null): self
     {
+        $field ??= $this->withAlias('id');
+
         $this->query['order'] = "$field DESC";
         return $this;
     }
@@ -2156,14 +2176,14 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Retrieves the latest results by ordering in descending order.
+     * Sets the query to order results by the latest created_at timestamp.
      *
-     * @return array
+     * @return self
      */
-    public function latest(): array
+    public function latest(): self
     {
         // Array of the latest results.
-        return $this->orderDesc()->all();
+        return $this->orderDesc($this->withAlias('created_at'));
     }
 
     /**
