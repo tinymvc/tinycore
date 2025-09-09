@@ -134,11 +134,12 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes an email address.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @return string|null Sanitized email or null if invalid.
      */
-    public function email(string $key): ?string
+    public function email(?string $key = null): ?string
     {
+        $key ??= 'email';
         return filter_var($this->get($key), FILTER_SANITIZE_EMAIL) ?: null;
     }
 
@@ -149,8 +150,9 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
      * @param bool $stripTags Whether to strip HTML tags from the text.
      * @return string|null Sanitized text or null if invalid.
      */
-    public function text(string $key, bool $stripTags = true): ?string
+    public function text(?string $key = null, bool $stripTags = true): ?string
     {
+        $key ??= 'text';
         $value = filter_var($this->get($key), FILTER_UNSAFE_RAW);
         return $stripTags && $value ? strip_tags($value) : $value;
     }
@@ -183,22 +185,24 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Escapes HTML special characters for safe output.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @return string|null Sanitized HTML or null if invalid.
      */
-    public function html(string $key): ?string
+    public function html(?string $key = null): ?string
     {
+        $key ??= 'html';
         return htmlspecialchars($this->get($key), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**
      * Sanitizes an integer value.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @return int|null Sanitized integer or null if invalid.
      */
-    public function number(string $key): ?int
+    public function number(?string $key = null): ?int
     {
+        $key ??= 'number';
         return filter_var($this->get($key), FILTER_SANITIZE_NUMBER_INT) ?: null;
     }
 
@@ -230,19 +234,21 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
      * @param string $key Key in the data array to sanitize.
      * @return string|null Sanitized URL or null if invalid.
      */
-    public function url(string $key): ?string
+    public function url(?string $key = null): ?string
     {
+        $key ??= 'url';
         return filter_var($this->get($key), FILTER_SANITIZE_URL) ?: null;
     }
 
     /**
      * Validates an IP address.
      *
-     * @param string $key Key in the data array to validate.
+     * @param ?string $key Key in the data array to validate.
      * @return string|null Valid IP address or null if invalid.
      */
-    public function ip(string $key): ?string
+    public function ip(?string $key = null): ?string
     {
+        $key ??= 'ip';
         return filter_var($this->get($key), FILTER_VALIDATE_IP) ?: null;
     }
 
@@ -297,11 +303,12 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes a string to contain only digits.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @return string|null Sanitized digit string or null if invalid.
      */
-    public function digits(string $key): ?string
+    public function digits(?string $key = null): ?string
     {
+        $key ??= 'digits';
         $value = $this->get($key);
         if (!$value)
             return null;
@@ -313,12 +320,13 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes a phone number by removing non-digit characters.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @param bool $keepPlus Whether to keep the plus sign for international numbers.
      * @return string|null Sanitized phone number or null if invalid.
      */
-    public function phone(string $key, bool $keepPlus = true): ?string
+    public function phone(?string $key = null, bool $keepPlus = true): ?string
     {
+        $key ??= 'phone';
         $value = $this->get($key);
         if (!$value)
             return null;
@@ -331,12 +339,13 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes a date string and optionally formats it.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @param string $format Output date format (default: 'Y-m-d').
      * @return string|null Sanitized date or null if invalid.
      */
-    public function date(string $key, string $format = 'Y-m-d'): ?string
+    public function date(?string $key = null, string $format = 'Y-m-d'): ?string
     {
+        $key ??= 'date';
         $value = $this->get($key);
         if (!$value)
             return null;
@@ -348,12 +357,13 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes a JSON string and optionally decodes it.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @param bool $decode Whether to decode the JSON to array.
      * @return string|array|null Sanitized JSON or decoded array, null if invalid.
      */
-    public function json(string $key, bool $decode = false): string|array|null
+    public function json(?string $key = null, bool $decode = false): string|array|null
     {
+        $key ??= 'json';
         $value = $this->get($key);
         if (!$value)
             return null;
@@ -368,16 +378,17 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes an array by filtering out empty values and optionally applying a callback.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @param callable|null $callback Optional callback to apply to each array element.
      * @param bool $removeEmpty Whether to remove empty values.
      * @return array|null Sanitized array or null if invalid.
      */
-    public function array(string $key, ?callable $callback = null, bool $removeEmpty = true): ?array
+    public function array(?string $key = null, ?callable $callback = null, bool $removeEmpty = true): ?array
     {
+        $key ??= 'array';
         $value = $this->get($key);
         if (!is_array($value)) {
-            $value = $this->json($key, true);
+            $value = arr_from_set($value);
             if (!is_array($value)) {
                 return null;
             }
@@ -397,11 +408,12 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes a file upload array.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @return array|null Sanitized file array or null if invalid.
      */
-    public function file(string $key): ?array
+    public function file(?string $key = null): ?array
     {
+        $key ??= 'file';
         $value = $this->get($key);
         if (!is_array($value) || !isset($value['tmp_name']))
             return null;
@@ -419,13 +431,14 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Sanitizes a password by trimming and optionally hashing.
      *
-     * @param string $key Key in the data array to sanitize.
+     * @param ?string $key Key in the data array to sanitize.
      * @param bool $hash Whether to hash the password.
      * @param array $options Password hashing options.
      * @return string|null Sanitized password or null if invalid.
      */
-    public function password(string $key, bool $hash = false, array $options = []): ?string
+    public function password(?string $key = null, bool $hash = false, array $options = []): ?string
     {
+        $key ??= 'password';
         $value = $this->get($key);
         if (!$value)
             return null;

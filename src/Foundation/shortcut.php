@@ -389,13 +389,10 @@ if (!function_exists('fireline')) {
             $engine = get(View::class);
 
             // Return a JSON response with the rendered HTML and title
-            return response()->json([
+            return json([
                 'html' => $engine->render($template, $context),
                 'title' => $engine->yieldSection('title'),
-            ])
-                ->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-                ->setHeader('Pragma', 'no-cache')
-                ->setHeader('Expires', '0');
+            ])->noCache();
         }
 
         // Otherwise, return a regular HTTP response with the rendered HTML
@@ -1624,6 +1621,7 @@ if (!function_exists('carbon')) {
         );
     }
 }
+
 if (!function_exists('filemanager')) {
     /**
      * Retrieves the FileManager instance.
@@ -1651,5 +1649,53 @@ if (!function_exists('fm')) {
     function fm(): FileManager
     {
         return filemanager();
+    }
+}
+
+if (!function_exists('arr_from_set')) {
+    /**
+     * Convert a comma-separated string into an array of trimmed values.
+     *
+     * @param null|string|array|Arrayable $value
+     * @param string|null $delimiter
+     * @return array
+     */
+    function arr_from_set(null|string|array|Arrayable $value, ?string $delimiter = ','): array
+    {
+        if (empty($value)) {
+            return [];
+        }
+
+        // If the value is a JSON string, decode it
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $value = $decoded;
+            }
+        }
+
+        // If the value is a serialized string, unserialize it
+        if (is_string($value)) {
+            $decoded = unserialize($value);
+            if ($decoded !== false && (is_array($decoded) || $decoded instanceof Arrayable)) {
+                $value = $decoded;
+            }
+        }
+
+        // If the value is an instance of Arrayable, convert it to an array
+        if ($value instanceof Arrayable) {
+            $value = $value->toArray();
+        }
+
+        // If the value is a string and a delimiter is provided, split it into an array
+        if (is_string($value) && $delimiter !== null && strpos($value, $delimiter) !== false) {
+            $value = explode($delimiter, $value);
+        }
+
+        if (!is_array($value)) {
+            return [$value]; // Return as a single-element array
+        }
+
+        return array_map('trim', $value); // Trim each value in the array
     }
 }

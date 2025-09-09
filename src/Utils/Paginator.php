@@ -203,6 +203,16 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
     }
 
     /**
+     * Checks if the data array is not empty.
+     * 
+     * @return bool
+     */
+    public function isNotEmpty(): bool
+    {
+        return !$this->isEmpty();
+    }
+
+    /**
      * Checks if pagination links are needed.
      * 
      * @return bool

@@ -6,6 +6,7 @@ use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Helpers\RequestErrors;
+use Spark\Http\Session;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -1100,5 +1101,30 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function old(string $field, ?string $default = null): ?string
     {
         return $this->getErrorObject()->getOld($field, $default);
+    }
+
+    /**
+     * Get the session instance.
+     *
+     * This method retrieves the session instance from the application container.
+     *
+     * @return \Spark\Http\Session The session instance.
+     */
+    public function session(): Session
+    {
+        return app(Session::class);
+    }
+
+    /**
+     * Get the authenticated user.
+     *
+     * This method retrieves the currently authenticated user from the Auth service.
+     * If no user is authenticated, it returns null.
+     *
+     * @return ?\App\Models\User The authenticated user model or null if not authenticated.
+     */
+    public function user()
+    {
+        return app(Auth::class)->getUser() ?: null;
     }
 }

@@ -20,6 +20,7 @@ class HttpUtilResponse implements ArrayAccess, \Stringable
     public string $lastUrl = ''; // The last URL after redirects
     public int $length = 0; // The content length of the response
     public array $headers = []; // The response headers
+    public array $json; // The JSON-decoded response body
 
     /**
      * Sets the response data.
@@ -52,7 +53,7 @@ class HttpUtilResponse implements ArrayAccess, \Stringable
      */
     public function json()
     {
-        return json_decode($this->body, true);
+        return $this->json ??= arr_from_set($this->body);
     }
 
     /**
@@ -63,6 +64,29 @@ class HttpUtilResponse implements ArrayAccess, \Stringable
     public function text()
     {
         return (string) $this->body ?? '';
+    }
+
+    /**
+     * Check if a key exists in the JSON-decoded response body using a dot-notated key.
+     *
+     * @param string $key The key to check.
+     * @return bool True if the key exists, false otherwise.
+     */
+    public function has(string $key): bool
+    {
+        return data_get($this->json(), $key) !== null;
+    }
+
+    /**
+     * Get a value from the JSON-decoded response body using a dot-notated key.
+     *
+     * @param string $key The key to retrieve.
+     * @param mixed $default The default value to return if the key does not exist.
+     * @return mixed The value associated with the key or the default value.
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        return data_get($this->json(), $key, $default);
     }
 
     /**

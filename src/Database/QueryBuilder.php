@@ -760,7 +760,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function whereNotIn(string $column, array $values): self
     {
-        return $this->where(column: [$column => $values], not: true);
+        return $this->where([$column => $values], not: true);
     }
 
     /**
@@ -775,7 +775,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function orWhereIn($column, array $values): self
     {
-        return $this->where(column: [$column => $values], andOr: 'OR');
+        return $this->where([$column => $values], andOr: 'OR');
     }
 
     /**
@@ -790,7 +790,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function orWhereNotIn($column, array $values): self
     {
-        return $this->where(column: [$column => $values], andOr: 'OR ', not: true);
+        return $this->where([$column => $values], andOr: 'OR ', not: true);
     }
 
     /**
@@ -882,7 +882,7 @@ class QueryBuilder implements QueryBuilderContract
         $this->bindings[$columnPlaceholder] = $key;
 
         // Add the condition to the query's WHERE clause
-        return $this->where(column: $where, andOr: $andOr);
+        return $this->where($where, andOr: $andOr);
     }
 
     /**
@@ -957,7 +957,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->bindings[$columnPlaceholder] = "%$value%";
 
-        return $this->where(column: $where, andOr: $andOr);
+        return $this->where($where, andOr: $andOr);
     }
 
     /**
@@ -1038,7 +1038,7 @@ class QueryBuilder implements QueryBuilderContract
         $this->bindings[$columnPlaceholder1] = $value1;
         $this->bindings[$columnPlaceholder2] = $value2;
 
-        return $this->where(column: $where, andOr: $andOr);
+        return $this->where($where, andOr: $andOr);
     }
 
     /**

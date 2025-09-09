@@ -166,6 +166,29 @@ class Hash implements HashContract
     }
 
     /**
+     * Create a hashed password.
+     *
+     * @param string $password The plain text password to hash.
+     * @return string The hashed password.
+     */
+    public function password(string $password): string
+    {
+        return $this->hashPassword($password);
+    }
+
+    /**
+     * Verify a plain text password against a hashed password.
+     *
+     * @param string $password The plain text password to verify.
+     * @param string $hashedPassword The hashed password to verify against.
+     * @return bool True if the password matches, false otherwise.
+     */
+    public function verify(string $password, string $hashedPassword): bool
+    {
+        return $this->validatePassword($password, $hashedPassword);
+    }
+
+    /**
      * Encrypts a string using AES-256-CBC symmetric encryption.
      *
      * @param string $value The plaintext string to encrypt.

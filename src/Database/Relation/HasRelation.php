@@ -531,7 +531,7 @@ trait HasRelation
             ->fetch(PDO::FETCH_ASSOC)
             ->whereIn($config['foreignKey'], $localValues);
 
-        $query = $this->applyConstraints($query, $config, $constraints);
+        $this->applyConstraints($query, $config, $constraints);
         $results = $query->all();
 
         return $this->matchModels($models, $results, $config, $name, 'one');
@@ -564,7 +564,7 @@ trait HasRelation
             ->fetch(PDO::FETCH_ASSOC)
             ->whereIn($config['foreignKey'], $localValues);
 
-        $query = $this->applyConstraints($query, $config, $constraints);
+        $this->applyConstraints($query, $config, $constraints);
         $results = $query->all();
 
         return $this->matchModels($models, $results, $config, $name, 'many');
@@ -597,7 +597,7 @@ trait HasRelation
             ->fetch(PDO::FETCH_ASSOC)
             ->whereIn($config['ownerKey'], $foreignValues);
 
-        $query = $this->applyConstraints($query, $config, $constraints);
+        $this->applyConstraints($query, $config, $constraints);
         $results = $query->all();
 
         return $this->matchBelongsTo($models, $results, $config, $name);
@@ -639,7 +639,7 @@ trait HasRelation
             ->join($config['table'] . ' as p', "p.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
             ->whereIn("p.{$config['foreignPivotKey']}", $parentValues);
 
-        $query = $this->applyConstraints($query, $config, $constraints);
+        $this->applyConstraints($query, $config, $constraints);
         $results = $query->all();
 
         return $this->matchBelongsToMany($models, $results, $config, $name);
@@ -685,7 +685,7 @@ trait HasRelation
             ->join("$throughTable as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
             ->whereIn("t.{$config['firstKey']}", $localValues);
 
-        $query = $this->applyConstraints($query, $config, $constraints);
+        $this->applyConstraints($query, $config, $constraints);
 
         if ($isOne) {
             $query->take(1);
@@ -870,22 +870,20 @@ trait HasRelation
      * @param QueryBuilder $query
      * @param array $config
      * @param Closure|null $constraints
-     * @return QueryBuilder
+     * @return void
      * 
      * @throws InvalidOrmException
      * @throws UndefinedOrmException
      */
-    private function applyConstraints(QueryBuilder $query, array $config, ?Closure $constraints = null): QueryBuilder
+    private function applyConstraints(QueryBuilder &$query, array $config, ?Closure $constraints = null): void
     {
         if (isset($config['callback']) && is_callable($config['callback'])) {
-            $query = call_user_func($config['callback'], $query);
+            call_user_func($config['callback'], $query);
         }
 
         if ($constraints && is_callable($constraints)) {
-            $query = call_user_func($constraints, $query);
+            call_user_func($constraints, $query);
         }
-
-        return $query;
     }
 
     /**

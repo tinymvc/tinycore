@@ -42,20 +42,17 @@ class Application implements ApplicationContract
 {
     use Macroable;
 
-    /** @var Application Singleton instance of the application */
+    /** @var Application Singleton instance of the application. */
     public static Application $app;
 
-    /**
-     * Dependency injection container.
-     * 
-     * Manages the application's services and dependencies by providing a way to register and resolve them.
-     * 
-     * @var Container
-     */
+    /** @var Container Dependency injection container. */
     private Container $container;
 
     /** @var array Array to store exception handlers. */
     private array $exceptions = [];
+
+    /** @var array Array to store application variables. */
+    private array $vars = [];
 
     /**
      * Application constructor.
@@ -403,5 +400,39 @@ class Application implements ApplicationContract
 
         $console = $this->get(Console::class);
         $console->run();
+    }
+
+    /**
+     * Magic method to check if a variable is set in the application.
+     *
+     * @param string $name The name of the variable to check.
+     * @return bool True if the variable is set, false otherwise.
+     */
+    public function __isset($name): bool
+    {
+        return isset($this->vars[$name]);
+    }
+
+    /**
+     * Magic method to get a variable from the application.
+     *
+     * @param string $name The name of the variable to get.
+     * @return mixed The value of the variable, or null if not set.
+     */
+    public function __get($name): mixed
+    {
+        return $this->vars[$name] ?? null;
+    }
+
+    /**
+     * Magic method to set a variable in the application.
+     *
+     * @param string $name The name of the variable to set.
+     * @param mixed $value The value to set the variable to.
+     * @return void
+     */
+    public function __set($name, $value): void
+    {
+        $this->vars[$name] = $value;
     }
 }

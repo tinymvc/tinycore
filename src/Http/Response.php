@@ -72,6 +72,39 @@ class Response implements ResponseContract
     }
 
     /**
+     * Sets headers to prevent caching of the response.
+     *
+     * This method sets the appropriate HTTP headers to instruct clients and proxies
+     * not to cache the response. It is useful for dynamic content that should not be
+     * stored in caches.
+     *
+     * @return $this Current response instance for method chaining.
+     */
+    public function noCache(): self
+    {
+        $this->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $this->setHeader('Pragma', 'no-cache');
+        $this->setHeader('Expires', '0');
+        return $this;
+    }
+
+    /**
+     * Sets the response to have no content with a 204 No Content status code.
+     *
+     * This method sets the HTTP status code to 204 and clears any existing content
+     * in the response body. It is typically used when the server successfully processes
+     * a request but does not need to return any content.
+     *
+     * @return $this Current response instance for method chaining.
+     */
+    public function noContent(): self
+    {
+        $this->setStatusCode(204);
+        $this->setContent('');
+        return $this;
+    }
+
+    /**
      * Sends a JSON response to the client.
      *
      * @param array|Arrayable $data The data to be encoded as JSON.
