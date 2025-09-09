@@ -1675,14 +1675,6 @@ if (!function_exists('arr_from_set')) {
             }
         }
 
-        // If the value is a serialized string, unserialize it
-        if (is_string($value)) {
-            $decoded = unserialize($value);
-            if ($decoded !== false && (is_array($decoded) || $decoded instanceof Arrayable)) {
-                $value = $decoded;
-            }
-        }
-
         // If the value is an instance of Arrayable, convert it to an array
         if ($value instanceof Arrayable) {
             $value = $value->toArray();
