@@ -1657,10 +1657,11 @@ if (!function_exists('arr_from_set')) {
      * Convert a comma-separated string into an array of trimmed values.
      *
      * @param null|string|array|Arrayable $value
+     * @param callable|null $callback
      * @param string|null $delimiter
      * @return array
      */
-    function arr_from_set(null|string|array|Arrayable $value, ?string $delimiter = ','): array
+    function arr_from_set(null|string|array|Arrayable $value, ?callable $callback = null, ?string $delimiter = ','): array
     {
         if (empty($value)) {
             return [];
@@ -1696,6 +1697,10 @@ if (!function_exists('arr_from_set')) {
             return [$value]; // Return as a single-element array
         }
 
-        return array_map('trim', $value); // Trim each value in the array
+        if ($callback) {
+            return array_map($callback, $value); // Apply the callback to each value in the array
+        }
+
+        return $value; // Trim each value in the array
     }
 }
