@@ -89,6 +89,24 @@ class Response implements ResponseContract
     }
 
     /**
+     * Sets headers to enable caching of the response for a specified duration.
+     *
+     * This method sets the appropriate HTTP headers to instruct clients and proxies
+     * to cache the response for a given number of seconds. It is useful for static
+     * content that does not change frequently.
+     *
+     * @param int $seconds The duration in seconds for which the response should be cached. Default is 3600 seconds (1 hour).
+     * @return $this Current response instance for method chaining.
+     */
+    public function cache(int $seconds = 3600): self
+    {
+        $this->setHeader('Cache-Control', "public, max-age=$seconds");
+        $this->setHeader('Pragma', 'cache');
+        $this->setHeader('Expires', gmdate('D, d M Y H:i:s', time() + $seconds) . ' GMT');
+        return $this;
+    }
+
+    /**
      * Sets the response to have no content with a 204 No Content status code.
      *
      * This method sets the HTTP status code to 204 and clears any existing content
