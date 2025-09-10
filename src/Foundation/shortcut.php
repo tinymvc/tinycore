@@ -1343,7 +1343,7 @@ if (!function_exists('abort')) {
         // return a JSON response
         if (request()->expectsJson()) {
             // If the request is an AJAX request, return a JSON response
-            json(['message' => $message ?? __e('Internal Server Error'), 'code' => $code], $code)
+            json(['message' => $message ?? _e('Internal Server Error'), 'code' => $code], $code)
                 ->send();
 
             exit; // Exit the script
