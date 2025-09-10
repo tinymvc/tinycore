@@ -782,7 +782,6 @@ if (!function_exists('envs')) {
     }
 }
 
-
 if (!function_exists('csrf_token')) {
     /**
      * Get the CSRF token.
@@ -1174,30 +1173,6 @@ if (!function_exists('validator')) {
     }
 }
 
-if (!function_exists('__e')) {
-    /**
-     * Translates and escapes a given text for safe HTML output.
-     *
-     * This function first translates the provided text using the application's
-     * translation service, with optional pluralization and argument substitution.
-     * The translated text is then escaped to ensure it is safe for rendering
-     * in HTML, converting special characters to HTML entities.
-     *
-     * @param string $text The text to be translated and escaped.
-     * @param mixed $arg An optional argument for pluralization or placeholder replacement.
-     * @param array $args Optional arguments for replacing placeholders in the text.
-     * @param array $args2 Optional arguments for replacing plural placeholders in the translated text.
-     *
-     * @return string The translated and escaped text, safe for HTML output.
-     */
-    function __e(string $text, $arg = null, array $args = [], array $args2 = []): string
-    {
-        return e(
-            __($text, $arg, $args, $args2)
-        );
-    }
-}
-
 if (!function_exists('_e')) {
     /**
      * Escapes a translated string for safe HTML output.
@@ -1436,6 +1411,21 @@ if (!function_exists('hashing')) {
     function hashing(): Hash
     {
         return get(Hash::class);
+    }
+}
+
+if (!function_exists('hasher')) {
+    /**
+     * Alias for the hashing() function.
+     *
+     * This function is an alias for the hashing() function, providing
+     * the same functionality of retrieving the Hash instance.
+     *
+     * @return Hash The Hash instance.
+     */
+    function hasher(): Hash
+    {
+        return hashing();
     }
 }
 
@@ -1681,12 +1671,12 @@ if (!function_exists('arr_from_set')) {
         }
 
         // If the value is a string and a delimiter is provided, split it into an array
-        if (is_string($value) && $delimiter !== null && strpos($value, $delimiter) !== false) {
+        if (is_string($value) && $delimiter && strpos($value, $delimiter) !== false) {
             $value = explode($delimiter, $value);
         }
 
         if (!is_array($value)) {
-            return [$value]; // Return as a single-element array
+            $value = [$value]; // Set as a single-element array
         }
 
         if ($callback) {
