@@ -236,7 +236,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function isLoggedIn(): bool
     {
-        return $this->hasId() && $this->getUser() !== null && $this->getUser()?->id === $this->getId();
+        return $this->hasId() && $this->getUser() !== null;
     }
 
     /**

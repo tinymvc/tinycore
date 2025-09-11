@@ -885,6 +885,21 @@ if (!function_exists('is_guest')) {
     }
 }
 
+if (!function_exists('is_logged_in')) {
+    /**
+     * Determine if the current request is made by an authenticated user.
+     * 
+     * This function checks if the user is set in the current application request,
+     * indicating that the request is made by an authenticated (logged-in) user.
+     * 
+     * @return bool True if the request is made by an authenticated user, false otherwise.
+     */
+    function is_logged_in(): bool
+    {
+        return auth()->isLoggedIn();
+    }
+}
+
 if (!function_exists('can')) {
     /**
      * Determine if the current user has a given ability.
