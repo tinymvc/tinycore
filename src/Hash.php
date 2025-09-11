@@ -174,7 +174,7 @@ class Hash implements HashContract
      */
     public function password(string $password, ?string $hash = null): bool|string
     {
-        if (!empty($hash)) {
+        if ($hash !== null) {
             return $this->validatePassword($password, $hash);
         }
 
