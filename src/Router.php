@@ -30,6 +30,14 @@ class Router implements RouterContract
     private array $groupAttributes = [];
 
     /**
+     * @var int $resourceCounter
+     *
+     * A counter to keep track of the number of resource routes added.
+     * This can be useful for adding name and middleware to resource routes.
+     */
+    private int $resourceCounter = 0;
+
+    /**
      * Construct a new router.
      *
      * @param array $routes An array of routes that should be added to the router.
@@ -202,12 +210,69 @@ class Router implements RouterContract
      */
     public function middleware(string|array $middleware): self
     {
+        $lastRouteKey = array_key_last($this->routes);
+        if ($lastRouteKey === null) {
+            return $this;
+        }
+
         // Merge group middleware with specified route middleware
         $groupedMiddlewares = array_merge(...array_map(fn($attr) => (array) ($attr['middleware'] ?? []), $this->groupAttributes));
         $middleware = array_unique(array_merge((array) $middleware, array_filter($groupedMiddlewares)));
 
-        // Set the middleware for the last added route
-        $this->routes[array_key_last($this->routes)]['middleware'] = $middleware;
+        // Check if the last route is a resource route
+        if (isset($this->routes[$lastRouteKey]['resourceCounter'])) {
+            $resourceCounter = $this->routes[$lastRouteKey]['resourceCounter'];
+
+            // Apply middleware to all routes with the same resourceCounter
+            foreach ($this->routes as $key => $route) {
+                if (isset($route['resourceCounter']) && $route['resourceCounter'] === $resourceCounter) {
+                    $currentMiddleware = $this->routes[$key]['middleware'] ?? [];
+                    $this->routes[$key]['middleware'] = array_unique(array_merge($currentMiddleware, $middleware));
+                }
+            }
+        } else {
+            // Apply to single route
+            $currentMiddleware = $this->routes[$lastRouteKey]['middleware'] ?? [];
+            $this->routes[$lastRouteKey]['middleware'] = array_unique(array_merge($currentMiddleware, $middleware));
+        }
+
+        return $this;
+    }
+
+    /**
+     * Exclude middleware from the most recently added route.
+     * 
+     * @param string|array $middleware An array of middleware to be excluded from the route.
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function withoutMiddleware(string|array $middleware): self
+    {
+        $lastRouteKey = array_key_last($this->routes);
+        if ($lastRouteKey === null) {
+            return $this;
+        }
+
+        // Merge group middleware with specified route middleware
+        $groupedWithoutMiddlewares = array_merge(...array_map(fn($attr) => (array) ($attr['withoutMiddleware'] ?? []), $this->groupAttributes));
+        $middleware = array_unique(array_merge((array) $middleware, array_filter($groupedWithoutMiddlewares)));
+
+        // Check if the last route is a resource route
+        if (isset($this->routes[$lastRouteKey]['resourceCounter'])) {
+            $resourceCounter = $this->routes[$lastRouteKey]['resourceCounter'];
+
+            // Apply withoutMiddleware to all routes with the same resourceCounter
+            foreach ($this->routes as $key => $route) {
+                if (isset($route['resourceCounter']) && $route['resourceCounter'] === $resourceCounter) {
+                    $currentWithoutMiddleware = $this->routes[$key]['withoutMiddleware'] ?? [];
+                    $this->routes[$key]['withoutMiddleware'] = array_unique(array_merge($currentWithoutMiddleware, $middleware));
+                }
+            }
+        } else {
+            // Apply to single route
+            $currentWithoutMiddleware = $this->routes[$lastRouteKey]['withoutMiddleware'] ?? [];
+            $this->routes[$lastRouteKey]['withoutMiddleware'] = array_unique(array_merge($currentWithoutMiddleware, $middleware));
+        }
+
         return $this;
     }
 
@@ -240,19 +305,43 @@ class Router implements RouterContract
      */
     public function name(string $name): self
     {
+        $lastRouteKey = array_key_last($this->routes);
+        if ($lastRouteKey === null) {
+            return $this;
+        }
+
         // Check if there are any group attributes to apply to the route name
         $groupedName = array_map(fn($attr) => $attr['name'] ?? null, $this->groupAttributes);
         $groupedName = implode('', array_filter($groupedName));
         if (!empty($groupedName)) {
-            $name ??= '';
             $name = "$groupedName$name";
         }
 
-        // Set the name for the last added route
-        $key = array_key_last($this->routes);
-        $this->routes[$name] = $this->routes[$key];
+        // Check if the last route is a resource route
+        if (isset($this->routes[$lastRouteKey]['resourceCounter'])) {
+            $resourceCounter = $this->routes[$lastRouteKey]['resourceCounter'];
 
-        unset($this->routes[$key]);
+            // Rename all routes with the same resourceCounter
+            $routesToRename = [];
+            foreach ($this->routes as $key => $route) {
+                if (isset($route['resourceCounter']) && $route['resourceCounter'] === $resourceCounter) {
+                    $routesToRename[$key] = $route;
+                }
+            }
+
+            // Rename the routes
+            foreach ($routesToRename as $oldKey => $route) {
+                $routeAction = \Spark\Support\Str::afterLast($oldKey, '.');
+                $newName = "$name.$routeAction";
+
+                $this->routes[$newName] = $route;
+                unset($this->routes[$oldKey]);
+            }
+        } else {
+            // Rename single route
+            $this->routes[$name] = $this->routes[$lastRouteKey];
+            unset($this->routes[$lastRouteKey]);
+        }
 
         return $this;
     }
@@ -266,6 +355,7 @@ class Router implements RouterContract
      * @param string|null $template Optional template for the route.
      * @param string|null $name Optional name for the route.
      * @param string|array $middleware Middleware specific to this route.
+     * @param string|array $withoutMiddleware Middleware to exclude from this route.
      *
      * @return self Returns the router instance to allow method chaining.
      */
@@ -275,7 +365,9 @@ class Router implements RouterContract
         callable|string|array|null $callback = null,
         string|null $template = null,
         string|null $name = null,
-        string|array $middleware = []
+        string|array $middleware = [],
+        string|array $withoutMiddleware = [],
+        ?int $resourceCounter = null
     ): self {
         $path = '/' . trim($path, '/'); // ensure it starts with a slash
         $method ??= 'GET'; // Set the default method to GET if not provided
@@ -294,6 +386,10 @@ class Router implements RouterContract
             // Merge group middleware with specified route middleware
             $groupedMiddlewares = array_merge(...array_map(fn($attr) => (array) ($attr['middleware'] ?? []), $this->groupAttributes));
             $middleware = array_unique(array_merge((array) $middleware, array_filter($groupedMiddlewares)));
+
+            // Merge group middleware with specified route middleware
+            $groupedWithoutMiddlewares = array_merge(...array_map(fn($attr) => (array) ($attr['withoutMiddleware'] ?? []), $this->groupAttributes));
+            $withoutMiddleware = array_unique(array_merge((array) $withoutMiddleware, array_filter($groupedWithoutMiddlewares)));
 
             // Append grouped name to the route name if both are set
             $groupedName = array_merge(...array_map(fn($attr) => (array) ($attr['name'] ?? []), $this->groupAttributes));
@@ -331,7 +427,13 @@ class Router implements RouterContract
             'callback' => $callback,
             'template' => $template,
             'middleware' => $middleware,
+            'withoutMiddleware' => $withoutMiddleware,
         ];
+
+        // If resourceCounter is set, add it to the route
+        if ($resourceCounter !== null) {
+            $route['resourceCounter'] = $resourceCounter;
+        }
 
         // Store the route by name if given, otherwise add to unnamed routes array
         if (!empty($name)) {
@@ -356,6 +458,7 @@ class Router implements RouterContract
      * @param array $except An array of actions to exclude (e.g., ['create', 'update']).
      * @param string|null $name Optional name prefix for the resource routes.
      * @param string|array $middleware Optional middleware to apply to the resource routes.
+     * @param string|array $withoutMiddleware Optional middleware to exclude from the resource routes.
      *
      * @return self Returns the router instance to allow method chaining.
      */
@@ -366,6 +469,7 @@ class Router implements RouterContract
         string|array $middleware = [],
         array $only = [],
         array $except = [],
+        string|array $withoutMiddleware = []
     ): self {
         $name ??= trim($path, '/');
         $name = str_replace('/', '.', $name);
@@ -389,6 +493,8 @@ class Router implements RouterContract
             $routes = array_diff_key($routes, array_flip($except));
         }
 
+        $resourceCounter = ++$this->resourceCounter; // Increment the resource counter
+
         // Register the resource routes
         foreach ($routes as $route) {
             $this->add(
@@ -396,7 +502,9 @@ class Router implements RouterContract
                 method: $route['method'],
                 callback: $route['callback'],
                 name: $route['name'],
-                middleware: $middleware
+                middleware: $middleware,
+                withoutMiddleware: $withoutMiddleware,
+                resourceCounter: $resourceCounter
             );
         }
 
@@ -488,7 +596,7 @@ class Router implements RouterContract
                 $middleware->queue($route['middleware']);
 
                 // Execute middleware stack and return response if middleware stops request
-                $middlewareResponse = $middleware->process($request, fn($payload) => $payload);
+                $middlewareResponse = $middleware->process($request, fn($payload) => $payload, $route['withoutMiddleware']);
                 if ($middlewareResponse instanceof Response) {
                     return $middlewareResponse;
                 }

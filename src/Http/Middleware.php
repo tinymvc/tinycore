@@ -97,9 +97,10 @@ class Middleware
      * 
      * @param Request $request
      * @param Closure $destination Final handler (controller action)
+     * @param array $except Middleware aliases to exclude from execution
      * @return mixed Response from middleware or final destination
      */
-    public function process(Request $request, Closure $destination)
+    public function process(Request $request, Closure $destination, array $except = [])
     {
         // Fast path: no middleware = direct execution
         if (empty($this->stack)) {
@@ -107,7 +108,7 @@ class Middleware
         }
 
         // Use optimized pipeline processing
-        return $this->createPipeline($request, $destination);
+        return $this->createPipeline($request, $destination, $except);
     }
 
     /**
@@ -117,13 +118,17 @@ class Middleware
      * 
      * @param Request $request
      * @param Closure $destination
+     * @param array $except
      * @return mixed
      */
-    private function createPipeline(Request $request, Closure $destination)
+    private function createPipeline(Request $request, Closure $destination, array $except = [])
     {
+        // Filter out excepted middlewares
+        $stack = array_filter($this->stack, fn($m) => !in_array($m, $except));
+
         // Build the pipeline from the end backwards (most efficient)
         $pipeline = array_reduce(
-            array_reverse($this->stack), // Process in reverse to build pipeline
+            array_reverse($stack), // Process in reverse to build pipeline
             fn(Closure $carry, string $middlewareName) => function (Request $request) use ($carry, $middlewareName) {
                 $middleware = $this->resolveMiddleware($middlewareName);
 
