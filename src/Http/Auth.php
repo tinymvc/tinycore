@@ -26,9 +26,15 @@ class Auth implements AuthContract, ArrayAccess
     }
 
     /**
-     * @var false|Model The currently logged in user.
+     * @var ?Model The currently logged in user.
      */
-    private false|Model $user;
+    private ?Model $user;
+
+    /** @var int The ID of the currently logged in user. */
+    private int $id;
+
+    /** @var self The singleton instance of the Auth class. */
+    public static Auth $instance;
 
     /**
      * Constructor for the Auth class.
@@ -43,6 +49,8 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __construct(private Session $session, private string $userModel, private array $config = [])
     {
+        self::$instance = $this; // Set the static instance to the current object
+
         $this->config = array_merge([
             'session_key' => 'user_id',
             'cache_enabled' => false,
@@ -55,6 +63,8 @@ class Auth implements AuthContract, ArrayAccess
             'cookie_expire' => '6 months',
             'driver' => null,
         ], $config);
+
+        $this->checkAuthId(); // Check and set the authentication ID from the session
     }
 
     /**
@@ -77,43 +87,61 @@ class Auth implements AuthContract, ArrayAccess
      * Retrieves the currently logged in user.
      *
      * This method returns the currently authenticated user model if the user
-     * is logged in, or false if no user is authenticated.
+     * is logged in, or null if no user is authenticated.
      *
-     * @return false|Model The user model or false if no user is logged in.
+     * @return ?Model The user model or null if no user is logged in.
      */
-    public function getUser(): false|Model
+    public function getUser(): ?Model
     {
         if ($this->hasDriver()) {
             return $this->getDriver()->getUser(); // If a driver is set, use it to get the user
         }
 
         // Check if the user's ID is not set and the session has the session key
-        if (!isset($this->user)) {
-            if ($this->session->has($this->config['session_key']) || $this->hasCookieAuth()) {
-                // Attempt to load user from cache if caching is enabled
-                if ($this->config['cache_enabled']) {
-                    $this->user = cache($this->config['cache_name'])
-                        ->load(
-                            key: $this->session->get($this->config['session_key']),
-                            callback: fn() => $this->userModel::find(
-                                $this->session->get($this->config['session_key'])
-                            ),
-                            expire: $this->config['cache_expire']
-                        );
-                    unload_cache($this->config['cache_name']); // Unload cache after use
-                } else {
-                    // Fetch user directly from the database if caching is not enabled
-                    $this->user = $this->userModel::find(
-                        $this->session->get($this->config['session_key'])
+        if (!isset($this->user) && $this->hasId()) {
+            // Attempt to load user from cache if caching is enabled
+            if ($this->config['cache_enabled']) {
+                $user = cache($this->config['cache_name'])
+                    ->load(
+                        key: $this->getId(),
+                        callback: fn() => $this->userModel::find($this->getId()) ?: null,
+                        expire: $this->config['cache_expire']
                     );
-                }
+                unload_cache($this->config['cache_name']); // Unload cache after use
             } else {
-                $this->user = false;
+                // Fetch user directly from the database if caching is not enabled
+                $user = $this->userModel::find($this->getId()) ?: null;
+            }
+
+            if (isset($user, $user->id)) {
+                $this->user = $user; // Set the user property if a valid user is found
+            } else {
+                $this->logout(); // Logout if the user is not found in the database
             }
         }
 
         // Return the currently logged in user
         return $this->user;
+    }
+
+    /**
+     * Retrieves the ID of the currently logged in user.
+     *
+     * @return int The user ID or 0 if not logged in.
+     */
+    public function getId(): int
+    {
+        return $this->id;
+    }
+
+    /**
+     * Checks if the current user has a valid ID (is logged in).
+     *
+     * @return bool True if the user has a valid ID, false otherwise.
+     */
+    public function hasId(): bool
+    {
+        return $this->id > 0;
     }
 
     /**
@@ -128,12 +156,11 @@ class Auth implements AuthContract, ArrayAccess
      */
     public static function user(?string $key = null, $default = null): mixed
     {
-        $auth = auth();
-        if ($key !== null && !$auth->isGuest()) {
-            return $auth->getUser()->get($key, $default);
+        if ($key !== null && !self::$instance->isGuest()) {
+            return self::$instance->getUser()->get($key, $default);
         }
 
-        return $auth->getUser(); // Return the user model or false if not logged in
+        return self::$instance->getUser(); // Return the user model or false if not logged in
     }
 
     /**
@@ -143,7 +170,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public static function id(): int
     {
-        return intval(self::user('id'));
+        return self::$instance->getId();
     }
 
     /**
@@ -158,52 +185,11 @@ class Auth implements AuthContract, ArrayAccess
         $identifier = \Spark\Support\Arr::except($credentials, ['password']);
 
         $user = $auth->userModel::where($identifier)->first();
-        if ($user && hashing()->validatePassword($credentials['password'], $user->password)) {
+        if ($user && hasher()->password($credentials['password'], $user->password)) {
             $auth->login($user);
             return true;
         }
 
-        return false;
-    }
-
-    /**
-     * Checks if the user is authenticated via a cookie.
-     *
-     * If the configured cookie name is set, this method will attempt to
-     * decrypt the cookie value and verify that it contains a valid user ID
-     * and expiration time. If the cookie is valid, the user ID will be set
-     * in the session and true will be returned.
-     *
-     * @return bool True if the user is authenticated via a cookie, false otherwise.
-     */
-    protected function hasCookieAuth(): bool
-    {
-        // Check if cookie authentication is enabled
-        if ($this->config['cookie_enabled']) {
-            $token = $_COOKIE[$this->config['cookie_name']] ?? null;
-            if (isset($token) && !empty($token) && is_string($token)) {
-                try {
-                    // Attempt to decrypt the cookie value
-                    $token = json_decode(
-                        get(Hash::class)
-                            ->decrypt($token),
-                        true
-                    );
-
-                    // Verify that the decrypted value is an array with an 'id' and 'expire' key
-                    if (is_array($token) && isset($token['expire']) && isset($token['id']) && time() < $token['expire']) {
-                        // Set the user ID in the session and return true
-                        $this->session->set($this->config['session_key'], $token['id']);
-                        return true;
-                    }
-                } catch (Throwable $e) {
-                    // If an error occurs, rethrow it if debug mode is enabled
-                    if (config('debug')) {
-                        throw $e;
-                    }
-                }
-            }
-        }
         return false;
     }
 
@@ -240,7 +226,17 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function isGuest(): bool
     {
-        return $this->getUser() === false;
+        return !$this->isLoggedIn();
+    }
+
+    /**
+     * Checks if the current user is logged in.
+     *
+     * @return bool True if the user is logged in, false otherwise.
+     */
+    public function isLoggedIn(): bool
+    {
+        return $this->hasId() && $this->getUser() !== null && $this->getUser()?->id === $this->getId();
     }
 
     /**
@@ -265,10 +261,7 @@ class Auth implements AuthContract, ArrayAccess
             $tokenExpire = strtotime($this->config['cookie_expire'] ?? '1 year');
 
             // add user hashed token in cookie with expiration
-            $token = get(Hash::class)
-                ->encrypt(
-                    json_encode(['id' => $user->id, 'expire' => $tokenExpire])
-                );
+            $token = encrypt(json_encode(['id' => $user->id, 'expire' => $tokenExpire]));
 
             // set cookie with token and expiration
             setcookie($this->config['cookie_name'], $token, $tokenExpire, '/', '', true, true);
@@ -295,9 +288,10 @@ class Auth implements AuthContract, ArrayAccess
 
         // Delete the session variable and unset the user property.
         $this->session->delete($this->config['session_key']);
-        $this->user = false;
+        $this->user = null;
+        $this->id = 0;
 
-        // destroy cookue auth if enabled
+        // destroy cookie auth if enabled
         if (isset($this->config['cookie_name'])) {
             setcookie($this->config['cookie_name'], '', time() - 3600, '/', '', true, true);
             unset($_COOKIE[$this->config['cookie_name']]);
@@ -316,7 +310,7 @@ class Auth implements AuthContract, ArrayAccess
     {
         if ($this->config['cache_enabled']) {
             cache($this->config['cache_name'])
-                ->erase($this->session->get($this->config['session_key']))
+                ->erase($this->getId())
                 ->unload();
         }
     }
@@ -450,6 +444,57 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         return $this->getUser()->{$method}(...$args);
+    }
+
+    /**
+     * Checks if the user is authenticated via a cookie.
+     *
+     * If the configured cookie name is set, this method will attempt to
+     * decrypt the cookie value and verify that it contains a valid user ID
+     * and expiration time. If the cookie is valid, the user ID will be set
+     * in the session and true will be returned.
+     *
+     * @return bool True if the user is authenticated via a cookie, false otherwise.
+     */
+    private function checkCookieAuth(): void
+    {
+        // Check if cookie authentication is enabled
+        if ($this->config['cookie_enabled']) {
+            $token = $_COOKIE[$this->config['cookie_name']] ?? null;
+            if (isset($token)) {
+                try {
+                    // Attempt to decrypt the cookie value
+                    $token = json_decode(decrypt($token), true);
+
+                    // Verify that the decrypted value is an array with an 'id' and 'expire' key
+                    if (is_array($token) && isset($token['expire'], $token['id']) && carbon($token['expire'])->isFuture()) {
+                        // Set the user ID in the session and return true
+                        $this->session->set($this->config['session_key'], $token['id']);
+                    }
+                } catch (Throwable $e) {
+                    // Ignore encryption errors
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks and sets the authentication ID from the session.
+     *
+     * This method checks if the session contains the configured session key
+     * for the user ID. If it does, it attempts to authenticate via cookie
+     * if cookie authentication is enabled. Finally, it sets the internal ID
+     * property to the user ID from the session or 0 if not found.
+     *
+     * @return void
+     */
+    private function checkAuthId(): void
+    {
+        if (!$this->session->has($this->config['session_key'])) {
+            $this->checkCookieAuth();
+        }
+
+        $this->id = intval($this->session->get($this->config['session_key'], 0));
     }
 
     /**

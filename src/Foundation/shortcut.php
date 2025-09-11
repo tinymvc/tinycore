@@ -1673,6 +1673,7 @@ if (!function_exists('arr_from_set')) {
         // If the value is a string and a delimiter is provided, split it into an array
         if (is_string($value) && $delimiter && strpos($value, $delimiter) !== false) {
             $value = explode($delimiter, $value);
+            $value = array_map('trim', $value); // Trim each value in the array
         }
 
         if (!is_array($value)) {

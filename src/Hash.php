@@ -169,10 +169,15 @@ class Hash implements HashContract
      * Create a hashed password.
      *
      * @param string $password The plain text password to hash.
-     * @return string The hashed password.
+     * @param string|null $hash Optional existing hash (not used in this implementation).
+     * @return bool|string The hashed password or validation result.
      */
-    public function password(string $password): string
+    public function password(string $password, ?string $hash = null): bool|string
     {
+        if (!empty($hash)) {
+            return $this->validatePassword($password, $hash);
+        }
+
         return $this->hashPassword($password);
     }
 

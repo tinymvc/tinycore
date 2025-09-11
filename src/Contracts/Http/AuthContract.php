@@ -18,9 +18,9 @@ interface AuthContract
      * Otherwise, it will be fetched from the database and stored in cache 
      * for the specified cache expiry duration.
      *
-     * @return false|Model The currently logged in user, or false if not found.
+     * @return ?Model The currently logged in user, or null if not found.
      */
-    public function getUser(): false|Model;
+    public function getUser(): ?Model;
 
     /**
      * Checks if the current user is a guest (not logged in).
