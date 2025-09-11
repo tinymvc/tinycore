@@ -255,6 +255,7 @@ class Auth implements AuthContract, ArrayAccess
 
         $this->session->set($this->config['session_key'], $user->id);
         $this->user = $user;
+        $this->id = $user->id;
 
         if ($remember && isset($this->config['cookie_name'])) {
             // set cookie expiration time
