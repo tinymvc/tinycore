@@ -3,7 +3,6 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\MiddlewareInterface;
-use Spark\Contracts\Http\MiddlewareWithParametersInterface;
 use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -107,8 +106,11 @@ class Middleware
             return $destination($request);
         }
 
+        // Filter out excepted middlewares
+        $stack = array_filter($this->stack, fn($m) => !in_array($m, $except));
+
         // Use optimized pipeline processing
-        return $this->createPipeline($request, $destination, $except);
+        return $this->createPipeline($request, $destination, $stack);
     }
 
     /**
@@ -118,14 +120,11 @@ class Middleware
      * 
      * @param Request $request
      * @param Closure $destination
-     * @param array $except
+     * @param array $stack
      * @return mixed
      */
-    private function createPipeline(Request $request, Closure $destination, array $except = [])
+    private function createPipeline(Request $request, Closure $destination, array $stack = [])
     {
-        // Filter out excepted middlewares
-        $stack = array_filter($this->stack, fn($m) => !in_array($m, $except));
-
         // Build the pipeline from the end backwards (most efficient)
         $pipeline = array_reduce(
             array_reverse($stack), // Process in reverse to build pipeline

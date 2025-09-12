@@ -52,18 +52,18 @@ interface RequestContract
      *
      * @param string $key The key of the query parameter.
      * @param mixed $default The default value to return if the key does not exist.
-     * @return ?string The value associated with the given key, or the default value if the key does not exist.
+     * @return mixed The value associated with the given key, or the default value if the key does not exist.
      */
-    public function query(string $key, $default = null): ?string;
+    public function query(?string $key = null, $default = null): mixed;
 
     /**
      * Retrieves a POST data value by key.
      *
-     * @param string $key The key of the POST data.
+     * @param ?string $key The key of the POST data.
      * @param mixed $default The default value to return if the key does not exist.
      * @return mixed The value associated with the given key, or the default value if the key does not exist.
      */
-    public function post(string $key, $default = null): mixed;
+    public function post(?string $key = null, $default = null): mixed;
 
     /**
      * Retrieves a file from the request by key.

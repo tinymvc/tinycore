@@ -525,11 +525,11 @@ if (!function_exists('route_url')) {
      * application's router.
      *
      * @param string $name The name of the route to generate a URL for.
-     * @param null|string|array $context Optional context to include in the route.
+     * @param null|string|array|Arrayable $context Optional context to include in the route.
      *
      * @return string The generated URL for the specified route.
      */
-    function route_url(string $name, null|string|array $context = null): string
+    function route_url(string $name, null|string|array|Arrayable $context = null): string
     {
         return home_url(router()->route($name, $context));
     }
@@ -543,11 +543,11 @@ if (!function_exists('route')) {
      * absolute URL for the specified route name, optionally including context.
      *
      * @param string $name The name of the route to retrieve.
-     * @param null|string|array $context Optional context to include in the route.
+     * @param null|string|array|Arrayable $context Optional context to include in the route.
      *
      * @return Url The Url containing route details.
      */
-    function route(string $name, null|string|array $context = null): Url
+    function route(string $name, null|string|array|Arrayable $context = null): Url
     {
         // Parse the route path and get the route details.
         $parsedPath = router()->route($name, $context);
@@ -1441,6 +1441,26 @@ if (!function_exists('hasher')) {
     function hasher(): Hash
     {
         return hashing();
+    }
+}
+
+if (!function_exists('passcode')) {
+    /**
+     * Hashes or verifies a password.
+     *
+     * This function hashes a given password or verifies it against an existing hash.
+     * If a hash is provided, it checks if the password matches the hash and returns
+     * a boolean result. If no hash is provided, it generates and returns a new hash
+     * for the password.
+     *
+     * @param string $password The password to be hashed or verified.
+     * @param string|null $hash An optional existing hash to verify against.
+     * @return bool|string Returns true if the password matches the hash, false if it does not match,
+     *                     or a new hash string if no hash is provided.
+     */
+    function passcode(string $password, ?string $hash = null): bool|string
+    {
+        return hashing()->password($password, $hash);
     }
 }
 

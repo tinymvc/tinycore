@@ -6,7 +6,6 @@ use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Helpers\RequestErrors;
-use Spark\Http\Session;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -279,6 +278,18 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Alias for getRouteParam to maintain consistency with other parameter retrieval methods.
+     * 
+     * @param string $key The key of the route parameter.
+     * @param ?string $default The default value to return if the key does not exist.
+     * @return ?string The value associated with the given key, or the default value if the key does not exist.
+     */
+    public function routeParam(string $key, ?string $default = null): ?string
+    {
+        return $this->getRouteParam($key, $default);
+    }
+
+    /**
      * Retrieves the HTTP request method.
      * 
      * @return string The request method in uppercase.
@@ -429,12 +440,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Retrieves a query parameter value.
      * 
-     * @param string $key The parameter key.
+     * @param ?string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return ?string The parameter value or default.
+     * @return mixed The parameter value or default.
      */
-    public function query(string $key, $default = null): ?string
+    public function query(?string $key = null, $default = null): mixed
     {
+        if (func_num_args() === 0) {
+            return new InputSanitizer($this->queryParams);
+        }
         return $this->queryParams[$key] ?? $default;
     }
 
@@ -452,12 +466,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Retrieves a POST parameter value.
      * 
-     * @param string $key The parameter key.
+     * @param ?string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
      * @return mixed The parameter value or default.
      */
-    public function post(string $key, $default = null): mixed
+    public function post(?string $key = null, $default = null): mixed
     {
+        if (func_num_args() === 0) {
+            return new InputSanitizer($this->postParams);
+        }
         return $this->postParams[$key] ?? $default;
     }
 
@@ -637,6 +654,47 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 
         // Validate and return IP, or false if invalid
         return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : false;
+    }
+
+    /**
+     * Get the User-Agent string from the request headers.
+     * 
+     * @return ?string The User-Agent string, or null if not present.
+     */
+    public function useragent(): ?string
+    {
+        return $this->header('user-agent');
+    }
+
+    /**
+     * Determines if the request is made by a bot.
+     * 
+     * This method checks the User-Agent header against a list of common bot signatures.
+     *
+     * @return bool True if the request is from a bot, false otherwise.
+     */
+    public function isBot(): bool
+    {
+        $userAgent = $this->useragent();
+        if (!$userAgent) {
+            return false;
+        }
+
+        $botSignatures = ['bot', 'crawl', 'slurp', 'spider', 'mediapartners', 'google', 'bing', 'yahoo', 'baidu', 'yandex', 'sogou', 'exabot', 'facebot', 'ia_archiver'];
+
+        $pattern = '/' . implode('|', array_map('preg_quote', $botSignatures)) . '/i';
+
+        return preg_match($pattern, $userAgent) === 1;
+    }
+
+    /**
+     * Get the referer URL from the request headers.
+     * 
+     * @return ?string The referer URL, or null if not present.
+     */
+    public function referer(): ?string
+    {
+        return $this->header('referer');
     }
 
     /**
@@ -1116,15 +1174,60 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Get the authenticated user.
+     * Get the Auth service instance.
      *
-     * This method retrieves the currently authenticated user from the Auth service.
-     * If no user is authenticated, it returns null.
+     * This method retrieves the Auth service instance from the application container.
      *
-     * @return ?\App\Models\User The authenticated user model or null if not authenticated.
+     * @return \Spark\Http\Auth The Auth service instance.
      */
-    public function user()
+    public function auth(): Auth
     {
-        return app(Auth::class)->getUser() ?: null;
+        return app(Auth::class);
+    }
+
+    /**
+     * Retrieves the currently authenticated user or a specific attribute of the user.
+     *
+     * This method utilizes the Auth service to fetch the currently authenticated user.
+     * If a key is provided, it returns the value of that specific attribute from the user object.
+     * If no key is provided, it returns the entire user object. If no user is authenticated,
+     * it returns null or the specified default value.
+     *
+     * @param ?string $key The specific attribute of the user to retrieve (optional).
+     * @param mixed $default The default value to return if no user is authenticated or the key does not exist (optional).
+     *
+     * @return mixed The authenticated user object, a specific attribute value, or the default value.
+     */
+    public function user(?string $key = null, $default = null)
+    {
+        return $this->auth()->user($key, $default);
+    }
+
+    /**
+     * Checks if the current user is authenticated.
+     *
+     * This method checks if there is a currently authenticated user
+     * by utilizing the Auth service. It returns true if a user is logged in,
+     * and false if no user is authenticated.
+     *
+     * @return bool True if the user is authenticated, false otherwise.
+     */
+    public function isAuthenticated(): bool
+    {
+        return $this->auth()->isLoggedIn();
+    }
+
+    /**
+     * Checks if the current user is not authenticated.
+     *
+     * This method checks if there is no currently authenticated user
+     * by utilizing the Auth service. It returns true if no user is logged in,
+     * and false if a user is authenticated.
+     *
+     * @return bool True if the user is not authenticated, false otherwise.
+     */
+    public function isNotAuthenticated(): bool
+    {
+        return $this->auth()->isGuest();
     }
 }

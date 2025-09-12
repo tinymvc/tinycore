@@ -99,10 +99,10 @@ class Translator implements TranslatorContract
 
     /**
      * Translates a given text based on the local translations or returns the original text if translation is unavailable.
-     * Supports pluralization and argument substitution.
+     * Supports pluralization and argument substitution with both %s and :name styles.
      *
      * @param string $text The text to be translated.
-     * @param $arg The number to determine pluralization or replace placeholder in the translated text.
+     * @param $arg The number to determine pluralization or replace placeholder in the translated text, or associative array for :name style.
      * @param array $args An array of arguments to replace placeholders in the translated text.
      * @param array $args2 An array of arguments to replace plural placeholders in the translated text.
      * @return string The translated text with any placeholders replaced by the provided arguments.
@@ -120,13 +120,67 @@ class Translator implements TranslatorContract
             $args = $arg > 1 ? $args2 : $args;
         }
 
-        // Determine if the translation has arguments, else substitute with the first argument.
+        // Handle different argument styles
         if ($arg !== null && empty($args)) {
             $args = is_array($arg) ? $arg : [$arg];
         }
 
-        // Use vsprintf to substitute any placeholders with args
+        // Check if we're using :name style placeholders
+        if ($this->hasNamedPlaceholders($translation)) {
+            return $this->replaceNamedPlaceholders($translation, $args);
+        }
+
+        // Use vsprintf for %s style placeholders (backward compatibility)
         return vsprintf($translation, $args);
+    }
+
+    /**
+     * Checks if the translation text contains :name style placeholders.
+     *
+     * @param string $text The text to check.
+     * @return bool True if the text contains :name style placeholders, false otherwise.
+     */
+    private function hasNamedPlaceholders(string $text): bool
+    {
+        return preg_match('/:\w+/', $text) === 1;
+    }
+
+    /**
+     * Replaces :name style placeholders with values from associative or indexed array.
+     *
+     * @param string $text The text containing :name placeholders.
+     * @param array $args The arguments to replace placeholders with.
+     * @return string The text with placeholders replaced.
+     */
+    private function replaceNamedPlaceholders(string $text, array $args): string
+    {
+        // If args is associative array, replace by key names
+        if ($this->isAssociativeArray($args)) {
+            foreach ($args as $key => $value) {
+                $text = str_replace(":$key", $value, $text);
+            }
+        } else {
+            // If args is indexed array, replace placeholders in order they appear
+            preg_match_all('/:\w+/', $text, $matches);
+            foreach ($matches[0] as $index => $placeholder) {
+                if (isset($args[$index])) {
+                    $text = str_replace($placeholder, $args[$index], $text);
+                }
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * Checks if an array is associative.
+     *
+     * @param array $array The array to check.
+     * @return bool True if the array is associative, false otherwise.
+     */
+    private function isAssociativeArray(array $array): bool
+    {
+        return array_keys($array) !== range(0, count($array) - 1);
     }
 
     /**

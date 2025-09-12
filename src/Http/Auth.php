@@ -6,7 +6,6 @@ use ArrayAccess;
 use Spark\Contracts\Http\AuthContract;
 use Spark\Contracts\Http\AuthDriverContract;
 use Spark\Database\Model;
-use Spark\Hash;
 use Spark\Support\Traits\Macroable;
 use Throwable;
 
@@ -181,12 +180,11 @@ class Auth implements AuthContract, ArrayAccess
      */
     public static function attempt(array $credentials): bool
     {
-        $auth = auth();
         $identifier = \Spark\Support\Arr::except($credentials, ['password']);
 
-        $user = $auth->userModel::where($identifier)->first();
-        if ($user && hasher()->password($credentials['password'], $user->password)) {
-            $auth->login($user);
+        $user = self::$instance->userModel::where($identifier)->first();
+        if ($user && passcode($credentials['password'], $user->password)) {
+            self::$instance->login($user);
             return true;
         }
 

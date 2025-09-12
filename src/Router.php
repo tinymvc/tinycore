@@ -2,6 +2,7 @@
 namespace Spark;
 
 use Spark\Contracts\RouterContract;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Exceptions\Routing\InvalidNamedRouteException;
 use Spark\Exceptions\Routing\RouteNotFoundException;
 use Spark\Http\Middleware;
@@ -356,6 +357,7 @@ class Router implements RouterContract
      * @param string|null $name Optional name for the route.
      * @param string|array $middleware Middleware specific to this route.
      * @param string|array $withoutMiddleware Middleware to exclude from this route.
+     * @param array $config Additional configuration options for the route.
      *
      * @return self Returns the router instance to allow method chaining.
      */
@@ -367,7 +369,7 @@ class Router implements RouterContract
         string|null $name = null,
         string|array $middleware = [],
         string|array $withoutMiddleware = [],
-        ?int $resourceCounter = null
+        array $config = []
     ): self {
         $path = '/' . trim($path, '/'); // ensure it starts with a slash
         $method ??= 'GET'; // Set the default method to GET if not provided
@@ -431,8 +433,8 @@ class Router implements RouterContract
         ];
 
         // If resourceCounter is set, add it to the route
-        if ($resourceCounter !== null) {
-            $route['resourceCounter'] = $resourceCounter;
+        if (isset($config['resourceCounter'])) {
+            $route['resourceCounter'] = $config['resourceCounter'];
         }
 
         // Store the route by name if given, otherwise add to unnamed routes array
@@ -469,7 +471,6 @@ class Router implements RouterContract
         string|array $middleware = [],
         array $only = [],
         array $except = [],
-        string|array $withoutMiddleware = []
     ): self {
         $name ??= trim($path, '/');
         $name = str_replace('/', '.', $name);
@@ -503,8 +504,7 @@ class Router implements RouterContract
                 callback: $route['callback'],
                 name: $route['name'],
                 middleware: $middleware,
-                withoutMiddleware: $withoutMiddleware,
-                resourceCounter: $resourceCounter
+                config: ['resourceCounter' => $resourceCounter]
             );
         }
 
@@ -538,13 +538,13 @@ class Router implements RouterContract
      * Get the URL path for a named route.
      *
      * @param string $name The name of the route.
-     * @param string|null|array $context Optional context parameter for dynamic segments.
+     * @param null|string|array|Arrayable $context Optional context parameter for dynamic segments.
      *
      * @return string Returns the route's path.
      *
      * @throws InvalidNamedRouteException if the route does not exist.
      */
-    public function route(string $name, null|string|array $context = null): string
+    public function route(string $name, null|string|array|Arrayable $context = null): string
     {
         // Retrieve the route path by name or throw an exception
         $route = $this->routes[$name]['path'] ?? null;
@@ -554,6 +554,11 @@ class Router implements RouterContract
 
         // Replace dynamic parameters in route path with context, if provided
         if ($context !== null) {
+            // Convert Arrayable context to array
+            if ($context instanceof Arrayable) {
+                $context = $context->toArray();
+            }
+
             if (is_array($context)) {
                 foreach ($context as $key => $value) {
                     $pattern = sprintf('/\{%s\??\}/', preg_quote($key, '/'));
