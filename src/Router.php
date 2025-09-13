@@ -601,7 +601,7 @@ class Router implements RouterContract
                 $middleware->queue($route['middleware']);
 
                 // Execute middleware stack and return response if middleware stops request
-                $middlewareResponse = $middleware->process($request, fn($payload) => $payload, $route['withoutMiddleware']);
+                $middlewareResponse = $middleware->process($request, fn($payload) => $payload, (array) ($route['withoutMiddleware'] ?? []));
                 if ($middlewareResponse instanceof Response) {
                     return $middlewareResponse;
                 }
