@@ -39,6 +39,29 @@ class Router implements RouterContract
     private int $resourceCounter = 0;
 
     /**
+     * @var array|null $pendingGroupAttributes
+     *
+     * Temporarily holds group attributes when using method chaining
+     * before the group callback is executed.
+     */
+    private ?array $pendingGroupAttributes = null;
+
+    /**
+     * @var array $pendingGroupRoutes
+     *
+     * Temporarily holds routes added during group method chaining
+     * before applying group attributes.
+     */
+    private array $pendingGroupRoutes = [];
+
+    /**
+     * @var bool $isInPendingGroup
+     *
+     * Flag to track if we're currently in a pending group state.
+     */
+    private bool $isInPendingGroup = false;
+
+    /**
      * Construct a new router.
      *
      * @param array $routes An array of routes that should be added to the router.
@@ -171,6 +194,26 @@ class Router implements RouterContract
     }
 
     /**
+     * Redirect to a specified path.
+     *
+     * This method adds a route that redirects to a specified URL with an optional HTTP status code.
+     *
+     * @param string $from The path for the redirect route.
+     * @param string $to The URL to redirect to.
+     * @param int $status The HTTP status code for the redirect (default is 302).
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function redirect(string $from, string $to, int $status = 302): self
+    {
+        $this->add($from, 'GET', function () use ($to, $status): never {
+            header("Location: $to", true, $status);
+            exit;
+        });
+        return $this;
+    }
+
+    /**
      * Add a route with a view to the router.
      *
      * @param string $path The path for the route.
@@ -203,7 +246,7 @@ class Router implements RouterContract
     }
 
     /**
-     * Assign middleware to the most recently added route.
+     * Assign middleware to the most recently added route or pending group.
      *
      * @param string|array $middleware An array of middleware to be associated with the route.
      *
@@ -211,6 +254,17 @@ class Router implements RouterContract
      */
     public function middleware(string|array $middleware): self
     {
+        // If we're in a pending group, add to pending group attributes
+        if ($this->isInPendingGroup) {
+            $this->pendingGroupAttributes['middleware'] = array_unique(
+                array_merge(
+                    (array) ($this->pendingGroupAttributes['middleware'] ?? []),
+                    (array) $middleware
+                )
+            );
+            return $this;
+        }
+
         $lastRouteKey = array_key_last($this->routes);
         if ($lastRouteKey === null) {
             return $this;
@@ -241,13 +295,24 @@ class Router implements RouterContract
     }
 
     /**
-     * Exclude middleware from the most recently added route.
+     * Exclude middleware from the most recently added route or pending group.
      * 
      * @param string|array $middleware An array of middleware to be excluded from the route.
      * @return self Returns the router instance to allow method chaining.
      */
     public function withoutMiddleware(string|array $middleware): self
     {
+        // If we're in a pending group, add to pending group attributes
+        if ($this->isInPendingGroup) {
+            $this->pendingGroupAttributes['withoutMiddleware'] = array_unique(
+                array_merge(
+                    (array) ($this->pendingGroupAttributes['withoutMiddleware'] ?? []),
+                    (array) $middleware
+                )
+            );
+            return $this;
+        }
+
         $lastRouteKey = array_key_last($this->routes);
         if ($lastRouteKey === null) {
             return $this;
@@ -278,27 +343,60 @@ class Router implements RouterContract
     }
 
     /**
-     * Redirect to a specified path.
+     * Alias for prefix method to set path prefix for pending group.
      *
-     * This method adds a route that redirects to a specified URL with an optional HTTP status code.
-     *
-     * @param string $from The path for the redirect route.
-     * @param string $to The URL to redirect to.
-     * @param int $status The HTTP status code for the redirect (default is 302).
-     *
+     * @param string $path The path prefix to set.
      * @return self Returns the router instance to allow method chaining.
      */
-    public function redirect(string $from, string $to, int $status = 302): self
+    public function path(string $path): self
     {
-        $this->add($from, 'GET', function () use ($to, $status): never {
-            header("Location: $to", true, $status);
-            exit;
-        });
+        if ($this->isInPendingGroup) {
+            $this->pendingGroupAttributes['path'] = (string) ($this->pendingGroupAttributes['path'] ?? '') . '/' . trim($path, '/');
+        }
         return $this;
     }
 
     /**
-     * Assign a name to the most recently added route.
+     * Set path prefix for pending group.
+     *
+     * @param string $path The path prefix to set.
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function prefix(string $path): self
+    {
+        return $this->path($path);
+    }
+
+    /**
+     * Set callback for pending group.
+     *
+     * @param callable|string|array $callback The callback to set.
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function callback(callable|string|array $callback): self
+    {
+        if ($this->isInPendingGroup) {
+            $this->pendingGroupAttributes['callback'] = $callback;
+        }
+        return $this;
+    }
+
+    /**
+     * Set template for pending group.
+     *
+     * @param string $template The template to set.
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function template(string $template): self
+    {
+        if ($this->isInPendingGroup) {
+            $this->pendingGroupAttributes['template'] = (string) ($this->pendingGroupAttributes['template'] ?? '') . $template;
+        }
+        return $this;
+    }
+
+    /**
+     * Assign a name to the most recently added route or pending group.
      *
      * @param string $name The name to assign to the route.
      *
@@ -306,6 +404,12 @@ class Router implements RouterContract
      */
     public function name(string $name): self
     {
+        // If we're in a pending group, add to pending group attributes
+        if ($this->isInPendingGroup) {
+            $this->pendingGroupAttributes['name'] = (string) ($this->pendingGroupAttributes['name'] ?? '') . $name;
+            return $this;
+        }
+
         $lastRouteKey = array_key_last($this->routes);
         if ($lastRouteKey === null) {
             return $this;
@@ -374,10 +478,25 @@ class Router implements RouterContract
         $path = '/' . trim($path, '/'); // ensure it starts with a slash
         $method ??= 'GET'; // Set the default method to GET if not provided
 
+        // If we're in a pending group, store the route temporarily
+        if ($this->isInPendingGroup) {
+            $this->pendingGroupRoutes[] = [
+                'path' => $path,
+                'method' => $method,
+                'callback' => $callback,
+                'template' => $template,
+                'name' => $name,
+                'middleware' => $middleware,
+                'withoutMiddleware' => $withoutMiddleware,
+                'config' => $config
+            ];
+            return $this;
+        }
+
         // Check if there are any group attributes to apply to the route
         if (!empty($this->groupAttributes)) {
             // Prepend the grouped path to the route path if it exists
-            $groupedPath = array_merge(...array_map(fn($attr) => (array) ($attr['path'] ?? []), $this->groupAttributes));
+            $groupedPath = array_merge(...array_map(fn($attr) => array_merge((array) ($attr['path'] ?? []), (array) ($attr['prefix'] ?? [])), $this->groupAttributes));
             $groupedPath = implode('', array_filter($groupedPath));
             $path = "$groupedPath$path";
 
@@ -514,16 +633,75 @@ class Router implements RouterContract
     /**
      * Adds a group of routes to the router with shared attributes.
      *
-     * The passed callback is called immediately. Any routes defined within the
-     * callback will have the given attributes applied to them.
+     * This method supports both traditional array-based attributes and method chaining.
+     * When used with method chaining, call the returned instance's methods before
+     * calling the group() method to finalize the group.
      *
-     * @param array $attributes An array of shared attributes for the group of routes.
-     * @param callable $callback The callback that defines the group of routes.
+     * @param array|callable|null $attributesOrCallback Array of shared attributes or the callback function.
+     * @param callable|null $callback Optional callback when first parameter is attributes array.
      *
+     * @return ?self Returns self for method chaining when no callback provided, void when callback is executed.
+     */
+    public function group(array|callable|null $attributesOrCallback = null, callable|null $callback = null): ?self
+    {
+        // Traditional usage: Router::group(['prefix' => 'api'], function($router) {...})
+        if (is_array($attributesOrCallback) && is_callable($callback)) {
+            $this->executeTraditionalGroup($attributesOrCallback, $callback);
+            return null;
+        }
+
+        // Method chaining with callback: Router::group(function($router) {...})->middleware('auth')->prefix('api')
+        if (is_callable($attributesOrCallback) && $callback === null) {
+            $this->executeMethodChainGroup($attributesOrCallback);
+            return null;
+        }
+
+        // Method chaining setup: Router::group()->middleware('auth')->prefix('api')->routes(function($router) {...})
+        if ($attributesOrCallback === null && $callback === null) {
+            $this->isInPendingGroup = true;
+            $this->pendingGroupAttributes = [];
+            $this->pendingGroupRoutes = [];
+            return $this;
+        }
+
+        // Invalid usage
+        throw new \InvalidArgumentException('Invalid group() method usage. Use either group($attributes, $callback), group($callback), or group() for method chaining.');
+    }
+
+    /**
+     * Execute routes callback for method chaining groups.
+     *
+     * @param callable $callback The routes callback.
      * @return void
      */
-    public function group(array $attributes, callable $callback): void
+    public function routes(callable $callback): void
     {
+        if (!$this->isInPendingGroup) {
+            throw new \RuntimeException('routes() can only be called on a pending group. Use group() first.');
+        }
+
+        $this->executeMethodChainGroup($callback);
+    }
+
+    /**
+     * Execute traditional group with array attributes.
+     *
+     * @param array $attributes Group attributes.
+     * @param callable $callback Routes callback.
+     * @return void
+     */
+    private function executeTraditionalGroup(array $attributes, callable $callback): void
+    {
+        // Validate group attributes
+        $keys = array_keys($attributes);
+        $validKeys = ['prefix', 'path', 'name', 'template', 'callback', 'method', 'middleware', 'withoutMiddleware'];
+
+        foreach ($keys as $key) {
+            if (!in_array($key, $validKeys, true)) {
+                throw new \InvalidArgumentException("Invalid group attribute: $key");
+            }
+        }
+
         // Store the group attributes that will be applied to all routes within the group
         $this->groupAttributes[] = $attributes;
 
@@ -532,6 +710,73 @@ class Router implements RouterContract
 
         // Remove the last group attributes after the callback has been executed
         array_pop($this->groupAttributes);
+    }
+
+    /**
+     * Execute method chain group by applying pending attributes to routes.
+     *
+     * @param callable $callback Routes callback.
+     * @return void
+     */
+    private function executeMethodChainGroup(callable $callback): void
+    {
+        $previousGroupState = $this->isInPendingGroup;
+        $previousAttributes = $this->pendingGroupAttributes;
+        $previousRoutes = $this->pendingGroupRoutes;
+
+        // Reset pending state
+        $this->isInPendingGroup = false;
+        $this->pendingGroupRoutes = [];
+
+        // Execute callback to collect routes
+        $this->isInPendingGroup = true;
+        $callback($this);
+
+        // Apply group attributes to collected routes
+        $this->applyGroupAttributesToPendingRoutes();
+
+        // Restore previous state if nested
+        $this->isInPendingGroup = $previousGroupState;
+        $this->pendingGroupAttributes = $previousAttributes;
+        $this->pendingGroupRoutes = $previousRoutes;
+    }
+
+    /**
+     * Apply pending group attributes to collected routes.
+     *
+     * @return void
+     */
+    private function applyGroupAttributesToPendingRoutes(): void
+    {
+        if (empty($this->pendingGroupRoutes)) {
+            $this->isInPendingGroup = false;
+            $this->pendingGroupAttributes = null;
+            return;
+        }
+
+        // Apply pending group attributes to all collected routes
+        foreach ($this->pendingGroupRoutes as $routeData) {
+            // Apply group attributes using existing logic
+            $this->groupAttributes[] = $this->pendingGroupAttributes ?? [];
+
+            $this->add(
+                path: $routeData['path'],
+                method: $routeData['method'],
+                callback: $routeData['callback'],
+                template: $routeData['template'],
+                name: $routeData['name'],
+                middleware: $routeData['middleware'],
+                withoutMiddleware: $routeData['withoutMiddleware'],
+                config: $routeData['config']
+            );
+
+            array_pop($this->groupAttributes);
+        }
+
+        // Reset pending state
+        $this->isInPendingGroup = false;
+        $this->pendingGroupAttributes = null;
+        $this->pendingGroupRoutes = [];
     }
 
     /**

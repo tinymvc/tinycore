@@ -143,6 +143,31 @@ class Hash implements HashContract
     }
 
     /**
+     * Check if a plain text value matches a given hash.
+     *
+     * @param string $plain The plaintext string.
+     * @param string $hash The hash to check against.
+     * @param string $algo The algorithm used to create the hash (default: sha256).
+     * @return bool True if the hash matches, false otherwise.
+     */
+    public function check(string $plain, string $hash, string $algo = 'sha256'): bool
+    {
+        return $this->validate($plain, $hash, $algo);
+    }
+
+    /**
+     * Compare two hashes in a timing-attack safe manner.
+     *
+     * @param string $knownHash The known hash to compare against.
+     * @param string $userString The user-provided string to compare.
+     * @return bool True if the hashes match, false otherwise.
+     */
+    public function equals(string $knownHash, string $userString): bool
+    {
+        return hash_equals($knownHash, $userString);
+    }
+
+    /**
      * Hash a password securely using Argon2id or Bcrypt.
      *
      * @param string $password The plain text password to hash.
@@ -191,6 +216,58 @@ class Hash implements HashContract
     public function verify(string $password, string $hashedPassword): bool
     {
         return $this->validatePassword($password, $hashedPassword);
+    }
+
+    /**
+     * Check if a hashed password needs to be rehashed according to the current algorithm and options.
+     *
+     * @param string $hashedPassword The hashed password to check.
+     * @return bool True if the password needs to be rehashed, false otherwise.
+     */
+    public function needsRehash(string $hashedPassword): bool
+    {
+        return password_needs_rehash($hashedPassword, $this->passwordAlgorithm, $this->passwordOptions);
+    }
+
+    /**
+     * Get information about a hashed password.
+     *
+     * @param string $hashedPassword The hashed password to get information about.
+     * @return array An associative array containing information about the hashed password.
+     */
+    public function passwordInfo(string $hashedPassword): array
+    {
+        return password_get_info($hashedPassword);
+    }
+
+    /**
+     * Get the current password hashing algorithm.
+     *
+     * @return string The current password hashing algorithm.
+     */
+    public function getPasswordAlgorithm(): string
+    {
+        return $this->passwordAlgorithm;
+    }
+
+    /**
+     * Get the current password hashing options.
+     *
+     * @return array The current password hashing options.
+     */
+    public function getPasswordOptions(): array
+    {
+        return $this->passwordOptions;
+    }
+
+    /**
+     * Get the current encryption key.
+     *
+     * @return string The current encryption key.
+     */
+    public function getKey(): string
+    {
+        return $this->key;
     }
 
     /**

@@ -120,9 +120,9 @@ interface RouterContract
      * @param array $attributes An array of shared attributes for the group of routes.
      * @param callable $callback The callback that defines the group of routes.
      * 
-     * @return void
+     * @return ?self Returns self for method chaining when no callback provided, mixed when callback is executed.
      */
-    public function group(array $attributes, callable $callback): void;
+    public function group(array $attributes, callable $callback): ?self;
 
     /**
      * Gets the URL path for a named route.
