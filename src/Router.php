@@ -382,6 +382,17 @@ class Router implements RouterContract
     }
 
     /**
+     * Set controller for pending group.
+     *
+     * @param string $controller The controller to set.
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function controller(string $controller): self
+    {
+        return $this->callback($controller);
+    }
+
+    /**
      * Set template for pending group.
      *
      * @param string $template The template to set.
@@ -521,7 +532,7 @@ class Router implements RouterContract
             }
 
             // Prepend grouped template path to the route template if both are set
-            $groupedTemplate = array_merge(...array_map(fn($attr) => (array) ($attr['template'] ?? []), $this->groupAttributes));
+            $groupedTemplate = array_merge(...array_map(fn($attr) => array_merge((array) ($attr['template'] ?? []), (array) ($attr['view'] ?? [])), $this->groupAttributes));
             $groupedTemplate = implode('', array_filter($groupedTemplate));
             if (!empty($groupedTemplate)) {
                 $template ??= '';
@@ -529,7 +540,7 @@ class Router implements RouterContract
             }
 
             // If group callback is set and no template is used, apply it to the callback
-            $groupedCallback = array_map(fn($attr) => $attr['callback'] ?? null, $this->groupAttributes);
+            $groupedCallback = array_map(fn($attr) => $attr['controller'] ?? $attr['callback'] ?? null, $this->groupAttributes);
             $groupedCallback = array_filter($groupedCallback);
             if (empty($template) && !empty($groupedCallback)) {
                 $groupedCallback = end($groupedCallback); // Get the last callback from the group attributes
@@ -694,7 +705,7 @@ class Router implements RouterContract
     {
         // Validate group attributes
         $keys = array_keys($attributes);
-        $validKeys = ['prefix', 'path', 'name', 'template', 'callback', 'method', 'middleware', 'withoutMiddleware'];
+        $validKeys = ['prefix', 'path', 'name', 'template', 'view', 'controller', 'callback', 'method', 'middleware', 'withoutMiddleware'];
 
         foreach ($keys as $key) {
             if (!in_array($key, $validKeys, true)) {
