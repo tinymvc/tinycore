@@ -2,9 +2,12 @@
 
 namespace Spark\Http;
 
-use Spark\Contracts\Http\HttpRouteContract;
+use Spark\Contracts\Http\RouteContract;
 use Spark\Foundation\Application;
-use Spark\Router;
+use Spark\Routing\Route;
+use Spark\Routing\RouteGroup;
+use Spark\Routing\Router;
+use Spark\Routing\RouteResource;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -13,24 +16,11 @@ use Spark\Support\Traits\Macroable;
  * This class provides a simple facade for the Router class, allowing for easy 
  * registration and dispatching of routes.
  *
- * @method static Router get(string $path, callable|string|array $callback)
- * @method static Router post(string $path, callable|string|array $callback)
- * @method static Router put(string $path, callable|string|array $callback)
- * @method static Router patch(string $path, callable|string|array $callback)
- * @method static Router delete(string $path, callable|string|array $callback)
- * @method static Router options(string $path, callable|string|array $callback)
- * @method static Router any(string $path, callable|string|array $callback)
- * @method static Router redirect(string $from, string $to, int $status = 302)
- * @method static Router group(array $attributes, callable $callback)
- * @method static Router view(string $path, string $template)
- * @method static Router fireline(string $path, string $template)
- * @method static Router resource(string $path, string $callback, string|null $name = null, string|array $middleware = [], array $only = [], array $except = [])
- *
  * @package Spark\Http
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Route implements HttpRouteContract
+class Route implements RouteContract
 {
     use Macroable;
 
@@ -40,9 +30,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function get($path, $callback): Router
+    public static function get($path, $callback): Route
     {
         return Application::$app->get(Router::class)->get($path, $callback);
     }
@@ -53,9 +43,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function post($path, $callback): Router
+    public static function post($path, $callback): Route
     {
         return Application::$app->get(Router::class)->post($path, $callback);
     }
@@ -66,9 +56,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function put($path, $callback): Router
+    public static function put($path, $callback): Route
     {
         return Application::$app->get(Router::class)->put($path, $callback);
     }
@@ -79,9 +69,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function patch($path, $callback): Router
+    public static function patch($path, $callback): Route
     {
         return Application::$app->get(Router::class)->patch($path, $callback);
     }
@@ -92,9 +82,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function delete($path, $callback): Router
+    public static function delete($path, $callback): Route
     {
         return Application::$app->get(Router::class)->delete($path, $callback);
     }
@@ -105,9 +95,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function options($path, $callback): Router
+    public static function options($path, $callback): Route
     {
         return Application::$app->get(Router::class)->options($path, $callback);
     }
@@ -118,9 +108,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function any($path, $callback): Router
+    public static function any($path, $callback): Route
     {
         return Application::$app->get(Router::class)->any($path, $callback);
     }
@@ -131,9 +121,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param string $template The view template file name.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function view($path, $template): Router
+    public static function view($path, $template): Route
     {
         return Application::$app->get(Router::class)->view($path, $template);
     }
@@ -144,9 +134,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param string $template The Fireline template file name.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function fireline($path, $template): Router
+    public static function fireline($path, $template): Route
     {
         return Application::$app->get(Router::class)->fireline($path, $template);
     }
@@ -161,9 +151,9 @@ class Route implements HttpRouteContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function match(array $methods, string $path, callable|string|array $callback): Router
+    public static function match(array $methods, string $path, callable|string|array $callback): Route
     {
         return Application::$app->get(Router::class)->match($methods, $path, $callback);
     }
@@ -181,17 +171,18 @@ class Route implements HttpRouteContract
      * @param array $only Optional array of actions to include in the resource route.
      * @param array $except Optional array of actions to exclude from the resource route.
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\RouteResource The registered Resource Route instance.
      */
     public static function resource(
         string $path,
-        string $callback,
+        string $controller,
         string|null $name = null,
         string|array $middleware = [],
+        string|array $withoutMiddleware = [],
         array $only = [],
         array $except = [],
-    ): Router {
-        return Application::$app->get(Router::class)->resource($path, $callback, $name, $middleware, $only, $except);
+    ): RouteResource {
+        return Application::$app->get(Router::class)->resource($path, $controller, $name, $middleware, $withoutMiddleware, $only, $except);
     }
 
     /**
@@ -203,9 +194,9 @@ class Route implements HttpRouteContract
      * @param string $to The path to redirect to.
      * @param int $status The HTTP status code for the redirect (default is 302).
      *
-     * @return \Spark\Router The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The registered Route instance.
      */
-    public static function redirect(string $from, string $to, int $status = 302): Router
+    public static function redirect(string $from, string $to, int $status = 302): Route
     {
         return Application::$app->get(Router::class)->redirect($from, $to, $status);
     }
@@ -213,13 +204,13 @@ class Route implements HttpRouteContract
     /**
      * Registers a group of routes with the same attributes.
      *
-     * @param array $attributes The attributes to be applied to each route.
-     * @param callable $callback The callback function containing the route definitions.
+     * @param array|callable|null $attrsOrCallback The attributes to be applied to each route.
+     * @param callable|null $callback The callback function containing the route definitions.
      *
-     * @return void
+     * @return \Spark\Routing\RouteGroup The registered Route Group instance.
      */
-    public static function group($attributes, $callback): void
+    public static function group($attrsOrCallback = null, $callback = null): RouteGroup
     {
-        Application::$app->get(Router::class)->group($attributes, $callback);
+        return Application::$app->get(Router::class)->group($attrsOrCallback, $callback);
     }
 }

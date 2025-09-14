@@ -1,9 +1,8 @@
 <?php
 
-namespace Spark\Exceptions\Routing;
+namespace Spark\Routing\Exceptions;
 
 use Spark\Exceptions\NotFoundException;
-
 
 class RouteNotFoundException extends NotFoundException
 {

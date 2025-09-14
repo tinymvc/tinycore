@@ -6,6 +6,8 @@ use Spark\Container;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
+use Spark\Routing\Route;
+use Spark\Routing\RouteGroup;
 
 /**
  * Interface for the router that defines the methods for registering
@@ -19,9 +21,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function get(string $path, callable|string|array $callback): self;
+    public function get(string $path, callable|string|array $callback): Route;
 
     /**
      * Registers a new POST route with the router.
@@ -29,9 +31,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function post(string $path, callable|string|array $callback): self;
+    public function post(string $path, callable|string|array $callback): Route;
 
     /**
      * Registers a new PUT route with the router.
@@ -39,9 +41,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function put(string $path, callable|string|array $callback): self;
+    public function put(string $path, callable|string|array $callback): Route;
 
     /**
      * Registers a new PATCH route with the router.
@@ -49,9 +51,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function patch(string $path, callable|string|array $callback): self;
+    public function patch(string $path, callable|string|array $callback): Route;
 
     /**
      * Registers a new DELETE route with the router.
@@ -59,9 +61,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function delete(string $path, callable|string|array $callback): self;
+    public function delete(string $path, callable|string|array $callback): Route;
 
     /**
      * Registers a new OPTIONS route with the router.
@@ -69,9 +71,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function options(string $path, callable|string|array $callback): self;
+    public function options(string $path, callable|string|array $callback): Route;
 
     /**
      * Registers a new route that matches any HTTP method with the router.
@@ -79,9 +81,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function any(string $path, callable|string|array $callback): self;
+    public function any(string $path, callable|string|array $callback): Route;
 
     /**
      * Registers a new route with a view with the router.
@@ -89,27 +91,9 @@ interface RouterContract
      * @param string $path The path for the route.
      * @param string $template The template to use for the route.
      * 
-     * @return self The router instance to allow method chaining.
+     * @return \Spark\Routing\Route The router instance to allow method chaining.
      */
-    public function view(string $path, string $template): self;
-
-    /**
-     * Assigns middleware to the most recently added route.
-     * 
-     * @param string|array $middleware An array of middleware to be associated with the route.
-     * 
-     * @return self The router instance to allow method chaining.
-     */
-    public function middleware(string|array $middleware): self;
-
-    /**
-     * Names the most recently added route.
-     * 
-     * @param string $name The name of the route.
-     * 
-     * @return self The router instance to allow method chaining.
-     */
-    public function name(string $name): self;
+    public function view(string $path, string $template): Route;
 
     /**
      * Adds a group of routes to the router with shared attributes.
@@ -117,12 +101,12 @@ interface RouterContract
      * The passed callback is called immediately. Any routes defined within the
      * callback will have the given attributes applied to them.
      * 
-     * @param array $attributes An array of shared attributes for the group of routes.
-     * @param callable $callback The callback that defines the group of routes.
+     * @param array|callable|null $attrsOrCallback Array of shared attributes or the callback function.
+     * @param callable|null $callback Optional callback when first parameter is attributes array.
      * 
-     * @return ?self Returns self for method chaining when no callback provided, mixed when callback is executed.
+     * @return \Spark\Routing\RouteGroup Returns a RouteGroup instance for method chaining when no callback is provided, or null when the callback is executed.
      */
-    public function group(array $attributes, callable $callback): ?self;
+    public function group(array|callable|null $attrsOrCallback = null, callable|null $callback = null): RouteGroup;
 
     /**
      * Gets the URL path for a named route.

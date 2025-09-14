@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Exceptions\Routing;
+namespace Spark\Routing\Exceptions;
 
 use Exception;
 
