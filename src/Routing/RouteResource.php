@@ -141,11 +141,11 @@ class RouteResource implements RouteResourceContract
         ];
 
         // Filter routes based on 'only' and 'except' parameters
-        if (!empty($only)) {
-            $routes = array_intersect_key($routes, array_flip($only));
+        if (!empty($this->only)) {
+            $routes = array_intersect_key($routes, array_flip($this->only));
         }
-        if (!empty($except)) {
-            $routes = array_diff_key($routes, array_flip($except));
+        if (!empty($this->except)) {
+            $routes = array_diff_key($routes, array_flip($this->except));
         }
 
         // Register each route with the router
