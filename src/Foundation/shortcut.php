@@ -11,6 +11,7 @@ use Spark\Exceptions\Http\InputValidationFailedException;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Helpers\HttpUtilResponse;
+use Spark\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
@@ -20,7 +21,6 @@ use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Http\Session;
 use Spark\Queue\Job;
-use Spark\Router;
 use Spark\Translator;
 use Spark\Utils\Cache;
 use Spark\Utils\Carbon;
@@ -277,7 +277,7 @@ if (!function_exists('router')) {
     /**
      * Get the current router instance.
      *
-     * @return Router
+     * @return \Spark\Routing\Router
      */
     function router(): Router
     {

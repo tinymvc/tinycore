@@ -5,7 +5,7 @@ namespace Spark\Foundation\Console;
 use Spark\Console\Commands;
 use Spark\Console\Prompt;
 use Spark\Queue\Queue;
-use Spark\Router;
+use Spark\Routing\Router;
 use Spark\Utils\FileManager;
 
 /**

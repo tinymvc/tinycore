@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts;
+namespace Spark\Routing\Contracts;
 
 use Spark\Container;
 use Spark\Http\Middleware;

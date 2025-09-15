@@ -30,7 +30,7 @@ class Route implements RouteContract
     public function __construct(
         private string $path,
         private string|array|null $method = null,
-        private callable|string|array|null $callback = null,
+        private $callback = null,
         private string|null $template = null,
         private string|null $name = null,
         private string|array $middleware = [],

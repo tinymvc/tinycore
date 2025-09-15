@@ -2,11 +2,11 @@
 namespace Spark\Routing;
 
 use Spark\Container;
-use Spark\Contracts\RouterContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
+use Spark\Routing\Contracts\RouterContract;
 use Spark\Routing\Exceptions\InvalidNamedRouteException;
 use Spark\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Macroable;

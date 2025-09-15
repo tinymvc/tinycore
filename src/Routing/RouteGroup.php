@@ -161,7 +161,7 @@ class RouteGroup implements RouteGroupContract
     private function concatGroupAttributes(string $name, string $value, string $delimiter): void
     {
         $currentString = $this->group['attributes'][$name] ?? '';
-        $this->group['attributes'][$name] = trim($currentString . $delimiter . ltrim($value, $delimiter), $delimiter);
+        $this->group['attributes'][$name] = $this->cleanForConcat($currentString, $value, $delimiter);
     }
 
     /**
@@ -175,6 +175,19 @@ class RouteGroup implements RouteGroupContract
     private function setGroupAttribute(string $name, mixed $value): void
     {
         $this->group['attributes'][$name] = $value;
+    }
+
+    /**
+     * Cleanly concatenate two strings with a delimiter, ensuring no duplicate delimiters.
+     *
+     * @param string $first The existing string.
+     * @param string $second The new string to append.
+     * @param string $delimiter The delimiter to use for concatenation.
+     * @return string The concatenated string.
+     */
+    private function cleanForConcat(string $first, string $second, string $delimiter): string
+    {
+        return trim($first . $delimiter . ltrim($second, $delimiter), $delimiter);
     }
 
     /**
@@ -232,6 +245,8 @@ class RouteGroup implements RouteGroupContract
 
             call_user_func($this->callback, $router);
 
+            $attributes = $this->group['attributes'] ?? [];
+
             foreach ($router->getPendingRoutes() as $routeData) {
                 $path = $routeData['path'];
                 $method = $routeData['method'];
@@ -245,7 +260,8 @@ class RouteGroup implements RouteGroupContract
                 if (!empty($attributes)) {
                     // Apply path prefix
                     if (isset($attributes['path'])) {
-                        $path = $attributes['path'] . $path;
+                        $path ??= '';
+                        $path = $this->cleanForConcat($attributes['path'], $path, '/');
                     }
 
                     // Apply method
@@ -265,12 +281,14 @@ class RouteGroup implements RouteGroupContract
 
                     // Apply name prefix
                     if (isset($attributes['name'])) {
-                        $name = $name ? $attributes['name'] . $name : $attributes['name'];
+                        $name ??= '';
+                        $name = $this->cleanForConcat($attributes['name'], $name, '.');
                     }
 
                     // Apply template
                     if (isset($attributes['template'])) {
-                        $template = $template ? $attributes['template'] . $template : $attributes['template'];
+                        $template ??= '';
+                        $template = $this->cleanForConcat($attributes['template'], $template, '.');
                     }
 
                     // Apply controller
