@@ -283,15 +283,13 @@ class RouteGroup implements RouteGroupContract
                         $withoutMiddleware = array_unique(array_merge((array) $withoutMiddleware, (array) $attributes['withoutMiddleware']));
                     }
 
-                    // Apply name prefix
-                    if (isset($attributes['name'])) {
-                        $name ??= '';
+                    // Apply name prefix if name is not empty
+                    if (isset($attributes['name']) && !empty($name)) {
                         $name = $this->cleanForConcat($attributes['name'], $name, '.');
                     }
 
-                    // Apply template
-                    if (isset($attributes['template'])) {
-                        $template ??= '';
+                    // Apply template prefix if template is not empty
+                    if (isset($attributes['template']) && !empty($template)) {
                         $template = $this->cleanForConcat($attributes['template'], $template, '.');
                     }
 
