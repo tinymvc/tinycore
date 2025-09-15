@@ -8,18 +8,18 @@ use Spark\Http\Session;
 use Spark\Support\Traits\Macroable;
 use Spark\View\BladeCompiler;
 use Spark\View\Contracts\BladeCompilerContract;
-use Spark\View\Contracts\ViewContract;
+use Spark\View\Contracts\BladeContract;
 use Spark\View\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\View\Exceptions\ViewException;
 
 /**
- * Class View
+ * Class Blade
  * 
  * Handles template rendering with Blade-like template engine
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class View implements ViewContract
+class Blade implements BladeContract
 {
     use Macroable;
 

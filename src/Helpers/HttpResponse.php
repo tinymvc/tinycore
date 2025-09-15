@@ -13,7 +13,7 @@ use ArrayAccess;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class HttpUtilResponse implements ArrayAccess, \Stringable
+class HttpResponse implements ArrayAccess, \Stringable
 {
     public mixed $body = ''; // The response body
     public int $status = 0; // The HTTP status code

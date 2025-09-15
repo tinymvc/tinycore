@@ -4,7 +4,7 @@ namespace Spark\Utils;
 
 use Spark\Contracts\Utils\HttpUtilContract;
 use Spark\Exceptions\Utils\PingUtilException;
-use Spark\Helpers\HttpUtilResponse;
+use Spark\Helpers\HttpResponse;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -13,11 +13,11 @@ use Spark\Support\Traits\Macroable;
  * A helper class for making HTTP requests in PHP using cURL. Supports GET, POST, PUT, PATCH, and DELETE methods,
  * as well as custom headers, options, user agents, and file downloads.
  * 
- * @method static HttpUtilResponse get(string $url, array $params = [])
- * @method static HttpUtilResponse post(string $url, array $params = [])
- * @method static HttpUtilResponse put(string $url, array $params = [])
- * @method static HttpUtilResponse patch(string $url, array $params = [])
- * @method static HttpUtilResponse delete(string $url, array $params = [])
+ * @method static HttpResponse get(string $url, array $params = [])
+ * @method static HttpResponse post(string $url, array $params = [])
+ * @method static HttpResponse put(string $url, array $params = [])
+ * @method static HttpResponse patch(string $url, array $params = [])
+ * @method static HttpResponse delete(string $url, array $params = [])
  * 
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
@@ -53,10 +53,10 @@ class Http implements HttpUtilContract
      *
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
-     * @return HttpUtilResponse The response data, including body, status code, final URL, and content length.
+     * @return HttpResponse The response data, including body, status code, final URL, and content length.
      * @throws PingUtilException If cURL initialization fails.
      */
-    public function send(string $url, array $params = []): HttpUtilResponse
+    public function send(string $url, array $params = []): HttpResponse
     {
         $curl = curl_init();
         if ($curl === false) {
@@ -118,7 +118,7 @@ class Http implements HttpUtilContract
         curl_close($curl);
 
         // The response data, including body, status code, final URL, and content length.
-        return new HttpUtilResponse($response);
+        return new HttpResponse($response);
     }
 
     /**

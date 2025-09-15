@@ -14,22 +14,6 @@ use Spark\Support\Traits\Macroable;
  * 
  * Manages database connections and provides query execution and statement preparation.
  * 
- * @method bool beginTransaction()
- * @method bool commit()
- * @method bool rollBack()
- * @method bool inTransaction()
- * @method bool|string lastInsertId()
- * @method bool|string quote()
- * @method bool|int exec(string $statement)
- * @method static QueryBuilder table(string $table)
- * @method static QueryBuilder select(array|string $fields = '*', ...$args)
- * @method static QueryBuilder from(string $table, ?string $alias = null)
- * @method static QueryBuilder max($field, $name = null)
- * @method static QueryBuilder min($field, $name = null)
- * @method static QueryBuilder sum($field, $name = null)
- * @method static QueryBuilder avg($field, $name = null)
- * @method static QueryBuilder take(int $limit)
- * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class DB implements DBContract

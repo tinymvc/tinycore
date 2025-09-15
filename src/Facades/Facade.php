@@ -34,7 +34,7 @@ abstract class Facade
      */
     public static function __callStatic($method, $args)
     {
-        $instance = Application::$app->get(static::getFacadeAccessor());
+        $instance = Application::$app->make(static::getFacadeAccessor());
 
         if (method_exists($instance, $method)) {
             return $instance->$method(...$args);

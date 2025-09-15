@@ -219,6 +219,18 @@ class Cache implements CacheUtilContract
     }
 
     /**
+     * Alias for retrieve method to get a single cache entry.
+     *
+     * @param string $key The cache key.
+     * @param bool $eraseExpired Whether to erase expired entries before retrieval.
+     * @return mixed The cached data or null if not found.
+     */
+    public function get(string $key, bool $eraseExpired = false): mixed
+    {
+        return $this->retrieve($key, $eraseExpired);
+    }
+
+    /**
      * Retrieves the metadata for the given cache key.
      *
      * @param string $key The cache key.
@@ -265,6 +277,17 @@ class Cache implements CacheUtilContract
     }
 
     /**
+     * Deletes specified cache entries (alias for erase).
+     *
+     * @param string|array $keys Cache key(s) to delete.
+     * @return self
+     */
+    public function delete(string|array $keys): self
+    {
+        return $this->erase($keys);
+    }
+
+    /**
      * Erases expired cache entries based on their timestamps and expiration times.
      *
      * @return self
@@ -297,6 +320,16 @@ class Cache implements CacheUtilContract
         $this->changed = true;
 
         return $this;
+    }
+
+    /**
+     * Clears all cache data (alias for flush).
+     *
+     * @return self
+     */
+    public function clear(): self
+    {
+        return $this->flush();
     }
 
     /**

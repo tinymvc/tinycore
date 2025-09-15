@@ -32,9 +32,6 @@ class Auth implements AuthContract, ArrayAccess
     /** @var int The ID of the currently logged in user. */
     private int $id;
 
-    /** @var self The singleton instance of the Auth class. */
-    public static Auth $instance;
-
     /**
      * Constructor for the Auth class.
      *
@@ -48,8 +45,6 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __construct(private Session $session, private string $userModel, private array $config = [])
     {
-        self::$instance = $this; // Set the static instance to the current object
-
         $this->config = array_merge([
             'session_key' => 'user_id',
             'cache_enabled' => false,
@@ -153,13 +148,13 @@ class Auth implements AuthContract, ArrayAccess
      * @param mixed $default The default value to return if the key does not exist.
      * @return mixed The user model or false if not logged in, or the value of the specified key.
      */
-    public static function user(?string $key = null, $default = null): mixed
+    public function user(?string $key = null, $default = null): mixed
     {
-        if ($key !== null && !self::$instance->isGuest()) {
-            return self::$instance->getUser()->get($key, $default);
+        if ($key !== null && !$this->isGuest()) {
+            return $this->getUser()->get($key, $default);
         }
 
-        return self::$instance->getUser(); // Return the user model or false if not logged in
+        return $this->getUser(); // Return the user model or false if not logged in
     }
 
     /**
@@ -167,9 +162,9 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return int The user ID or 0 if not logged in.
      */
-    public static function id(): int
+    public function id(): int
     {
-        return self::$instance->getId();
+        return $this->getId();
     }
 
     /**
@@ -178,13 +173,13 @@ class Auth implements AuthContract, ArrayAccess
      * @param array $credentials An array containing the user's credentials (e.g., email and password).
      * @return bool True if authentication is successful, false otherwise.
      */
-    public static function attempt(array $credentials): bool
+    public function attempt(array $credentials): bool
     {
         $identifier = \Spark\Support\Arr::except($credentials, ['password']);
 
-        $user = self::$instance->userModel::where($identifier)->first();
+        $user = $this->userModel::where($identifier)->first();
         if ($user && passcode($credentials['password'], $user->password)) {
-            self::$instance->login($user);
+            $this->login($user);
             return true;
         }
 

@@ -27,7 +27,7 @@ use Spark\Http\Gate;
 use Spark\Http\Session;
 use Spark\Utils\Tracer;
 use Spark\Utils\Vite;
-use Spark\View\View;
+use Spark\View\Blade;
 use Throwable;
 
 /**
@@ -85,7 +85,7 @@ class Application implements ApplicationContract
         $this->container->singleton(Router::class);
         $this->container->singleton(Translator::class);
         $this->container->singleton(DB::class);
-        $this->container->singleton(View::class);
+        $this->container->singleton(Blade::class);
         $this->container->singleton(Vite::class);
         $this->container->singleton(Hash::class);
         $this->container->singleton(EventDispatcher::class);
@@ -106,7 +106,7 @@ class Application implements ApplicationContract
      *
      * @return self A new instance of the application.
      */
-    public static function make(string $path, array $env = []): self
+    public static function create(string $path, array $env = []): self
     {
         return new self($path, $env);
     }
@@ -211,6 +211,21 @@ class Application implements ApplicationContract
      * @return mixed The resolved service or value.
      */
     public function get(string $abstract): mixed
+    {
+        return $this->container->get($abstract);
+    }
+
+    /**
+     * Alias for the `get` method to resolve a service or value from the container.
+     *
+     * This method serves as an alias for the `get` method, providing a more
+     * intuitive way to resolve services or values from the dependency injection
+     * container.
+     *
+     * @param string $abstract The abstract name or class name of the service or value to be resolved.
+     * @return mixed The resolved service or value.
+     */
+    public function make(string $abstract): mixed
     {
         return $this->container->get($abstract);
     }

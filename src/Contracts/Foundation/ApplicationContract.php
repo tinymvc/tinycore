@@ -24,7 +24,7 @@ interface ApplicationContract
      *
      * @return self A new instance of the application.
      */
-    public static function make(string $path, array $env = []): self;
+    public static function create(string $path, array $env = []): self;
 
     /**
      * Returns the container instance.

@@ -3,7 +3,7 @@
 namespace Spark\View\Contracts;
 
 /** Interface ViewContract */
-interface ViewContract
+interface BladeContract
 {
     /**
      * Renders the specified template with the provided context.

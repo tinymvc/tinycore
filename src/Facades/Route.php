@@ -8,7 +8,7 @@ use Spark\Routing\Router;
 use Spark\Routing\RouteResource;
 
 /**
- * Class Route
+ * Facade Route
  * 
  * This class provides a simple facade for the Router class, allowing for easy 
  * registration and dispatching of routes.
@@ -28,7 +28,7 @@ use Spark\Routing\RouteResource;
  * @method static RouteGroup group(array|callable|null $attrsOrCallback = null, callable|null $callback = null)
  * @method static Router add(string $path, string|array|null $method = null, callable|string|array|null $callback = null, string|null $template = null, string|null $name = null, string|array $middleware = [], string|array $withoutMiddleware = [])
  * 
- * @package Spark\Http
+ * @package Spark\Facades
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */

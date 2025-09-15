@@ -44,14 +44,53 @@ class EventDispatcher implements EventDispatcherContract
     }
 
     /**
+     * Alias for addListener method to register a listener for a specific event.
+     * 
+     * @param string   $eventName The name of the event.
+     * @param callable $listener  The listener callback.
+     * @param int      $priority  The priority of the listener (default is 0).
+     * @return void
+     */
+    public function add(string $eventName, string|array|callable $listener, int $priority = 0): void
+    {
+        $this->addListener($eventName, $listener, $priority);
+    }
+
+    /**
+     * Checks if there are any listeners registered for a specific event.
+     *
+     * @param string $eventName The name of the event.
+     * @return bool True if there are listeners registered, false otherwise.
+     */
+    public function hasListeners(string $eventName): bool
+    {
+        return isset($this->listeners[$eventName]) && !empty($this->listeners[$eventName]);
+    }
+
+    /**
+     * Alias for hasListeners method to check if there are any listeners registered for a specific event.
+     * 
+     * @param string $eventName The name of the event.
+     * @return bool True if there are listeners registered, false otherwise.
+     */
+    public function has(string $eventName): bool
+    {
+        return $this->hasListeners($eventName);
+    }
+
+    /**
      * Retrieves all registered event listeners.
      *
      * @return array
      *   An associative array where keys are event names and values are arrays
      *   of callables registered as listeners for the events.
      */
-    public function getListeners(): array
+    public function getListeners(?string $eventName = null): array
     {
+        if (func_num_args() === 1) {
+            return $this->listeners[$eventName] ?? [];
+        }
+
         return $this->listeners;
     }
 
@@ -65,8 +104,13 @@ class EventDispatcher implements EventDispatcherContract
      * 
      * @return void
      */
-    public function clearListeners(): void
+    public function clearListeners(?string $eventName = null): void
     {
+        if (func_num_args() === 1) {
+            unset($this->listeners[$eventName]);
+            return;
+        }
+
         $this->listeners = [];
     }
 

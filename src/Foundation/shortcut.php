@@ -10,7 +10,7 @@ use Spark\EventDispatcher;
 use Spark\Exceptions\Http\InputValidationFailedException;
 use Spark\Foundation\Application;
 use Spark\Hash;
-use Spark\Helpers\HttpUtilResponse;
+use Spark\Helpers\HttpResponse;
 use Spark\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
@@ -31,7 +31,7 @@ use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
 use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
-use Spark\View\View;
+use Spark\View\Blade;
 
 if (!function_exists('app')) {
     /**
@@ -351,18 +351,18 @@ if (!function_exists('view')) {
      *
      * @param string|null $template The path to the template file to render.
      * @param array $context An associative array of variables to pass to the template.
-     * @return View|Response The View instance or the Response instance with the rendered HTML.
+     * @return Blade|Response The View instance or the Response instance with the rendered HTML.
      */
-    function view(?string $template = null, array $context = []): View|Response
+    function view(?string $template = null, array $context = []): Blade|Response
     {
         // Return the current View instance.
         if ($template === null) {
-            return get(View::class);
+            return get(Blade::class);
         }
 
         // Render the template with the given context.
         return get(Response::class)->write(
-            get(View::class)
+            get(Blade::class)
                 ->render($template, $context) // Render the template.
         );
     }
@@ -386,7 +386,7 @@ if (!function_exists('fireline')) {
         // Check if the request accepts JSON
         if (request()->isFirelineRequest()) {
             // Get the template engine
-            $engine = get(View::class);
+            $engine = get(Blade::class);
 
             // Return a JSON response with the rendered HTML and title
             return json([
@@ -1365,7 +1365,7 @@ if (!function_exists('abort')) {
         }
 
         // Get the view service
-        $view = get(View::class);
+        $view = get(Blade::class);
 
         // Set the view path to the errors folder
         if (!$view->templateExists("errors/$error")) {
@@ -1515,9 +1515,9 @@ if (!function_exists('http')) {
      * @param string|null $url Optional. The URL to make the request to.
      * @param array $params Optional. The query parameters for the request.
      * @param array $config Optional. The configuration for the request.
-     * @return Http|HttpUtilResponse The HTTP instance or the response from the request.
+     * @return Http|HttpResponse The HTTP instance or the response from the request.
      */
-    function http(?string $url = null, array $params = [], array $config = []): Http|HttpUtilResponse
+    function http(?string $url = null, array $params = [], array $config = []): Http|HttpResponse
     {
         $http = new Http($config);
 

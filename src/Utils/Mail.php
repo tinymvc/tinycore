@@ -5,7 +5,7 @@ namespace Spark\Utils;
 use PHPMailer\PHPMailer\PHPMailer;
 use Spark\Contracts\Utils\MailUtilContract;
 use Spark\Support\Traits\Macroable;
-use Spark\View\View;
+use Spark\View\Blade;
 
 /**
  * Utility class for sending emails.
@@ -102,7 +102,7 @@ class Mail extends PHPMailer implements MailUtilContract
     public function view(string $template, array $context = []): self
     {
         return $this->body(
-            get(View::class)->render($template, $context),
+            get(Blade::class)->render($template, $context),
             true
         );
     }
