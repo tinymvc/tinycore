@@ -54,7 +54,7 @@ class RouteGroup implements RouteGroupContract
     /**
      * Set path prefix for pending group.
      *
-     * @param string $name The path prefix to set.
+     * @param string $name The prefix to set before url and name.
      * @return self Returns the router instance to allow method chaining.
      */
     public function prefix(string $name): self
@@ -215,8 +215,10 @@ class RouteGroup implements RouteGroupContract
     public function withAttributes(array $attributes): self
     {
         foreach ($attributes as $name => $value) {
-            if (in_array($name, ['prefix', 'path'])) {
+            if ($name === 'prefix') {
                 $this->prefix($value);
+            } elseif ($name === 'path') {
+                $this->path($value);
             } elseif ($name === 'name') {
                 $this->name($value);
             } elseif (in_array($name, ['template', 'view'])) {
