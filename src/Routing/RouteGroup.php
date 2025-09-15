@@ -54,12 +54,13 @@ class RouteGroup implements RouteGroupContract
     /**
      * Set path prefix for pending group.
      *
-     * @param string $path The path prefix to set.
+     * @param string $name The path prefix to set.
      * @return self Returns the router instance to allow method chaining.
      */
-    public function prefix(string $path): self
+    public function prefix(string $name): self
     {
-        $this->concatGroupAttributes('path', $path, '/');
+        $this->concatGroupAttributes('path', str_replace('.', '/', $name), '/');
+        $this->concatGroupAttributes('name', str_replace('/', '.', $name), '.');
         return $this;
     }
 
@@ -71,7 +72,8 @@ class RouteGroup implements RouteGroupContract
      */
     public function path(string $path): self
     {
-        return $this->prefix($path);
+        $this->concatGroupAttributes('path', $path, '/');
+        return $this;
     }
 
     /**
