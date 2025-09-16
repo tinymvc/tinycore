@@ -544,7 +544,9 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function unset(string $name): void
     {
-        data_forget($this->attributes, $name);
+        foreach (func_get_args() as $name) {
+            data_forget($this->attributes, $name);
+        }
     }
 
     /**
@@ -591,7 +593,12 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function isset(string $name): bool
     {
-        return $this->get($name) !== null;
+        foreach (func_get_args() as $name) {
+            if ($this->get($name) === null) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
