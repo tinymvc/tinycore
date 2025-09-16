@@ -4,8 +4,8 @@ namespace Spark\Utils;
 
 use Spark\Console\Prompt;
 use Spark\Contracts\Utils\TracerUtilContract;
+use Spark\Facades\Blade;
 use Spark\Support\Traits\Macroable;
-use Spark\View\Blade;
 use Throwable;
 
 /**
@@ -141,10 +141,9 @@ class Tracer implements TracerUtilContract
         }
 
         // Detailed error output with stack trace if debug mode is enabled.
-        $view = get(Blade::class);
-        $view->setPath(__DIR__ . '/../Foundation/resources/views');
+        Blade::setPath(__DIR__ . '/../Foundation/resources/views');
 
-        echo $view->render(
+        echo Blade::render(
             'tracer',
             compact('type', 'message', 'file', 'line', 'trace')
         );

@@ -366,8 +366,11 @@ class Application implements ApplicationContract
      */
     public function run(): void
     {
+        event('app:booting');
         try {
             $this->container->bootServiceProviders();
+
+            event('app:booted');
 
             $this->container
                 ->get(Router::class)
@@ -377,6 +380,8 @@ class Application implements ApplicationContract
                     $this->container->get(Request::class),
                 )
                 ->send();
+
+            event('app:terminated');
         } catch (RouteNotFoundException) {
             abort(error: 404, message: 'Route not found');
         } catch (ItemNotFoundException) {

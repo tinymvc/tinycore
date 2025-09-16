@@ -468,6 +468,8 @@ class Blade implements BladeContract
             unset($GLOBALS['sections']);
         }
 
+        event('app:bladeTemplateRendered', $compiledPath);
+
         return $content;
     }
 

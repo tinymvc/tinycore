@@ -76,6 +76,8 @@ class Translator implements TranslatorContract
     {
         $file = dir_path($file);
 
+        event('app:translator.addedLanguageFile', $file);
+
         if ($prepend) {
             array_unshift($this->deferredLanguageFiles, $file);
             return;

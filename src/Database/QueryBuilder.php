@@ -373,6 +373,8 @@ class QueryBuilder implements QueryBuilderContract
             return 0;
         }
 
+        $started = microtime(true); // Start timing the query execution
+
         // Normalize data to always be an array of records
         $data = !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
 
@@ -394,6 +396,8 @@ class QueryBuilder implements QueryBuilderContract
         if ($statement->execute() === false) {
             throw new QueryBuilderException('Failed to execute statement');
         }
+
+        $this->log($started, $sql);
 
         // Handle PostgreSQL RETURNING clause
         if ($this->grammar->isPostgreSQL() && isset($config['returning'])) {
@@ -1438,6 +1442,8 @@ class QueryBuilder implements QueryBuilderContract
             return false;
         }
 
+        $started = microtime(true); // Start timing the operation
+
         // Prepare the table name
         $table = self::$prefix . $this->table;
 
@@ -1476,6 +1482,8 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->resetWhere();
 
+        $this->log($started, $sql);
+
         // Returns true if records are successfully updated, false otherwise.
         return $statement->rowCount() > 0;
     }
@@ -1501,11 +1509,14 @@ class QueryBuilder implements QueryBuilderContract
             return false;
         }
 
+        $started = microtime(true); // Start timing the operation
+
         // Prepare the table name
         $table = self::$prefix . $this->table;
 
         // Prepare the SQL delete statement
-        $statement = $this->database->prepare($this->addCollateToSql("DELETE FROM {$table} {$this->getWhereSql()}"));
+        $sql = $this->addCollateToSql("DELETE FROM {$table} {$this->getWhereSql()}");
+        $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -1522,6 +1533,8 @@ class QueryBuilder implements QueryBuilderContract
         // Reset current query builder.
         $this->resetWhere();
 
+        $this->log($started, $sql);
+
         // Returns true if records are successfully deleted, false otherwise.
         return $statement->rowCount() > 0;
     }
@@ -1537,11 +1550,14 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function truncate(): bool
     {
+        $started = microtime(true); // Start timing the operation
+
         // Prepare the table name
         $table = self::$prefix . $this->table;
+        $sql = "TRUNCATE TABLE {$table}";
 
         // Prepare the SQL truncate statement
-        $statement = $this->database->prepare("TRUNCATE TABLE {$table}");
+        $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -1551,6 +1567,8 @@ class QueryBuilder implements QueryBuilderContract
         if ($statement->execute() === false) {
             throw new QueryBuilderException('Failed to execute statement');
         }
+
+        $this->log($started, $sql);
 
         return true;
     }
@@ -1564,6 +1582,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function raw(string $sql, array $bindings = []): array
     {
+        $started = microtime(true); // Start timing the operation
+
         $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
@@ -1582,6 +1602,8 @@ class QueryBuilder implements QueryBuilderContract
         if ($statement->execute() === false) {
             throw new QueryBuilderException('Failed to execute statement');
         }
+
+        $this->log($started, $sql);
 
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -2284,25 +2306,29 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function count(): int
     {
+        $started = microtime(true); // Start timing the operation
+
         $table = $this->getTableName(); // Get the table name with prefix if exists.
 
-        // Create sql command to count rows.
-        $statement = $this->database->prepare(
-            $this->addCollateToSql(
-                "SELECT COUNT(1) FROM {$table}"
-                . $this->query['alias']
-                . $this->query['joins']
-                . $this->getWhereSql()
-                . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
-                . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
-            )
+        $sql = $this->addCollateToSql(
+            "SELECT COUNT(1) FROM {$table}"
+            . $this->query['alias']
+            . $this->query['joins']
+            . $this->getWhereSql()
+            . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
+            . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
         );
+
+        // Create sql command to count rows.
+        $statement = $this->database->prepare($sql);
 
         // Apply where statement if exists.
         $this->bindParameters($statement);
 
         // Execute sql command.
         $statement->execute();
+
+        $this->log($started, $sql);
 
         // Returns number of found rows.
         return $statement->fetch(PDO::FETCH_COLUMN);
@@ -2392,12 +2418,19 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function increment(string $column, int $value = 1, $where = null): bool
     {
+        $started = microtime(true); // Start timing the operation
+
         $this->where($where);
 
-        return $this->raw(
-            "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} + :increment " . $this->getWhereSql(),
+        $sql = "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} + :increment " . $this->getWhereSql();
+        $result = $this->raw(
+            $sql,
             array_merge(['increment' => $value], $this->getBindings())
-        ) !== false;
+        );
+
+        $this->log($started, $sql);
+
+        return $result !== false;
     }
 
     /**
@@ -2410,12 +2443,19 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function decrement(string $column, int $value = 1, $where = null): bool
     {
+        $started = microtime(true); // Start timing the operation
+
         $this->where($where);
 
-        return $this->raw(
-            "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} - :decrement " . $this->getWhereSql(),
+        $sql = "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} - :decrement " . $this->getWhereSql();
+        $result = $this->raw(
+            $sql,
             array_merge(['decrement' => $value], $this->getBindings())
-        ) !== false;
+        );
+
+        $this->log($started, $sql);
+
+        return $result !== false;
     }
 
     /**
@@ -2550,8 +2590,12 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function executeSelectQuery(): void
     {
+        $started = microtime(true); // Start timing the operation
+
+        $sql = $this->toSql(); // Get the complete SQL query.
+
         // Build complete select command with condition, order, and limit.
-        $statement = $this->database->prepare($this->toSql());
+        $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
             throw new QueryBuilderException('Failed to prepare statement');
@@ -2564,6 +2608,8 @@ class QueryBuilder implements QueryBuilderContract
         if ($statement->execute() === false) {
             throw new QueryBuilderException('Failed to execute statement');
         }
+
+        $this->log($started, $sql);
 
         // Set select statement into query to modify dynamically.
         $this->query['statement'] = $statement;
@@ -2977,5 +3023,20 @@ class QueryBuilder implements QueryBuilderContract
         } else {
             $this->parameter($bindings);
         }
+    }
+
+    /**
+     * Logs the execution time of a SQL query.
+     *
+     * @param float $started The start time of the query execution.
+     * @param string $sql The SQL query that was executed.
+     * @return void
+     */
+    private function log(float $started, string $sql): void
+    {
+        $ended = microtime(true);
+        $time = round(($ended - $started) * 1000, 6);
+
+        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time]);
     }
 }

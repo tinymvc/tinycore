@@ -157,7 +157,13 @@ class DB implements DBContract
      */
     public function query(string $query, ...$args): false|PDOStatement
     {
-        return $this->getPdo()->query($query, ...$args);
+        $started = microtime(true);
+
+        $result = $this->getPdo()->query($query, ...$args);
+
+        $this->log($started, $query);
+
+        return $result;
     }
 
     /**
@@ -170,6 +176,23 @@ class DB implements DBContract
     public function prepare(string $statement, array $options = []): false|PDOStatement
     {
         return $this->getPdo()->prepare($statement, $options);
+    }
+
+    /**
+     * Executes an SQL statement and returns the number of affected rows.
+     *
+     * @param string $statement The SQL statement to execute.
+     * @return int|false The number of affected rows or false on failure.
+     */
+    public function exec(string $statement): int|false
+    {
+        $started = microtime(true);
+
+        $result = $this->getPdo()->exec($statement);
+
+        $this->log($started, $statement);
+
+        return $result;
     }
 
     /**
@@ -289,5 +312,20 @@ class DB implements DBContract
                 sprintf('charset=%s;', $this->config['charset']) : '',
             ),
         };
+    }
+
+    /**
+     * Logs the execution time of a SQL query.
+     *
+     * @param float $started The start time of the query execution.
+     * @param string $sql The SQL query that was executed.
+     * @return void
+     */
+    private function log(float $started, string $sql): void
+    {
+        $ended = microtime(true);
+        $time = round(($ended - $started) * 1000, 6);
+
+        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time]);
     }
 }
