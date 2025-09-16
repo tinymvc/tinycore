@@ -1166,11 +1166,19 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * This method retrieves the session instance from the application container.
      *
-     * @return \Spark\Http\Session The session instance.
+     * @param ?string $key The session key to retrieve (optional).
+     * @param mixed $default The default value to return if the key does not exist (optional).
+     * @return \Spark\Http\Session|mixed The session instance or the value associated with the given key.
      */
-    public function session(): Session
+    public function session(?string $key, $default = null): mixed
     {
-        return app(Session::class);
+        $session = app(Session::class);
+
+        if (func_num_args() > 0) {
+            return $session->get($key, $default);
+        }
+
+        return $session;
     }
 
     /**

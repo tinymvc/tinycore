@@ -160,6 +160,10 @@ class Migration implements MigrationContract
 
         $appliedMigrations = $this->getAppliedMigrations();
 
+        if (isset($args['all']) && $args['all']) {
+            $steps = count($appliedMigrations); // Rollback all applied migrations
+        }
+
         if (empty($appliedMigrations)) {
             $this->prompt->message("No migrations to rollback.", 'warning');
             return;
