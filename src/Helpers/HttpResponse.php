@@ -47,11 +47,73 @@ class HttpResponse implements ArrayAccess, \Stringable
     }
 
     /**
+     * Get the raw body of the response.
+     *
+     * @return string The raw response body.
+     */
+    public function body(): string
+    {
+        return (string) ($this->body ?? '');
+    }
+
+    /**
+     * Get the HTTP status code of the response.
+     *
+     * @return int The HTTP status code.
+     */
+    public function status(): int
+    {
+        return $this->status;
+    }
+
+    /**
+     * Get the last URL after redirects.
+     *
+     * @return string The last URL.
+     */
+    public function lastUrl(): string
+    {
+        return $this->lastUrl;
+    }
+
+    /**
+     * Get the content length of the response.
+     *
+     * @return int The content length.
+     */
+    public function length(): int
+    {
+        return $this->length;
+    }
+
+    /**
+     * Get the response headers.
+     *
+     * @return array The response headers.
+     */
+    public function headers(): array
+    {
+        return $this->headers;
+    }
+
+    /**
+     * Get a specific header value.
+     *
+     * @param string $key The header key.
+     * @param mixed $default The default value if the header is not found.
+     * @return mixed The header value or the default value.
+     */
+    public function header(string $key, mixed $default = null): mixed
+    {
+        return $this->headers[strtolower($key)] ?? $default;
+    }
+
+    /**
      * Get the Response body as a JSON object.
      *
      * @return array|null The JSON-decoded response body or null if decoding failed.
      */
-    public function json()
+    public function json(): array
     {
         return $this->json ??= arr_from_set($this->body);
     }
@@ -61,7 +123,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      *
      * @return string The response body as a string.
      */
-    public function text()
+    public function text(): string
     {
         return (string) $this->body ?? '';
     }
@@ -104,7 +166,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      *
      * @return bool True if successful, false otherwise.
      */
-    public function isSuccess()
+    public function isSuccess(): bool
     {
         return $this->status >= 200 && $this->status < 300;
     }
@@ -114,7 +176,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      *
      * @return bool True if client error, false otherwise.
      */
-    public function isClientError()
+    public function isClientError(): bool
     {
         return $this->status >= 400 && $this->status < 500;
     }
@@ -124,7 +186,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      *
      * @return bool True if server error, false otherwise.
      */
-    public function isServerError()
+    public function isServerError(): bool
     {
         return $this->status >= 500 && $this->status < 600;
     }
@@ -134,7 +196,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      *
      * @return bool True if redirect, false otherwise.
      */
-    public function isRedirect()
+    public function isRedirect(): bool
     {
         return $this->status >= 300 && $this->status < 400;
     }
