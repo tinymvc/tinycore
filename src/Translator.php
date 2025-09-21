@@ -76,8 +76,6 @@ class Translator implements TranslatorContract
     {
         $file = dir_path($file);
 
-        event('app:translator.addedLanguageFile', $file);
-
         if ($prepend) {
             array_unshift($this->deferredLanguageFiles, $file);
             return;
@@ -209,6 +207,8 @@ class Translator implements TranslatorContract
             if (file_exists($lang_file)) {
                 // Merge the loaded translations with the existing ones
                 $this->mergeTranslatedTexts(require $lang_file);
+
+                event('app:translator.loadedLanguageFile', $lang_file);
             }
 
             // Try to get the translation again
