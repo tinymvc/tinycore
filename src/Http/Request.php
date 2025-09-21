@@ -1170,8 +1170,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param mixed $default The default value to return if the key does not exist (optional).
      * @return \Spark\Http\Session|mixed The session instance or the value associated with the given key.
      */
-    public function session(?string $key, $default = null): mixed
+    public function session(?string $key = null, $default = null): mixed
     {
+        /** @var \Spark\Http\Session $session */
         $session = app(Session::class);
 
         if (func_num_args() > 0) {
