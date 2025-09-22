@@ -323,6 +323,21 @@ class Cache implements CacheUtilContract
     }
 
     /**
+     * Clears all cache data if the given condition is true.
+     *
+     * @param bool $condition The condition to check.
+     * @return self
+     */
+    public function flushIf(bool $condition): self
+    {
+        if ($condition) {
+            $this->flush();
+        }
+
+        return $this;
+    }
+
+    /**
      * Clears all cache data (alias for flush).
      *
      * @return self
