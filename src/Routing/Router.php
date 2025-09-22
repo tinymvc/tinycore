@@ -408,7 +408,7 @@ class Router implements RouterContract
                     return $middlewareResponse;
                 }
 
-                event('app:middlewaresHandled');
+                event('app:middlewaresHandled', $middleware->getStack());
 
                 // Handle view rendering or instantiate a class for callback if specified
                 if (isset($route['template'])) {
