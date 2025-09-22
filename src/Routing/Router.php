@@ -397,7 +397,7 @@ class Router implements RouterContract
         // Iterate through all routes to find a match
         foreach ($this->routes as $route) {
             if ($this->matchRoute($route['method'], $route['path'], $request)) {
-                event('app:routeMatched');
+                event('app:routeMatched', $route);
 
                 // Add route-specific middleware to the middleware stack
                 $middleware->queue($route['middleware']);

@@ -397,7 +397,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, $data);
 
         // Handle PostgreSQL RETURNING clause
         if ($this->grammar->isPostgreSQL() && isset($config['returning'])) {
@@ -1482,7 +1482,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->resetWhere();
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, $data);
 
         // Returns true if records are successfully updated, false otherwise.
         return $statement->rowCount() > 0;
@@ -3030,13 +3030,22 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @param float $started The start time of the query execution.
      * @param string $sql The SQL query that was executed.
+     * @param array $bindings The bindings used in the query.
      * @return void
      */
-    private function log(float $started, string $sql): void
+    private function log(float $started, string $sql, array $bindings = []): void
     {
+        if (env('debug') === false) {
+            return;
+        }
+
         $ended = microtime(true);
         $time = round(($ended - $started) * 1000, 6);
 
-        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time]);
+        if ($this->hasWhere()) {
+            $bindings['parameters'] = !empty($this->bindings) ? $this->bindings : $this->parameters;
+        }
+
+        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'bindings' => $bindings]);
     }
 }

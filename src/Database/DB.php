@@ -323,6 +323,10 @@ class DB implements DBContract
      */
     private function log(float $started, string $sql): void
     {
+        if (env('debug') === false) {
+            return;
+        }
+
         $ended = microtime(true);
         $time = round(($ended - $started) * 1000, 6);
 

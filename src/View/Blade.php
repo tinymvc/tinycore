@@ -457,9 +457,11 @@ class Blade implements BladeContract
             $GLOBALS['sections'] = $this->sections;
         }
 
+        $start = microtime(true);
         ob_start();
         include dir_path($compiledPath);
         $content = ob_get_clean();
+        $renderTime = round((microtime(true) - $start) * 1000, 6);
 
         // Restore previous sections state
         if ($previousSections !== null) {
@@ -468,7 +470,7 @@ class Blade implements BladeContract
             unset($GLOBALS['sections']);
         }
 
-        event('app:bladeTemplateRendered', $compiledPath);
+        event('app:bladeTemplateRendered', ['path' => $compiledPath, 'time' => $renderTime]);
 
         return $content;
     }
