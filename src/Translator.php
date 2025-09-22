@@ -3,6 +3,7 @@
 namespace Spark;
 
 use Spark\Contracts\TranslatorContract;
+use Spark\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -205,10 +206,13 @@ class Translator implements TranslatorContract
 
             // Check if the language file exists
             if (file_exists($lang_file)) {
+                $started = microtime(true);
+
                 // Merge the loaded translations with the existing ones
                 $this->mergeTranslatedTexts(require $lang_file);
 
-                event('app:translator.loadedLanguageFile', $lang_file);
+                $loadTime = round((microtime(true) - $started) * 1000, 6);
+                event('app:translator.loadedLanguageFile', ['file' => $lang_file, 'load_time' => $loadTime]);
             }
 
             // Try to get the translation again
