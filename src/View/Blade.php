@@ -457,11 +457,14 @@ class Blade implements BladeContract
             $GLOBALS['sections'] = $this->sections;
         }
 
-        $start = microtime(true);
+        $started = microtime(true);
+        $startedMemory = memory_get_usage(true);
+
         ob_start();
         include dir_path($compiledPath);
         $content = ob_get_clean();
-        $renderTime = round((microtime(true) - $start) * 1000, 6);
+
+        $renderTime = round((microtime(true) - $started) * 1000, 6);
 
         // Restore previous sections state
         if ($previousSections !== null) {
@@ -470,7 +473,7 @@ class Blade implements BladeContract
             unset($GLOBALS['sections']);
         }
 
-        event('app:bladeTemplateRendered', ['path' => $compiledPath, 'time' => $renderTime]);
+        event('app:bladeTemplateRendered', ['path' => $compiledPath, 'time' => $renderTime, 'memory_before' => $startedMemory]);
 
         return $content;
     }

@@ -158,10 +158,11 @@ class DB implements DBContract
     public function query(string $query, ...$args): false|PDOStatement
     {
         $started = microtime(true);
+        $startedMemory = memory_get_usage(true);
 
         $result = $this->getPdo()->query($query, ...$args);
 
-        $this->log($started, $query);
+        $this->log($started, $query, $startedMemory);
 
         return $result;
     }
@@ -187,10 +188,11 @@ class DB implements DBContract
     public function exec(string $statement): int|false
     {
         $started = microtime(true);
+        $startedMemory = memory_get_usage(true);
 
         $result = $this->getPdo()->exec($statement);
 
-        $this->log($started, $statement);
+        $this->log($started, $statement, $startedMemory);
 
         return $result;
     }
@@ -319,9 +321,10 @@ class DB implements DBContract
      *
      * @param float $started The start time of the query execution.
      * @param string $sql The SQL query that was executed.
+     * @param int $startedMemory The memory usage before the query execution.
      * @return void
      */
-    private function log(float $started, string $sql): void
+    private function log(float $started, string $sql, int $startedMemory): void
     {
         if (env('debug') === false) {
             return;
@@ -330,6 +333,6 @@ class DB implements DBContract
         $ended = microtime(true);
         $time = round(($ended - $started) * 1000, 6);
 
-        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time]);
+        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'memory_before' => $startedMemory]);
     }
 }

@@ -374,6 +374,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         $started = microtime(true); // Start timing the query execution
+        $startedMemory = memory_get_usage(true);
 
         // Normalize data to always be an array of records
         $data = !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
@@ -397,7 +398,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql, $data);
+        $this->log($started, $sql, $data, $startedMemory);
 
         // Handle PostgreSQL RETURNING clause
         if ($this->grammar->isPostgreSQL() && isset($config['returning'])) {
@@ -1443,6 +1444,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
         $table = self::$prefix . $this->table;
@@ -1482,7 +1484,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->resetWhere();
 
-        $this->log($started, $sql, $data);
+        $this->log($started, $sql, $data, $startedMemory);
 
         // Returns true if records are successfully updated, false otherwise.
         return $statement->rowCount() > 0;
@@ -1510,6 +1512,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
         $table = self::$prefix . $this->table;
@@ -1533,7 +1536,7 @@ class QueryBuilder implements QueryBuilderContract
         // Reset current query builder.
         $this->resetWhere();
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, [], $startedMemory);
 
         // Returns true if records are successfully deleted, false otherwise.
         return $statement->rowCount() > 0;
@@ -1551,6 +1554,7 @@ class QueryBuilder implements QueryBuilderContract
     public function truncate(): bool
     {
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
         $table = self::$prefix . $this->table;
@@ -1568,7 +1572,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, [], $startedMemory);
 
         return true;
     }
@@ -1583,6 +1587,7 @@ class QueryBuilder implements QueryBuilderContract
     public function raw(string $sql, array $bindings = []): array
     {
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         $statement = $this->database->prepare($sql);
 
@@ -1603,7 +1608,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, $bindings, $startedMemory);
 
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -2307,6 +2312,7 @@ class QueryBuilder implements QueryBuilderContract
     public function count(): int
     {
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         $table = $this->getTableName(); // Get the table name with prefix if exists.
 
@@ -2328,7 +2334,7 @@ class QueryBuilder implements QueryBuilderContract
         // Execute sql command.
         $statement->execute();
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, [], $startedMemory);
 
         // Returns number of found rows.
         return $statement->fetch(PDO::FETCH_COLUMN);
@@ -2419,6 +2425,7 @@ class QueryBuilder implements QueryBuilderContract
     public function increment(string $column, int $value = 1, $where = null): bool
     {
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         $this->where($where);
 
@@ -2428,7 +2435,7 @@ class QueryBuilder implements QueryBuilderContract
             array_merge(['increment' => $value], $this->getBindings())
         );
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, [], $startedMemory);
 
         return $result !== false;
     }
@@ -2444,6 +2451,7 @@ class QueryBuilder implements QueryBuilderContract
     public function decrement(string $column, int $value = 1, $where = null): bool
     {
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         $this->where($where);
 
@@ -2453,7 +2461,7 @@ class QueryBuilder implements QueryBuilderContract
             array_merge(['decrement' => $value], $this->getBindings())
         );
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, [], $startedMemory);
 
         return $result !== false;
     }
@@ -2591,6 +2599,7 @@ class QueryBuilder implements QueryBuilderContract
     private function executeSelectQuery(): void
     {
         $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
 
         $sql = $this->toSql(); // Get the complete SQL query.
 
@@ -2609,7 +2618,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql);
+        $this->log($started, $sql, [], $startedMemory);
 
         // Set select statement into query to modify dynamically.
         $this->query['statement'] = $statement;
@@ -3031,9 +3040,10 @@ class QueryBuilder implements QueryBuilderContract
      * @param float $started The start time of the query execution.
      * @param string $sql The SQL query that was executed.
      * @param array $bindings The bindings used in the query.
+     * @param int $startedMemory The memory usage at the start of the query execution.
      * @return void
      */
-    private function log(float $started, string $sql, array $bindings = []): void
+    private function log(float $started, string $sql, array $bindings = [], int $startedMemory): void
     {
         if (env('debug') === false) {
             return;
@@ -3046,6 +3056,6 @@ class QueryBuilder implements QueryBuilderContract
             $bindings['parameters'] = !empty($this->bindings) ? $this->bindings : $this->parameters;
         }
 
-        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'bindings' => $bindings]);
+        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'bindings' => $bindings, 'memory_before' => $startedMemory]);
     }
 }
