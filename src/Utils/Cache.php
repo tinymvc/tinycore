@@ -316,6 +316,8 @@ class Cache implements CacheUtilContract
      */
     public function flush(): self
     {
+        $this->reload(); // Ensure cache is loaded before flushing
+
         $this->cacheData = [];
         $this->changed = true;
 
