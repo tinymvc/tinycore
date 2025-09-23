@@ -124,6 +124,10 @@ class CommandsServiceProvider
         $commands->addCommand('make:model', [MakeStubCommandsHandler::class, 'makeModel'])
             ->description('Create a new model class');
 
+        // Make a Cast class file
+        $commands->addCommand('make:cast', [MakeStubCommandsHandler::class, 'makeCast'])
+            ->description('Create a new cast class for model attributes');
+
         // Make a Controller class file
         $commands->addCommand('make:controller', [MakeStubCommandsHandler::class, 'makeController'])
             ->description('Create a new controller class');

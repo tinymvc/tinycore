@@ -197,6 +197,33 @@ class MakeStubCommandsHandler
     }
 
     /**
+     * Create a cast stub.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     *
+     * @return void
+     */
+    public function makeCast(array $args)
+    {
+        $this->askName($args, 'What is the name of the cast?');
+
+        $name = $this->resolveSuffix($args['_args'][0], 'Cast');
+
+        StubCreation::create(
+            $name,
+            [
+                'stub' => __DIR__ . '/stubs/database/cast.stub',
+                'destination' => 'app/Models/Casts/::subfolder:ucfirst/::name:ucfirst.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'App\Models\Casts::subfolder:namespace',
+                    '{{ class }}' => '::name:ucfirst',
+                ],
+            ]
+        );
+    }
+
+    /**
      * Create a controller stub.
      *
      * @param array $args

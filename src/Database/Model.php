@@ -98,7 +98,7 @@ use Traversable;
  */
 abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate
 {
-    use HasRelation, Macroable {
+    use HasRelation, Casts, Macroable {
         __call as macroCall;
         __callStatic as staticMacroCall;
     }
@@ -128,9 +128,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function __construct()
     {
-        if ($this->primaryValue()) {
-            $this->decodeSavedData();
-        }
+        $this->primaryValue() && $this->decodeSavedData();
     }
 
     /**
@@ -140,9 +138,12 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public static function query(): QueryBuilder
     {
-        // Return a new database query builder object.
-        return app(QueryBuilder::class)
-            ->table(static::$table ?? Str::snake(Str::plural(class_basename(static::class))))
+        /** @var QueryBuilder The query builder instance. */
+        $query = app(QueryBuilder::class);
+
+        return $query->table(
+            static::$table ??= Str::snake(Str::plural(class_basename(static::class)))
+        )
             ->fetchModel(static::class);
     }
 
@@ -159,9 +160,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         $model = new static();
 
         $model->fill($data, $ignoreEmpty); // Fill the model with the given data.
-
-        // Decode model properties from JSON to array if necessary.
-        $model->decodeSavedData();
 
         // Return the new model object.
         return $model;
@@ -193,7 +191,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     {
         $model = self::load($data, $ignoreEmpty);
 
-        $data = $model->encodeToSaveData($model->getFillableData());
+        $data = $model->getFillableData();
 
         if (empty($uniqueBy)) {
             $uniqueBy = [static::$primaryKey];
@@ -221,8 +219,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public static function firstOrCreate(array|Arrayable $data): static
     {
-        $data = $data instanceof Arrayable ? $data->toArray() : $data;
-
         $model = self::query()->where($data)->first();
 
         if ($model) {
@@ -240,8 +236,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public static function firstOrNew(array|Arrayable $data): static
     {
-        $data = $data instanceof Arrayable ? $data->toArray() : $data;
-
         $model = self::query()->where($data)->first();
 
         if ($model) {
@@ -301,7 +295,13 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
         // Update this records if it has an id, else insert this records into database.
         if (!empty($this->primaryValue())) {
-            $status = $this->query()->update($data, [static::$primaryKey => $this->primaryValue()]);
+            $condition = [static::$primaryKey => $this->primaryValue()];
+            $status = $this->query()->update($data, $condition);
+
+            // If update fails and no record exists, insert a new record.
+            if (!$status && $this->query()->where($condition)->notExists()) {
+                $status = $this->query()->insert($data);
+            }
         } else {
             $status = $this->query()->insert($data);
         }
@@ -310,9 +310,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         if (is_int($status)) {
             $this->attributes[static::$primaryKey] = $status;
         }
-
-        // Apply model events after saved the record.
-        $this->decodeSavedData();
 
         return $status; // Return database operation status.
     }
@@ -364,16 +361,27 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
-     * Prepares data before saving, such as encoding arrays to JSON.
+     * Prepares data before saving, such as encoding arrays to JSON and applying mutators.
      *
      * @param array $data The data to prepare.
      * @return array The prepared data for database insertion or update.
      */
     private function encodeToSaveData(array $data): array
     {
-        // Parse model property into string if the are in array.
+        // Apply mutators, casts, and encode data for saving
         foreach ($data as $key => $value) {
-            $data[$key] = is_array($value) ? json_encode($value) : $value;
+            // Check if there's a custom mutator for this attribute
+            if ($this->hasMutator($key)) {
+                $data[$key] = $this->mutateAttribute($key, $value);
+            }
+            // Check if there's a cast for this attribute
+            elseif ($this->hasCast($key)) {
+                $data[$key] = $this->castAttributeForStorage($key, $value);
+            }
+            // Default behavior: Parse model property into string if they are in array
+            elseif (is_array($value) || $value instanceof Arrayable) {
+                $data[$key] = json_encode(is_array($value) ? $value : $value->toArray());
+            }
         }
 
         // returns associative array of model properties.
@@ -381,7 +389,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
-     * Decodes JSON strings in properties to their original formats.
+     * Decodes JSON strings in properties to their original formats and applies casts.
      * 
      * @return void
      */
@@ -389,17 +397,17 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     {
         // Go Through all the properties of this model.
         foreach ($this->attributes as $key => $value) {
-            /** 
-             * if the property is json format then decode json
-             * string to associative array.
-             */
-            if (
-                is_string($value) && (strpos($value, '[') === 0
-                    || strpos($value, '{') === 0)
+            // Check if there's a cast for this attribute
+            if ($this->hasCast($key)) {
+                $this->attributes[$key] = $this->castAttribute($key, $value);
+            }
+            // Fallback: if the property is json format then decode json string to associative array
+            elseif (
+                is_string($value) && (strpos($value, '[') === 0 || strpos($value, '{') === 0)
             ) {
-                $value = json_decode($value, true);
+                $decodedValue = json_decode($value, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
-                    $this->attributes[$key] = $value;
+                    $this->attributes[$key] = $decodedValue;
                 }
             }
         }
@@ -468,7 +476,32 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function toArray()
     {
-        return array_merge($this->attributes, $this->getRelations());
+        $attributes = [];
+
+        // Process each attribute, applying accessors where they exist
+        foreach ($this->attributes as $key => $value) {
+            // Check for accessor first (highest priority)
+            if ($this->hasAccessor($key)) {
+                $attributes[$key] = $this->getAttributeValue($key);
+            }
+            // Use the already processed value (cast during loading in decodeSavedData)
+            else {
+                $attributes[$key] = $value;
+            }
+        }
+
+        $attributes = array_merge($attributes, $this->getRelations());
+
+        $hidden = $this->hidden ?? [];
+        $visible = $this->visible ?? [];
+
+        if (!empty($hidden)) {
+            $attributes = array_diff_key($attributes, array_flip((array) $hidden));
+        } elseif (!empty($visible)) {
+            $attributes = array_intersect_key($attributes, array_flip((array) $visible));
+        }
+
+        return $attributes;
     }
 
     /**
@@ -490,6 +523,12 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function offsetGet(mixed $offset): mixed
     {
+        // Check for accessor first (highest priority)
+        if ($this->hasAccessor($offset)) {
+            return $this->getAttributeValue($offset);
+        }
+
+        // Get raw value
         return $this->attributes[$offset] ?? $this->getRelationshipAttribute($offset);
     }
 
@@ -627,6 +666,55 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function copy(): static
     {
         return clone $this;
+    }
+
+    /**
+     * Check if an accessor method exists for a given attribute.
+     *
+     * @param string $name The name of the attribute.
+     * @return bool True if an accessor method exists, false otherwise.
+     */
+    public function hasAccessor(string $name): bool
+    {
+        $method = sprintf('get%sAttribute', Str::studly($name));
+        return method_exists($this, $method);
+    }
+
+    /**
+     * Get the value of an attribute using its accessor method.
+     *
+     * @param string $name The name of the attribute.
+     * @return mixed The value of the attribute.
+     */
+    public function getAttributeValue(string $name): mixed
+    {
+        $method = sprintf('get%sAttribute', Str::studly($name));
+        return $this->{$method}();
+    }
+
+    /**
+     * Check if a mutator method exists for a given attribute.
+     *
+     * @param string $name The name of the attribute.
+     * @return bool True if a mutator method exists, false otherwise.
+     */
+    public function hasMutator(string $name): bool
+    {
+        $method = sprintf('set%sAttribute', Str::studly($name));
+        return method_exists($this, $method);
+    }
+
+    /**
+     * Mutate the value of an attribute using its mutator method.
+     *
+     * @param string $name The name of the attribute.
+     * @param mixed $value The value to mutate.
+     * @return mixed The mutated value of the attribute.
+     */
+    public function mutateAttribute(string $name, mixed $value): mixed
+    {
+        $method = sprintf('set%sAttribute', Str::studly($name));
+        return $this->{$method}($value);
     }
 
     /**

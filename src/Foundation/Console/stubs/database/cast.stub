@@ -1,0 +1,18 @@
+<?php
+
+namespace {{ namespace }};
+
+use Spark\Contracts\Database\CastsAttributes;
+
+class {{ class }} implements CastsAttributes
+{
+    public function get($value)
+    {
+
+    }
+
+    public function set($value)
+    {
+
+    }
+}

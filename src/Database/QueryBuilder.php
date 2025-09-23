@@ -78,11 +78,9 @@ use Spark\Utils\Paginator;
  */
 class QueryBuilder implements QueryBuilderContract
 {
-    use Macroable {
+    use ManageRelation, Macroable {
         __call as macroCall;
     }
-
-    use ManageRelation;
 
     /**
      * Holds the collation to be used for string comparisons.
@@ -465,8 +463,12 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self
      */
-    public function where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false): self
+    public function where(null|string|array|Arrayable|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false): self
     {
+        if ($column instanceof Arrayable) {
+            $column = $column->toArray();
+        }
+
         if ($column === null) {
             return $this;
         } elseif ($column instanceof Closure) {
@@ -2559,6 +2561,18 @@ class QueryBuilder implements QueryBuilderContract
             return $this->macroCall($method, $args);
         }
 
+        // Check if the method exists in the related model's scope.
+        if ($this->hasRelatedModel()) {
+            $scope = sprintf('scope%s', ucfirst($method));
+            $model = $this->getRelatedModel();
+
+            // Call the scope method on the model if it exists.
+            if (method_exists($model, $scope)) {
+                return call_user_func_array([$model, $scope], [$this, ...$args]);
+            }
+        }
+
+        // else, call the method from the collection instance.
         return call_user_func_array([$this->get(), $method], $args);
     }
 

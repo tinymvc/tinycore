@@ -472,6 +472,21 @@ trait ManageRelation
     }
 
     /**
+     * Check if the QueryBuilder has a related Model.
+     *
+     * @return bool
+     */
+    private function hasRelatedModel(): bool
+    {
+        try {
+            $this->getRelatedModel();
+            return true;
+        } catch (InvalidOrmException $e) {
+            return false;
+        }
+    }
+
+    /**
      * Check if the model has a related instance.
      *
      * @return bool
