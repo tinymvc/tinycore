@@ -398,7 +398,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql, $data, $startedMemory);
+        $this->log($started, $startedMemory, $sql, $data);
 
         // Handle PostgreSQL RETURNING clause
         if ($this->grammar->isPostgreSQL() && isset($config['returning'])) {
@@ -1484,7 +1484,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->resetWhere();
 
-        $this->log($started, $sql, $data, $startedMemory);
+        $this->log($started, $startedMemory, $sql, $data);
 
         // Returns true if records are successfully updated, false otherwise.
         return $statement->rowCount() > 0;
@@ -1536,7 +1536,7 @@ class QueryBuilder implements QueryBuilderContract
         // Reset current query builder.
         $this->resetWhere();
 
-        $this->log($started, $sql, [], $startedMemory);
+        $this->log($started, $startedMemory, $sql, []);
 
         // Returns true if records are successfully deleted, false otherwise.
         return $statement->rowCount() > 0;
@@ -1572,7 +1572,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql, [], $startedMemory);
+        $this->log($started, $startedMemory, $sql, []);
 
         return true;
     }
@@ -1608,7 +1608,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql, $bindings, $startedMemory);
+        $this->log($started, $startedMemory, $sql, $bindings);
 
         return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -2334,7 +2334,7 @@ class QueryBuilder implements QueryBuilderContract
         // Execute sql command.
         $statement->execute();
 
-        $this->log($started, $sql, [], $startedMemory);
+        $this->log($started, $startedMemory, $sql, []);
 
         // Returns number of found rows.
         return $statement->fetch(PDO::FETCH_COLUMN);
@@ -2435,7 +2435,7 @@ class QueryBuilder implements QueryBuilderContract
             array_merge(['increment' => $value], $this->getBindings())
         );
 
-        $this->log($started, $sql, [], $startedMemory);
+        $this->log($started, $startedMemory, $sql, []);
 
         return $result !== false;
     }
@@ -2461,7 +2461,7 @@ class QueryBuilder implements QueryBuilderContract
             array_merge(['decrement' => $value], $this->getBindings())
         );
 
-        $this->log($started, $sql, [], $startedMemory);
+        $this->log($started, $startedMemory, $sql, []);
 
         return $result !== false;
     }
@@ -2618,7 +2618,7 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->log($started, $sql, [], $startedMemory);
+        $this->log($started, $startedMemory, $sql, []);
 
         // Set select statement into query to modify dynamically.
         $this->query['statement'] = $statement;
@@ -3038,12 +3038,12 @@ class QueryBuilder implements QueryBuilderContract
      * Logs the execution time of a SQL query.
      *
      * @param float $started The start time of the query execution.
+     * @param int $startedMemory The memory usage at the start of the query execution.
      * @param string $sql The SQL query that was executed.
      * @param array $bindings The bindings used in the query.
-     * @param int $startedMemory The memory usage at the start of the query execution.
      * @return void
      */
-    private function log(float $started, string $sql, array $bindings = [], int $startedMemory): void
+    private function log(float $started, int $startedMemory, string $sql, array $bindings = []): void
     {
         if (env('debug') === false) {
             return;
@@ -3053,7 +3053,12 @@ class QueryBuilder implements QueryBuilderContract
         $time = round(($ended - $started) * 1000, 6);
 
         if ($this->hasWhere()) {
-            $bindings['parameters'] = !empty($this->bindings) ? $this->bindings : $this->parameters;
+            $parameters = !empty($this->bindings) ? $this->bindings : $this->parameters;
+            if (!empty($bindings)) {
+                $bindings['where'] = $parameters;
+            } else {
+                $bindings = $parameters;
+            }
         }
 
         event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'bindings' => $bindings, 'memory_before' => $startedMemory]);
