@@ -321,7 +321,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function remove(): bool
     {
-        return $this->query()->delete();
+        return $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
     }
 
     /**
