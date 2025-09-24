@@ -6,6 +6,7 @@ use Closure;
 use DateTime;
 use Laravel\SerializableClosure\SerializableClosure;
 use RuntimeException;
+use Spark\Console\Prompt;
 use Spark\Contracts\Queue\QueueContract;
 use Spark\EventDispatcher;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
@@ -185,6 +186,10 @@ class Queue implements QueueContract
                 unset($this->jobs[$id]);
 
                 $this->saveJobs(); // Save the jobs to the queue file.
+
+                if (php_sapi_name() === 'cli') {
+                    Prompt::message("Running job <bold>#$id</bold>", 'info');
+                }
 
                 $job->handle(); // Execute the job.
 
