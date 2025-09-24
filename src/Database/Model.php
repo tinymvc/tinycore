@@ -378,13 +378,17 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             elseif ($this->hasCast($key)) {
                 $data[$key] = $this->castAttributeForStorage($key, $value);
             }
-            // Check if the value is Stringable
-            elseif ($value instanceof \Stringable) {
-                $data[$key] = (string) $value;
+            // Handle Arrayable and Jsonable objects
+            elseif ($value instanceof \Spark\Contracts\Support\Jsonable) {
+                $data[$key] = $value->toJson();
             }
             // Default behavior: Parse model property into string if they are in array
-            elseif (is_array($value) || $value instanceof Arrayable) {
-                $data[$key] = json_encode(is_array($value) ? $value : $value->toArray());
+            elseif (is_array($value)) {
+                $data[$key] = json_encode($value);
+            }
+            // Fallback: Convert all other values to string
+            else {
+                $data[$key] = (string) $value;
             }
         }
 
