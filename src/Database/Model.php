@@ -325,6 +325,20 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
+     * Loads the model attributes from the given data array.
+     *
+     * @param array $data Key-value pairs of model properties.
+     * @return static The current model instance.
+     */
+    public function loadAttributes(array $data): static
+    {
+        $this->attributes = $data;
+        $this->decodeSavedData();
+
+        return $this;
+    }
+
+    /**
      * Retrieves the fillable fields of the model based on the $fillable and $guarded properties.
      *
      * If $fillable is defined, only the fields specified in the array are included unless

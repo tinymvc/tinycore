@@ -720,10 +720,10 @@ trait HasRelation
             foreach ($results as $result) {
                 if ($result[$config['foreignKey']] == $model->{$config['localKey']}) {
                     if ($type === 'one') {
-                        $related = $relatedModel->load($result);
+                        $related = $relatedModel->loadAttributes($result);
                         break;
                     } else {
-                        $related[] = $relatedModel->load($result);
+                        $related[] = $relatedModel->loadAttributes($result);
                     }
                 }
             }
@@ -759,7 +759,7 @@ trait HasRelation
 
             foreach ($results as $result) {
                 if ($result[$config['ownerKey']] == $model->{$config['foreignKey']}) {
-                    $related = $relatedModel->load($result);
+                    $related = $relatedModel->loadAttributes($result);
                     break;
                 }
             }
@@ -791,7 +791,7 @@ trait HasRelation
 
             foreach ($results as $result) {
                 if ($result[$config['foreignPivotKey']] == $model->{$config['parentKey']}) {
-                    $related[] = $relatedModel->load($result);
+                    $related[] = $relatedModel->loadAttributes($result);
                 }
             }
 
@@ -824,10 +824,10 @@ trait HasRelation
             foreach ($results as $result) {
                 if ($result[$config['firstKey']] == $model->{$config['localKey']}) {
                     if ($isOne) {
-                        $related = $relatedModel->load($result);
+                        $related = $relatedModel->loadAttributes($result);
                         break; // Only get the first match for hasOne
                     } else {
-                        $related[] = $relatedModel->load($result);
+                        $related[] = $relatedModel->loadAttributes($result);
                     }
                 }
             }
