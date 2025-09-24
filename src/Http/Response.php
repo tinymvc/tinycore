@@ -317,8 +317,10 @@ class Response implements ResponseContract
     private function toPureArray(mixed $data): mixed
     {
         // If it's an object that knows how to cast itself to array, do it and recurse
-        if ($data instanceof Arrayable) {
-            return $this->toPureArray($data->toArray());
+        if ($data instanceof Stringable) {
+            $data = (string) $data;
+        } elseif ($data instanceof Arrayable) {
+            $data = $data->toArray();
         }
 
         // If it's an array, recurse into each element
