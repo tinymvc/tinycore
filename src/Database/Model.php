@@ -352,7 +352,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     private function getFillableData(): array
     {
-        if (!isset($this->fillable, $this->guarded)) {
+        if (!isset($this->fillable) && !isset($this->guarded)) {
             throw new InvalidModelFillableException(
                 'Either fillable or guarded must be defined for the modal: ' . static::class
             );
