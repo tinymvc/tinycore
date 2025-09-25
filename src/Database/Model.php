@@ -7,6 +7,7 @@ use ArrayIterator;
 use IteratorAggregate;
 use Spark\Contracts\Database\ModelContract;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Jsonable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Relation\HasRelation;
@@ -96,7 +97,7 @@ use Traversable;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate
+abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate, Jsonable
 {
     use HasRelation, Casts, Macroable {
         __call as macroCall;
@@ -396,7 +397,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
                 $data[$key] = $this->castAttributeForStorage($key, $value);
             }
             // Handle Arrayable and Jsonable objects
-            elseif ($value instanceof \Spark\Contracts\Support\Jsonable) {
+            elseif ($value instanceof Jsonable) {
                 $data[$key] = $value->toJson();
             }
             // Default behavior: Parse model property into string if they are in array
@@ -527,7 +528,26 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             $attributes = array_intersect_key($attributes, array_flip((array) $this->visible));
         }
 
+        if (property_exists($this, 'appends')) {
+            foreach ((array) $this->appends as $key) {
+                if ($this->hasAccessor($key)) {
+                    $attributes[$key] = $this->getAttributeValue($key);
+                }
+            }
+        }
+
         return $attributes;
+    }
+
+    /**
+     * Converts the model to a JSON string.
+     *
+     * @param int $options Options for json_encode.
+     * @return string A JSON representation of the model.
+     */
+    public function toJson($options = 0)
+    {
+        return json_encode($this->toArray(), $options);
     }
 
     /**
