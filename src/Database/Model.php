@@ -326,6 +326,9 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
     /**
      * Loads the model attributes from the given data array.
+     * 
+     * This is helpful when you want to populate a model instance with 
+     * directly inserting database's data.
      *
      * @param array $data Key-value pairs of model properties.
      * @return static The current model instance.
@@ -349,16 +352,16 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     private function getFillableData(): array
     {
-        $data = [];
-
-        $fillable = $this->fillable ?? [];
-        $guarded = $this->guarded ?? [];
-
-        if (!isset($this->fillable) && !isset($this->guarded)) {
+        if (!isset($this->fillable, $this->guarded)) {
             throw new InvalidModelFillableException(
                 'Either fillable or guarded must be defined for the modal: ' . static::class
             );
         }
+
+        $data = [];
+
+        $fillable = $this->fillable ?? [];
+        $guarded = $this->guarded ?? [];
 
         foreach ($this->attributes as $key => $value) {
             // If fillable is defined, only allow fillable fields unless guarded explicitly restricts it.
@@ -399,6 +402,10 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             // Default behavior: Parse model property into string if they are in array
             elseif (is_array($value)) {
                 $data[$key] = json_encode($value);
+            }
+            // Handle Scalar values
+            elseif (is_int($value) || is_bool($value) || is_null($value)) {
+                $data[$key] = $value;
             }
             // Fallback: Convert all other values to string
             else {
@@ -514,13 +521,10 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
         $attributes = array_merge($attributes, $this->getRelations());
 
-        $hidden = $this->hidden ?? [];
-        $visible = $this->visible ?? [];
-
-        if (!empty($hidden)) {
-            $attributes = array_diff_key($attributes, array_flip((array) $hidden));
-        } elseif (!empty($visible)) {
-            $attributes = array_intersect_key($attributes, array_flip((array) $visible));
+        if (property_exists($this, 'hidden')) {
+            $attributes = array_diff_key($attributes, array_flip((array) $this->hidden));
+        } elseif (property_exists($this, 'visible')) {
+            $attributes = array_intersect_key($attributes, array_flip((array) $this->visible));
         }
 
         return $attributes;
@@ -603,7 +607,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param string $name The name of the attribute to unset.
      * @return void
      */
-    public function unset(string $name): void
+    public function unset(string $name, ...$names): void
     {
         foreach (func_get_args() as $name) {
             data_forget($this->attributes, $name);
@@ -619,7 +623,23 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function get(string $name, mixed $default = null): mixed
     {
-        return data_get(array_filter($this->toArray()), $name, $default);
+        return data_get(array_filter($this->attributes), $name, $default);
+    }
+
+    /**
+     * Check if the model has a specific attribute.
+     *
+     * @param string $name The name of the attribute to check.
+     * @return bool True if the attribute exists, false otherwise.
+     */
+    public function isset(string $name, ...$names): bool
+    {
+        foreach (func_get_args() as $name) {
+            if ($this->get($name) === null) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -644,22 +664,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     {
         $filtered = array_diff_key($this->attributes, array_flip((array) $fields));
         return static::load($filtered);
-    }
-
-    /**
-     * Check if the model has a specific attribute.
-     *
-     * @param string $name The name of the attribute to check.
-     * @return bool True if the attribute exists, false otherwise.
-     */
-    public function isset(string $name): bool
-    {
-        foreach (func_get_args() as $name) {
-            if ($this->get($name) === null) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /**
