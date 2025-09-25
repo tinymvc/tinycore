@@ -598,7 +598,11 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function set(string $name, mixed $value): void
     {
-        data_set($this->attributes, $name, $value);
+        if ($this->relationLoaded($name)) {
+            $this->setRelation($name, $value);
+        } else {
+            data_set($this->attributes, $name, $value);
+        }
     }
 
     /**
@@ -610,7 +614,11 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function unset(string $name, ...$names): void
     {
         foreach (func_get_args() as $name) {
-            data_forget($this->attributes, $name);
+            if ($this->relationLoaded($name)) {
+                $this->forgetRelation($name);
+            } else {
+                data_forget($this->attributes, $name);
+            }
         }
     }
 
@@ -623,7 +631,12 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function get(string $name, mixed $default = null): mixed
     {
-        return data_get(array_filter($this->attributes), $name, $default);
+        if ($this->hasAccessor($name)) {
+            return $this->getAttributeValue($name);
+        }
+
+        $attributes = array_merge($this->attributes, $this->getRelations());
+        return data_get(array_filter($attributes), $name, $default);
     }
 
     /**
