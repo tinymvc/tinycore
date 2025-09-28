@@ -29,12 +29,18 @@ class Tracer implements TracerUtilContract
      * Sets up custom error, exception, and shutdown handlers for the application.
      * This ensures that errors and exceptions are logged and handled consistently.
      * 
+     * @param string|null $errorLogFile The path to the error log file. 
+     *      Defaults to storage_dir('error.log').
+     * 
      * @return void
      */
-    public function __construct()
+    public function __construct(private ?string $errorLogFile = null)
     {
         // Set the tracer instance as a singleton
         self::$instance = $this;
+
+        // Set default error log file if not provided
+        $this->errorLogFile ??= storage_dir('error.log');
 
         // Set custom error, exception, and shutdown handlers.
         set_error_handler([$this, 'handleError']);
@@ -106,6 +112,8 @@ class Tracer implements TracerUtilContract
      */
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
+        $this->log("$type: $message in $file on line $line"); // Log the error message
+
         if (php_sapi_name() === 'cli') {
             // Get the prompt instance
             $prompt = get(Prompt::class);
@@ -130,25 +138,48 @@ class Tracer implements TracerUtilContract
             exit(1);
         }
 
-        // Clear any previous output
-        if (ob_get_length()) {
-            ob_end_clean();
+        if (config('debug')) {
+            // Clear any previous output
+            if (ob_get_length()) {
+                ob_end_clean();
+            }
+
+            // Set HTTP response code to 500 for server error.
+            if (!headers_sent()) {
+                http_response_code(500);
+            }
+
+            // Detailed error output with stack trace if debug mode is enabled.
+            Blade::setPath(__DIR__ . '/../Foundation/resources/views');
+
+            echo Blade::render(
+                'tracer',
+                compact('type', 'message', 'file', 'line', 'trace')
+            );
+
+            // End the script to prevent further execution
+            exit;
         }
 
-        // Set HTTP response code to 500 for server error.
-        if (!headers_sent()) {
-            http_response_code(500);
+        abort(500, 'Internal Server Error');
+    }
+
+    /**
+     * Logs a message to the error log file.
+     * Rotates the log file when it reaches 10 MB.
+     *
+     * @param string $message The message to log.
+     */
+    public function log(string $message): void
+    {
+        $maxFileSize = 10 * 1024 * 1024; // 10 MB in bytes
+
+        // Check if log file exists and its size and rotate if it exceeds the max size.
+        if (file_exists($this->errorLogFile) && filesize($this->errorLogFile) >= $maxFileSize) {
+            rename($this->errorLogFile, $this->errorLogFile . '.' . date('Y-m-d_H-i-s'));
         }
 
-        // Detailed error output with stack trace if debug mode is enabled.
-        Blade::setPath(__DIR__ . '/../Foundation/resources/views');
-
-        echo Blade::render(
-            'tracer',
-            compact('type', 'message', 'file', 'line', 'trace')
-        );
-
-        // End the script to prevent further execution
-        exit;
+        $time = date('Y-m-d H:i:s'); // Current timestamp
+        error_log("[$time] $message\n", 3, $this->errorLogFile);
     }
 }

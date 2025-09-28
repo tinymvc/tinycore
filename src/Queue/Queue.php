@@ -43,21 +43,17 @@ class Queue implements QueueContract
      *
      * @param string|null $storageFile The path to the queue file. Defaults to
      *                                  storage_dir('temp/queue.json').
+     * @param string|null $logFile The path to the log file. Defaults to
+     *                                 storage_dir('queue.log').
      */
-    public function __construct(private ?string $storageFile = null)
+    public function __construct(private ?string $storageFile = null, private ?string $logFile = null)
     {
         $this->storageFile ??= storage_dir('queue.json');
+        $this->logFile ??= storage_dir('queue.log');
 
-        // If the queue file does not exist, try to create it.
-        if (!file_exists($this->storageFile) && !touch($this->storageFile)) {
-            throw new InvalidStorageFileException('Failed to create the queue file.');
-        }
-        // If the queue file is not writable, try to make it so.
-        elseif (!is_writable($this->storageFile) && !chmod($this->storageFile, 0666)) {
-            throw new InvalidStorageFileException(
-                sprintf('The queue file (%s) is not writable.', $this->storageFile)
-            );
-        }
+        // Ensure that the queue and log files exist and are writable.
+        $this->makeSureQueueFileIsValid($this->storageFile);
+        $this->makeSureQueueFileIsValid($this->logFile);
 
         // Set the serializable closure secret key.
         if (class_exists(SerializableClosure::class)) {
@@ -172,6 +168,10 @@ class Queue implements QueueContract
 
         $ranJobs = 0; // Counter for the number of jobs run.
 
+        // Measure the start time and memory usage.
+        $startedAt = microtime(true);
+        $startedMemory = memory_get_usage(true);
+
         foreach ($this->getJobs() as $id => $serializedJob) {
             // If the maximum number of jobs to run has been reached, break the loop.
             if ($ranJobs >= $maxJobs) {
@@ -202,6 +202,12 @@ class Queue implements QueueContract
                 $ranJobs++; // Increment the counter for the number of jobs run.
             }
         }
+
+        $timeUsed = microtime(true) - $startedAt;
+        $memoryUsed = memory_get_usage(true) - $startedMemory;
+
+        // If any jobs were run, display the time and memory used.
+        $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs);
     }
 
     /**
@@ -391,6 +397,74 @@ class Queue implements QueueContract
         }
 
         $this->isChanged = false; // Set the changed flag to false.
+    }
+
+    /**
+     * Adds a log entry to the queue log file.
+     *
+     * This method will add a log entry to the queue log file with the time
+     * taken to run the jobs, the memory used, and the number of jobs run.
+     * The log entry is added to the beginning of the log file and only the
+     * latest 5000 entries are kept.
+     *
+     * @param float $timeUsed The time taken to run the jobs in milliseconds.
+     * @param int $memoryUsed The memory used to run the jobs in bytes.
+     * @param int $ranJobs The number of jobs that were run.
+     *
+     * @return void
+     */
+    private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs): void
+    {
+        $message = $ranJobs > 0 ? sprintf(
+            'Finished running %d job(s) in %.4f ms, using %.2f KB of memory.',
+            $ranJobs,
+            $timeUsed,
+            $memoryUsed / 1024
+        ) : 'No jobs were run.';
+
+        $log = [
+            'message' => $message,
+            'time_used' => $timeUsed,
+            'memory_used' => $memoryUsed,
+            'jobs_run' => $ranJobs,
+            'timestamp' => time(),
+        ];
+
+        $oldLogs = (array) json_decode(file_get_contents($this->logFile) ?: '[]', true);
+        array_unshift($oldLogs, $log);
+
+        $oldLogs = array_slice($oldLogs, 0, 1000); // Keep only the latest 1K entries.
+
+        file_put_contents($this->logFile, json_encode($oldLogs), LOCK_EX);
+    }
+
+    /**
+     * Ensures that the queue file exists and is writable.
+     *
+     * This method checks if the queue file exists. If it does not exist, it
+     * attempts to create it. If it exists but is not writable, it attempts to
+     * change its permissions to make it writable. If any of these operations
+     * fail, an InvalidStorageFileException is thrown.
+     *
+     * @param string $queueFile The path to the queue file.
+     *
+     * @throws InvalidStorageFileException If the queue file cannot be created
+     *                                     or made writable.
+     *
+     * @return void
+     */
+    private function makeSureQueueFileIsValid(string $queueFile): void
+    {
+        // If the queue file does not exist, try to create it.
+        if (!file_exists($queueFile) && !touch($queueFile)) {
+            throw new InvalidStorageFileException('Failed to create the queue file.');
+        }
+        // If the queue file is not writable, try to make it so.
+        elseif (!is_writable($queueFile) && !chmod($queueFile, 0666)) {
+            throw new InvalidStorageFileException(
+                sprintf('The queue file (%s) is not writable.', $queueFile)
+            );
+        }
     }
 
     /**

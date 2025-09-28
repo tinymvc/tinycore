@@ -29,6 +29,7 @@ use Spark\Utils\Http;
 use Spark\Utils\Image;
 use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
+use Spark\Utils\Tracer;
 use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
@@ -1720,5 +1721,20 @@ if (!function_exists('arr_from_set')) {
         }
 
         return $value; // Trim each value in the array
+    }
+}
+
+if (!function_exists('tracer')) {
+    /**
+     * Retrieves the Tracer instance.
+     *
+     * This function returns the Tracer instance, which provides methods
+     * for tracing and logging application events.
+     *
+     * @return \Spark\Utils\Tracer The Tracer instance.
+     */
+    function tracer(): Tracer
+    {
+        return Tracer::$instance;
     }
 }

@@ -69,10 +69,7 @@ class Application implements ApplicationContract
         // Set the application instance statically.
         self::$app = $this;
 
-        // Initialize the tracer if debug mode is enabled
-        if (isset($env['debug']) && $env['debug']) {
-            Tracer::start();
-        }
+        Tracer::start(); // Initialize the tracer
 
         // Initialize the dependency injection container
         $this->container = new Container;
@@ -393,16 +390,11 @@ class Application implements ApplicationContract
         } catch (InvalidCsrfTokenException) {
             abort(error: 419, message: 'Page Expired');
         } catch (Throwable $e) {
-
             if (isset($this->exceptions[get_class($e)])) {
                 $this->exceptions[get_class($e)]($e);
             }
 
-            if (config('debug')) {
-                Tracer::$instance->handleException($e);
-            }
-
-            abort(error: 500, message: 'Internal Server Error');
+            Tracer::$instance->handleException($e);
         }
     }
 
