@@ -712,13 +712,13 @@ trait HasRelation
      */
     private function matchModels(array $models, array $results, array $config, string $name, string $type): array
     {
-        $relatedModel = new $config['related'];
-
         foreach ($models as $model) {
             $related = $type === 'one' ? null : [];
 
             foreach ($results as $result) {
                 if ($result[$config['foreignKey']] == $model->{$config['localKey']}) {
+                    $relatedModel = new $config['related'];
+
                     if ($type === 'one') {
                         $related = $relatedModel->loadAttributes($result);
                         break;
@@ -752,14 +752,12 @@ trait HasRelation
      */
     private function matchBelongsTo(array $models, array $results, array $config, string $name): array
     {
-        $relatedModel = new $config['related'];
-
         foreach ($models as $model) {
             $related = null;
 
             foreach ($results as $result) {
                 if ($result[$config['ownerKey']] == $model->{$config['foreignKey']}) {
-                    $related = $relatedModel->loadAttributes($result);
+                    $related = (new $config['related'])->loadAttributes($result);
                     break;
                 }
             }
@@ -784,14 +782,12 @@ trait HasRelation
      */
     private function matchBelongsToMany(array $models, array $results, array $config, string $name): array
     {
-        $relatedModel = new $config['related'];
-
         foreach ($models as $model) {
             $related = [];
 
             foreach ($results as $result) {
                 if ($result[$config['foreignPivotKey']] == $model->{$config['parentKey']}) {
-                    $related[] = $relatedModel->loadAttributes($result);
+                    $related[] = (new $config['related'])->loadAttributes($result);
                 }
             }
 
@@ -816,13 +812,13 @@ trait HasRelation
      */
     private function matchHasThrough(array $models, array $results, array $config, string $name, bool $isOne): array
     {
-        $relatedModel = new $config['related'];
-
         foreach ($models as $model) {
             $related = $isOne ? null : [];
 
             foreach ($results as $result) {
                 if ($result[$config['firstKey']] == $model->{$config['localKey']}) {
+                    $relatedModel = new $config['related'];
+
                     if ($isOne) {
                         $related = $relatedModel->loadAttributes($result);
                         break; // Only get the first match for hasOne
