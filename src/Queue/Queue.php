@@ -49,7 +49,7 @@ class Queue implements QueueContract
     public function __construct(private ?string $storageFile = null, private ?string $logFile = null)
     {
         $this->storageFile ??= storage_dir('queue.json');
-        $this->logFile ??= storage_dir('queue.log');
+        $this->logFile ??= storage_dir('logs/queue.log');
 
         // Ensure that the queue and log files exist and are writable.
         $this->makeSureQueueFileIsValid($this->storageFile);

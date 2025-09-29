@@ -40,7 +40,7 @@ class Tracer implements TracerUtilContract
         self::$instance = $this;
 
         // Set default error log file if not provided
-        $this->errorLogFile ??= storage_dir('error.log');
+        $this->errorLogFile ??= storage_dir('logs/error.log');
 
         // Set custom error, exception, and shutdown handlers.
         set_error_handler([$this, 'handleError']);
