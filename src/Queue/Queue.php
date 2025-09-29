@@ -167,6 +167,7 @@ class Queue implements QueueContract
         $now = new DateTime();
 
         $ranJobs = 0; // Counter for the number of jobs run.
+        $failedJobs = 0; // Counter for the number of failed jobs.
 
         // Measure the start time and memory usage.
         $startedAt = microtime(true);
@@ -191,15 +192,23 @@ class Queue implements QueueContract
                     Prompt::message("Running job <bold>#$id</bold>", 'info');
                 }
 
-                $job->handle(); // Execute the job.
+                try {
+                    $job->handle(); // Execute the job.
 
-                // If the job is repeated, reschedule it for the next time.
-                if ($job->isRepeated()) {
-                    $job->schedule(new DateTime($job->getRepeat()));
-                    $this->addJob($job, $id);
+                    // If the job is repeated, reschedule it for the next time.
+                    if ($job->isRepeated()) {
+                        $job->schedule(new DateTime($job->getRepeat()));
+                        $this->addJob($job, $id);
+                    }
+
+                    $ranJobs++; // Increment the counter for the number of jobs run.
+                } catch (\Throwable $e) {
+                    if (php_sapi_name() === 'cli') {
+                        Prompt::message("Job <bold>#$id</bold> failed: " . $e->getMessage(), 'error');
+                    }
+
+                    $failedJobs++; // Increment the counter for the number of failed jobs.
                 }
-
-                $ranJobs++; // Increment the counter for the number of jobs run.
             }
         }
 
@@ -207,7 +216,7 @@ class Queue implements QueueContract
         $memoryUsed = memory_get_usage(true) - $startedMemory;
 
         // If any jobs were run, display the time and memory used.
-        $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs);
+        $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
     }
 
     /**
@@ -413,20 +422,22 @@ class Queue implements QueueContract
      *
      * @return void
      */
-    private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs): void
+    private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs, int $failedJobs): void
     {
-        $message = $ranJobs > 0 ? sprintf(
-            'Finished running %d job(s) in %.4f seconds, using %.2f MB of memory.',
+        $message = sprintf(
+            'Finished running %d success and %d failed job(s) in %.4f seconds, using %.2f MB of memory.',
             $ranJobs,
+            $failedJobs,
             $timeUsed,
             $memoryUsed / 1024 / 1024
-        ) : 'No jobs were run.';
+        );
 
         $log = [
             'message' => $message,
             'time_used' => $timeUsed,
             'memory_used' => $memoryUsed,
             'jobs_run' => $ranJobs,
+            'jobs_failed' => $failedJobs,
             'timestamp' => time(),
         ];
 
