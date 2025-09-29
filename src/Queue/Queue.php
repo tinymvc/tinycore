@@ -416,10 +416,10 @@ class Queue implements QueueContract
     private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs): void
     {
         $message = $ranJobs > 0 ? sprintf(
-            'Finished running %d job(s) in %.4f ms, using %.2f KB of memory.',
+            'Finished running %d job(s) in %.4f seconds, using %.2f MB of memory.',
             $ranJobs,
             $timeUsed,
-            $memoryUsed / 1024
+            $memoryUsed / 1024 / 1024
         ) : 'No jobs were run.';
 
         $log = [
