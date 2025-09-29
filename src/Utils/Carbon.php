@@ -810,6 +810,64 @@ class Carbon implements Arrayable, \Stringable
     }
 
     /**
+     * Get a short human-readable difference between two DateTime instances
+     * 
+     * This method returns a shortened version of the time difference, suitable for compact display.
+     * Examples: "1m ago", "2h ago", "3d ago", "1y ago", "5m", "2h", etc.
+     * 
+     * @param self|null $other The other DateTime instance to compare with, defaults to now
+     * @param bool $withSuffix Whether to include "ago" suffix for past times, defaults to true
+     * @return string The short human-readable time difference
+     */
+    public function diffForHumansShort(?self $other = null, bool $withSuffix = true): string
+    {
+        $other ??= self::now();
+        $diff = $this->getTimestamp() - $other->getTimestamp();
+        $absDiff = abs($diff);
+
+        $future = $diff > 0;
+
+        // Determine the appropriate unit and value
+        if ($absDiff < 60) {
+            $value = $absDiff;
+            $unit = 's';
+        } elseif ($absDiff < 3600) {
+            $value = round($absDiff / 60);
+            $unit = 'm';
+        } elseif ($absDiff < 86400) {
+            $value = round($absDiff / 3600);
+            $unit = 'h';
+        } elseif ($absDiff < 2592000) { // 30 days
+            $value = round($absDiff / 86400);
+            $unit = 'd';
+        } elseif ($absDiff < 31536000) { // 365 days
+            $value = round($absDiff / 2592000);
+            $unit = 'mo';
+        } else {
+            $value = round($absDiff / 31536000);
+            $unit = 'y';
+        }
+
+        // Handle very small differences
+        if ($value == 0) {
+            return $withSuffix ? 'now' : '0s';
+        }
+
+        // Build the result string
+        $result = "{$value}{$unit}";
+
+        if ($withSuffix) {
+            if ($future) {
+                $result = "in {$result}";
+            } else {
+                $result = "{$result} ago";
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * Set the timezone for the DateTime instance
      * 
      * @param string|DateTimeZone $timezone The timezone to set
