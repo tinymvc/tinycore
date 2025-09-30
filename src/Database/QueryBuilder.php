@@ -2146,6 +2146,16 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Specifies that results should be fetched as associative arrays.
+     *
+     * @return self
+     */
+    public function fetchAssoc(): self
+    {
+        return $this->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
      * Retrieves the first result from the query.
      *
      * @return mixed
