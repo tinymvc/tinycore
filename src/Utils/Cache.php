@@ -310,6 +310,25 @@ class Cache implements CacheUtilContract
     }
 
     /**
+     * Retrieves all expired cache entries without removing them.
+     *
+     * @return array An associative array of expired cache entries.
+     */
+    public function getExpired(): array
+    {
+        $this->reload();
+        $expired = [];
+
+        foreach ($this->cacheData as $key => $entry) {
+            if ($this->isExpired($entry['time'], $entry['expire'])) {
+                $expired[$key] = unserialize($entry['data']);
+            }
+        }
+
+        return $expired;
+    }
+
+    /**
      * Clears all cache data.
      *
      * @return self
