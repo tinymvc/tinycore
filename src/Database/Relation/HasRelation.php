@@ -432,29 +432,6 @@ trait HasRelation
     }
 
     /**
-     * Attach relationships to the model if not loaded.
-     * 
-     * This method allows you to attach one or more relationships to the model.
-     * It accepts a string or an array of relationship names and loads them.
-     * 
-     * @param mixed ...$relations
-     * @return void
-     */
-    public function attachRelationIf(...$relations): void
-    {
-        $relations = array_map(fn($relation) => (array) $relation, $relations);
-        $relations = array_merge(...$relations);
-
-        foreach ((array) $relations as $relation) {
-            if ($this->relationLoaded($relation)) {
-                continue;
-            }
-
-            $this->getRelationshipAttribute($relation);
-        }
-    }
-
-    /**
      * Check if a relationship exists and has data.
      * 
      * @param string $name
