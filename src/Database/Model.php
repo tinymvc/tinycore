@@ -124,6 +124,13 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     protected array $attributes = [];
 
     /**
+     * Track vars for internal usage.
+     *
+     * @var array
+     */
+    protected array $tracking = [];
+
+    /**
      * model constructor.
      * Initializes the model instance and decodes any previously saved data if an ID is set.
      */
@@ -425,6 +432,11 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     private function decodeSavedData(): void
     {
+        // Keep track of original attributes for change detection.
+        if ($this->hasAnyCast()) {
+            $this->tracking['__original_attributes'] = $this->attributes;
+        }
+
         // Go Through all the properties of this model.
         foreach ($this->attributes as $key => $value) {
             // Check if there's a cast for this attribute
@@ -673,6 +685,100 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             }
         }
         return true;
+    }
+
+    /**
+     * Get the original value of a specific attribute before any changes were made.
+     *
+     * @param string $name The name of the attribute to get.
+     * @param mixed $default The default value to return if the attribute is not set.
+     * @return mixed The original value of the attribute or the default value if not set.
+     */
+    public function getOriginal(string $name, mixed $default = null): mixed
+    {
+        return $this->tracking['__original_attributes'][$name] ?? $this->attributes[$name] ?? $default;
+    }
+
+    /**
+     * Get the changes made to the model compared to its original state.
+     *
+     * @return array An associative array of changed attributes and their new values.
+     */
+    public function getChanges(): array
+    {
+        if (!$this->hasOriginal()) {
+            return []; // No original data to compare with.
+        }
+
+        $original = $this->tracking['__original_attributes'];
+        $changes = [];
+
+        foreach ($this->attributes as $key => $value) {
+            if (!array_key_exists($key, $original) || $original[$key] !== $value) {
+                $changes[$key] = $value;
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Check if the model has any changes compared to its original state.
+     *
+     * @return bool True if there are changes, false otherwise.
+     */
+    public function hasChanges(): bool
+    {
+        return !empty($this->getChanges());
+    }
+
+    /**
+     * Clear the original attributes of the model.
+     * 
+     * @return void
+     */
+    public function clearOriginal(): void
+    {
+        unset($this->tracking['__original_attributes']);
+    }
+
+    /**
+     * Check if the model has original attributes stored.
+     * 
+     * @return bool
+     */
+    public function hasOriginal(): bool
+    {
+        return isset($this->tracking['__original_attributes']);
+    }
+
+    /**
+     * Preserve the current attributes as original before updating.
+     * 
+     * This method should be called before making updates to the model.
+     * 
+     * @param array $attributes The new data to fill the model with.
+     * @return void
+     */
+    public function preserveOriginalBeforeUpdating(array $attributes): void
+    {
+        $this->tracking['__original_attributes'] = $this->attributes;
+        $this->fill($attributes); // Fill the model with the new data.
+    }
+
+    /**
+     * Restore the model's attributes to their original state.
+     * 
+     * This method reverts any changes made to the model since the last save.
+     * 
+     * @return void
+     */
+    public function restoreOriginal(): void
+    {
+        if ($this->hasOriginal()) {
+            $this->attributes = $this->tracking['__original_attributes'];
+            $this->clearOriginal();
+        }
     }
 
     /**

@@ -2,7 +2,6 @@
 
 namespace Spark\Contracts\Http;
 
-use Spark\Container;
 use Spark\Http\Request;
 
 /**
@@ -18,27 +17,27 @@ interface MiddlewareContract
      * 
      * If $concrete is not given, the $abstract will be used as the class name.
      * 
-     * @param string $abstract The middleware key.
-     * @param callable|string|null $concrete Optional. The middleware class name.
+     * @param string $alias The alias for the middleware.
+     * @param string|callable $middleware The middleware class or callable.
      * @return self
      */
-    public function register(string $abstract, callable|string|null $concrete = null): self;
+    public function register(string $alias, string|callable $middleware): self;
 
     /**
      * Adds middleware keys to the execution stack.
      * 
-     * @param array|string $abstract The middleware keys to queue for execution.
+     * @param array|string $aliases The middleware aliases to queue for execution.
      * @return self
      */
-    public function queue(array|string $abstract): self;
+    public function queue(array|string ...$aliases): self;
 
     /**
      * Executes the middleware stack and returns the first response
      * from a middleware or null if no response was returned.
      * 
-     * @param Container $container The service container.
      * @param Request $request The request being processed.
-     * @return mixed The response from the middleware or null.
+     * @param \Closure $destination The final destination callable if no middleware returns a response.
+     * @param array $except An array of middleware keys to skip during processing.
      */
-    public function process(Container $container, Request $request): mixed;
+    public function process(Request $request, \Closure $destination, array $except = []);
 }

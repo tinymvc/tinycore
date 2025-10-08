@@ -1434,6 +1434,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Apply related model condition if necessary
         if ($this->isUsingModel()) {
+            $this->getModelBeingUsed()->preserveOriginalBeforeUpdating($data);
             $this->applyModelPrimaryCondition();
         }
 
@@ -1489,7 +1490,13 @@ class QueryBuilder implements QueryBuilderContract
         $this->log($started, $startedMemory, $sql, $data);
 
         // Returns true if records are successfully updated, false otherwise.
-        return $statement->rowCount() > 0;
+        $status = $statement->rowCount() > 0;
+
+        if (!$status && $this->isUsingModel()) {
+            $this->getModelBeingUsed()->restoreOriginal();
+        }
+
+        return $status; // Return true if rows were affected, false otherwise.
     }
 
     /**

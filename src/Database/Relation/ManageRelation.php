@@ -497,17 +497,27 @@ trait ManageRelation
     }
 
     /**
+     * Get the model being used in the query.
+     *
+     * @return Model|null
+     */
+    private function getModelBeingUsed(): ?Model
+    {
+        return $this->isUsingModel() ? $this->query['use_model'] : null;
+    }
+
+    /**
      * Apply conditions based on the related model.
      *
      * @return void
      */
     private function applyModelPrimaryCondition(): void
     {
-        if (!$this->isUsingModel()) {
+        $model = $this->getModelBeingUsed();
+        if (!$model) {
             return;
         }
 
-        $model = $this->query['use_model'];
         $primaryValue = $model->primaryValue();
 
         if (!empty($primaryValue)) {

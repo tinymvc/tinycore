@@ -2,6 +2,7 @@
 
 namespace Spark\Http;
 
+use Spark\Contracts\Http\MiddlewareContract;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
@@ -19,7 +20,7 @@ use Closure;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Middleware
+class Middleware implements MiddlewareContract
 {
     use Macroable;
 
@@ -70,14 +71,16 @@ class Middleware
     }
 
     /**
-     * Adds middleware keys to the execution stack.
+     * Add middlewares to the execution stack
      * 
-     * @param array|string $abstract The middleware keys to queue for execution.
+     * @param array|string $aliases The middleware aliases to queue for execution.
      * @return self
      */
-    public function queue(array|string $abstract): self
+    public function queue(array|string ...$aliases): self
     {
-        foreach ((array) $abstract as $key) {
+        $aliases = is_array($aliases[0]) ? $aliases[0] : $aliases;
+
+        foreach ($aliases as $key) {
             if (!in_array($key, $this->stack)) {
                 $this->stack[] = $key;
             }

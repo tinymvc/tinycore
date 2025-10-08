@@ -156,6 +156,16 @@ trait Casts
     }
 
     /**
+     * Check if any of the given attributes should be cast.
+     *
+     * @return bool Whether any of the attributes should be cast
+     */
+    public function hasAnyCast(array|string ...$keys): bool
+    {
+        return isset($this->casts) && !empty($this->casts);
+    }
+
+    /**
      * Cast a value to a boolean.
      *
      * @param mixed $value The value to cast
