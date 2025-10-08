@@ -534,11 +534,15 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
 
         $attributes = array_merge($attributes, $this->getRelations());
 
-        if (property_exists($this, 'hidden')) {
-            $attributes = array_diff_key($attributes, array_flip((array) $this->hidden));
-        } elseif (property_exists($this, 'visible')) {
-            $attributes = array_intersect_key($attributes, array_flip((array) $this->visible));
+        // Apply visibility rules with temporary overrides
+        $hidden = $this->getHidden();
+        $visible = $this->getVisible();
+
+        if (!empty($visible)) {
+            $attributes = array_intersect_key($attributes, array_flip($visible));
         }
+
+        $attributes = array_diff_key($attributes, array_flip($hidden));
 
         if (property_exists($this, 'appends')) {
             foreach ((array) $this->appends as $key) {
@@ -549,6 +553,66 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         }
 
         return $attributes;
+    }
+
+    /**
+     * Get the hidden attributes for the model.
+     *
+     * @return array
+     */
+    public function getHidden(): array
+    {
+        return array_merge(
+            $this->tracking['__hidden'] ?? [],
+            property_exists($this, 'hidden') ? (array) $this->hidden : []
+        );
+    }
+
+    /**
+     * Get the visible attributes for the model.
+     *
+     * @return array
+     */
+    public function getVisible(): array
+    {
+        $visible = array_merge(
+            $this->tracking['__visible'] ?? [],
+            property_exists($this, 'visible') ? (array) $this->visible : []
+        );
+
+        return array_diff($visible, $this->getHidden());
+    }
+
+    /**
+     * Make the given, typically hidden, attributes visible.
+     *
+     * @param string|array ...$attributes
+     * @return $this
+     */
+    public function makeVisible(string|array ...$attributes): static
+    {
+        $attributes = is_array($attributes[0]) ? $attributes[0] : func_get_args();
+        $visible = $this->tracking['__visible'] ?? [];
+
+        $this->tracking['__visible'] = array_merge($visible, $attributes);
+
+        return $this;
+    }
+
+    /**
+     * Make the given, typically visible, attributes hidden.
+     *
+     * @param string|array ...$attributes
+     * @return $this
+     */
+    public function makeHidden(string|array ...$attributes): static
+    {
+        $attributes = is_array($attributes[0]) ? $attributes[0] : func_get_args();
+        $hidden = $this->tracking['__hidden'] ?? [];
+
+        $this->tracking['__hidden'] = array_merge($hidden, $attributes);
+
+        return $this;
     }
 
     /**
