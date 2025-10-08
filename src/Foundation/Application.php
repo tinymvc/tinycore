@@ -5,7 +5,7 @@ namespace Spark\Foundation;
 use Spark\Console\Commands;
 use Spark\Console\Console;
 use Spark\Container;
-use Spark\Contracts\Foundation\ApplicationContract;
+use Spark\Contracts\ApplicationContract;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;

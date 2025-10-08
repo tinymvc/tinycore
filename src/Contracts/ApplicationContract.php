@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Foundation;
+namespace Spark\Contracts;
 
 use Spark\Container;
 
