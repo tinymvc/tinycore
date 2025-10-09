@@ -1485,9 +1485,9 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
-        $this->resetWhere();
-
         $this->log($started, $startedMemory, $sql, $data);
+
+        $this->resetWhere();
 
         // Returns true if records are successfully updated, false otherwise.
         $status = $statement->rowCount() > 0;
@@ -1542,10 +1542,10 @@ class QueryBuilder implements QueryBuilderContract
             throw new QueryBuilderException('Failed to execute statement');
         }
 
+        $this->log($started, $startedMemory, $sql, []);
+
         // Reset current query builder.
         $this->resetWhere();
-
-        $this->log($started, $startedMemory, $sql, []);
 
         // Returns true if records are successfully deleted, false otherwise.
         return $statement->rowCount() > 0;
