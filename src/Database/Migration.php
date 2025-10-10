@@ -3,7 +3,7 @@
 namespace Spark\Database;
 
 use Spark\Console\Prompt;
-use Spark\Contracts\Database\MigrationContract;
+use Spark\Database\Contracts\MigrationContract;
 use Spark\Database\Exceptions\InvalidMigrationFile;
 use Throwable;
 

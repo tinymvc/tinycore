@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Database;
+namespace Spark\Database\Contracts;
 
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\QueryBuilder;

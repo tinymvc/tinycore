@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Queue;
+namespace Spark\Queue\Contracts;
 
 use Closure;
 use DateTime;

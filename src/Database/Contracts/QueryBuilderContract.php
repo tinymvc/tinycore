@@ -1,5 +1,5 @@
 <?php
-namespace Spark\Contracts\Database;
+namespace Spark\Database\Contracts;
 
 use Spark\Contracts\Support\Arrayable;
 
@@ -39,7 +39,7 @@ interface QueryBuilderContract
      * @param ?string $type The type of the value given.
      * @return QueryBuilderContract Returns the query builder instance.
      */
-    public function where(null|string|array $column = null, ?string $operator = null, mixed $value = null, ?string $type = null): self;
+    public function where(null|string|array $column = null, ?string $operator = null, $value = null, ?string $type = null): self;
 
     /**
      * Update data in the database.
@@ -48,7 +48,7 @@ interface QueryBuilderContract
      * @param mixed $where The condition to use for the update.
      * @return bool True if the update was successful, false otherwise.
      */
-    public function update(array|Arrayable $data, mixed $where = null): bool;
+    public function update(array|Arrayable $data, $where = null): bool;
 
     /**
      * Delete data from the database.
@@ -56,7 +56,7 @@ interface QueryBuilderContract
      * @param mixed $where The condition to use for the delete.
      * @return bool True if the delete was successful, false otherwise.
      */
-    public function delete(mixed $where = null): bool;
+    public function delete($where = null): bool;
 
     /**
      * Set the fields to select from the database.

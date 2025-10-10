@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Database;
+namespace Spark\Database\Contracts;
 
 /**
  * Interface CastsAttributes
@@ -9,7 +9,7 @@ namespace Spark\Contracts\Database;
  * cast classes that handle the conversion of model attributes
  * to and from specific data types.
  *
- * @package Spark\Contracts\Database
+ * @package Spark\Database\Contracts
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 interface CastsAttributes

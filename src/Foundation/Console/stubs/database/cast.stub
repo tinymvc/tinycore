@@ -2,7 +2,7 @@
 
 namespace {{ namespace }};
 
-use Spark\Contracts\Database\CastsAttributes;
+use Spark\Database\Contracts\CastsAttributes;
 
 class {{ class }} implements CastsAttributes
 {

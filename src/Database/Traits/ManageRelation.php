@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Database\Relation;
+namespace Spark\Database\Traits;
 
 use Closure;
 use Spark\Database\Exceptions\InvalidOrmException;

@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Database;
+namespace Spark\Database\Contracts;
 
 /**
  * Interface for database migration contracts.

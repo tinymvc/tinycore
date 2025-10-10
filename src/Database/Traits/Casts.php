@@ -1,8 +1,8 @@
 <?php
 
-namespace Spark\Database;
+namespace Spark\Database\Traits;
 
-use Spark\Contracts\Database\CastsAttributes;
+use Spark\Database\Contracts\CastsAttributes;
 use Spark\Support\Collection;
 use Spark\Utils\Carbon;
 
@@ -367,7 +367,7 @@ trait Casts
      * Get an instance of the custom cast class for the given attribute.
      *
      * @param string $key The attribute key
-     * @return \Spark\Contracts\Database\CastsAttributes The cast instance
+     * @return \Spark\Database\Contracts\CastsAttributes The cast instance
      * @throws \InvalidArgumentException If the cast is not a valid custom cast class
      */
     protected function getCustomCastInstance(string $key): CastsAttributes

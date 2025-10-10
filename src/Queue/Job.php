@@ -3,7 +3,7 @@
 namespace Spark\Queue;
 
 use DateTime;
-use Spark\Contracts\Queue\JobContract;
+use Spark\Queue\Contracts\JobContract;
 use Spark\EventDispatcher;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;

@@ -7,7 +7,7 @@ use DateTime;
 use Laravel\SerializableClosure\SerializableClosure;
 use RuntimeException;
 use Spark\Console\Prompt;
-use Spark\Contracts\Queue\QueueContract;
+use Spark\Queue\Contracts\QueueContract;
 use Spark\EventDispatcher;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;

@@ -4,7 +4,7 @@ namespace Spark\Database;
 
 use PDO;
 use PDOStatement;
-use Spark\Contracts\Database\DBContract;
+use Spark\Database\Contracts\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
 use Spark\Support\Traits\Macroable;
 
