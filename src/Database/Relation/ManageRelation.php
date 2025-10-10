@@ -26,13 +26,12 @@ trait ManageRelation
      * It accepts a string or an array of relationship names,
      * and returns a QueryBuilder instance with the relationships loaded.
      * 
-     * @param array|string $relations
+     * @param array|string ...$relations
      * @return QueryBuilder
      */
-    public function with($relations): QueryBuilder
+    public function with(array|string ...$relations): QueryBuilder
     {
-        $relations = is_string($relations) ? [$relations] : $relations;
-
+        $relations = is_array($relations[0]) ? $relations[0] : $relations;
         $model = $this->getRelatedModel();
 
         foreach ($relations as $name => $constraints) {

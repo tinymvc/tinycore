@@ -256,7 +256,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
      * 
      * @return mixed
      */
-    public function reduce(callable $callback, mixed $initial = null): mixed
+    public function reduce(callable $callback, $initial = null): mixed
     {
         return array_reduce($this->data, $callback, $initial);
     }

@@ -64,10 +64,10 @@ class RouteResource implements RouteResourceContract
     /**
      * Set the name prefix for the resource routes.
      *
-     * @param string|null $name The name prefix.
+     * @param string $name The name prefix.
      * @return self Returns the current instance for method chaining.
      */
-    public function name(string|null $name): self
+    public function name(string $name): self
     {
         $this->name = $name;
         return $this;
@@ -100,24 +100,24 @@ class RouteResource implements RouteResourceContract
     /**
      * Specify actions to include in the resource routes.
      *
-     * @param array $only Actions to include (e.g., ['index', 'show']).
+     * @param string|array ...$includes Actions to include (e.g., ['index', 'show']).
      * @return self Returns the current instance for method chaining.
      */
-    public function only(array $only): self
+    public function only(string|array ...$includes): self
     {
-        $this->only = $only;
+        $this->only = is_array($includes[0]) ? $includes[0] : $includes;
         return $this;
     }
 
     /**
      * Specify actions to exclude from the resource routes.
      *
-     * @param array $except Actions to exclude (e.g., ['destroy']).
+     * @param string|array ...$excludes Actions to exclude (e.g., ['destroy']).
      * @return self Returns the current instance for method chaining.
      */
-    public function except(array $except): self
+    public function except(string|array ...$excludes): self
     {
-        $this->except = $except;
+        $this->except = is_array($excludes[0]) ? $excludes[0] : $excludes;
         return $this;
     }
 

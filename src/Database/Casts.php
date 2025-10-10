@@ -31,7 +31,6 @@ trait Casts
         }
 
         $castType = $this->getCastType($key);
-
         if (!$castType) {
             return $value;
         }
@@ -160,7 +159,7 @@ trait Casts
      *
      * @return bool Whether any of the attributes should be cast
      */
-    public function hasAnyCast(array|string ...$keys): bool
+    public function hasAnyCast(): bool
     {
         return isset($this->casts) && !empty($this->casts);
     }
@@ -281,7 +280,6 @@ trait Casts
 
         if (is_string($value)) {
             $decoded = json_decode($value, !$asObject);
-
             if (json_last_error() === JSON_ERROR_NONE) {
                 return $decoded;
             }

@@ -816,7 +816,7 @@ class InputValidator implements InputValidatorContract
      * @param array $params Parameters for the rule, if any.
      * @param array $value The value that failed validation.
      */
-    private function addError(string $field, string $rule, array $params = [], mixed $value = null): void
+    private function addError(string $field, string $rule, array $params = [], $value = null): void
     {
         $prettyField = __(Str::headline($field));
 

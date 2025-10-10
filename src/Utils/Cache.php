@@ -359,13 +359,23 @@ class Cache implements CacheUtilContract
     }
 
     /**
-     * Clears all cache data (alias for flush).
+     * Clears all cache data by deleting the cache file 
+     * and resetting properties.
      *
      * @return self
      */
     public function clear(): self
     {
-        return $this->flush();
+        if (file_exists($this->cachePath)) {
+            unlink($this->cachePath);
+        }
+
+        $this->cacheData = [];
+        $this->erased = false;
+        $this->cached = false;
+        $this->changed = false;
+
+        return $this;
     }
 
     /**

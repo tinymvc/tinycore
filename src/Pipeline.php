@@ -47,7 +47,7 @@ class Pipeline
      * 
      * @param mixed $payload The initial payload to be processed by the pipeline.
      */
-    public function __construct(private mixed $payload = null)
+    public function __construct(private $payload = null)
     {
     }
 
@@ -59,7 +59,7 @@ class Pipeline
      * @param mixed $payload The initial payload to be processed by the pipeline.
      * @return self A new instance of the Pipeline class.
      */
-    public static function make(mixed $payload = null): self
+    public static function make($payload = null): self
     {
         return new self($payload);
     }
@@ -72,7 +72,7 @@ class Pipeline
      * @param mixed $payload The initial payload to be processed by the pipeline.
      * @return self The current instance of the Pipeline class for method chaining.
      */
-    public function send(mixed $payload): self
+    public function send($payload): self
     {
         $this->payload = $payload;
         return $this;

@@ -54,12 +54,16 @@ trait HasRelation
     /**
      * Unset a loaded relationship.
      * 
-     * @param string $relation
+     * @param string|array ...$relations
      * @return $this
      */
-    public function unsetRelation(string $relation): self
+    public function unsetRelation(string|array ...$relations): self
     {
-        unset($this->relations[$relation]);
+        $relations = is_array($relations[0]) ? $relations[0] : $relations;
+        foreach ($relations as $relation) {
+            unset($this->relations[$relation]);
+        }
+
         return $this;
     }
 
@@ -351,7 +355,7 @@ trait HasRelation
      * @param array $models
      * @return void
      */
-    public static function loadRelations($relations, array &$models = []): void
+    public static function loadRelations(array|string $relations, array &$models = []): void
     {
         if (empty($models)) {
             return;
@@ -418,15 +422,13 @@ trait HasRelation
      * This method allows you to attach one or more relationships to the model.
      * It accepts a string or an array of relationship names and loads them.
      * 
-     * @param mixed ...$relations
+     * @param array|string ...$relations
      * @return void
      */
-    public function attachRelation(...$relations): void
+    public function attachRelation(array|string ...$relations): void
     {
-        $relations = array_map(fn($relation) => (array) $relation, $relations);
-        $relations = array_merge(...$relations);
-
-        foreach ((array) $relations as $relation) {
+        $relations = is_array($relations[0]) ? $relations[0] : $relations;
+        foreach ($relations as $relation) {
             $this->getRelationshipAttribute($relation);
         }
     }
@@ -446,12 +448,15 @@ trait HasRelation
     /**
      * Remove a relationship from memory.
      * 
-     * @param string $name
+     * @param array|string ...$relations
      * @return void
      */
-    public function forgetRelation(string $name): void
+    public function forgetRelation(array|string ...$relations): void
     {
-        unset($this->relations[$name]);
+        $relations = is_array($relations[0]) ? $relations[0] : $relations;
+        foreach ($relations as $relation) {
+            unset($this->relations[$relation]);
+        }
     }
 
     /**

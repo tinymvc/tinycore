@@ -57,15 +57,17 @@ class Commands implements CommandsContract
      *
      * This method allows you to remove a command by its name.
      *
-     * @param array|string $names
+     * @param array|string ...$commands
      *   The name of the command to remove.
      *
      * @return $this
      *   The Commands instance.
      */
-    public function removeCommand(array|string $names): self
+    public function removeCommand(array|string ...$commands): self
     {
-        foreach ((array) $names as $name) {
+        $commands = is_array($commands[0]) ? $commands[0] : $commands;
+
+        foreach ($commands as $name) {
             unset($this->commands[$name]);
         }
 
@@ -78,15 +80,17 @@ class Commands implements CommandsContract
      * This method allows you to disable a command by its name, preventing it
      * from being executed.
      *
-     * @param array|string $names
+     * @param array|string ...$commands
      *   The name(s) of the command(s) to disable.
      *
      * @return $this
      *   The Commands instance.
      */
-    public static function disable(array|string $names): void
+    public static function disable(array|string ...$commands): void
     {
-        foreach ((array) $names as $name) {
+        $commands = is_array($commands[0]) ? $commands[0] : $commands;
+
+        foreach ($commands as $name) {
             self::$disabledCommands[$name] = true;
         }
     }

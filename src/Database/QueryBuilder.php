@@ -304,27 +304,14 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Adds a parameter for a query.
      *
-     * @param string|array $parameter The parameter name(s) to add.
-     * @param mixed ...$parameters Additional parameter names.
+     * @param string|array ...$parameters Additional parameter names.
      * @return self Returns the query object.
      */
-    public function parameter(string|array $parameter, ...$parameters): self
+    public function param(string|array ...$parameters): self
     {
-        $placeholders = is_array($parameter) ? $parameter : [$parameter];
-        $this->parameters = array_merge($this->parameters, $placeholders, $parameters);
+        $parameters = is_array($parameters[0]) ? $parameters[0] : $parameters;
+        $this->parameters = array_merge($this->parameters, $parameters);
         return $this;
-    }
-
-    /**
-     * Adds a parameter for a query.
-     *
-     * @param string|array $parameter The parameter name(s) to add.
-     * @param mixed ...$parameters Additional parameter names.
-     * @return self Returns the query object.
-     */
-    public function param(string|array $parameter, ...$parameters): self
-    {
-        return $this->parameter($parameter, ...$parameters);
     }
 
     /**
@@ -463,7 +450,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self
      */
-    public function where(null|string|array|Arrayable|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false): self
+    public function where(null|string|array|Arrayable|Closure $column = null, ?string $operator = null, $value = null, ?string $andOr = null, bool $not = false): self
     {
         if ($column instanceof Arrayable) {
             $column = $column->toArray();
@@ -577,7 +564,7 @@ class QueryBuilder implements QueryBuilderContract
         if ($named && is_array($args)) {
             $this->bindings = array_merge($this->bindings, $args);
         } else {
-            $this->parameter($args);
+            $this->param($args);
         }
 
         return $this;
@@ -1019,6 +1006,78 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Add a WHERE condition that checks if a JSON field contains a specific value.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param string $key
+     *   The key within the JSON object to check.
+     * @param mixed $value
+     *   The value to check for within the JSON array.
+     * @param string $type
+     *   The type of comparison, e.g., 'NOT'.
+     * @param string $andOr
+     *   The logical operator to combine with previous conditions, e.g., 'AND' or 'OR'.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereJsonContains($field, $key, $value, $type = '', $andOr = 'AND'): self
+    {
+        return $this->findInJson($field, $key, $value, $type, $andOr);
+    }
+
+    /**
+     * Add a WHERE condition that checks if a JSON field does not contain a specific value.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param string $key
+     *   The key within the JSON object to check.
+     * @param mixed $value
+     *   The value to check for within the JSON array.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereJsonNotContains($field, $key, $value): self
+    {
+        return $this->whereJsonContains($field, $key, $value, 'NOT ');
+    }
+
+    /**
+     * Add an OR WHERE condition that checks if a JSON field contains a specific value.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param string $key
+     *   The key within the JSON object to check.
+     * @param mixed $value
+     *   The value to check for within the JSON array.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orWhereJsonContains($field, $key, $value): self
+    {
+        return $this->whereJsonContains($field, $key, $value, '', 'OR');
+    }
+
+    /**
+     * Add an OR WHERE condition that checks if a JSON field does not contain a specific value.
+     *
+     * @param string $field
+     *   The field name to query.
+     * @param string $key
+     *   The key within the JSON object to check.
+     * @param mixed $value
+     *   The value to check for within the JSON array.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orWhereJsonNotContains($field, $key, $value): self
+    {
+        return $this->whereJsonContains($field, $key, $value, 'NOT ', 'OR');
+    }
+
+    /**
      * Add a WHERE condition that checks if the field is between two values.
      *
      * @param string $field
@@ -1282,7 +1341,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param string $andOr
      * @return self
      */
-    public function whereDate(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): self
+    public function whereDate(string $column, string $operator, $value = null, string $andOr = 'AND'): self
     {
         if ($value === null) {
             $value = $operator;
@@ -1308,7 +1367,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value
      * @return self
      */
-    public function orWhereDate(string $column, string $operator, mixed $value = null): self
+    public function orWhereDate(string $column, string $operator, $value = null): self
     {
         return $this->whereDate($column, $operator, $value, 'OR');
     }
@@ -1322,7 +1381,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param string $andOr
      * @return self
      */
-    public function whereYear(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): self
+    public function whereYear(string $column, string $operator, $value = null, string $andOr = 'AND'): self
     {
         if ($value === null) {
             $value = $operator;
@@ -1348,7 +1407,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value
      * @return self
      */
-    public function orWhereYear(string $column, string $operator, mixed $value = null): self
+    public function orWhereYear(string $column, string $operator, $value = null): self
     {
         return $this->whereYear($column, $operator, $value, 'OR');
     }
@@ -1362,7 +1421,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param string $andOr
      * @return self
      */
-    public function whereMonth(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): self
+    public function whereMonth(string $column, string $operator, $value = null, string $andOr = 'AND'): self
     {
         if ($value === null) {
             $value = $operator;
@@ -1388,7 +1447,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value
      * @return self
      */
-    public function orWhereMonth(string $column, string $operator, mixed $value = null): self
+    public function orWhereMonth(string $column, string $operator, $value = null): self
     {
         return $this->whereMonth($column, $operator, $value, 'OR');
     }
@@ -1415,7 +1474,6 @@ class QueryBuilder implements QueryBuilderContract
         $this->where['grouped'] = true;
         $callback($this);
         $this->where['sql'] .= ')';
-
         return $this;
     }
 
@@ -1426,7 +1484,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $where  Optional WHERE clause to specify which records to update.
      * @return bool
      */
-    public function update(array|Arrayable $data, mixed $where = null): bool
+    public function update(array|Arrayable $data, $where = null): bool
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -1505,7 +1563,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $where  Optional WHERE clause to specify which records to delete.
      * @return bool
      */
-    public function delete(mixed $where = null): bool
+    public function delete($where = null): bool
     {
         // Apply related model condition if necessary
         if ($this->isUsingModel()) {
@@ -1878,7 +1936,7 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         if ($parameters) {
-            $this->parameter($parameters);
+            $this->param($parameters);
         }
 
         return $this;
@@ -2160,6 +2218,16 @@ class QueryBuilder implements QueryBuilderContract
     public function fetchAssoc(): self
     {
         return $this->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Specifies that results should be fetched as objects.
+     *
+     * @return self
+     */
+    public function fetchClass(string $className, array $ctorArgs = []): self
+    {
+        return $this->fetch(PDO::FETCH_CLASS, $className, $ctorArgs);
     }
 
     /**
@@ -2780,7 +2848,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function addCollateToSql(string $sql): string
     {
-        if (isset(self::$collate) && strpos($sql, 'where') !== false) {
+        if (isset(self::$collate) && stripos($sql, 'where') !== false) {
             return rtrim($sql, ';') . " COLLATE " . self::$collate . ";";
         }
 
@@ -3061,7 +3129,7 @@ class QueryBuilder implements QueryBuilderContract
         if (is_array($bindings) && strpos($sql, '?') === false && preg_match('/\:(\w+)/', $sql)) {
             $this->bindings = array_merge($this->bindings, $bindings);
         } else {
-            $this->parameter($bindings);
+            $this->param($bindings);
         }
     }
 

@@ -3,7 +3,6 @@
 namespace Spark;
 
 use Spark\Contracts\TranslatorContract;
-use Spark\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Macroable;
 
 /**

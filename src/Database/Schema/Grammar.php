@@ -81,12 +81,13 @@ class Grammar implements GrammarContract
     /**
      * Checks if the database driver is one of the given drivers.
      *
-     * @param string|array $driver The driver(s) to check.
+     * @param string|array ...$drivers The driver(s) to check.
      * @return bool True if the current driver matches one of the given drivers, false otherwise.
      */
-    public function isDriver(string|array $driver): bool
+    public function isDriver(string|array ...$drivers): bool
     {
-        foreach ((array) $driver as $d) {
+        $drivers = is_array($drivers[0]) ? $drivers[0] : $drivers;
+        foreach ($drivers as $d) {
             if ($d === $this->driver) {
                 return true;
             }

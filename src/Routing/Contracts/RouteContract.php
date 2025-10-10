@@ -23,10 +23,10 @@ interface RouteContract
     /**
      * Set the HTTP method(s) for the route.
      *
-     * @param string|array|null $method The HTTP method(s).
+     * @param string|array $method The HTTP method(s).
      * @return self Returns the current instance for method chaining.
      */
-    public function method(string|array|null $method): self;
+    public function method(string|array $method): self;
 
     /**
      * Set middleware(s) for the route.
@@ -47,24 +47,24 @@ interface RouteContract
     /**
      * Set the callback for the route.
      *
-     * @param callable|string|array|null $callback The callback function or controller action.
+     * @param callable|string|array $callback The callback function or controller action.
      * @return self Returns the current instance for method chaining.
      */
-    public function callback(callable|string|array|null $callback): self;
+    public function callback(callable|string|array $callback): self;
 
     /**
      * Set the template for the route.
      *
-     * @param string|null $template The template to be rendered.
+     * @param string $template The template to be rendered.
      * @return self Returns the current instance for method chaining.
      */
-    public function template(string|null $template): self;
+    public function template(string $template): self;
 
     /**
      * Set the name for the route.
      *
-     * @param string|null $name The name of the route.
+     * @param string $name The name of the route.
      * @return self Returns the current instance for method chaining.
      */
-    public function name(string|null $name): self;
+    public function name(string $name): self;
 }

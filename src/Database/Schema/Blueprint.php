@@ -428,12 +428,13 @@ class Blueprint implements BlueprintContract
     /**
      * Add a unique index to the blueprint.
      *
-     * @param string|array $columns The column(s) to set as unique index.
+     * @param string|array ...$columns The column(s) to set as unique index.
      * @return void
      */
-    public function unique($columns): void
+    public function unique(string|array ...$columns): void
     {
-        $this->indexes[] = ['type' => 'unique', 'columns' => (array) $columns];
+        $columns = is_array($columns[0]) ? $columns[0] : $columns;
+        $this->indexes[] = ['type' => 'unique', 'columns' => $columns];
     }
 
     /**
@@ -442,9 +443,10 @@ class Blueprint implements BlueprintContract
      * @param string|array $columns The column(s) to set as index.
      * @return void
      */
-    public function index($columns): void
+    public function index(string|array ...$columns): void
     {
-        $this->indexes[] = ['type' => 'index', 'columns' => (array) $columns];
+        $columns = is_array($columns[0]) ? $columns[0] : $columns;
+        $this->indexes[] = ['type' => 'index', 'columns' => $columns];
     }
 
     /**
@@ -520,12 +522,13 @@ class Blueprint implements BlueprintContract
     /**
      * Drop a column from the blueprint.
      *
-     * @param string|array $columns The column(s) to drop.
+     * @param string|array ...$columns The column(s) to drop.
      * @return self
      */
-    public function dropColumn($columns): self
+    public function dropColumn(string|array ...$columns): self
     {
-        $this->drops[] = ['type' => 'column', 'names' => (array) $columns];
+        $columns = is_array($columns[0]) ? $columns[0] : $columns;
+        $this->drops[] = ['type' => 'column', 'names' => $columns];
         return $this;
     }
 

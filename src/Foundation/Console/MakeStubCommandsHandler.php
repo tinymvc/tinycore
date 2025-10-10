@@ -236,7 +236,7 @@ class MakeStubCommandsHandler
         if ($this->hasFlag($args, ['restful', 'resource', 'rest', 'r'])) {
             $stub = __DIR__ . '/stubs/controller/restful.stub';
         } else {
-            $stub = __DIR__ . '/stubs/controller/general.stub';
+            $stub = __DIR__ . '/stubs/controller/basic.stub';
         }
 
         $this->askName($args, 'What is the name of the controller?');

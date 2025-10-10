@@ -7,7 +7,6 @@ use Spark\Console\Console;
 use Spark\Container;
 use Spark\Contracts\ApplicationContract;
 use Spark\Database\DB;
-use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\NotFoundException;
@@ -38,7 +37,7 @@ use Throwable;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Application implements ApplicationContract
+class Application implements ApplicationContract, \ArrayAccess
 {
     use Macroable;
 
@@ -92,7 +91,6 @@ class Application implements ApplicationContract
             Auth::class,
             fn() => new Auth(session: $this->container->get(Session::class), userModel: \App\Models\User::class)
         );
-        $this->container->bind(QueryBuilder::class);
     }
 
     /**
@@ -446,5 +444,65 @@ class Application implements ApplicationContract
     public function __set($name, $value): void
     {
         $this->vars[$name] = $value;
+    }
+
+    /**
+     * Magic method to unset a variable in the application.
+     *
+     * @param string $name The name of the variable to unset.
+     * @return void
+     */
+    public function __unset($name): void
+    {
+        unset($this->vars[$name]);
+    }
+
+    /**
+     * Checks if a variable exists in the application.
+     *
+     * @param mixed $offset The name of the variable to check.
+     * @return bool True if the variable exists, false otherwise.
+     */
+    public function offsetExists($offset): bool
+    {
+        return isset($this->vars[$offset]);
+    }
+
+    /**
+     * Gets a variable from the application.
+     *
+     * @param mixed $offset The name of the variable to get.
+     * @return mixed The value of the variable, or null if not set.
+     */
+    public function offsetGet($offset): mixed
+    {
+        return $this->vars[$offset] ?? null;
+    }
+
+    /**
+     * Sets a variable in the application.
+     *
+     * @param mixed $offset The name of the variable to set.
+     * @param mixed $value The value to set the variable to.
+     * @return void
+     */
+    public function offsetSet($offset, $value): void
+    {
+        if ($offset === null) {
+            $this->vars[] = $value;
+        } else {
+            $this->vars[$offset] = $value;
+        }
+    }
+
+    /**
+     * Unsets a variable in the application.
+     *
+     * @param mixed $offset The name of the variable to unset.
+     * @return void
+     */
+    public function offsetUnset($offset): void
+    {
+        unset($this->vars[$offset]);
     }
 }

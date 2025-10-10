@@ -216,9 +216,7 @@ class Migration implements MigrationContract
      */
     public function refresh(array $args): void
     {
-        if (!isset($args['step']) && !isset($args['_args'][0])) {
-            $args['step'] = count($this->getAppliedMigrations()); // Default to rolling back all applied migrations
-        }
+        $args['all'] = true; // Default to rolling back all applied migrations
 
         // Rollback all applied migrations
         $this->down($args);

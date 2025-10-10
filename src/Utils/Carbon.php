@@ -893,6 +893,27 @@ class Carbon implements Arrayable, \Stringable
         return $this->dateTime->getTimezone();
     }
 
+    /** Comparison methods */
+    public function lt(self $other): bool
+    {
+        return $this->getTimestamp() < $other->getTimestamp();
+    }
+
+    public function gt(self $other): bool
+    {
+        return $this->getTimestamp() > $other->getTimestamp();
+    }
+
+    public function lte(self $other): bool
+    {
+        return $this->getTimestamp() <= $other->getTimestamp();
+    }
+
+    public function gte(self $other): bool
+    {
+        return $this->getTimestamp() >= $other->getTimestamp();
+    }
+
     /**
      * Clone the DateTime instance
      * 

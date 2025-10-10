@@ -6,7 +6,6 @@ use PDO;
 use PDOStatement;
 use Spark\Contracts\Database\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
-use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -109,12 +108,13 @@ class DB implements DBContract
     /**
      * Checks if the current database driver matches the specified driver.
      *
-     * @param string $driver The driver to check against the current driver.
+     * @param array|string ...$drivers The driver to check against the current driver.
      * @return bool True if the current driver matches the specified driver, false otherwise.
      */
-    public function isDriver(string $driver): bool
+    public function isDriver(array|string ...$drivers): bool
     {
-        return $this->getDriver() === $driver;
+        $drivers = is_array($drivers[0]) ? $drivers[0] : $drivers;
+        return in_array($this->getDriver(), $drivers);
     }
 
     /**
@@ -229,7 +229,7 @@ class DB implements DBContract
         }
 
         // Create a new QueryBuilder instance with the current context.
-        $query = Application::$app->get(QueryBuilder::class);
+        $query = app(QueryBuilder::class);
 
         // Dynamically call the method on the QueryBuilder instance and return the result.
         return call_user_func_array([$query, $name], $arguments);
@@ -255,7 +255,7 @@ class DB implements DBContract
 
         // Merge PDO default options with config.
         $options = $this->config['options'] ?? [];
-        $options += [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION];
+        $options[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
 
         /** 
          * Create a new databse (PHP Data Object) connection.

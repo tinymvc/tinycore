@@ -552,7 +552,7 @@ class Url implements ArrayAccess, JsonSerializable, Stringable
      * @param mixed $default The default value to return if the parameter does not exist
      * @return mixed The value of the parameter or the default value
      */
-    public function getParameter(string $key, mixed $default = null): mixed
+    public function getParameter(string $key, $default = null): mixed
     {
         return $this->parameters[$key] ?? $default;
     }

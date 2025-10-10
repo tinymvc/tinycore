@@ -120,7 +120,7 @@ class Console implements ConsoleContract
      * @return array
      *   An associative array containing parsed command line arguments.
      */
-    public function parseArguments(array $args): array
+    private function parseArguments(array $args): array
     {
         $parsed = ['_args' => []]; // Initialize parsed arguments with positional arguments array
         foreach ($args as $arg) {

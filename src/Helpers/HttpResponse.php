@@ -103,7 +103,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      * @param mixed $default The default value if the header is not found.
      * @return mixed The header value or the default value.
      */
-    public function header(string $key, mixed $default = null): mixed
+    public function header(string $key, $default = null): mixed
     {
         return $this->headers[strtolower($key)] ?? $default;
     }
@@ -146,7 +146,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      * @param mixed $default The default value to return if the key does not exist.
      * @return mixed The value associated with the key or the default value.
      */
-    public function get(string $key, mixed $default = null): mixed
+    public function get(string $key, $default = null): mixed
     {
         return data_get($this->json(), $key, $default);
     }
@@ -207,7 +207,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      * @param mixed $offset The offset to check.
      * @return bool True if success, false otherwise.
      */
-    public function offsetExists(mixed $offset): bool
+    public function offsetExists($offset): bool
     {
         return property_exists($this, $offset);
     }
@@ -218,7 +218,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      * @param mixed $offset The offset to retrieve.
      * @return mixed The value at the specified offset or null if not set.
      */
-    public function offsetGet(mixed $offset): mixed
+    public function offsetGet($offset): mixed
     {
         return $this->{$offset} ?? null;
     }
@@ -229,7 +229,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      * @param mixed $offset The offset to set.
      * @param mixed $value The value to set at the specified offset.
      */
-    public function offsetSet(mixed $offset, mixed $value): void
+    public function offsetSet($offset, $value): void
     {
         $this->{$offset} = $value;
     }
@@ -239,7 +239,7 @@ class HttpResponse implements ArrayAccess, \Stringable
      *
      * @param mixed $offset The offset to unset.
      */
-    public function offsetUnset(mixed $offset): void
+    public function offsetUnset($offset): void
     {
         unset($this->{$offset});
     }

@@ -591,7 +591,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function makeVisible(string|array ...$attributes): static
     {
-        $attributes = is_array($attributes[0]) ? $attributes[0] : func_get_args();
+        $attributes = is_array($attributes[0]) ? $attributes[0] : $attributes;
         $visible = $this->tracking['__visible'] ?? [];
 
         $this->tracking['__visible'] = array_merge($visible, $attributes);
@@ -607,7 +607,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      */
     public function makeHidden(string|array ...$attributes): static
     {
-        $attributes = is_array($attributes[0]) ? $attributes[0] : func_get_args();
+        $attributes = is_array($attributes[0]) ? $attributes[0] : $attributes;
         $hidden = $this->tracking['__hidden'] ?? [];
 
         $this->tracking['__hidden'] = array_merge($hidden, $attributes);
@@ -725,7 +725,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param mixed $default The default value to return if the attribute is not set.
      * @return mixed The value of the attribute or the default value if not set.
      */
-    public function get(string $name, mixed $default = null): mixed
+    public function get(string $name, $default = null): mixed
     {
         if ($this->hasAccessor($name)) {
             return $this->getAttributeValue($name);
@@ -738,12 +738,13 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     /**
      * Check if the model has a specific attribute.
      *
-     * @param string $name The name of the attribute to check.
+     * @param array|string ...$names The name of the attribute to check.
      * @return bool True if the attribute exists, false otherwise.
      */
-    public function isset(string $name, ...$names): bool
+    public function isset(array|string ...$names): bool
     {
-        foreach (func_get_args() as $name) {
+        $names = is_array($names[0]) ? $names[0] : $names;
+        foreach ($names as $name) {
             if ($this->get($name) === null) {
                 return false;
             }
@@ -758,7 +759,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param mixed $default The default value to return if the attribute is not set.
      * @return mixed The original value of the attribute or the default value if not set.
      */
-    public function getOriginal(string $name, mixed $default = null): mixed
+    public function getOriginal(string $name, $default = null): mixed
     {
         return $this->tracking['__original_attributes'][$name] ?? $this->attributes[$name] ?? $default;
     }
@@ -848,11 +849,12 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     /**
      * Get a new instance of the model with only the specified attributes.
      *
-     * @param string|array $fields The attributes to include.
+     * @param string|array ...$fields The attributes to include.
      * @return static
      */
-    public function only(string|array $fields): static
+    public function only(string|array ...$fields): static
     {
+        $fields = is_array($fields[0]) ? $fields[0] : $fields;
         $filtered = array_intersect_key($this->attributes, array_flip((array) $fields));
         return static::load($filtered);
     }
@@ -860,11 +862,12 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     /**
      * Get a new instance of the model with all attributes except the specified ones.
      *
-     * @param string|array $fields The attributes to exclude.
+     * @param string|array ...$fields The attributes to exclude.
      * @return static
      */
-    public function except(string|array $fields): static
+    public function except(string|array ...$fields): static
     {
+        $fields = is_array($fields[0]) ? $fields[0] : $fields;
         $filtered = array_diff_key($this->attributes, array_flip((array) $fields));
         return static::load($filtered);
     }

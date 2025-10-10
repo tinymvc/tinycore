@@ -31,10 +31,10 @@ interface RouteResourceContract
     /**
      * Set the name prefix for the resource route.
      *
-     * @param string|null $name The name prefix.
+     * @param string $name The name prefix.
      * @return self Returns the current instance for method chaining.
      */
-    public function name(string|null $name): self;
+    public function name(string $name): self;
 
     /**
      * Set middleware(s) for the resource route.
@@ -55,16 +55,16 @@ interface RouteResourceContract
     /**
      * Specify which resource methods to include.
      *
-     * @param array $only The resource methods to include.
+     * @param string|array ...$includes The resource methods to include.
      * @return self Returns the current instance for method chaining.
      */
-    public function only(array $only): self;
+    public function only(string|array ...$includes): self;
 
     /**
      * Specify which resource methods to exclude.
      *
-     * @param array $except The resource methods to exclude.
+     * @param string|array ...$excludes The resource methods to exclude.
      * @return self Returns the current instance for method chaining.
      */
-    public function except(array $except): self;
+    public function except(string|array ...$excludes): self;
 }

@@ -73,14 +73,14 @@ class Middleware implements MiddlewareContract
     /**
      * Add middlewares to the execution stack
      * 
-     * @param array|string $aliases The middleware aliases to queue for execution.
+     * @param array|string ...$middlewares The middleware aliases to queue for execution.
      * @return self
      */
-    public function queue(array|string ...$aliases): self
+    public function queue(array|string ...$middlewares): self
     {
-        $aliases = is_array($aliases[0]) ? $aliases[0] : $aliases;
+        $middlewares = is_array($middlewares[0]) ? $middlewares[0] : $middlewares;
 
-        foreach ($aliases as $key) {
+        foreach ($middlewares as $key) {
             if (!in_array($key, $this->stack)) {
                 $this->stack[] = $key;
             }

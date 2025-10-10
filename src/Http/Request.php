@@ -1014,7 +1014,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param mixed $default The default value to return if the key does not exist.
      * @return mixed The retrieved value or the default value if the key does not exist.
      */
-    public function get(string $key, mixed $default = null): mixed
+    public function get(string $key, $default = null): mixed
     {
         if ($this->has($key) === false) {
             return $default;

@@ -698,11 +698,12 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Filters the sanitizer data array to include only specified keys.
      *
-     * @param array $keys Keys to include in the filtered data.
+     * @param array|string ...$keys Keys to include in the filtered data.
      * @return self Returns a new instance with filtered data.
      */
-    public function only(array $keys): self
+    public function only(array|string ...$keys): self
     {
+        $keys = is_array($keys[0]) ? $keys[0] : $keys;
         $filteredData = array_intersect_key($this->data, array_flip($keys));
         return new self($filteredData);
     }
@@ -710,11 +711,12 @@ class InputSanitizer implements InputSanitizerContract, ArrayAccess, Arrayable, 
     /**
      * Filters the sanitizer data array to exclude specified keys.
      *
-     * @param array $keys Keys to exclude from the filtered data.
+     * @param array|string ...$keys Keys to exclude from the filtered data.
      * @return self Returns a new instance with filtered data.
      */
-    public function except(array $keys): self
+    public function except(array|string ...$keys): self
     {
+        $keys = is_array($keys[0]) ? $keys[0] : $keys;
         $filteredData = array_diff_key($this->data, array_flip($keys));
         return new self($filteredData);
     }
