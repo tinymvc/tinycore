@@ -4,12 +4,12 @@ namespace Spark\Database;
 use Closure;
 use PDO;
 use PDOStatement;
-use Spark\Database\Contracts\QueryBuilderContract;
+use Spark\Contracts\Database\QueryBuilderContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
+use Spark\Database\Relation\ManageRelation;
 use Spark\Database\Schema\Grammar;
-use Spark\Database\Traits\ManageRelation;
 use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
@@ -83,13 +83,6 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Holds the collation to be used for string comparisons.
-     *
-     * @var string
-     */
-    public static string $collate;
-
-    /**
      * Holds the table prefix to be used for the query.
      *
      * @var string $prefix
@@ -155,10 +148,6 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function __construct(private DB $database)
     {
-        if ($database->isSQLite()) {
-            self::$collate = 'nocase'; // Set case insensitive collation for SQLite.
-        }
-
         $this->grammar = new Grammar($database->getDriver());
 
         self::$prefix ??= ''; // Set default prefix if not already set
@@ -223,21 +212,6 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         return "{$this->table}.$column";
-    }
-
-    /**
-     * Sets the collation to be used for string comparisons in the query.
-     *
-     * This method allows you to specify a collation for string comparisons,
-     * which can be useful for case sensitivity or locale-specific sorting.
-     *
-     * @param string $collate The collation to set.
-     * @return self
-     */
-    public function collate(string $collate): self
-    {
-        self::$collate = $collate;
-        return $this;
     }
 
     /**
@@ -1511,18 +1485,16 @@ class QueryBuilder implements QueryBuilderContract
         $table = self::$prefix . $this->table;
 
         // Prepare the SQL update statement
-        $sql = $this->addCollateToSql(
-            sprintf(
-                "UPDATE {$table} SET %s %s",
-                implode(
-                    ', ',
-                    array_map(
-                        fn($attr) => $this->grammar->wrapColumn($attr) . " = :$attr",
-                        array_keys($data)
-                    )
-                ),
-                $this->getWhereSql()
-            )
+        $sql = sprintf(
+            "UPDATE {$table} SET %s %s",
+            implode(
+                ', ',
+                array_map(
+                    fn($attr) => $this->grammar->wrapColumn($attr) . " = :$attr",
+                    array_keys($data)
+                )
+            ),
+            $this->getWhereSql()
         );
         $statement = $this->database->prepare($sql);
 
@@ -1585,7 +1557,7 @@ class QueryBuilder implements QueryBuilderContract
         $table = self::$prefix . $this->table;
 
         // Prepare the SQL delete statement
-        $sql = $this->addCollateToSql("DELETE FROM {$table} {$this->getWhereSql()}");
+        $sql = "DELETE FROM {$table} {$this->getWhereSql()}";
         $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
@@ -2403,14 +2375,12 @@ class QueryBuilder implements QueryBuilderContract
 
         $table = $this->getTableName(); // Get the table name with prefix if exists.
 
-        $sql = $this->addCollateToSql(
-            "SELECT COUNT(1) FROM {$table}"
+        $sql = "SELECT COUNT(1) FROM {$table}"
             . $this->query['alias']
             . $this->query['joins']
             . $this->getWhereSql()
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
-            . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
-        );
+            . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '');
 
         // Create sql command to count rows.
         $statement = $this->database->prepare($sql);
@@ -2566,8 +2536,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $table = $this->getTableName();
 
-        return $this->addCollateToSql(
-            "SELECT {$this->query['select']} FROM {$table}"
+        return "SELECT {$this->query['select']} FROM {$table}"
             . $this->query['alias']
             . $this->query['sql']
             . $this->query['joins']
@@ -2576,8 +2545,7 @@ class QueryBuilder implements QueryBuilderContract
             . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
             . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
             . (isset($this->query['limit']) || isset($this->query['offset']) ? ' LIMIT ' . (isset($this->query['offset'], $this->query['limit']) ? "{$this->query['offset']}, {$this->query['limit']}" : $this->query['limit']) : '')
-            . (isset($this->query['unions']) ? $this->query['unions'] : '')
-        );
+            . (isset($this->query['unions']) ? $this->query['unions'] : '');
     }
 
     /**
@@ -2838,21 +2806,6 @@ class QueryBuilder implements QueryBuilderContract
 
         // Reset where query parameters.
         $this->resetWhere();
-    }
-
-    /**
-     * Adds a COLLATE clause to the SQL statement if a collation is set.
-     *
-     * @param string $sql The SQL statement to modify.
-     * @return string The modified SQL statement with COLLATE clause if applicable.
-     */
-    private function addCollateToSql(string $sql): string
-    {
-        if (isset(self::$collate) && stripos($sql, 'where') !== false) {
-            return rtrim($sql, ';') . " COLLATE " . self::$collate . ";";
-        }
-
-        return $sql; // Return the original SQL if no collation is set.
     }
 
     /**
