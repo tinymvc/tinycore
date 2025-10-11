@@ -8,6 +8,13 @@ use Spark\Database\Exceptions\OrmDisabledLazyLoadingException;
 use Spark\Database\Exceptions\UndefinedOrmException;
 use Spark\Database\QueryBuilder;
 use PDO;
+use Spark\Database\Relation\BelongsTo;
+use Spark\Database\Relation\BelongsToMany;
+use Spark\Database\Relation\HasMany;
+use Spark\Database\Relation\HasManyThrough;
+use Spark\Database\Relation\HasOne;
+use Spark\Database\Relation\HasOneThrough;
+use Spark\Database\Relation\Relation;
 use Spark\Support\Str;
 
 /**

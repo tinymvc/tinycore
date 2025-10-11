@@ -151,7 +151,7 @@ trait Casts
      */
     public function hasCast(string $key): bool
     {
-        return isset($this->casts, $this->casts[$key]);
+        return property_exists($this, 'casts') && isset($this->casts[$key]);
     }
 
     /**
@@ -161,7 +161,7 @@ trait Casts
      */
     public function hasAnyCast(): bool
     {
-        return isset($this->casts) && !empty($this->casts);
+        return property_exists($this, 'casts') && !empty($this->casts);
     }
 
     /**
