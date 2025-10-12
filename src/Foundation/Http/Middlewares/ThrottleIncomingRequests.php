@@ -35,10 +35,10 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
      */
     public function handle(Request $request, \Closure $next, ...$args): mixed
     {
-        $minute = $args[0] ?? 1;
-        $requests = $args[1] ?? 50;
+        $attempts = $args[0] ?? 50;
+        $duration = $args[1] ?? 1;
 
-        if (!$this->authorizeCurrentRequest($request->ip(), $minute, $requests)) {
+        if (!$this->authorizeCurrentRequest($request->ip(), $duration, $attempts)) {
             throw new TooManyRequests('Too Many Requests', 429);
         }
 
@@ -50,11 +50,11 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
      *
      * @param string|null $ip The client's IP address.
      * @param int $minute The time frame in minutes.
-     * @param int $requests The maximum number of requests allowed in the time frame.
+     * @param int $attempts The maximum number of requests allowed in the time frame.
      *
      * @return bool True if the request is authorized, false otherwise.
      */
-    private function authorizeCurrentRequest(?string $ip, int $minute, int $requests): bool
+    private function authorizeCurrentRequest(?string $ip, int $minute, int $attempts): bool
     {
         if (!$ip) {
             return false;
@@ -75,7 +75,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
 
         $timestamps = array_filter($timestamps, fn($timestamp) => $timestamp > $windowStart);
 
-        if (count($timestamps) >= $requests) {
+        if (count($timestamps) >= $attempts) {
             return false;
         }
 
