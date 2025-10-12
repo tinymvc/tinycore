@@ -11,6 +11,7 @@ use Spark\EventDispatcher;
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\NotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
+use Spark\Foundation\Exceptions\TooManyRequests;
 use Spark\Hash;
 use Spark\Http\Auth;
 use Spark\Http\Middleware;
@@ -387,6 +388,8 @@ class Application implements ApplicationContract, \ArrayAccess
             abort(error: 403, message: 'Forbidden');
         } catch (InvalidCsrfTokenException) {
             abort(error: 419, message: 'Page Expired');
+        } catch (TooManyRequests) {
+            abort(error: 429, message: 'Too many requests');
         } catch (Throwable $e) {
             if (isset($this->exceptions[get_class($e)])) {
                 $this->exceptions[get_class($e)]($e);

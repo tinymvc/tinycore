@@ -34,14 +34,18 @@ class Cache implements CacheUtilContract
     /** @var bool Tracks changes in cache data for saving on destruction */
     private bool $changed;
 
+    /** @var string The Name of the cache file */
+    private string $name;
+
     /**
      * Construct a new cache object.
      *
      * @param string $name The name of the cache.
+     * @param null|string $cacheDir The Directory path to store this cache file.
      */
-    public function __construct(private string $name = 'default')
+    public function __construct(string $name = 'default', ?string $cacheDir = null)
     {
-        $this->setName($name);
+        $this->setName($name, $cacheDir);
     }
 
     /**

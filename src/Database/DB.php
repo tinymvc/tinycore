@@ -13,6 +13,26 @@ use Spark\Support\Traits\Macroable;
  * 
  * Manages database connections and provides query execution and statement preparation.
  * 
+ * @method bool beginTransaction()
+ * @method bool commit()
+ * @method bool rollBack()
+ * @method bool inTransaction()
+ * @method bool|string lastInsertId()
+ * @method bool|string quote(string $string, int $type = PDO::PARAM_STR)
+ * @method static array raw(string $sql, array $bindings = [])
+ * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
+ * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND')
+ * @method static QueryBuilder when(mixed $value, callable $callback)
+ * @method static QueryBuilder unless(mixed $value, callable $callback)
+ * @method static QueryBuilder table(string $table)
+ * @method static QueryBuilder select(array|string $fields = '*', ...$args)
+ * @method static QueryBuilder selectRaw(string $sql, array $bindings = [])
+ * @method static QueryBuilder from(string $table, ?string $alias = null)
+ * @method static QueryBuilder max($field, $name = null)
+ * @method static QueryBuilder min($field, $name = null)
+ * @method static QueryBuilder sum($field, $name = null)
+ * @method static QueryBuilder avg($field, $name = null)
+ * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class DB implements DBContract

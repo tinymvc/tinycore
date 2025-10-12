@@ -6,6 +6,8 @@ use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Helpers\RequestErrors;
+use Spark\Http\Input\Sanitizer;
+use Spark\Http\Input\Validator;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -447,7 +449,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function query(?string $key = null, $default = null): mixed
     {
         if (func_num_args() === 0) {
-            return new InputSanitizer($this->queryParams);
+            return new Sanitizer($this->queryParams);
         }
         return $this->queryParams[$key] ?? $default;
     }
@@ -473,7 +475,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function post(?string $key = null, $default = null): mixed
     {
         if (func_num_args() === 0) {
-            return new InputSanitizer($this->postParams);
+            return new Sanitizer($this->postParams);
         }
         return $this->postParams[$key] ?? $default;
     }
@@ -835,11 +837,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Creates an InputSanitizer instance with the current request data.
+     * Creates an Sanitizer instance with the current request data.
      * 
      * @param string|array $filter Optional filter to apply to the input data.
      * @param mixed $default Default value to return if the filter is a string and the key does not exist.
-     * @return InputSanitizer|mixed An instance of InputSanitizer with the request data.
+     * @return Sanitizer|mixed An instance of Sanitizer with the request data.
      */
     public function input(string|array $filter = [], $default = null): mixed
     {
@@ -848,7 +850,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             return $input[$filter] ?? $default;
         }
 
-        return new InputSanitizer($input);
+        return new Sanitizer($input);
     }
 
     /**
@@ -1073,13 +1075,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param array $rules
      *   The validation rules.
      *
-     * @return InputSanitizer
-     *   Returns the validated attributes as an InputSanitizer instance.
+     * @return Sanitizer
+     *   Returns the validated attributes as an Sanitizer instance.
      */
-    public function validate(array $rules): InputSanitizer
+    public function validate(array $rules): Sanitizer
     {
         $attributes = $this->all(array_keys($rules)); // Get the attributes from the current request
-        $validator = new InputValidator(); // Get the validator instance
+        $validator = new Validator(); // Get the validator instance
 
         if (!$validator->validate($rules, $this->all())) { // Validate the request
             $errors = $validator->getErrors(); // Get the errors as an array
@@ -1111,7 +1113,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             exit; // Exit the script to prevent further execution
         }
 
-        return new InputSanitizer($attributes); // Return the validated attributes
+        return new Sanitizer($attributes); // Return the validated attributes
     }
 
     /**

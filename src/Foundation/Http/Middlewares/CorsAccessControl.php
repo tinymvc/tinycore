@@ -13,7 +13,7 @@ use Spark\Http\Request;
  *
  * @package Middlewares
  */
-class CorsAccessControl implements MiddlewareInterface
+abstract class CorsAccessControl implements MiddlewareInterface
 {
     /**
      * CORS settings.

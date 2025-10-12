@@ -7,7 +7,7 @@ use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
-use Spark\Exceptions\Http\InputValidationFailedException;
+use Spark\Exceptions\Http\Input\ValidationFailedException;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Helpers\HttpResponse;
@@ -15,8 +15,8 @@ use Spark\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
-use Spark\Http\InputSanitizer;
-use Spark\Http\InputValidator;
+use Spark\Http\Input\Sanitizer;
+use Spark\Http\Input\Validator;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Http\Session;
@@ -1157,7 +1157,7 @@ if (!function_exists('input')) {
      *
      * @param string|array $filter An optional array of filters to apply to the input data.
      * @param mixed $default The default value to return if the specified filter does not exist in the input data.
-     * @return InputSanitizer|mixed An instance of the sanitizer.
+     * @return Sanitizer|mixed An instance of the sanitizer.
      */
     function input(string|array $filter = [], $default = null): mixed
     {
@@ -1171,18 +1171,18 @@ if (!function_exists('validator')) {
      *
      * @param string|array $rules An array of validation rules to apply.
      * @param array|null $data An optional array of data to validate.
-     * @return InputSanitizer Returns a sanitizer object if validation passes.
+     * @return Sanitizer Returns a sanitizer object if validation passes.
      * @throws Exception Throws an exception if validation fails, with the first error message or a default message.
      */
-    function validator(string|array $rules, ?array $data = null): InputSanitizer
+    function validator(string|array $rules, ?array $data = null): Sanitizer
     {
         $data ??= request()->all();
 
-        $validator = new InputValidator;
+        $validator = new Validator();
         $result = $validator->validate($rules, $data);
 
         if (!$result) {
-            throw new InputValidationFailedException($validator->getFirstError() ?? 'Input validation failed');
+            throw new ValidationFailedException($validator->getFirstError() ?? 'Input validation failed');
         }
 
         return $result; // Return the sanitized input data

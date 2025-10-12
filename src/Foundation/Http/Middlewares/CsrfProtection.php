@@ -14,7 +14,7 @@ use Spark\Http\Request;
  * validating the CSRF token sent in the request. If the token is
  * invalid or missing, it returns a 403 Forbidden response.
  */
-class CsrfProtection implements MiddlewareInterface
+abstract class CsrfProtection implements MiddlewareInterface
 {
     /**
      * An array of URI paths that should be excluded from CSRF verification.
