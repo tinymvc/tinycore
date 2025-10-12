@@ -71,7 +71,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
         $now = time();
         $windowStart = $now - $minute * 60;
 
-        $timestamps = $cache->get($key) ?: [];
+        $timestamps = $cache->get($key, true) ?: [];
 
         $timestamps = array_filter($timestamps, fn($timestamp) => $timestamp > $windowStart);
 
@@ -81,7 +81,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
 
         $timestamps[] = $now;
 
-        $cache->store($key, $timestamps, sprintf("+%d minute%s", $minute + 1, $minute > 0 ? 's' : ''));
+        $cache->store($key, $timestamps, sprintf("+%d minutes", $minute + 1));
 
         return true;
     }
