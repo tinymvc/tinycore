@@ -31,14 +31,16 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
      *
      * @param Request $request The current request.
      *
-     * @return mixed The response when the token is invalid, current request otherwise.
+     * @return mixed The response from the next middleware or handler.
+     * @throws TooManyRequests If the request limit is exceeded.
      */
     public function handle(Request $request, \Closure $next, ...$args): mixed
     {
-        $attempts = $args[0] ?? 50;
-        $duration = $args[1] ?? 1;
+        $attempts = $args[0] ?? 50; // Max requests in the time frame
+        $duration = $args[1] ?? 1; // Duration in minutes for the time frame
+        $suffix = $args[2] ?? ''; // Optional suffix for cache key differentiation
 
-        if (!$this->authorizeCurrentRequest($request->ip(), $duration, $attempts)) {
+        if (!$this->authorizeCurrentRequest($request, $duration, $attempts, $suffix)) {
             throw new TooManyRequests('Too Many Requests', 429);
         }
 
@@ -48,14 +50,18 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
     /**
      * Authorize the current request based on IP address and request limits.
      *
-     * @param string|null $ip The client's IP address.
+     * @param Request $request The current request.
      * @param int $minute The time frame in minutes.
      * @param int $attempts The maximum number of requests allowed in the time frame.
+     * @param string $suffix An optional suffix to differentiate cache keys.
      *
      * @return bool True if the request is authorized, false otherwise.
      */
-    private function authorizeCurrentRequest(?string $ip, int $minute, int $attempts): bool
+    private function authorizeCurrentRequest(Request $request, int $minute, int $attempts, string $suffix): bool
     {
+        $ip = $request->ip();
+        $path = $request->getPath();
+
         if (!$ip) {
             return false;
         }
@@ -65,8 +71,8 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
             'cache_dir' => null,
         ], $this->config);
 
-        $cache = new Cache($config['cache_name'], $config['cache_dir']);
-        $key = 'throttle_' . md5($ip);
+        $cache = new Cache($config['cache_name'] . $suffix, $config['cache_dir']);
+        $key = md5("$path$ip");
 
         $now = time();
         $windowStart = $now - $minute * 60;
