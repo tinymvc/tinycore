@@ -1207,9 +1207,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param ?string $key The specific attribute of the user to retrieve (optional).
      * @param mixed $default The default value to return if no user is authenticated or the key does not exist (optional).
      *
-     * @return mixed The authenticated user object, a specific attribute value, or the default value.
+     * @return \App\Models\User|mixed The authenticated user object, a specific attribute value, or the default value.
      */
-    public function user(?string $key = null, $default = null)
+    public function user(?string $key = null, $default = null): mixed
     {
         return $this->auth()->user($key, $default);
     }

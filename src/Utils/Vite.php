@@ -66,7 +66,7 @@ class Vite implements ViteUtilContract
      * @param mixed $default The default value if the key is not found.
      * @return mixed The configuration value or the default.
      */
-    public function config(string $key, mixed $default = null): mixed
+    public function config(string $key, $default = null): mixed
     {
         return $this->config[$key] ?? $default;
     }

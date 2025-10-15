@@ -863,7 +863,7 @@ if (!function_exists('user')) {
      * @param string $key The key to retrieve from the user's data.
      * @param mixed $default The default value to return if the key does not exist.
      *
-     * @return mixed The user object, or the value of the provided key from the user's data.
+     * @return \App\Models\User|mixed The user object, or the value of the provided key from the user's data.
      */
     function user(?string $key = null, $default = null): mixed
     {
