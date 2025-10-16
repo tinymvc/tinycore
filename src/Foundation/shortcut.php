@@ -646,6 +646,60 @@ if (!function_exists('upload_dir')) {
     }
 }
 
+if (!function_exists('cache_dir')) {
+    /**
+     * Get the cache directory path with an optional appended path.
+     *
+     * This function returns the cache directory path, optionally appending a
+     * specified sub-path to it. The resulting path is normalized with a single
+     * trailing slash.
+     *
+     * @param string $path The sub-path to append to the cache directory path. Default is '/'.
+     *
+     * @return string The full path to the cache directory, including the appended sub-path.
+     */
+    function cache_dir(string $path = '/'): string
+    {
+        return dir_path(config('cache_dir') . '/' . ltrim($path, '/'));
+    }
+}
+
+if (!function_exists('views_dir')) {
+    /**
+     * Get the views directory path with an optional appended path.
+     *
+     * This function returns the views directory path, optionally appending a
+     * specified sub-path to it. The resulting path is normalized with a single
+     * trailing slash.
+     *
+     * @param string $path The sub-path to append to the views directory path. Default is '/'.
+     *
+     * @return string The full path to the views directory, including the appended sub-path.
+     */
+    function views_dir(string $path = '/'): string
+    {
+        return dir_path(config('views_dir') . '/' . ltrim($path, '/'));
+    }
+}
+
+if (!function_exists('temp_dir')) {
+    /**
+     * Get the temporary directory path with an optional appended path.
+     *
+     * This function returns the temporary directory path, optionally appending a
+     * specified sub-path to it. The resulting path is normalized with a single
+     * trailing slash.
+     *
+     * @param string $path The sub-path to append to the temporary directory path. Default is '/'.
+     *
+     * @return string The full path to the temporary directory, including the appended sub-path.
+     */
+    function temp_dir(string $path = '/'): string
+    {
+        return storage_dir('temp/' . ltrim($path, '/'));
+    }
+}
+
 if (!function_exists('dir_path')) {
     /**
      * Returns the path to the given directory.

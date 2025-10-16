@@ -94,8 +94,8 @@ class Blade implements BladeContract
      */
     public function __construct(?string $path = null, ?string $cachePath = null)
     {
-        $path ??= config('views_dir', resource_dir('views'));
-        $cachePath ??= config('view_cache_dir', storage_dir('temp/views'));
+        $path ??= views_dir();
+        $cachePath ??= temp_dir('views');
 
         if ($path === null) {
             throw new UndefinedViewDirectoryPathException('Views directory path is not set.');
