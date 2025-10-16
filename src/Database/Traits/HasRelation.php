@@ -96,6 +96,21 @@ trait HasRelation
     }
 
     /**
+     * Reload all currently loaded relationships.
+     * 
+     * This method clears all currently loaded relationships and re-attaches them.
+     * It is useful when you want to refresh the relationship data after changes to the model.
+     * 
+     * @return void
+     */
+    public function reloadRelations(): void
+    {
+        $relations = array_keys($this->relations);
+        $this->clearRelations();
+        $this->attachRelation($relations);
+    }
+
+    /**
      * Define a one-to-one relationship.
      * 
      * This method allows you to define a one-to-one relationship between 

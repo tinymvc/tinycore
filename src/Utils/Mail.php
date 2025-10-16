@@ -245,7 +245,13 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function send(): bool
     {
-        return parent::send();
+        $startedAt = microtime(true);
+
+        $status = parent::send();
+
+        $this->logEmailSent($status, $startedAt);
+
+        return $status;
     }
 
     /**
@@ -256,5 +262,28 @@ class Mail extends PHPMailer implements MailUtilContract
     public function copy(): self
     {
         return clone $this;
+    }
+
+    /**
+     * Log the email sending status.
+     *
+     * This method logs the status of the email sending operation, including
+     * whether it was successful or not, the recipient addresses, the subject,
+     * and the duration of the operation.
+     *
+     * @param bool $status The status of the email sending operation (true for success, false for failure).
+     * @param float $startedAt The timestamp when the email sending operation started.
+     */
+    private function logEmailSent(bool $status, float $startedAt): void
+    {
+        $duration = round((microtime(true) - $startedAt) * 1000, 2); // in milliseconds
+
+        event('app:mail.sent', [
+            'status' => $status ? 'success' : 'failure',
+            'to' => array_map(fn($addr) => $addr[0], $this->getToAddresses()),
+            'subject' => $this->Subject,
+            'body' => $this->Body,
+            'duration_ms' => $duration,
+        ]);
     }
 }

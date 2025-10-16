@@ -841,7 +841,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param string|array $filter Optional filter to apply to the input data.
      * @param mixed $default Default value to return if the filter is a string and the key does not exist.
-     * @return Sanitizer|mixed An instance of Sanitizer with the request data.
+     * @return \Spark\Http\Input\Sanitizer|mixed An instance of Sanitizer with the request data.
      */
     public function input(string|array $filter = [], $default = null): mixed
     {

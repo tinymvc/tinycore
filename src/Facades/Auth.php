@@ -15,7 +15,7 @@ use Spark\Http\Auth as BaseAuth;
  * @method static ?Model getUser()
  * @method static int getId()
  * @method static int id()
- * @method static mixed user(?string $key = null, $default = null)
+ * @method static \App\Models\User|mixed user(?string $key = null, $default = null)
  * @method static string getGuestRoute()
  * @method static string getLoggedInRoute()
  * @method static bool hasId()

@@ -14,6 +14,7 @@ use Spark\Utils\Cache;
  * Parameters:
  *      - $minute: Time frame in minutes (default: 1)
  *      - $requests: Maximum number of requests allowed in the time frame (default: 50)
+ *      - $suffix: Optional suffix to differentiate cache keys (default: '')
  *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */

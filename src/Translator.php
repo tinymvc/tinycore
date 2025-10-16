@@ -205,14 +205,18 @@ class Translator implements TranslatorContract
 
             // Check if the language file exists
             if (file_exists($lang_file)) {
-                $started = microtime(true);
-                $startedMemory = memory_get_usage(true);
+                if (env('debug')) {
+                    $started = microtime(true);
+                    $startedMemory = memory_get_usage(true);
 
-                // Merge the loaded translations with the existing ones
-                $this->mergeTranslatedTexts(require $lang_file);
+                    // Merge the loaded translations with the existing ones
+                    $this->mergeTranslatedTexts(require $lang_file);
 
-                $loadTime = round((microtime(true) - $started) * 1000, 6);
-                event('app:translator.loadedLanguageFile', ['file' => $lang_file, 'load_time' => $loadTime, 'memory_before' => $startedMemory]);
+                    $loadTime = round((microtime(true) - $started) * 1000, 6);
+                    event('app:translator.loadedLanguageFile', ['file' => $lang_file, 'load_time' => $loadTime, 'memory_before' => $startedMemory]);
+                } else {
+                    $this->mergeTranslatedTexts(require $lang_file);
+                }
             }
 
             // Try to get the translation again

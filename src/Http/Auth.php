@@ -55,6 +55,8 @@ class Auth implements AuthContract, ArrayAccess
             'cookie_enabled' => true,
             'cookie_name' => 'auth',
             'cookie_expire' => '6 months',
+            'jwt_enabled' => false,
+            'jwt_expire' => '6 months',
             'driver' => null,
         ], $config);
 
@@ -266,6 +268,27 @@ class Auth implements AuthContract, ArrayAccess
     }
 
     /**
+     * Generates a JWT token for the specified user with an optional payload.
+     *
+     * This method creates a JWT token that includes the user's ID and an expiration time.
+     * Additional payload data can be included by passing an associative array.
+     *
+     * @param Model $user The user model for whom the JWT token is to be generated.
+     * @param array $payload Optional associative array of additional payload data to include in the token.
+     * @return string The generated JWT token as a string.
+     * @throws \InvalidArgumentException If the payload does not contain an 'id' key.
+     */
+    public function getJwtToken(Model $user, array $payload = []): string
+    {
+        $expire = $this->config['jwt_expire'] ?? '1 year';
+
+        $payload['id'] = $user->id;
+        $payload['exp'] = strtotime("+$expire");
+
+        return encrypt($payload);
+    }
+
+    /**
      * Logs out the current user by deleting the session and user properties.
      *
      * @return void
@@ -452,24 +475,51 @@ class Auth implements AuthContract, ArrayAccess
      */
     private function checkCookieAuth(): void
     {
-        // Check if cookie authentication is enabled
-        if ($this->config['cookie_enabled']) {
-            $token = $_COOKIE[$this->config['cookie_name']] ?? null;
-            if (isset($token)) {
-                try {
-                    // Attempt to decrypt the cookie value
-                    $token = json_decode(decrypt($token), true);
+        $token = $_COOKIE[$this->config['cookie_name']] ?? null;
+        if (isset($token)) {
+            try {
+                // Attempt to decrypt the cookie value
+                $token = json_decode(decrypt($token), true);
 
-                    // Verify that the decrypted value is an array with an 'id' and 'expire' key
-                    if (is_array($token) && isset($token['expire'], $token['id']) && carbon($token['expire'])->isFuture()) {
-                        // Set the user ID in the session and return true
-                        $this->session->set($this->config['session_key'], $token['id']);
-                    }
-                } catch (Throwable $e) {
-                    // Ignore encryption errors
+                // Verify that the decrypted value is an array with an 'id' and 'expire' key
+                if (is_array($token) && isset($token['expire'], $token['id']) && carbon($token['expire'])->isFuture()) {
+                    // Set the user ID in the session and return true
+                    $this->session->set($this->config['session_key'], $token['id']);
                 }
+            } catch (Throwable $e) {
+                // Ignore encryption errors
             }
         }
+    }
+
+    /**
+     * Checks if the user is authenticated via a JWT token.
+     *
+     * This method checks for a JWT token in the Authorization header of the request.
+     * If a valid token is found, it decrypts the token and verifies that it contains
+     * a valid user ID and expiration time. If the token is valid, the user ID will
+     * be set in the session.
+     *
+     * @return ?int The user ID if authenticated via JWT, or null if not authenticated.
+     */
+    private function checkJwtAuth(): ?int
+    {
+        $authHeader = request()->header('Authorization');
+
+        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+            $token = $matches[1];
+
+            try {
+                $payload = decrypt($token);
+                if (isset($payload['id'], $payload['exp']) && carbon($payload['exp'])->isFuture()) {
+                    return $payload['id'];
+                }
+            } catch (Throwable $e) {
+                // Ignore decryption errors
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -484,8 +534,16 @@ class Auth implements AuthContract, ArrayAccess
      */
     private function checkAuthId(): void
     {
-        if (!$this->session->has($this->config['session_key'])) {
-            $this->checkCookieAuth();
+        if (!$this->session->has($this->config['session_key']) && $this->config['cookie_enabled']) {
+            $this->checkCookieAuth(); // Check cookie authentication if enabled
+        }
+
+        if (!$this->session->has($this->config['session_key']) && $this->config['jwt_enabled']) {
+            $id = $this->checkJwtAuth(); // Check JWT authentication if enabled
+            if ($id && $id > 0) {
+                $this->id = intval($id);
+                return; // If JWT auth is successful, set the ID and return
+            }
         }
 
         $this->id = intval($this->session->get($this->config['session_key'], 0));

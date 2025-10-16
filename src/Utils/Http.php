@@ -63,6 +63,8 @@ class Http implements HttpUtilContract
             throw new PingUtilException('Failed to initialize cURL.');
         }
 
+        $startedAt = microtime(true);
+
         // Default cURL options for the request
         $defaultOptions = [
             CURLOPT_FOLLOWLOCATION => true,
@@ -116,6 +118,8 @@ class Http implements HttpUtilContract
         }
 
         curl_close($curl);
+
+        $this->logHttpRequest($url, $this->config['options'], $response, $startedAt);
 
         // The response data, including body, status code, final URL, and content length.
         return new HttpResponse($response);
@@ -325,6 +329,30 @@ class Http implements HttpUtilContract
             CURLOPT_POST => 1,
             CURLOPT_POSTFIELDS => $isJson && is_array($fields) ? json_encode($fields) :
                 (is_array($fields) ? http_build_query($fields) : $fields)
+        ]);
+    }
+
+    /**
+     * Logs the HTTP request details.
+     *
+     * @param string $url The request URL.
+     * @param array $options The cURL options used for the request.
+     * @param array $response The response data from the request.
+     * @param float $startedAt The timestamp when the request started.
+     */
+    private function logHttpRequest(string $url, array $options, array $response, float $startedAt): void
+    {
+        if (!env('debug')) {
+            return; // Skip logging in non-debug mode
+        }
+
+        $duration = round((microtime(true) - $startedAt) * 1000, 2); // in milliseconds
+
+        event('app:http.request', [
+            'url' => $url,
+            'options' => $options,
+            'response' => $response,
+            'duration_ms' => $duration,
         ]);
     }
 

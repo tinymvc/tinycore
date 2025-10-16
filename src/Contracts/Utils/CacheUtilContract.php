@@ -48,10 +48,10 @@ interface CacheUtilContract
     /**
      * Erases specified cache entries.
      *
-     * @param string|array $keys Cache key(s) to erase.
+     * @param string|array ...$keys Cache key(s) to erase.
      * @return self The instance of the cache util for method chaining.
      */
-    public function erase(string|array $keys): self;
+    public function erase(string|array ...$keys): self;
 
     /**
      * Clears all cache data.

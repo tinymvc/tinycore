@@ -137,7 +137,6 @@ class Response implements ResponseContract
         $this->setContent(
             json_encode($this->toPureArray($data), $flags, $depth)
         );
-
         return $this;
     }
 
@@ -152,7 +151,6 @@ class Response implements ResponseContract
     {
         $this->redirectUrl = $url;
         $this->setStatusCode($httpCode); // Default to 302 if no code is provided
-
         return $this;
     }
 

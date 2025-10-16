@@ -951,6 +951,28 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     }
 
     /**
+     * Refresh the model instance with the latest data from the database.
+     *
+     * @return static The refreshed model instance.
+     */
+    public function refresh(): static
+    {
+        if ($this->primaryValue()) {
+            $fresh = static::query()
+                ->where([static::$primaryKey => $this->primaryValue()])
+                ->fetchAssoc()
+                ->first();
+
+            if ($fresh) {
+                $this->loadAttributes($fresh);
+                $this->reloadRelations();
+            }
+        }
+
+        return $this;
+    }
+
+    /**
      * Handles dynamic method calls to the query instance.
      *
      * @param string $name The method name.

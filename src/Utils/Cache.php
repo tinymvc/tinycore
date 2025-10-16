@@ -264,14 +264,16 @@ class Cache implements CacheUtilContract
     /**
      * Erases specified cache entries.
      *
-     * @param string|array $keys Cache key(s) to erase.
+     * @param string|array ...$keys Cache key(s) to erase.
      * @return self
      */
-    public function erase(string|array $keys): self
+    public function erase(string|array ...$keys): self
     {
+        $keys = is_array($keys[0]) ? $keys[0] : $keys;
         $this->reload();
 
-        foreach ((array) $keys as $key) {
+        // Remove the specified keys from cache data.
+        foreach ($keys as $key) {
             unset($this->cacheData[$key]);
         }
 
@@ -422,6 +424,11 @@ class Cache implements CacheUtilContract
                 json_encode($this->cacheData, JSON_UNESCAPED_UNICODE),
                 LOCK_EX
             );
+
+            // Log cache saved event in debug mode.
+            if (env('debug')) {
+                event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
+            }
 
             $this->changed = false;
         }
