@@ -231,7 +231,7 @@ class DB implements DBContract
             return $this->macroCall($name, $args);
         }
 
-        return call_user_func_array([$this->getPdo(), $name], $args);
+        return $this->getPdo()->$name(...$args);
     }
 
     /**
@@ -252,7 +252,7 @@ class DB implements DBContract
         $query = app(QueryBuilder::class);
 
         // Dynamically call the method on the QueryBuilder instance and return the result.
-        return call_user_func_array([$query, $name], $arguments);
+        return $query->$name(...$arguments);
     }
 
     /**

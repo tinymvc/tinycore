@@ -901,11 +901,11 @@ trait HasRelation
     private function applyConstraints(QueryBuilder &$query, array $config, ?Closure $constraints = null): void
     {
         if (isset($config['callback']) && is_callable($config['callback'])) {
-            call_user_func($config['callback'], $query);
+            $config['callback']($query);
         }
 
         if ($constraints && is_callable($constraints)) {
-            call_user_func($constraints, $query);
+            $constraints($query);
         }
     }
 

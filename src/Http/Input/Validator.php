@@ -670,7 +670,6 @@ class Validator implements ValidatorContract
         }
 
         $mimeType = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
 
         if ($mimeType === false) {
             return false;

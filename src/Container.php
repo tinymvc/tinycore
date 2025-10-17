@@ -227,12 +227,12 @@ class Container implements ContainerContract
      * explicitly set in the $parameters array. If not, the method attempts to resolve the
      * parameter by calling the resolveParameter method.
      *
-     * @param Reflector $reflector The reflected method or function.
+     * @param ReflectionFunction|ReflectionMethod $reflector The reflected method or function.
      * @param array $parameters The parameters to use for resolving dependencies.
      *
      * @return array The resolved dependencies.
      */
-    private function getReflectorDependencies(Reflector $reflector, array $parameters): array
+    private function getReflectorDependencies(ReflectionFunction|ReflectionMethod $reflector, array $parameters): array
     {
         $methodParams = $reflector->getParameters();
         $dependencies = [];
@@ -493,13 +493,12 @@ class Container implements ContainerContract
      * the container. If the parameter has a default value, return that.
      *
      * @param ReflectionParameter $param The parameter to resolve.
-     * @param mixed $default The default value to return if the parameter has no value.
      *
      * @return mixed The resolved value.
      *
      * @throws FailedToResolveParameterException If the parameter could not be resolved.
      */
-    private function resolveParameter(ReflectionParameter $param, mixed $default = null): mixed
+    private function resolveParameter(ReflectionParameter $param): mixed
     {
         $type = $param->getType();
 
@@ -514,14 +513,6 @@ class Container implements ContainerContract
                     return $this->get($unionType->getName());
                 }
             }
-        }
-
-        if ($type instanceof ReflectionNamedType && $type->isBuiltin() && $default) {
-            return $default;
-        }
-
-        if ($default !== null) {
-            return $default; // Return the default value if provided
         }
 
         if ($param->isDefaultValueAvailable()) {

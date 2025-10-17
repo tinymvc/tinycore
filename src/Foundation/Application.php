@@ -140,7 +140,7 @@ class Application implements ApplicationContract, \ArrayAccess
      * @param mixed $value The value to assign to the environment variable.
      * @return void
      */
-    public function setEnv(string $key, $value): void
+    public function setEnv(string $key, mixed $value): void
     {
         data_set($this->env, $key, $value);
     }

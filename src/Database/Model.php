@@ -985,7 +985,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             return $this->macroCall($name, $arguments);
         }
 
-        return call_user_func([$this->query()->useModel($this), $name], ...$arguments);
+        return $this->query()->useModel($this)->$name(...$arguments);
     }
 
     /**
@@ -1001,6 +1001,6 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             return static::staticMacroCall($name, $arguments);
         }
 
-        return call_user_func([self::query(), $name], ...$arguments);
+        return self::query()->$name(...$arguments);
     }
 }

@@ -193,7 +193,8 @@ class Middleware implements MiddlewareContract
         return function (Request $request, Closure $next) use ($middlewareHandler, $parameters) {
             // If middleware is an array (e.g., [class, method]), call it directly
             if (is_array($middlewareHandler)) {
-                return call_user_func_array($middlewareHandler, [$request, $next, ...$parameters]);
+                [$instance, $method] = $middlewareHandler;
+                return $instance->$method($request, $next, ...$parameters);
             }
 
             // Standard middleware pattern: middleware(request, next, ...parameters)

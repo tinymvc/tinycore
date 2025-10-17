@@ -247,7 +247,7 @@ class RouteGroup implements RouteGroupContract
         if ($this->callback) {
             $router = Application::$app->get(Router::class);
 
-            call_user_func($this->callback, $router);
+            ($this->callback)($router);
 
             $attributes = $this->group['attributes'] ?? [];
 

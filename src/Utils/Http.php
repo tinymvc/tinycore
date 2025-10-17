@@ -117,8 +117,6 @@ class Http implements HttpUtilContract
             fclose($download);
         }
 
-        curl_close($curl);
-
         $this->logHttpRequest($url, $this->config['options'], $response, $startedAt);
 
         // The response data, including body, status code, final URL, and content length.
@@ -395,6 +393,6 @@ class Http implements HttpUtilContract
         }
 
         $ping = new static();
-        return call_user_func([$ping, $name], ...$arguments);
+        return $ping->$name(...$arguments);
     }
 }

@@ -618,7 +618,7 @@ trait ManageRelation
         }
 
         if ($callback) {
-            call_user_func($callback, $query);
+            $callback($query);
         }
 
         // Get the built SQL from the query

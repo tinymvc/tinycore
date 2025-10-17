@@ -2621,12 +2621,12 @@ class QueryBuilder implements QueryBuilderContract
 
             // Call the scope method on the model if it exists.
             if (method_exists($model, $scope)) {
-                return call_user_func_array([$model, $scope], [$this, ...$args]);
+                return $model->$scope($this, ...$args);
             }
         }
 
         // else, call the method from the collection instance.
-        return call_user_func_array([$this->get(), $method], $args);
+        return $this->get()->$method(...$args);
     }
 
     /** @internal helpers methods for this query builder class */
@@ -2641,7 +2641,7 @@ class QueryBuilder implements QueryBuilderContract
     {
         foreach ($this->dataMapper as $key => $mapper) {
             unset($this->dataMapper[$key]);
-            $data = call_user_func($mapper, $data);
+            $data = $mapper($data);
         }
 
         return $data;

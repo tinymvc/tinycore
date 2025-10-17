@@ -187,7 +187,7 @@ class Cache implements CacheUtilContract
 
         // Check if cache is already exists, else store it into cache. 
         if (!$this->has($key)) {
-            $this->store($key, call_user_func($callback, $this), $expire);
+            $this->store($key, $callback($this), $expire);
         }
 
         // Retrieve entry from cache.
