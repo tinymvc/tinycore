@@ -34,7 +34,7 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function __construct(array $config = [])
     {
-        $this->logFile = storage_dir('logs/mail.log');
+        $this->logFile = $config['log_file'] ?? storage_dir('logs/mail.log');
 
         // Merger mail config with env config
         $config = array_merge(config('mail', []), $config);
