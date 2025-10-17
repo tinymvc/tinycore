@@ -424,29 +424,23 @@ class Queue implements QueueContract
      */
     private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs, int $failedJobs): void
     {
-        $message = sprintf(
-            'Finished running %d success and %d failed job(s) in %.4f seconds, using %.2f MB of memory.',
+        $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
+
+        // Check if log file exists and its size and rotate if it exceeds the max size.
+        if (is_file($this->logFile) && filesize($this->logFile) >= $maxFileSize) {
+            rename($this->logFile, $this->logFile . '.' . date('Y-m-d_H-i-s'));
+        }
+
+        $logEntry = sprintf(
+            '[%s] Finished running %d success and %d failed job(s) in %.4f seconds, using %.2f MB of memory.',
+            date('Y-m-d H:i:s'),
             $ranJobs,
             $failedJobs,
             $timeUsed,
             $memoryUsed / 1024 / 1024
         );
 
-        $log = [
-            'message' => $message,
-            'time_used' => $timeUsed,
-            'memory_used' => $memoryUsed,
-            'jobs_run' => $ranJobs,
-            'jobs_failed' => $failedJobs,
-            'timestamp' => time(),
-        ];
-
-        $oldLogs = (array) json_decode(file_get_contents($this->logFile) ?: '[]', true);
-        array_unshift($oldLogs, $log);
-
-        $oldLogs = array_slice($oldLogs, 0, 1000); // Keep only the latest 1K entries.
-
-        file_put_contents($this->logFile, json_encode($oldLogs), LOCK_EX);
+        file_put_contents($this->logFile, $logEntry, FILE_APPEND | LOCK_EX);
     }
 
     /**

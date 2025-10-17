@@ -20,6 +20,9 @@ class Mail extends PHPMailer implements MailUtilContract
 {
     use Macroable;
 
+    /** @var string The log file path. */
+    private string $logFile;
+
     /**
      * Construct a new instance of the Mail utility class.
      *
@@ -31,6 +34,8 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function __construct(array $config = [])
     {
+        $this->logFile = storage_dir('logs/mail.log');
+
         // Merger mail config with env config
         $config = array_merge(config('mail', []), $config);
 
@@ -47,6 +52,32 @@ class Mail extends PHPMailer implements MailUtilContract
         if (isset($config['smtp']) && ($config['smtp']['enabled'] ?? true)) {
             $this->configureSmtp($config['smtp']);
         }
+    }
+
+    /**
+     * Disable email logging.
+     *
+     * This method disables the logging of sent emails.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function disableLogging(): self
+    {
+        $this->config['logging'] = false;
+        return $this;
+    }
+
+    /**
+     * Enable email logging.
+     *
+     * This method enables the logging of sent emails.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function enableLogging(): self
+    {
+        $this->config['logging'] = true;
+        return $this;
     }
 
     /**
@@ -139,7 +170,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public function subject(string $subject): self
     {
         $this->Subject = $subject;
-
         return $this;
     }
 
@@ -157,7 +187,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public function to($address, $name = null): self
     {
         $this->addAddress($address, $name);
-
         return $this;
     }
 
@@ -175,7 +204,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public function cc($address, $name = null): self
     {
         $this->addCC($address, $name);
-
         return $this;
     }
 
@@ -194,7 +222,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public function bcc($address, $name = null): self
     {
         $this->addBCC($address, $name);
-
         return $this;
     }
 
@@ -212,7 +239,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public function mailer($address, $name = null): self
     {
         $this->setFrom($address, $name);
-
         return $this;
     }
 
@@ -231,7 +257,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public function reply($address, $name = null): self
     {
         $this->addReplyTo($address, $name);
-
         return $this;
     }
 
@@ -245,12 +270,8 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function send(): bool
     {
-        $startedAt = microtime(true);
-
         $status = parent::send();
-
-        $this->logEmailSent($status, $startedAt);
-
+        $this->logEmailSent($status);
         return $status;
     }
 
@@ -272,18 +293,28 @@ class Mail extends PHPMailer implements MailUtilContract
      * and the duration of the operation.
      *
      * @param bool $status The status of the email sending operation (true for success, false for failure).
-     * @param float $startedAt The timestamp when the email sending operation started.
      */
-    private function logEmailSent(bool $status, float $startedAt): void
+    private function logEmailSent(bool $status): void
     {
-        $duration = round((microtime(true) - $startedAt) * 1000, 2); // in milliseconds
+        if (!($this->config['logging'] ?? true)) {
+            return; // Logging is disabled
+        }
 
-        event('app:mail.sent', [
-            'status' => $status ? 'success' : 'failure',
-            'to' => array_map(fn($addr) => $addr[0], $this->getToAddresses()),
-            'subject' => $this->Subject,
-            'body' => $this->Body,
-            'duration_ms' => $duration,
-        ]);
+        $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
+
+        // Check if log file exists and its size and rotate if it exceeds the max size.
+        if (is_file($this->logFile) && filesize($this->logFile) >= $maxFileSize) {
+            rename($this->logFile, $this->logFile . '.' . date('Y-m-d_H-i-s'));
+        }
+
+        $logEntry = sprintf(
+            "[%s] Email to: %s | Subject: %s | Status: %s\n",
+            date('Y-m-d H:i:s'),
+            implode(', ', array_keys($this->getToAddresses())),
+            $this->Subject,
+            $status ? 'Sent' : 'Failed'
+        );
+
+        file_put_contents($this->logFile, $logEntry, FILE_APPEND | LOCK_EX);
     }
 }

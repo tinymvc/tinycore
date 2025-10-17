@@ -29,18 +29,18 @@ class Tracer implements TracerUtilContract
      * Sets up custom error, exception, and shutdown handlers for the application.
      * This ensures that errors and exceptions are logged and handled consistently.
      * 
-     * @param string|null $errorLogFile The path to the error log file. 
+     * @param string|null $logFile The path to the error log file. 
      *      Defaults to storage_dir('error.log').
      * 
      * @return void
      */
-    public function __construct(private ?string $errorLogFile = null)
+    public function __construct(private ?string $logFile = null)
     {
         // Set the tracer instance as a singleton
         self::$instance = $this;
 
         // Set default error log file if not provided
-        $this->errorLogFile ??= storage_dir('logs/error.log');
+        $this->logFile ??= storage_dir('logs/error.log');
 
         // Set custom error, exception, and shutdown handlers.
         set_error_handler([$this, 'handleError']);
@@ -172,14 +172,14 @@ class Tracer implements TracerUtilContract
      */
     public function log(string $message): void
     {
-        $maxFileSize = 10 * 1024 * 1024; // 10 MB in bytes
+        $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
 
         // Check if log file exists and its size and rotate if it exceeds the max size.
-        if (file_exists($this->errorLogFile) && filesize($this->errorLogFile) >= $maxFileSize) {
-            rename($this->errorLogFile, $this->errorLogFile . '.' . date('Y-m-d_H-i-s'));
+        if (is_file($this->logFile) && filesize($this->logFile) >= $maxFileSize) {
+            rename($this->logFile, $this->logFile . '.' . date('Y-m-d_H-i-s'));
         }
 
         $time = date('Y-m-d H:i:s'); // Current timestamp
-        error_log("[$time] $message\n", 3, $this->errorLogFile);
+        error_log("[$time] $message\n", 3, $this->logFile);
     }
 }

@@ -426,9 +426,7 @@ class Cache implements CacheUtilContract
             );
 
             // Log cache saved event in debug mode.
-            if (env('debug')) {
-                event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
-            }
+            env('debug') && event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
 
             $this->changed = false;
         }

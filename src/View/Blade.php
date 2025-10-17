@@ -473,7 +473,11 @@ class Blade implements BladeContract
             unset($GLOBALS['sections']);
         }
 
-        event('app:bladeTemplateRendered', ['path' => $compiledPath, 'time' => $renderTime, 'memory_before' => $startedMemory]);
+        env('debug') && event('app:bladeTemplateRendered', [
+            'path' => $compiledPath,
+            'time' => $renderTime,
+            'memory_before' => $startedMemory
+        ]);
 
         return $content;
     }

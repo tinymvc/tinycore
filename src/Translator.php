@@ -213,7 +213,11 @@ class Translator implements TranslatorContract
                     $this->mergeTranslatedTexts(require $lang_file);
 
                     $loadTime = round((microtime(true) - $started) * 1000, 6);
-                    event('app:translator.loadedLanguageFile', ['file' => $lang_file, 'load_time' => $loadTime, 'memory_before' => $startedMemory]);
+                    event('app:translator.loadedLanguageFile', [
+                        'file' => $lang_file,
+                        'load_time' => $loadTime,
+                        'memory_before' => $startedMemory
+                    ]);
                 } else {
                     $this->mergeTranslatedTexts(require $lang_file);
                 }

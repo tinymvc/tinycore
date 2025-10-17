@@ -362,11 +362,11 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function run(): void
     {
-        event('app:booting');
+        env('debug') && event('app:booting');
         try {
             $this->container->bootServiceProviders();
 
-            event('app:booted');
+            env('debug') && event('app:booted');
 
             $this->container
                 ->get(Router::class)
@@ -377,7 +377,7 @@ class Application implements ApplicationContract, \ArrayAccess
                 )
                 ->send();
 
-            event('app:terminated');
+            env('debug') && event('app:terminated');
         } catch (RouteNotFoundException) {
             abort(error: 404, message: 'Route not found');
         } catch (ItemNotFoundException) {

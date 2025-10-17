@@ -1338,11 +1338,12 @@ if (!function_exists('mailer')) {
      * @param null|array $body The context to pass to the template
      * @param null|string|array $form The email address of the sender
      * @param null|string|array $reply The email address of the reply to
+     * @param array $config Additional configuration options for the Mail utility class
      * @return Mail The instance of the Mail utility class
      */
-    function mailer(null|string|array $to = null, ?string $subject = null, ?string $body = null, ?bool $isHtml = null, ?string $template = null, ?array $context = null, null|string|array $from = null, null|string|array $reply = null): Mail
+    function mailer(null|string|array $to = null, ?string $subject = null, ?string $body = null, ?bool $isHtml = null, ?string $template = null, ?array $context = null, null|string|array $from = null, null|string|array $reply = null, array $config = []): Mail
     {
-        $mailer = get(Mail::class);
+        $mailer = new Mail($config);
 
         if (isset($template)) {
             // Merge the context with the other parameters
@@ -1637,7 +1638,8 @@ if (!function_exists('uploader')) {
      * @param array|null $resize Optional. The resize configuration array. Default is an empty array.
      * @param array|null $resizes Optional. The resizes configuration array. Default is an empty array.
      * @param int|null $compress Optional. The compression ratio for images. Default is null.
-     * @return Uploader The Uploader instance.
+     * @param UploaderUtilDriverInterface|null $driver Optional. The custom uploader driver instance. Default is null.
+     * @return \Spark\Utils\Uploader The Uploader instance.
      */
     function uploader(
         ?string $uploadTo = null,

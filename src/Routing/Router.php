@@ -397,7 +397,7 @@ class Router implements RouterContract
         // Iterate through all routes to find a match
         foreach ($this->routes as $route) {
             if ($this->matchRoute($route['method'], $route['path'], $request)) {
-                event('app:routeMatched', $route);
+                env('debug') && event('app:routeMatched', $route);
 
                 // Add route-specific middleware to the middleware stack
                 $middleware->queue($route['middleware']);
@@ -408,7 +408,7 @@ class Router implements RouterContract
                     return $middlewareResponse;
                 }
 
-                event('app:middlewaresHandled', $middleware->getStack());
+                env('debug') && event('app:middlewaresHandled', $middleware->getStack());
 
                 // Handle view rendering or instantiate a class for callback if specified
                 if (isset($route['template'])) {
@@ -417,7 +417,7 @@ class Router implements RouterContract
 
                 $response = $container->call($route['callback'], $request->getRouteParams());
 
-                event('app:routeDispatched');
+                env('debug') && event('app:routeDispatched');
 
                 // Call the matched route's callback
                 return $this->parseHttpResponse($response);

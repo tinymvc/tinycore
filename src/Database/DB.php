@@ -346,8 +346,8 @@ class DB implements DBContract
      */
     private function log(float $started, string $sql, int $startedMemory): void
     {
-        if (env('debug') === false) {
-            return;
+        if (!env('debug')) {
+            return; // Skip in non-debug mode.
         }
 
         $ended = microtime(true);

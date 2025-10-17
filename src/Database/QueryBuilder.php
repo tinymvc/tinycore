@@ -3097,8 +3097,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function log(float $started, int $startedMemory, string $sql, array $bindings = []): void
     {
-        if (env('debug') === false) {
-            return;
+        if (!env('debug')) {
+            return; // Skip in non-debug mode.
         }
 
         $ended = microtime(true);
