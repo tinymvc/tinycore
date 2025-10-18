@@ -310,7 +310,13 @@ class Mail extends PHPMailer implements MailUtilContract
         $logEntry = sprintf(
             "[%s] Email to: %s | Subject: %s | Status: %s\n",
             date('Y-m-d H:i:s'),
-            implode(', ', array_keys($this->getToAddresses())),
+            implode(
+                ', ',
+                array_map(
+                    fn($addr) => sprintf('%s <%s>', $addr[1] ?? 'Unknown', $addr[0]),
+                    $this->getToAddresses()
+                )
+            ),
             $this->Subject,
             $status ? 'Sent' : 'Failed'
         );
