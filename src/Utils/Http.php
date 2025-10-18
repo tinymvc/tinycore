@@ -117,7 +117,12 @@ class Http implements HttpUtilContract
             fclose($download);
         }
 
-        $this->logHttpRequest($url, ['url' => $url, 'params' => $params, 'options' => $this->config['options']], $response, $startedAt);
+        $this->logHttpRequest($url, [
+            'url' => $url,
+            'method' => $this->config['options'][CURLOPT_CUSTOMREQUEST] ?? 'GET',
+            'params' => $params,
+            'headers' => $this->config['headers'],
+        ], $response, $startedAt);
 
         // The response data, including body, status code, final URL, and content length.
         return new HttpResponse($response);
