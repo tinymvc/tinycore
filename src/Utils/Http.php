@@ -117,7 +117,7 @@ class Http implements HttpUtilContract
             fclose($download);
         }
 
-        $this->logHttpRequest($url, $this->config['options'], $response, $startedAt);
+        $this->logHttpRequest($url, ['url' => $url, 'params' => $params, 'options' => $this->config['options']], $response, $startedAt);
 
         // The response data, including body, status code, final URL, and content length.
         return new HttpResponse($response);
@@ -334,11 +334,11 @@ class Http implements HttpUtilContract
      * Logs the HTTP request details.
      *
      * @param string $url The request URL.
-     * @param array $options The cURL options used for the request.
+     * @param array $payload The cURL options used for the request.
      * @param array $response The response data from the request.
      * @param float $startedAt The timestamp when the request started.
      */
-    private function logHttpRequest(string $url, array $options, array $response, float $startedAt): void
+    private function logHttpRequest(string $url, array $payload, array $response, float $startedAt): void
     {
         if (!env('debug')) {
             return; // Skip logging in non-debug mode
@@ -348,7 +348,7 @@ class Http implements HttpUtilContract
 
         event('app:http.request', [
             'url' => $url,
-            'options' => $options,
+            'payload' => $payload,
             'response' => $response,
             'duration_ms' => $duration,
         ]);
