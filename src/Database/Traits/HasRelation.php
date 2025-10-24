@@ -17,14 +17,13 @@ use Spark\Database\Relation\Relation;
 use Spark\Support\Str;
 
 /**
- * HasOrm - Laravel-style Object Relational Mapping
+ * Laravel-style Mini ORM (Object Relational Mapping)
  * 
  * Provides Laravel Eloquent-like functionality for handling object-relational mapping (ORM).
  * Supports hasOne, hasMany, belongsTo, belongsToMany relationships with lazy and eager loading.
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  * @package Spark\Database\Relation
- * @version 2.0.0
  */
 trait HasRelation
 {
@@ -649,7 +648,6 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
-            ->fetchAssoc()
             ->whereIn($config['foreignKey'], $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -687,7 +685,6 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
-            ->fetchAssoc()
             ->whereIn($config['foreignKey'], $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -725,7 +722,6 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
-            ->fetchAssoc()
             ->whereIn($config['ownerKey'], $foreignValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -771,7 +767,6 @@ trait HasRelation
 
         $query = $relatedModel->query()
             ->select("r.*, p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}{$appendField}")
-            ->fetchAssoc()
             ->from($relatedTable, 'r')
             ->join($config['table'] . ' as p', "p.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
             ->whereIn("p.{$config['foreignPivotKey']}", $parentValues);
@@ -823,7 +818,6 @@ trait HasRelation
 
         $query = $relatedModel->query()
             ->select('r.*', "t.{$config['firstKey']}{$appendField}")
-            ->fetchAssoc()
             ->from($relatedTable, 'r')
             ->join("$throughTable as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
             ->whereIn("t.{$config['firstKey']}", $localValues);
@@ -864,14 +858,12 @@ trait HasRelation
             $related = $type === 'one' ? null : [];
 
             foreach ($results as $result) {
-                if ($result[$config['foreignKey']] == $model->{$config['localKey']}) {
-                    $relatedModel = new $config['related'];
-
+                if ($result->{$config['foreignKey']} == $model->{$config['localKey']}) {
                     if ($type === 'one') {
-                        $related = $relatedModel->loadAttributes($result);
+                        $related = $result;
                         break;
                     } else {
-                        $related[] = $relatedModel->loadAttributes($result);
+                        $related[] = $result;
                     }
                 }
             }
@@ -904,8 +896,8 @@ trait HasRelation
             $related = null;
 
             foreach ($results as $result) {
-                if ($result[$config['ownerKey']] == $model->{$config['foreignKey']}) {
-                    $related = (new $config['related'])->loadAttributes($result);
+                if ($result->{$config['ownerKey']} == $model->{$config['foreignKey']}) {
+                    $related = $result;
                     break;
                 }
             }
@@ -934,8 +926,8 @@ trait HasRelation
             $related = [];
 
             foreach ($results as $result) {
-                if ($result[$config['foreignPivotKey']] == $model->{$config['parentKey']}) {
-                    $related[] = (new $config['related'])->loadAttributes($result);
+                if ($result->{$config['foreignPivotKey']} == $model->{$config['parentKey']}) {
+                    $related[] = $result;
                 }
             }
 
@@ -964,14 +956,12 @@ trait HasRelation
             $related = $isOne ? null : [];
 
             foreach ($results as $result) {
-                if ($result[$config['firstKey']] == $model->{$config['localKey']}) {
-                    $relatedModel = new $config['related'];
-
+                if ($result->{$config['firstKey']} == $model->{$config['localKey']}) {
                     if ($isOne) {
-                        $related = $relatedModel->loadAttributes($result);
+                        $related = $result;
                         break; // Only get the first match for hasOne
                     } else {
-                        $related[] = $relatedModel->loadAttributes($result);
+                        $related[] = $result;
                     }
                 }
             }
