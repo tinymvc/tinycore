@@ -7,7 +7,6 @@ use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Exceptions\OrmDisabledLazyLoadingException;
 use Spark\Database\Exceptions\UndefinedOrmException;
 use Spark\Database\QueryBuilder;
-use PDO;
 use Spark\Database\Relation\BelongsTo;
 use Spark\Database\Relation\BelongsToMany;
 use Spark\Database\Relation\HasMany;
@@ -517,10 +516,16 @@ trait HasRelation
      * @param array $config
      * @param string $name
      * @param Closure|null $constraints
+     * @param array $nested Additional nested relationships to load
      * @return array
      */
-    public function loadRelation(array $models, array $config, string $name, ?Closure $constraints = null): array
+    public function loadRelation(array $models, array $config, string $name, ?Closure $constraints = null, array $nested = []): array
     {
+        // Store nested relationships in config for later use
+        if (!empty($nested)) {
+            $config['nested'] = $nested;
+        }
+
         return match ($config['type']) {
             'hasOne' => $this->loadHasOne($models, $config, $name, $constraints),
             'hasMany' => $this->loadHasMany($models, $config, $name, $constraints),
@@ -529,6 +534,96 @@ trait HasRelation
             'hasManyThrough', 'hasOneThrough' => $this->loadHasThrough($models, $config, $name, $constraints),
             default => throw new InvalidOrmException("Invalid relationship type: {$config['type']}")
         };
+    }
+
+    /**
+     * Load polymorphic relationships for a collection of models.
+     * 
+     * This method handles polymorphic relationship loading where the related model
+     * type varies based on a morph type column.
+     * 
+     * @param array $models The models to load relationships for
+     * @param string $relation The polymorphic relationship name
+     * @param array $morphMap Array mapping morph types to their relationships
+     * @param string|null $typeColumn The morph type column name
+     * @param string|null $idColumn The morph id column name
+     * @return array
+     */
+    public function loadMorphRelation(array $models, string $relation, array $morphMap, ?string $typeColumn = null, ?string $idColumn = null): array
+    {
+        if (empty($models)) {
+            return $models;
+        }
+
+        // Set default column names if not provided
+        $typeColumn ??= $relation . '_type';
+        $idColumn ??= $relation . '_id';
+
+        // Group models by their morph type
+        $modelsByType = [];
+        foreach ($models as $index => $model) {
+            if (!$model instanceof \Spark\Database\Model) {
+                continue;
+            }
+
+            $type = $model->get($typeColumn);
+            $id = $model->get($idColumn);
+
+            if ($type && $id) {
+                if (!isset($modelsByType[$type])) {
+                    $modelsByType[$type] = [];
+                }
+                $modelsByType[$type][] = ['index' => $index, 'model' => $model, 'id' => $id];
+            }
+        }
+
+        // Load relationships for each morph type
+        foreach ($modelsByType as $type => $items) {
+            if (!isset($morphMap[$type])) {
+                continue;
+            }
+
+            // Resolve the morph model class
+            $morphClass = $this->resolveMorphClass($type);
+            if (!$morphClass) {
+                continue;
+            }
+
+            // Get nested relations for this morph type
+            $relations = $morphMap[$type];
+            $relations = is_string($relations) ? [$relations] : $relations;
+
+            // Extract unique IDs
+            $ids = array_unique(array_column($items, 'id'));
+
+            // Load the polymorphic models
+            $morphModel = new $morphClass;
+            $primaryKey = $morphModel::$primaryKey ?? 'id';
+
+            $query = $morphModel->query()->whereIn($primaryKey, $ids);
+
+            // Eager load nested relationships
+            if (!empty($relations)) {
+                $query->with(...$relations);
+            }
+
+            $relatedModels = $query->all();
+
+            // Index by primary key for quick lookup
+            $relatedByKey = [];
+            foreach ($relatedModels as $related) {
+                $relatedByKey[$related->primaryValue()] = $related;
+            }
+
+            // Attach to original models
+            foreach ($items as $item) {
+                if (isset($relatedByKey[$item['id']])) {
+                    $models[$item['index']]->setRelation($relation, $relatedByKey[$item['id']]);
+                }
+            }
+        }
+
+        return $models;
     }
 
     /**
@@ -554,11 +649,16 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
-            ->select()
-            ->fetch(PDO::FETCH_ASSOC)
+            ->fetchAssoc()
             ->whereIn($config['foreignKey'], $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
+
+        // Apply nested relationships if any
+        if (!empty($config['nested'])) {
+            $query->with(...$config['nested']);
+        }
+
         $results = $query->all();
 
         return $this->matchModels($models, $results, $config, $name, 'one');
@@ -587,11 +687,16 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
-            ->select()
-            ->fetch(PDO::FETCH_ASSOC)
+            ->fetchAssoc()
             ->whereIn($config['foreignKey'], $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
+
+        // Apply nested relationships if any
+        if (!empty($config['nested'])) {
+            $query->with(...$config['nested']);
+        }
+
         $results = $query->all();
 
         return $this->matchModels($models, $results, $config, $name, 'many');
@@ -620,11 +725,16 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
-            ->select()
-            ->fetch(PDO::FETCH_ASSOC)
+            ->fetchAssoc()
             ->whereIn($config['ownerKey'], $foreignValues);
 
         $this->applyConstraints($query, $config, $constraints);
+
+        // Apply nested relationships if any
+        if (!empty($config['nested'])) {
+            $query->with(...$config['nested']);
+        }
+
         $results = $query->all();
 
         return $this->matchBelongsTo($models, $results, $config, $name);
@@ -661,12 +771,18 @@ trait HasRelation
 
         $query = $relatedModel->query()
             ->select("r.*, p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}{$appendField}")
-            ->fetch(PDO::FETCH_ASSOC)
+            ->fetchAssoc()
             ->from($relatedTable, 'r')
             ->join($config['table'] . ' as p', "p.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
             ->whereIn("p.{$config['foreignPivotKey']}", $parentValues);
 
         $this->applyConstraints($query, $config, $constraints);
+
+        // Apply nested relationships if any
+        if (!empty($config['nested'])) {
+            $query->with(...$config['nested']);
+        }
+
         $results = $query->all();
 
         return $this->matchBelongsToMany($models, $results, $config, $name);
@@ -707,12 +823,17 @@ trait HasRelation
 
         $query = $relatedModel->query()
             ->select('r.*', "t.{$config['firstKey']}{$appendField}")
-            ->fetch(PDO::FETCH_ASSOC)
+            ->fetchAssoc()
             ->from($relatedTable, 'r')
             ->join("$throughTable as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
             ->whereIn("t.{$config['firstKey']}", $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
+
+        // Apply nested relationships if any
+        if (!empty($config['nested'])) {
+            $query->with(...$config['nested']);
+        }
 
         if ($isOne) {
             $query->take(1);
@@ -960,5 +1081,30 @@ trait HasRelation
         $tables = [Str::lower($currentTable), Str::lower($relatedTable)];
         sort($tables);
         return implode('_', $tables);
+    }
+
+    /**
+     * Resolve the morph class from a morph type string.
+     * 
+     * @param string $type The morph type
+     * @return string|null The resolved class name
+     */
+    private function resolveMorphClass(string $type): ?string
+    {
+        // If already a valid class name, return it
+        if (class_exists($type)) {
+            return $type;
+        }
+
+        // Convert snake_case or kebab-case to StudlyCase
+        $studlyType = Str::studly(str_replace('-', '_', $type));
+
+        // Try common namespace patterns
+        $className = "App\\Models\\$studlyType";
+        if (class_exists($className)) {
+            return $className;
+        }
+
+        return null;
     }
 }

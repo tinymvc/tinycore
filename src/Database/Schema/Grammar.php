@@ -6,6 +6,7 @@ use Spark\Database\Schema\Contracts\GrammarContract;
 use Spark\Database\Schema\Exceptions\SqliteAlterFailedException;
 use Spark\Database\Schema\Exceptions\InvalidForeignKeyException;
 use Spark\Database\Schema\Exceptions\UnsupportedDatabaseDriverException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Grammar
@@ -15,6 +16,8 @@ use Spark\Database\Schema\Exceptions\UnsupportedDatabaseDriverException;
  */
 class Grammar implements GrammarContract
 {
+    use Macroable;
+
     /**
      * @var array $wrapper Character wrappers for SQL identifiers.
      */

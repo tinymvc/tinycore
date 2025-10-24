@@ -6,6 +6,7 @@ use Closure;
 use PDO;
 use Spark\Database\DB;
 use Spark\Database\Schema\Contracts\SchemaContract;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Schema
@@ -17,6 +18,8 @@ use Spark\Database\Schema\Contracts\SchemaContract;
  */
 class Schema implements SchemaContract
 {
+    use Macroable;
+
     /** @var PDO The PDO connection.*/
     private static PDO $connection;
 

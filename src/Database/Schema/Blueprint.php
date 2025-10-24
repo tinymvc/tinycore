@@ -4,6 +4,7 @@ namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\BlueprintContract;
 use Spark\Database\Schema\Exceptions\InvalidBlueprintArgumentException;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Blueprint
@@ -15,6 +16,8 @@ use Spark\Database\Schema\Exceptions\InvalidBlueprintArgumentException;
  */
 class Blueprint implements BlueprintContract
 {
+    use Macroable;
+
     /**
      * @var array List of columns in the blueprint.
      */

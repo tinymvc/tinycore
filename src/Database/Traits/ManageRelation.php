@@ -26,6 +26,11 @@ trait ManageRelation
      * It accepts a string or an array of relationship names,
      * and returns a QueryBuilder instance with the relationships loaded.
      * 
+     * Supports nested relationships using dot notation:
+     * - with('posts.comments')
+     * - with('posts.comments.author')
+     * - with(['posts' => fn($q) => $q->latest(), 'posts.comments'])
+     * 
      * @param array|string ...$relations
      * @return QueryBuilder
      */
@@ -34,17 +39,33 @@ trait ManageRelation
         $relations = is_array($relations[0]) ? $relations[0] : $relations;
         $model = $this->getRelatedModel();
 
-        foreach ($relations as $name => $constraints) {
-            if (is_numeric($name)) {
-                $name = $constraints;
-                $constraints = null;
-            }
+        // Parse and organize nested relationships
+        $parsed = $this->parseWithRelations($relations);
 
+        foreach ($parsed as $name => $data) {
             $relationConfig = $model->getRelationshipConfig($name);
             if ($relationConfig) {
-                $this->addMapper(fn($data) => $model->loadRelation($data, $relationConfig, $name, $constraints));
+                $this->addMapper(fn($result) => $model->loadRelation($result, $relationConfig, $name, $data['constraints'], $data['nested']));
             }
         }
+
+        return $this;
+    }
+
+    /**
+     * Eager load polymorphic relationships (Laravel-like).
+     * 
+     * @param string $relation The polymorphic relationship name
+     * @param array $morphMap Array mapping morph types to their relationships
+     * @param string|null $typeColumn The morph type column name
+     * @param string|null $idColumn The morph id column name
+     * @return QueryBuilder
+     */
+    public function morphWith(string $relation, array $morphMap, ?string $typeColumn = null, ?string $idColumn = null): QueryBuilder
+    {
+        $model = $this->getRelatedModel();
+
+        $this->addMapper(fn($data) => $model->loadMorphRelation($data, $relation, $morphMap, $typeColumn, $idColumn));
 
         return $this;
     }
@@ -699,5 +720,54 @@ trait ManageRelation
     {
         // This should match the logic in your Model class
         return $class::$table ?? Str::snake(Str::plural(class_basename($class)));
+    }
+
+    /**
+     * Parse nested relationships from with() arguments.
+     * 
+     * Converts Laravel-style dot notation to nested structure:
+     * ['posts.comments.author'] => ['posts' => ['nested' => ['comments.author']]]
+     * 
+     * @param array $relations
+     * @return array
+     */
+    private function parseWithRelations(array $relations): array
+    {
+        $parsed = [];
+
+        foreach ($relations as $name => $constraints) {
+            // Handle numeric keys (simple string relations)
+            if (is_numeric($name)) {
+                $name = $constraints;
+                $constraints = null;
+            }
+
+            // Check for nested relationships (dot notation)
+            if (str_contains($name, '.')) {
+                $parts = explode('.', $name, 2);
+                $parentRelation = $parts[0];
+                $nestedRelation = $parts[1];
+
+                if (!isset($parsed[$parentRelation])) {
+                    $parsed[$parentRelation] = ['constraints' => null, 'nested' => []];
+                }
+
+                // Avoid duplicates in nested array
+                if (!in_array($nestedRelation, $parsed[$parentRelation]['nested'])) {
+                    $parsed[$parentRelation]['nested'][] = $nestedRelation;
+                }
+            } else {
+                if (!isset($parsed[$name])) {
+                    $parsed[$name] = ['constraints' => null, 'nested' => []];
+                }
+
+                // Set constraints if provided (don't override if already set)
+                if ($constraints instanceof Closure && $parsed[$name]['constraints'] === null) {
+                    $parsed[$name]['constraints'] = $constraints;
+                }
+            }
+        }
+
+        return $parsed;
     }
 }

@@ -3,6 +3,7 @@
 namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\ColumnContract;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class representing a database column.
@@ -14,6 +15,8 @@ use Spark\Database\Schema\Contracts\ColumnContract;
  */
 class Column implements ColumnContract
 {
+    use Macroable;
+
     /**
      * @var array List of modifiers for the column
      */

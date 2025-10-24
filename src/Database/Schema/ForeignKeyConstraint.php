@@ -4,6 +4,7 @@ namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\ForeignKeyConstraintContract;
 use Spark\Support\Str;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class ForeignKeyConstraint
@@ -14,6 +15,8 @@ use Spark\Support\Str;
  */
 class ForeignKeyConstraint implements ForeignKeyConstraintContract
 {
+    use Macroable;
+
     /**
      * The columns that will be used to form the foreign key.
      *
