@@ -2317,7 +2317,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $paginator = new Paginator(limit: $limit, keyword: $keyword);
 
-        // Count total records from exisitng command only for serverside database driver.
+        // Count total records from existing command only for serverside database driver.
         if ($this->database->isDriver('mysql')) {
             $this->query['select'] = "SQL_CALC_FOUND_ROWS {$this->query['select']}";
         }
@@ -2418,15 +2418,14 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @param array $attributes Attributes to search by.
      * @param array $values Values to update or create with.
-     * @return int|array Returns last insert ID or array of returned data.
+     * @return int|bool Returns last inserted ID on insert, number of affected rows on update, or false on failure.
      */
-    public function updateOrInsert(array $attributes, array $values = []): int|array
+    public function updateOrInsert(array $attributes, array $values = []): int|bool
     {
         // Check if record exists
         if ($this->where($attributes)->exists()) {
             // Update existing record
-            $this->where($attributes)->update($values);
-            return 0; // Return 0 for update operations
+            return $this->where($attributes)->update($values);
         } else {
             // Insert new record
             return $this->insert(array_merge($attributes, $values));

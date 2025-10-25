@@ -211,6 +211,10 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function getLoggedInRoute(): string
     {
+        if ($this->session->hasFlash('__auth_redirect')) {
+            return $this->session->getFlash('__auth_redirect');
+        }
+
         return route_url($this->config['logged_in_route']);
     }
 
