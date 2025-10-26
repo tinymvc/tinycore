@@ -402,6 +402,14 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             elseif ($this->hasCast($key)) {
                 $data[$key] = $this->castAttributeForStorage($key, $value);
             }
+            // Handle Carbon time Object into string
+            elseif ($value instanceof \Spark\Utils\Carbon) {
+                $data[$key] = $value->toDateTimeString();
+            }
+            // Handle Arrayable objects into json string
+            elseif ($value instanceof Arrayable) {
+                $data[$key] = json_encode($value->toArray());
+            }
             // Handle Arrayable and Jsonable objects
             elseif ($value instanceof Jsonable) {
                 $data[$key] = $value->toJson();

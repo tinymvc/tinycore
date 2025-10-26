@@ -1496,7 +1496,7 @@ if (!function_exists('hasher')) {
      */
     function hasher(): Hash
     {
-        return hashing();
+        return get(Hash::class);
     }
 }
 
