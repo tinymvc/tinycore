@@ -127,7 +127,9 @@ class Route implements RouteContract
      */
     public function __destruct()
     {
-        Application::$app->get(Router::class)->add(
+        /** @var \Spark\Routing\Router $router */
+        $router = Application::$app->get(Router::class);
+        $router->add(
             path: $this->path,
             method: $this->method,
             callback: $this->callback,

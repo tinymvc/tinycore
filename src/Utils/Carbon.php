@@ -144,6 +144,31 @@ class Carbon implements Arrayable, \Stringable
     }
 
     /**
+     * Create DateTime from array
+     * 
+     * @param array $array An associative array with keys: year, month, day, hour, minute, second, timezone
+     * @return self
+     */
+    public static function fromArray(array $array): self
+    {
+        $year = $array['year'] ?? 1970;
+        $month = $array['month'] ?? 1;
+        $day = $array['day'] ?? 1;
+        $hour = $array['hour'] ?? 0;
+        $minute = $array['minute'] ?? 0;
+        $second = $array['second'] ?? 0;
+        $timezone = $array['timezone'] ?? null;
+        if ($timezone) {
+            $timezone = new DateTimeZone($timezone);
+        }
+
+        return new self(
+            sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second),
+            $timezone
+        );
+    }
+
+    /**
      * Get default timezone
      * 
      * This method returns the default timezone set for the class.
@@ -235,6 +260,7 @@ class Carbon implements Arrayable, \Stringable
             'dayOfYear' => (int) $this->format('z'),
             'weekOfYear' => (int) $this->format('W'),
             'timestamp' => $this->getTimestamp(),
+            'timezone' => $this->getTimezone()->getName(),
         ];
     }
 

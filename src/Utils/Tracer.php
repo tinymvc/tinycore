@@ -114,7 +114,7 @@ class Tracer implements TracerUtilContract
     {
         $this->log("$type: $message in $file on line $line"); // Log the error message
 
-        if (php_sapi_name() === 'cli') {
+        if (is_cli()) {
             // Get the prompt instance
             $prompt = get(Prompt::class);
 

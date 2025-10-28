@@ -178,9 +178,7 @@ class Container implements ContainerContract
         if (is_callable($abstract) && !is_array($abstract)) {
             $reflectionFunction = new ReflectionFunction($abstract);
             $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters);
-
-            // Call the closure
-            return $abstract(...$dependencies);
+            return $abstract(...$dependencies); // Call the closure
         }
 
         // Split class and method from the "ClassName@methodName" format
@@ -189,8 +187,6 @@ class Container implements ContainerContract
             $instance = $this->get($class);
         } elseif (is_array($abstract)) {
             [$class, $method] = $abstract;
-
-            // Check if $class is already an instantiated object
             $instance = is_object($class) ? $class : $this->get($class);
         } else {
             if (method_exists($abstract, 'handle')) {
@@ -258,9 +254,6 @@ class Container implements ContainerContract
                 // For associative arrays, check by parameter name first
                 if (array_key_exists($paramName, $parameters)) {
                     $dependencies[] = $parameters[$paramName];
-                } elseif ($isDependency) {
-                    // Resolve dependency from container
-                    $dependencies[] = $this->resolveParameter($param);
                 } else {
                     // Try to resolve with default value or throw exception
                     $dependencies[] = $this->resolveParameter($param);

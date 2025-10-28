@@ -322,7 +322,9 @@ class Job implements JobContract
      */
     public function dispatch(?string $id = null): void
     {
-        Application::$app->get(Queue::class)->addJob($this, $id);
+        /** @var \Spark\Queue\Queue $queue */
+        $queue = Application::$app->get(Queue::class);
+        $queue->addJob($this, $id);
     }
 
     /**

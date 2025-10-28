@@ -245,6 +245,7 @@ class RouteGroup implements RouteGroupContract
     public function __destruct()
     {
         if ($this->callback) {
+            /** @var \Spark\Routing\Router  $router */
             $router = Application::$app->get(Router::class);
 
             ($this->callback)($router);
@@ -260,47 +261,44 @@ class RouteGroup implements RouteGroupContract
                 $middleware = $routeData['middleware'];
                 $withoutMiddleware = $routeData['withoutMiddleware'];
 
-                // Apply pending group attributes
-                if (!empty($attributes)) {
-                    // Apply path prefix
-                    if (isset($attributes['path'])) {
-                        $path ??= '';
-                        $path = $this->cleanForConcat($attributes['path'], $path, '/');
-                    }
+                // Apply path prefix
+                if (isset($attributes['path'])) {
+                    $path ??= '';
+                    $path = $this->cleanForConcat($attributes['path'], $path, '/');
+                }
 
-                    // Apply method
-                    if (isset($attributes['method'])) {
-                        $method = array_unique(array_merge((array) $method, (array) $attributes['method']));
-                    }
+                // Apply method
+                if (isset($attributes['method'])) {
+                    $method = array_unique(array_merge((array) $method, (array) $attributes['method']));
+                }
 
-                    // Apply middleware
-                    if (isset($attributes['middleware'])) {
-                        $middleware = array_unique(array_merge((array) $middleware, (array) $attributes['middleware']));
-                    }
+                // Apply middleware
+                if (isset($attributes['middleware'])) {
+                    $middleware = array_unique(array_merge((array) $middleware, (array) $attributes['middleware']));
+                }
 
-                    // Apply withoutMiddleware
-                    if (isset($attributes['withoutMiddleware'])) {
-                        $withoutMiddleware = array_unique(array_merge((array) $withoutMiddleware, (array) $attributes['withoutMiddleware']));
-                    }
+                // Apply withoutMiddleware
+                if (isset($attributes['withoutMiddleware'])) {
+                    $withoutMiddleware = array_unique(array_merge((array) $withoutMiddleware, (array) $attributes['withoutMiddleware']));
+                }
 
-                    // Apply name prefix if name is not empty
-                    if (isset($attributes['name']) && !empty($name)) {
-                        $name = $this->cleanForConcat($attributes['name'], $name, '.');
-                    }
+                // Apply name prefix if name is not empty
+                if (isset($attributes['name']) && !empty($name)) {
+                    $name = $this->cleanForConcat($attributes['name'], $name, '.');
+                }
 
-                    // Apply template prefix if template is not empty
-                    if (isset($attributes['template']) && !empty($template)) {
-                        $template = $this->cleanForConcat($attributes['template'], $template, '.');
-                    }
+                // Apply template prefix if template is not empty
+                if (isset($attributes['template']) && !empty($template)) {
+                    $template = $this->cleanForConcat($attributes['template'], $template, '.');
+                }
 
-                    // Apply controller
-                    if (isset($attributes['callback']) && empty($template)) {
-                        $callback = match (true) {
-                            $callback === null => $attributes['callback'],
-                            is_string($callback) && !is_array($attributes['callback']) && !is_callable($callback) => [$attributes['callback'], $callback],
-                            default => $callback,
-                        };
-                    }
+                // Apply controller
+                if (isset($attributes['callback']) && empty($template)) {
+                    $callback = match (true) {
+                        $callback === null => $attributes['callback'],
+                        is_string($callback) && !is_array($attributes['callback']) && !is_callable($callback) => [$attributes['callback'], $callback],
+                        default => $callback,
+                    };
                 }
 
                 $router->add(

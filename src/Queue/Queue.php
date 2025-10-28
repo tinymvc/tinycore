@@ -188,7 +188,7 @@ class Queue implements QueueContract
 
                 $this->saveJobs(); // Save the jobs to the queue file.
 
-                if (php_sapi_name() === 'cli') {
+                if (is_cli()) {
                     Prompt::message("Running job <bold>#$id</bold>", 'info');
                 }
 
@@ -203,7 +203,7 @@ class Queue implements QueueContract
 
                     $ranJobs++; // Increment the counter for the number of jobs run.
                 } catch (\Throwable $e) {
-                    if (php_sapi_name() === 'cli') {
+                    if (is_cli()) {
                         Prompt::message("Job <bold>#$id</bold> failed: " . $e->getMessage(), 'error');
                     }
 

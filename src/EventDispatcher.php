@@ -57,6 +57,19 @@ class EventDispatcher implements EventDispatcherContract
     }
 
     /**
+     * Alias for addListener method to register a listener for a specific event.
+     * 
+     * @param string   $eventName The name of the event.
+     * @param callable $listener  The listener callback.
+     * @param int      $priority  The priority of the listener (default is 0).
+     * @return void
+     */
+    public function listen(string $eventName, string|array|callable $listener, int $priority = 0): void
+    {
+        $this->addListener($eventName, $listener, $priority);
+    }
+
+    /**
      * Checks if there are any listeners registered for a specific event.
      *
      * @param string $eventName The name of the event.

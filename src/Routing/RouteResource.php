@@ -148,6 +148,9 @@ class RouteResource implements RouteResourceContract
             $routes = array_diff_key($routes, array_flip($this->except));
         }
 
+        /** @var \Spark\Routing\Router $router */
+        $router = Application::$app->get(Router::class);
+
         // Register each route with the router
         foreach ($routes as $route) {
             // Add middleware and withoutMiddleware to each route
@@ -155,7 +158,7 @@ class RouteResource implements RouteResourceContract
             $route['withoutMiddleware'] = $this->withoutMiddleware;
 
             // Register the route in the router
-            Application::$app->get(Router::class)->add(...$route);
+            $router->add(...$route);
         }
     }
 }

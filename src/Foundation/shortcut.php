@@ -730,7 +730,7 @@ if (!function_exists('dump')) {
      */
     function dump(...$args)
     {
-        if (php_sapi_name() !== 'cli') {
+        if (!is_cli()) {
             echo '<pre style="font-size: 18px;margin: 25px;"><code>';
             ob_start();
 
@@ -1792,5 +1792,20 @@ if (!function_exists('tracer')) {
     function tracer(): Tracer
     {
         return Tracer::$instance;
+    }
+}
+
+if (!function_exists('is_cli')) {
+    /**
+     * Determine if the current execution environment is CLI.
+     *
+     * This function checks if the PHP script is being executed from the command line interface (CLI)
+     * by comparing the PHP SAPI name to 'cli'.
+     *
+     * @return bool True if the script is running in CLI mode, false otherwise.
+     */
+    function is_cli(): bool
+    {
+        return php_sapi_name() === 'cli';
     }
 }

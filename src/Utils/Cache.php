@@ -74,6 +74,18 @@ class Cache implements CacheUtilContract
     }
 
     /**
+     * Alias for setName method.
+     *
+     * @param string $name The cache name.
+     * @param string|null $cacheDir The path to the cache directory.
+     * @return self The instance of the cache for method chaining.
+     */
+    public function name(string $name, ?string $cacheDir = null): self
+    {
+        return $this->setName($name, $cacheDir);
+    }
+
+    /**
      * Sets the path of the cache file.
      *
      * The set cache path is used to store the cache data.
@@ -168,6 +180,19 @@ class Cache implements CacheUtilContract
         $this->changed = true;
 
         return $this;
+    }
+
+    /**
+     * Loads data from cache or generates it using a callback if not present.
+     *
+     * @param string $key The cache key.
+     * @param callable $callback Function to generate the data if not cached.
+     * @param string|null $expire Optional expiration time.
+     * @return mixed
+     */
+    public function remember(string $key, callable $callback, ?string $expire = null): mixed
+    {
+        return $this->load($key, $callback, $expire);
     }
 
     /**

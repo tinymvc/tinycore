@@ -36,7 +36,7 @@ class Console implements ConsoleContract
     public function run(): void
     {
         // Check if the application is running in CLI mode
-        if (php_sapi_name() !== 'cli') {
+        if (!is_cli()) {
             throw new NotAllowedException('This application is not running in CLI mode.');
         }
 
