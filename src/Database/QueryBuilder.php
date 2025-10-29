@@ -1747,6 +1747,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function from(string $table, ?string $alias = null): self
     {
+        $this->table ??= $table;
         $this->query['from'] = $table;
 
         if (!empty($alias)) {

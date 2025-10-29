@@ -8,6 +8,7 @@ use Spark\Container;
 use Spark\Database\Migration;
 use Spark\Foundation\Console\PrimaryCommandsHandler;
 use Spark\Foundation\Console\MakeStubCommandsHandler;
+use Spark\Foundation\Services\Tinker;
 
 /**
  * Registers services for CLI commands.
@@ -143,5 +144,9 @@ class CommandsServiceProvider
         // Make a view component file
         $commands->addCommand('make:component', [MakeStubCommandsHandler::class, 'makeViewComponent'])
             ->description('Create a new view component file');
+
+        // Add the tinker command
+        $commands->addCommand('tinker', fn() => (new Tinker())->run())
+            ->description('Start an interactive shell session');
     }
 }

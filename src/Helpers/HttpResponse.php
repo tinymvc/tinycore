@@ -3,6 +3,7 @@
 namespace Spark\Helpers;
 
 use ArrayAccess;
+use Spark\Contracts\Support\Arrayable;
 
 /**
  * HttpResponse class provides a structured way to handle HTTP responses.
@@ -13,7 +14,7 @@ use ArrayAccess;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class HttpResponse implements ArrayAccess, \Stringable
+class HttpResponse implements Arrayable, ArrayAccess, \Stringable
 {
     public mixed $body = ''; // The response body
     public int $status = 0; // The HTTP status code
@@ -242,5 +243,22 @@ class HttpResponse implements ArrayAccess, \Stringable
     public function offsetUnset($offset): void
     {
         unset($this->{$offset});
+    }
+
+    /**
+     * Convert the HttpResponse object to an array.
+     *
+     * @return array The array representation of the HttpResponse object.
+     */
+    public function toArray(): array
+    {
+        return [
+            'body' => $this->body(),
+            'status' => $this->status(),
+            'last_url' => $this->lastUrl(),
+            'length' => $this->length(),
+            'headers' => $this->headers(),
+            'json' => $this->json(),
+        ];
     }
 }

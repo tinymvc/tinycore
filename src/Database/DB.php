@@ -231,6 +231,26 @@ class DB implements DBContract
             return $this->macroCall($name, $args);
         }
 
+        if (
+            in_array($name, [
+                'table',
+                'prefix',
+                'when',
+                'unless',
+                'select',
+                'column',
+                'from',
+                'where',
+                'whereRaw',
+                'selectRaw',
+                'whereIn',
+                'raw'
+            ])
+        ) {
+            $query = app(QueryBuilder::class);
+            return $query->$name(...$args);
+        }
+
         return $this->getPdo()->$name(...$args);
     }
 

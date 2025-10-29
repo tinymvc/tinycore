@@ -42,6 +42,10 @@ class Tracer implements TracerUtilContract
         // Set default error log file if not provided
         $this->logFile ??= storage_dir('logs/error.log');
 
+        // Enable error reporting
+        error_reporting(E_ALL);
+        ini_set('display_errors', '1');
+
         // Set custom error, exception, and shutdown handlers.
         set_error_handler([$this, 'handleError']);
         set_exception_handler([$this, 'handleException']);

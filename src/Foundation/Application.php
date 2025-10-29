@@ -81,6 +81,7 @@ class Application implements ApplicationContract, \ArrayAccess
         $this->container->singleton(EventDispatcher::class);
         $this->container->singleton(Gate::class);
         $this->container->singleton(Queue::class);
+        $this->container->singleton(Router::class);
 
         // Bind core services to the container for Http Client
         if (!is_cli()) {
@@ -88,7 +89,6 @@ class Application implements ApplicationContract, \ArrayAccess
             $this->container->singleton(Request::class);
             $this->container->singleton(Response::class);
             $this->container->singleton(Middleware::class);
-            $this->container->singleton(Router::class);
             $this->container->singleton(Blade::class);
             $this->container->singleton(Vite::class);
             $this->container->singleton(
