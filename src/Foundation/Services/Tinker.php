@@ -845,16 +845,16 @@ class Tinker
         echo "  " . $this->color('config', 'yellow') . "        Show configuration\n";
         echo "  " . $this->color('exit', 'yellow') . "          Exit tinker\n";
         echo "\n" . $this->color("── Examples ──────────────────────────", 'cyan') . "\n";
-        echo "  // Variables persist across commands\n";
+        echo "  " . $this->color('// Variables persist across commands', 'gray') . "\n";
         echo "  \$name = \"Shahin\"\n";
-        echo "  \$name  // Access it later\n";
+        echo "  \$name  " . $this->color('// Access it later', 'gray') . "\n";
         echo "\n";
-        echo "  // Models auto-imported (no namespace needed)\n";
+        echo "  " . $this->color('// Models auto-imported (no namespace needed)', 'gray') . "\n";
         echo "  User::find(1)\n";
         echo "  User::all()\n";
         echo "  User::where('active', 1)->get()\n";
         echo "\n";
-        echo "  // Database queries\n";
+        echo "  " . $this->color('// Database queries', 'gray') . "\n";
         echo "  \$db->table('users')->count()\n";
         echo "\n";
     }
@@ -1008,7 +1008,7 @@ class Tinker
             $routes = $groupedRoutes[$method];
 
             echo $this->color("  $method", $color) . $this->color(" (" . count($routes) . ")", 'gray') . "\n";
-            echo $this->color("  " . str_repeat('─', 55), 'gray') . "\n";
+            echo $this->color("  " . str_repeat('─', 85), 'gray') . "\n";
 
             foreach ($routes as $route) {
                 $path = $route['path'];
