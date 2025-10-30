@@ -116,7 +116,7 @@ class HttpResponse implements Arrayable, ArrayAccess, \Stringable
      */
     public function json(): array
     {
-        return $this->json ??= arr_from_set($this->body);
+        return $this->json ??= json_decode((string) $this->body, true) ?? [];
     }
 
     /**

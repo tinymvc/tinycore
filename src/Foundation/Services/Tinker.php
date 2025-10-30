@@ -9,6 +9,7 @@ use Spark\Hash;
 use Spark\Queue\Queue;
 use Spark\Translator;
 use Spark\Utils\FileManager;
+use Spark\Utils\Http;
 use Spark\Utils\Image;
 use Throwable;
 
@@ -143,6 +144,7 @@ class Tinker
         $this->context['container'] = Application::$app->getContainer();
         $this->context['translator'] = Application::$app->make(Translator::class);
         $this->context['hash'] = Application::$app->make(Hash::class);
+        $this->context['http'] = Application::$app->make(Http::class);
         $this->context['queue'] = Application::$app->make(Queue::class);
         $this->context['cache'] = Application::$app->make(Cache::class);
         $this->context['fm'] = Application::$app->make(FileManager::class);
@@ -264,12 +266,12 @@ class Tinker
             return false;
         }
 
-        // Remove comments
-        $codeNoComments = preg_replace('/\/\/.*$/m', '', $trimmed);
-        $codeNoComments = preg_replace('/\/\*.*?\*\//s', '', $codeNoComments);
+        // This prevents URLs like https:// from being treated as comments
+        $codeNoStrings = $this->removeStrings($trimmed);
 
-        // Remove strings to avoid counting delimiters inside strings
-        $codeNoStrings = preg_replace('/(["\'])(?:\\\\.|(?!\1).)*\1/', '""', $codeNoComments);
+        // Now remove comments from the code (strings are already gone)
+        $codeNoStrings = preg_replace('/\/\/.*$/m', '', $codeNoStrings);
+        $codeNoStrings = preg_replace('/\/\*.*?\*\//s', '', $codeNoStrings);
 
         // Count braces, brackets, parentheses
         $openBraces = substr_count($codeNoStrings, '{') - substr_count($codeNoStrings, '}');
@@ -305,6 +307,62 @@ class Tinker
         }
 
         return false;
+    }
+
+    /**
+     * Remove all string literals from code
+     * 
+     * This parser walks through code character-by-character and removes
+     * the content of all string literals (single and double quoted),
+     * leaving only empty quotes in their place.
+     */
+    private function removeStrings(string $code): string
+    {
+        $result = '';
+        $length = strlen($code);
+        $i = 0;
+
+        while ($i < $length) {
+            $char = $code[$i];
+
+            // Check if we found a quote (string start)
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $result .= $quote; // Add opening quote
+                $i++;
+
+                // Parse until we find the matching unescaped closing quote
+                $escaped = false;
+                while ($i < $length) {
+                    $char = $code[$i];
+
+                    if ($escaped) {
+                        // Previous char was backslash, current char is escaped
+                        // Skip this character (don't add to result)
+                        $escaped = false;
+                        $i++;
+                    } elseif ($char === '\\') {
+                        // Found backslash - next char will be escaped
+                        $escaped = true;
+                        $i++;
+                    } elseif ($char === $quote) {
+                        // Found unescaped closing quote - string ends here
+                        $result .= $quote; // Add closing quote
+                        $i++;
+                        break;
+                    } else {
+                        // Regular character inside string - skip it
+                        $i++;
+                    }
+                }
+            } else {
+                // Regular character outside strings - keep it
+                $result .= $char;
+                $i++;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -555,12 +613,12 @@ class Tinker
      */
     private function objectToArray(object $obj): ?array
     {
-        // 1. Handle stdClass
+        // Handle stdClass
         if ($obj instanceof \stdClass) {
             return (array) $obj;
         }
 
-        // 2. Handle models/objects with toArray method
+        // Handle models/objects with toArray method
         if (method_exists($obj, 'toArray')) {
             try {
                 $result = $obj->toArray();
@@ -572,7 +630,7 @@ class Tinker
             }
         }
 
-        // 3. Handle collections with all() method
+        // Handle collections with all() method
         if (method_exists($obj, 'all')) {
             try {
                 $result = $obj->all();
@@ -584,7 +642,7 @@ class Tinker
             }
         }
 
-        // 4. Handle objects with getIterator (iterable objects)
+        // Handle objects with getIterator (iterable objects)
         if (method_exists($obj, 'getIterator')) {
             try {
                 $result = [];
@@ -599,7 +657,7 @@ class Tinker
             }
         }
 
-        // 5. Try to get public properties
+        // Try to get public properties
         try {
             $reflection = new \ReflectionObject($obj);
             $publicProps = $reflection->getProperties(\ReflectionProperty::IS_PUBLIC);
@@ -615,7 +673,7 @@ class Tinker
             // Continue to fallback
         }
 
-        // 6. Last resort: try object cast (works for simple objects)
+        // Last resort: try object cast (works for simple objects)
         try {
             $data = (array) $obj;
             if (!empty($data)) {
@@ -879,17 +937,111 @@ class Tinker
      */
     private function listRoutes(): void
     {
-        echo "\n" . $this->color("── Routes ────────────────────────────", 'cyan') . "\n";
+        echo "\n" . $this->color("┌─────────────────────────────────────────────────────────────┐", 'cyan') . "\n";
+        echo $this->color("│", 'cyan') . $this->color("                         Routes                              ", 'white') . $this->color("│", 'cyan') . "\n";
+        echo $this->color("└─────────────────────────────────────────────────────────────┘", 'cyan') . "\n\n";
 
         $routes = router()->getRoutes();
 
-        foreach ($routes as $route) {
-            $method = $route['method'] ?? 'GET';
-            $path = $route['path'] ?? '/';
-            echo "  \033[33m$method\033[0m  $path\n";
+        if (empty($routes)) {
+            echo "  " . $this->color("No routes found", 'gray') . "\n\n";
+            return;
         }
 
-        echo "\n";
+        // Total route count
+        $totalCount = count($routes);
+
+        // Group routes by method for better organization
+        $groupedRoutes = [];
+        foreach ($routes as $name => $route) {
+            $methods = (array) ($route['method'] ?? 'GET');
+            if (in_array('*', $methods)) {
+                $methods = ['ANY'];
+            }
+
+            if (is_int($name)) {
+                $name = null;
+            }
+
+            $path = $route['path'] ?? '/';
+            $callback = isset($route['template']) ? ('view:' . $route['template']) : ($route['callback'] ?? null);
+
+            foreach ($methods as $method) {
+                $method = strtoupper($method);
+                $groupedRoutes[$method][] = [
+                    'path' => $path,
+                    'callback' => $callback,
+                    'name' => $name
+                ];
+            }
+        }
+
+        // Method colors
+        $methodColors = [
+            'GET' => 'green',
+            'POST' => 'blue',
+            'PUT' => 'yellow',
+            'PATCH' => 'yellow',
+            'DELETE' => 'red',
+            'OPTIONS' => 'gray',
+            'ANY' => 'gray',
+        ];
+
+        // Display routes grouped by method
+        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'ANY'] as $method) {
+            if (!isset($groupedRoutes[$method])) {
+                continue;
+            }
+
+            $color = $methodColors[$method] ?? 'white';
+            $routes = $groupedRoutes[$method];
+
+            echo $this->color("  $method", $color) . $this->color(" (" . count($routes) . ")", 'gray') . "\n";
+            echo $this->color("  " . str_repeat('─', 55), 'gray') . "\n";
+
+            foreach ($routes as $route) {
+                $path = $route['path'];
+                $callback = $route['callback'];
+                $name = $route['name'];
+
+                // Format path with parameter highlighting
+                $formattedPath = preg_replace('/\{([^}]+)\}/', $this->color('{$1}', 'magenta'), $path);
+
+                echo "  " . $this->color('│', 'gray') . " ";
+
+                // Use the original path length for padding calculation
+                $pathLength = strlen($path);
+                $padding = max(0, 35 - $pathLength);
+                echo $formattedPath . str_repeat(' ', $padding);
+
+                // Show callback if available
+                if ($callback) {
+                    if (is_string($callback)) {
+                        $callbackStr = $callback;
+                    } elseif (is_array($callback) && count($callback) === 2) {
+                        $class = is_object($callback[0]) ? get_class($callback[0]) : $callback[0];
+                        $shortClass = basename(str_replace('\\', '/', $class));
+                        $callbackStr = "$shortClass@$callback[1]";
+                    } elseif (is_callable($callback)) {
+                        $callbackStr = 'Closure';
+                    } else {
+                        $callbackStr = 'Callable';
+                    }
+                    echo $this->color($callbackStr, 'cyan');
+                }
+
+                // Show route name if available
+                if ($name) {
+                    echo " " . $this->color("[$name]", 'yellow');
+                }
+
+                echo "\n";
+            }
+
+            echo "\n";
+        }
+
+        echo $this->color("  Total: $totalCount routes", 'white') . "\n\n";
     }
 
     /**
