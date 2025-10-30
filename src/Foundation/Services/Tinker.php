@@ -7,6 +7,7 @@ use Spark\Facades\Cache;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Queue\Queue;
+use Spark\Routing\Router;
 use Spark\Translator;
 use Spark\Utils\FileManager;
 use Spark\Utils\Http;
@@ -603,19 +604,16 @@ class Tinker
      */
     private function formatObject(object $obj, int $depth = 0): string
     {
-        // Special handling for Application instance
-        if ($obj instanceof Application) {
-            return $this->color(get_class($obj), 'gray') . ' {...}';
-        }
-
         $class = get_class($obj);
         $shortClass = basename(str_replace('\\', '/', $class));
 
-        // Try to convert object to array representation
-        $data = $this->objectToArray($obj);
+        if (!$obj instanceof Application) {
+            // Try to convert object to array representation
+            $data = $this->objectToArray($obj);
 
-        if ($data !== null) {
-            return $this->color($shortClass, 'yellow') . ' ' . $this->formatArray($data, $depth);
+            if ($data !== null) {
+                return $this->color($shortClass, 'yellow') . ' ' . $this->formatArray($data, $depth);
+            }
         }
 
         // Fallback for objects we can't convert
@@ -956,7 +954,7 @@ class Tinker
         echo $this->color("│", 'cyan') . $this->color("                         Routes                              ", 'white') . $this->color("│", 'cyan') . "\n";
         echo $this->color("└─────────────────────────────────────────────────────────────┘", 'cyan') . "\n\n";
 
-        $routes = router()->getRoutes();
+        $routes = Application::$app->make(Router::class)->getRoutes();
 
         if (empty($routes)) {
             echo "  " . $this->color("No routes found", 'gray') . "\n\n";
