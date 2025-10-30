@@ -3,12 +3,12 @@
 namespace Spark\Foundation\Services;
 
 use Spark\Database\DB;
-use Spark\Facades\Cache;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Queue\Queue;
 use Spark\Routing\Router;
 use Spark\Translator;
+use Spark\Utils\Cache;
 use Spark\Utils\FileManager;
 use Spark\Utils\Http;
 use Spark\Utils\Image;
