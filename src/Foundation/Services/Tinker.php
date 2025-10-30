@@ -49,10 +49,6 @@ class Tinker
      */
     public function __construct()
     {
-        error_reporting(E_ALL);
-        ini_set('display_errors', '1');
-        set_time_limit(0);
-
         // Determine if we can use readline
         $this->useReadline = $this->canUseReadline();
 
@@ -63,7 +59,7 @@ class Tinker
         if (PHP_OS_FAMILY === 'Windows') {
             // Enable ANSI colors on Windows 10+
             if (function_exists('sapi_windows_vt100_support')) {
-                @sapi_windows_vt100_support(STDOUT, true);
+                sapi_windows_vt100_support(STDOUT, true);
             }
 
             // Set stream encoding to UTF-8
@@ -91,6 +87,14 @@ class Tinker
      */
     public function run(): void
     {
+        // Enable error reporting
+        error_reporting(E_ALL);
+        ini_set('display_errors', '1');
+
+        // Set unlimited execution time
+        set_time_limit(0);
+
+        // Print welcome banner and auto-import classes
         $this->printBanner();
         $this->autoImportClasses();
 
