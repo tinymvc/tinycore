@@ -88,10 +88,6 @@ class Tinker
      */
     public function run(): void
     {
-        // Enable error reporting
-        error_reporting(E_ALL);
-        ini_set('display_errors', '1');
-
         // Set unlimited execution time
         set_time_limit(0);
 

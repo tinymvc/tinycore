@@ -44,7 +44,7 @@ class Tracer implements TracerUtilContract
 
         // Enable error reporting
         error_reporting(E_ALL);
-        ini_set('display_errors', '1');
+        ini_set('display_errors', '0');
 
         // Set custom error, exception, and shutdown handlers.
         set_error_handler([$this, 'handleError']);
@@ -116,7 +116,8 @@ class Tracer implements TracerUtilContract
      */
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
-        $this->log("$type: $message in $file on line $line"); // Log the error message
+        // Log the error message unless it's from Tinker context
+        !$this->isFromTinkerContext($file) && $this->log("$type: $message in $file on line $line"); // Log the error message
 
         if (is_cli()) {
             // Get the prompt instance
@@ -137,6 +138,10 @@ class Tracer implements TracerUtilContract
                     $frameFunction = $frame['function'] ?? 'unknown';
                     $prompt->message("#$index $frameFile(<danger>$frameLine</danger>): <warning>$frameFunction()</warning>");
                 }
+            }
+
+            if ($this->isFromTinkerContext($file)) {
+                return; // Skip further output in Tinker context
             }
 
             exit(1);
@@ -166,6 +171,18 @@ class Tracer implements TracerUtilContract
         }
 
         abort(500, 'Internal Server Error');
+    }
+
+    /**
+     * Checks if the error originated from the Tinker context.
+     * 
+     * @param string $file The file path where the error occurred.
+     * 
+     * @return bool True if the error is from Tinker context, false otherwise.
+     */
+    private function isFromTinkerContext(string $file): bool
+    {
+        return is_cli() && strpos($file, dir_path('src/Foundation/Services/Tinker.php')) !== false;
     }
 
     /**
