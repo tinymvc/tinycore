@@ -12,6 +12,7 @@ use Spark\EventDispatcher;
  * 
  * @method static void addListener(string $eventName, string|array|callable $listener, int $priority = 0)
  * @method static void add(string $eventName, string|array|callable $listener, int $priority = 0)
+ * @method static void listen(string $eventName, string|array|callable $listener, int $priority = 0)
  * @method static bool hasListeners(string $eventName): bool
  * @method static bool has(string $eventName): bool
  * @method static array getListeners(?string $eventName = null)

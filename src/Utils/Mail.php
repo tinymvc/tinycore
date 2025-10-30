@@ -286,6 +286,27 @@ class Mail extends PHPMailer implements MailUtilContract
     }
 
     /**
+     * Reset the mailer instance to its initial state.
+     *
+     * This method clears all recipients, subject, and body of the email,
+     * effectively resetting the mailer instance to its initial state.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function reset(): self
+    {
+        parent::clearAddresses();
+        parent::clearCCs();
+        parent::clearBCCs();
+        parent::clearReplyTos();
+
+        $this->Subject = '';
+        $this->Body = '';
+
+        return $this;
+    }
+
+    /**
      * Log the email sending status.
      *
      * This method logs the status of the email sending operation, including

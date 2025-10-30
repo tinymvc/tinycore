@@ -186,7 +186,7 @@ class Queue implements QueueContract
                 // Otherwise, remove it from the queue.
                 unset($this->jobs[$id]);
 
-                $this->saveJobs(); // Save the jobs to the queue file.
+                $this->save(); // Save the jobs to the queue file.
 
                 if (is_cli()) {
                     Prompt::message("Running job <bold>#$id</bold>", 'info');
@@ -392,8 +392,12 @@ class Queue implements QueueContract
      *
      * @return void
      */
-    private function saveJobs(): void
+    public function save(): void
     {
+        if (!$this->isChanged) {
+            return; // If there are no changes, do nothing.
+        }
+
         // Convert the jobs to an array of data that can be saved to JSON.
         $jobs = collect($this->getJobs())
             ->sortByDesc('priority');
@@ -484,8 +488,6 @@ class Queue implements QueueContract
      */
     public function __destruct()
     {
-        if ($this->isChanged) {
-            $this->saveJobs();
-        }
+        $this->isChanged && $this->save();
     }
 }

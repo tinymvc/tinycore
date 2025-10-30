@@ -11,6 +11,7 @@ use Spark\Translator;
 use Spark\Utils\FileManager;
 use Spark\Utils\Http;
 use Spark\Utils\Image;
+use Spark\Utils\Mail;
 use Throwable;
 
 /**
@@ -149,6 +150,11 @@ class Tinker
         $this->context['cache'] = Application::$app->make(Cache::class);
         $this->context['fm'] = Application::$app->make(FileManager::class);
         $this->context['image'] = Application::$app->make(Image::class);
+
+        // Import Mailer if available
+        if (class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+            $this->context['mail'] = Application::$app->make(Mail::class);
+        }
 
         // Auto-import all models
         $this->importModels();
@@ -593,6 +599,11 @@ class Tinker
      */
     private function formatObject(object $obj, int $depth = 0): string
     {
+        // Special handling for Application instance
+        if ($obj instanceof Application) {
+            return $this->color(get_class($obj), 'gray') . ' {...}';
+        }
+
         $class = get_class($obj);
         $shortClass = basename(str_replace('\\', '/', $class));
 
@@ -964,7 +975,7 @@ class Tinker
             }
 
             $path = $route['path'] ?? '/';
-            $callback = isset($route['template']) ? ('view:' . $route['template']) : ($route['callback'] ?? null);
+            $callback = isset($route['template']) ? ('View:' . $route['template']) : ($route['callback'] ?? null);
 
             foreach ($methods as $method) {
                 $method = strtoupper($method);

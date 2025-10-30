@@ -102,6 +102,32 @@ class Image implements ImageUtilContract
     }
 
     /**
+     * Sets the source of the image.
+     * 
+     * @param string $imageSource The source path of the image to be loaded.
+     * 
+     * @return static The current instance for method chaining.
+     */
+    public function set(string $imageSource): static
+    {
+        $this->setImageSource($imageSource);
+        return $this;
+    }
+
+    /**
+     * Sets the source of the image.
+     * 
+     * @param string $imageSource The source path of the image to be loaded.
+     * 
+     * @return static The current instance for method chaining.
+     */
+    public function source(string $imageSource): static
+    {
+        $this->setImageSource($imageSource);
+        return $this;
+    }
+
+    /**
      * Retrieves information about the image.
      * 
      * @param string|null $key Specific information key to retrieve.
@@ -112,6 +138,19 @@ class Image implements ImageUtilContract
     public function getInfo(?string $key = null, $default = null)
     {
         return $key !== null ? ($this->info[$key] ?? $default) : $this->info;
+    }
+
+    /**
+     * Retrieves information about the image.
+     * 
+     * @param string|null $key Specific information key to retrieve.
+     * @param mixed $default Default value if the key is not found.
+     * 
+     * @return mixed The information value or an array of all information if no key is provided.
+     */
+    public function info(?string $key = null, $default = null): mixed
+    {
+        return $this->getInfo($key, $default);
     }
 
     /**
@@ -132,6 +171,18 @@ class Image implements ImageUtilContract
         }
 
         return $this->image;
+    }
+
+    /**
+     * Creates a GD image resource from the image file.
+     * 
+     * @return GdImage|resource The GD image resource.
+     * 
+     * @throws ImageUtilException If the image type is unsupported.
+     */
+    public function image()
+    {
+        return $this->getImage();
     }
 
     /**
