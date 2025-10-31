@@ -115,4 +115,37 @@ class Prompt implements PromptContract
     {
         echo str_repeat(PHP_EOL, $count);
     }
+
+    /**
+     * Parses command line arguments into an associative array.
+     *
+     * This method takes an array of command line arguments and converts them
+     * into a structured associative array, where long options (e.g., --option)
+     * and short options (e.g., -o) are separated from positional arguments.
+     *
+     * @param array $args
+     *   The command line arguments to parse.
+     *
+     * @return array
+     *   An associative array containing parsed command line arguments.
+     */
+    public static function parseArguments(array $args): array
+    {
+        $parsed = ['_args' => []]; // Initialize parsed arguments with positional arguments array
+        foreach ($args as $arg) {
+            if (str_starts_with($arg, '--')) {
+                // Long option detected, split by '=' to separate key and value
+                $parts = explode('=', substr($arg, 2), 2);
+                $parsed[$parts[0]] = $parts[1] ?? true; // Default value to true if no value is provided
+            } elseif (str_starts_with($arg, '-')) {
+                // Short option detected, default value to true
+                $parsed[substr($arg, 1)] = true;
+            } else {
+                // Positional argument detected, add to '_args' array
+                $parsed['_args'][] = $arg;
+            }
+        }
+
+        return $parsed;
+    }
 }

@@ -270,8 +270,7 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function send(): bool
     {
-        $status = parent::send();
-        $this->logEmailSent($status);
+        $this->logEmailSent($status = parent::send());
         return $status;
     }
 

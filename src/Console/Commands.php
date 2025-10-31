@@ -180,22 +180,20 @@ class Commands implements CommandsContract
     /**
      * Shows the help for a given command.
      *
-     * @param Prompt $prompt
-     *   The prompt instance to use for displaying messages.
      * @param string $commandName
      *   The name of the command to show help for.
      *
      * @return void
      */
-    public function showCommandHelp(Prompt $prompt, string $commandName): void
+    public function showCommandHelp(string $commandName): void
     {
         $command = $this->commands[$commandName];
 
-        $prompt->message("Command: {$commandName}", "success");
-        $prompt->message("Description: " . $command['description'], "info");
+        Prompt::message("Command: {$commandName}", "success");
+        Prompt::message("Description: " . $command['description'], "info");
 
         if (isset($command['help'])) {
-            $prompt->message("<bold>Help:</bold> " . $command['help'], "raw");
+            Prompt::message("<bold>Help:</bold> " . $command['help'], "raw");
         }
     }
 
@@ -205,12 +203,9 @@ class Commands implements CommandsContract
      * This method iterates through the available commands and displays them
      * with their descriptions in a formatted list.
      *
-     * @param Prompt $prompt
-     *   The prompt instance to use for displaying messages.
-     *
      * @return void
      */
-    public function listCommands(Prompt $prompt): void
+    public function listCommands(): void
     {
         $maxLength = max(array_map('strlen', array_keys($this->commands))) + 4;
 
@@ -223,7 +218,7 @@ class Commands implements CommandsContract
             // Check if the command is disabled and set the appropriate message
             $isDisabled = $this->isDisabled($name) ? ' <warning>(disabled)</warning>' : '';
 
-            $prompt->message(
+            Prompt::message(
                 // Format the command name and description using ANSI escape
                 // sequences for color and bold formatting.
                 "  <success>{$name}</success>{$spacing}{$description}{$isDisabled}",

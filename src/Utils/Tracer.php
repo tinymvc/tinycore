@@ -120,23 +120,20 @@ class Tracer implements TracerUtilContract
         !$this->isFromTinkerContext($file) && $this->log("$type: $message in $file on line $line"); // Log the error message
 
         if (is_cli()) {
-            // Get the prompt instance
-            $prompt = get(Prompt::class);
-
             // Format and output the error message
-            $prompt->message("[$type] $message", 'danger');
-            $prompt->message("File: $file(<danger>$line</danger>)");
+            Prompt::message("[$type] $message", 'danger');
+            Prompt::message("File: $file(<danger>$line</danger>)");
 
             if (!empty($trace)) {
-                $prompt->newline();
-                $prompt->message('Trace:', 'info');
+                Prompt::newline();
+                Prompt::message('Trace:', 'info');
 
                 // Format the trace output
                 foreach ($trace as $index => $frame) {
                     $frameFile = $frame['file'] ?? '[internal function]';
                     $frameLine = $frame['line'] ?? 'n/a';
                     $frameFunction = $frame['function'] ?? 'unknown';
-                    $prompt->message("#$index $frameFile(<danger>$frameLine</danger>): <warning>$frameFunction()</warning>");
+                    Prompt::message("#$index $frameFile(<danger>$frameLine</danger>): <warning>$frameFunction()</warning>");
                 }
             }
 

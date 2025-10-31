@@ -24,24 +24,22 @@ class PrimaryCommandsHandler
      * indicating the server's address and start time. The server runs in the
      * foreground, allowing proper termination with Ctrl+C.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      * @param array $args
      *   An associative array of arguments, where the server port can be specified
      *   using the '_args' key.
      */
-    public function startDevelopmentServer(Prompt $prompt, array $args)
+    public function startDevelopmentServer(array $args)
     {
         $port = $args['_args'][0] ?? 8080;
 
-        $prompt->message(
+        Prompt::message(
             sprintf(
                 "<info>Info</info> Server running on <bold>[http://localhost:%s]</bold> at <bold>%s</bold>.",
                 $port,
                 date('Y-m-d H:i:s')
             )
         );
-        $prompt->message("Press <bold>Ctrl+C</bold> to stop the server.", "warning");
+        Prompt::message("Press <bold>Ctrl+C</bold> to stop the server.", "warning");
 
         // Simple foreground execution
         passthru("php -S localhost:{$port} -t public");
@@ -55,21 +53,19 @@ class PrimaryCommandsHandler
      * route names. The output is formatted to be easy to read, with the route
      * path and HTTP method(s) aligned in columns.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      * @param Router $router
      *   An instance of the Router class containing the registered routes.
      */
-    public function routeList(Prompt $prompt, Router $router)
+    public function routeList(Router $router)
     {
         $maxLength = max(array_map('strlen', array_column($router->getRoutes(), 'path'))) + 4;
-        $prompt->message("Available routes:", "info");
+        Prompt::message("Available routes:", "info");
 
         foreach ($router->getRoutes() as $name => $route) {
             $spacing = str_repeat(' ', $maxLength - strlen($route['path']));
             $methods = implode(', ', (array) $route['method']);
             $name = is_string($name) ? " (<bold>{$name}</bold>)" : '';
-            $prompt->message(
+            Prompt::message(
                 "  URI: <success>{$route['path']}</success>{$spacing} [<info>{$methods}</info>]{$name}",
                 'raw'
             );
@@ -80,8 +76,6 @@ class PrimaryCommandsHandler
      * Handles the "help" command by listing all registered commands or showing
      * help for a specific command if a command name is provided.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      * @param Commands $commands
      *   An instance of the Commands class containing the registered commands.
      * @param array $args
@@ -90,26 +84,24 @@ class PrimaryCommandsHandler
      *
      * @return void
      */
-    public function handleHelp(Prompt $prompt, Commands $commands, array $args)
+    public function handleHelp(Commands $commands, array $args)
     {
         $commandName = $args['_args'][0] ?? null;
 
         // If a command name is provided, show the help for that command.
         if ($commandName && $commands->hasCommand($commandName)) {
-            $commands->showCommandHelp($prompt, $commandName);
+            $commands->showCommandHelp($commandName);
         } else {
             // Otherwise, list all the registered commands.
-            $prompt->message("Available commands:", "info");
-            $commands->listCommands($prompt);
-            $prompt->message("\nUse 'help <command>' to view details for a specific command.", "info");
+            Prompt::message("Available commands:", "info");
+            $commands->listCommands();
+            Prompt::message("\nUse 'help <command>' to view details for a specific command.", "info");
         }
     }
 
     /**
      * Handles the "queue:run" command by running all the pending queue jobs.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      * @param Queue $queue
      *   An instance of the Queue class for running queue jobs.
      *  @param array $args
@@ -117,16 +109,16 @@ class PrimaryCommandsHandler
      *
      * @return void
      */
-    public function runQueueJobs(Prompt $prompt, Queue $queue, array $args)
+    public function runQueueJobs(Queue $queue, array $args)
     {
         $start = microtime(true);
-        $prompt->message("Running queue jobs...", "info");
+        Prompt::message("Running queue jobs...", "info");
 
         $maxJobs = intval($args['_args'][0] ?? 10);
 
         $queue->run($maxJobs); // Run all pending queue jobs
 
-        $prompt->message(
+        Prompt::message(
             "Queue jobs completed in " . round(microtime(true) - $start, 2) . " seconds.",
             "success"
         );
@@ -135,19 +127,17 @@ class PrimaryCommandsHandler
     /**
      * Lists all scheduled queue jobs.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      * @param Queue $queue
      *   An instance of the Queue class for managing queue jobs.
      *
      * @return void
      */
-    public function listQueueJobs(Prompt $prompt, Queue $queue)
+    public function listQueueJobs(Queue $queue)
     {
         $jobs = $queue->getJobs();
 
         foreach ($jobs as $id => $job) {
-            $prompt->message(
+            Prompt::message(
                 sprintf(
                     "Job <bold>#%s</bold> Scheduled <info>%s</info>%s%s",
                     $id,
@@ -159,24 +149,22 @@ class PrimaryCommandsHandler
         }
 
         if (empty($jobs)) {
-            $prompt->message("No scheduled jobs found.", "info");
+            Prompt::message("No scheduled jobs found.", "info");
         }
     }
 
     /**
      * Clears all the pending jobs in the queue.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      * @param Queue $queue
      *   An instance of the Queue class for clearing queue jobs.
      * 
      * @return void
      */
-    public function clearQueueJobs(Prompt $prompt, Queue $queue)
+    public function clearQueueJobs(Queue $queue)
     {
         $queue->clearAllJobs();
-        $prompt->message("Queue jobs cleared.", "success");
+        Prompt::message("Queue jobs cleared.", "success");
     }
 
     /**
@@ -184,17 +172,14 @@ class PrimaryCommandsHandler
      *
      * This method clears the cached views in the application, ensuring that
      * the latest view files are used when rendering views.
-     * 
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      *
      * @return void
      */
-    public function clearViewCaches(Prompt $prompt)
+    public function clearViewCaches()
     {
         view()->clearCache();
 
-        $prompt->message("View caches cleared.", "success");
+        Prompt::message("View caches cleared.", "success");
     }
 
     /**
@@ -204,14 +189,11 @@ class PrimaryCommandsHandler
      * except for the .gitignore file. It provides feedback on the success
      * or failure of the operation.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
-     *
      * @return void
      */
-    public function clearCache(Prompt $prompt)
+    public function clearCache()
     {
-        $this->clearViewCaches($prompt); // Also clear view caches
+        $this->clearViewCaches(); // Also clear view caches
 
         $cacheDir = storage_dir('cache');
 
@@ -230,10 +212,10 @@ class PrimaryCommandsHandler
                 }
             }
         } else {
-            $prompt->message("Cache directory does not exist.", "warning");
+            Prompt::message("Cache directory does not exist.", "warning");
         }
 
-        $prompt->message("All cache contents cleared.", "success");
+        Prompt::message("All cache contents cleared.", "success");
     }
 
     /**
@@ -243,18 +225,15 @@ class PrimaryCommandsHandler
      * in the environment file with the new key. It ensures the environment file is 
      * writable before making any changes. If the file is not writable, a warning message
      * is displayed. Once the key is updated, a success message is shown in the console.
-     *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
      * 
      * @return void
      */
-    public function generateAppKey(Prompt $prompt)
+    public function generateAppKey()
     {
         $envFile = root_dir('env.php');
 
         if (!is_writable($envFile) && !chmod($envFile, 0666)) {
-            $prompt->message("<danger>Error</danger> Environment file is not writable.", "warning");
+            Prompt::message("<danger>Error</danger> Environment file is not writable.", "warning");
             return;
         }
 
@@ -267,7 +246,7 @@ class PrimaryCommandsHandler
 
         file_put_contents($envFile, $envFileContent);
 
-        $prompt->message("<info>Info</info> Application key has been updated.");
+        Prompt::message("<info>Info</info> Application key has been updated.");
     }
 
     /**
@@ -279,27 +258,24 @@ class PrimaryCommandsHandler
      * If not, it attempts to create the symbolic link and provides feedback
      * on whether the operation was successful or not.
      *
-     * @param Prompt $prompt
-     *   An instance of the Prompt class for displaying messages in the console.
-     *
      * @return void
      */
-    public function createSymbolicLinkForUploads(Prompt $prompt)
+    public function createSymbolicLinkForUploads()
     {
         $storageUploadsDir = storage_dir('uploads');
         $publicUploadsDir = root_dir('public/uploads');
 
         // Check if the symbolic link already exists
         if (FileManager::isLink($publicUploadsDir)) {
-            $prompt->message("The symbolic link is already exists.", "warning");
+            Prompt::message("The symbolic link is already exists.", "warning");
             return;
         }
 
         // Attempt to create the symbolic link
         if (!FileManager::link($storageUploadsDir, $publicUploadsDir)) {
-            $prompt->message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
+            Prompt::message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
         }
 
-        $prompt->message("<info>Success</info> Symbolic link created successfully: $storageUploadsDir → $publicUploadsDir");
+        Prompt::message("<info>Success</info> Symbolic link created successfully: $storageUploadsDir → $publicUploadsDir");
     }
 }

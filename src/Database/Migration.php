@@ -20,9 +20,6 @@ class Migration implements MigrationContract
     /**
      * Creates a new instance of the migration class.
      *
-     * @param Prompt $prompt
-     *   The prompt service.
-     *
      * @param string|null $migrationsFolder
      *   The path to the folder containing the migration PHP files.
      *   Defaults to "database/migrations" in the root directory.
@@ -32,7 +29,7 @@ class Migration implements MigrationContract
      *   Defaults to "database/migrations.json" in the root directory.
      */
 
-    public function __construct(private Prompt $prompt, private ?string $migrationsFolder = null, private ?string $migrationFile = null)
+    public function __construct(private ?string $migrationsFolder = null, private ?string $migrationFile = null)
     {
         $this->migrationsFolder ??= root_dir('database/migrations'); // Default to the root directory
 
@@ -129,7 +126,7 @@ class Migration implements MigrationContract
                 if (is_object($migration) && method_exists($migration, 'up')) {
                     $migration->up();
 
-                    $this->prompt->message("Applied migration: {$migrationName}", 'success');
+                    Prompt::message("Applied migration: {$migrationName}", 'success');
 
                     $appliedMigrations[] = $migrationName;
                 }
@@ -165,7 +162,7 @@ class Migration implements MigrationContract
         }
 
         if (empty($appliedMigrations)) {
-            $this->prompt->message("No migrations to rollback.", 'warning');
+            Prompt::message("No migrations to rollback.", 'warning');
             return;
         }
 
@@ -180,7 +177,7 @@ class Migration implements MigrationContract
                 $file = $this->migrationsFolder . DIRECTORY_SEPARATOR . $migrationName;
 
                 if (!file_exists($file)) {
-                    $this->prompt->message("Migration file not found: {$migrationName}", 'warning');
+                    Prompt::message("Migration file not found: {$migrationName}", 'warning');
                     continue;
                 }
 
@@ -189,7 +186,7 @@ class Migration implements MigrationContract
                 if (is_object($migration) && method_exists($migration, 'down')) {
                     $migration->down();
 
-                    $this->prompt->message("Rolled back migration: {$migrationName}", 'success');
+                    Prompt::message("Rolled back migration: {$migrationName}", 'success');
 
                     // Remove the rolled back migration from the list
                     $remainingMigrations = array_slice($remainingMigrations, $index + 1);
@@ -221,7 +218,7 @@ class Migration implements MigrationContract
         // Rollback all applied migrations
         $this->down($args);
 
-        $this->prompt->newline();
+        Prompt::newline();
 
         $this->up($args);
     }

@@ -19,9 +19,28 @@ use Spark\Support\Traits\Macroable;
  * @method bool inTransaction()
  * @method bool|string lastInsertId()
  * @method bool|string quote(string $string, int $type = PDO::PARAM_STR)
+ * 
+ * @method QueryBuilder select(array|string $fields = '*', ...$args)
+ * @method QueryBuilder max($field, $name = null)
+ * @method QueryBuilder min($field, $name = null)
+ * @method QueryBuilder sum($field, $name = null)
+ * @method QueryBuilder avg($field, $name = null)
+ * @method QueryBuilder table(string $table)
+ * @method QueryBuilder prefix(string $prefix)
+ * @method QueryBuilder when(mixed $value, callable $callback)
+ * @method QueryBuilder unless(mixed $value, callable $callback)
+ * @method QueryBuilder column(string $column)
+ * @method QueryBuilder from(string $table, ?string $alias = null)
+ * @method QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
+ * @method QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND')
+ * @method QueryBuilder selectRaw(string $sql, array $bindings = [])
+ * @method QueryBuilder whereIn(string $column, array $values)
+ * @method array raw(string $sql, array $bindings = [])
+ * 
  * @method static array raw(string $sql, array $bindings = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
  * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND')
+ * @method static QueryBuilder whereIn(string $column, array $values)
  * @method static QueryBuilder when(mixed $value, callable $callback)
  * @method static QueryBuilder unless(mixed $value, callable $callback)
  * @method static QueryBuilder table(string $table)
@@ -244,6 +263,10 @@ class DB implements DBContract
                 'whereRaw',
                 'selectRaw',
                 'whereIn',
+                'max',
+                'min',
+                'sum',
+                'avg',
                 'raw'
             ])
         ) {

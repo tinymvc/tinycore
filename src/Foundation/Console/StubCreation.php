@@ -55,7 +55,7 @@ class StubCreation
         }
 
         // Create directory if it doesn't exist
-        FileManager::ensureDirectoryWritable($dirName = dirname($destination));
+        FileManager::ensureDirectoryWritable(dirname($destination));
 
         // Write the stub content to the destination file
         if (FileManager::put($destination, $stub)) {

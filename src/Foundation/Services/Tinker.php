@@ -2,6 +2,8 @@
 
 namespace Spark\Foundation\Services;
 
+use Spark\Console\Commands;
+use Spark\Console\Prompt;
 use Spark\Database\DB;
 use Spark\Foundation\Application;
 use Spark\Hash;
@@ -480,6 +482,9 @@ class Tinker
      */
     private function handleCommand(string $input): bool
     {
+        /** @var \Spark\Console\Commands $spark */
+        $spark = Application::$app->make(Commands::class);
+
         $commands = [
             'help' => fn() => $this->showHelp(),
             '?' => fn() => $this->showHelp(),
@@ -490,6 +495,7 @@ class Tinker
             'models' => fn() => $this->listModels(),
             'routes' => fn() => $this->listRoutes(),
             'config' => fn() => $this->showConfig(),
+            'commands' => fn() => $spark->listCommands(),
         ];
 
         if (isset($commands[$input])) {
@@ -497,7 +503,33 @@ class Tinker
             return true;
         }
 
+        $sparkCmd = $this->parseSparkCommands($input);
+        if ($spark->hasCommand($sparkCmd[0])) {
+            if ($spark->isDisabled($sparkCmd[0])) {
+                $this->color("Command {$sparkCmd[0]} is disabled.", 'yellow');
+                return true;
+            }
+
+            // Run the Spark command
+            Application::$app->resolve(
+                $spark->getCommand($sparkCmd[0])['callback'],
+                ['args' => Prompt::parseArguments($sparkCmd[1])]
+            );
+            return true;
+        }
+
         return false;
+    }
+
+    /**
+     * Parse Spark commands from user input
+     */
+    public function parseSparkCommands(string $input): array
+    {
+        $parts = explode(' ', $input);
+        $command = array_shift($parts);
+
+        return [$command, $parts]; // Return command and arguments
     }
 
     /**
@@ -841,6 +873,7 @@ class Tinker
         echo "  " . $this->color('models', 'yellow') . "        List models\n";
         echo "  " . $this->color('routes', 'yellow') . "        Show routes\n";
         echo "  " . $this->color('config', 'yellow') . "        Show configuration\n";
+        echo "  " . $this->color('commands', 'yellow') . "      Show Spark commands\n";
         echo "  " . $this->color('exit', 'yellow') . "          Exit tinker\n";
         echo "\n" . $this->color("── Examples ──────────────────────────", 'cyan') . "\n";
         echo "  " . $this->color('// Variables persist across commands', 'gray') . "\n";
