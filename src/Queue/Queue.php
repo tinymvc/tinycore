@@ -436,7 +436,7 @@ class Queue implements QueueContract
         }
 
         $logEntry = sprintf(
-            '[%s] Finished running %d success and %d failed job(s) in %.4f seconds, using %.2f MB of memory.',
+            "[%s] Finished running %d success and %d failed job(s) in %.4f seconds, using %.2f MB of memory.\n",
             date('Y-m-d H:i:s'),
             $ranJobs,
             $failedJobs,
