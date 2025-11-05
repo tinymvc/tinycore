@@ -21,6 +21,7 @@ use Spark\Utils\Paginator;
  * @method Collection except($keys)
  * @method Collection filter(?callable $callback = null)
  * @method Collection map(callable $callback)
+ * @method Collection each(callable $callback)
  * @method Collection mapToDictionary(callable $callback)
  * @method Collection mapWithKeys(callable $callback)
  * @method Collection merge($items)
