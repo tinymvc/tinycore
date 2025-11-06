@@ -33,11 +33,12 @@ interface MiddlewareContract
 
     /**
      * Executes the middleware stack and returns the first response
-     * from a middleware or null if no response was returned.
+     * from a middleware if any middleware returns early (auth failure, redirect, etc.),
+     * or null if all middleware pass through without returning.
      * 
      * @param Request $request The request being processed.
-     * @param \Closure $destination The final destination callable if no middleware returns a response.
      * @param array $except An array of middleware keys to skip during processing.
+     * @return mixed Response from middleware if early return, null otherwise
      */
-    public function process(Request $request, \Closure $destination, array $except = []);
+    public function process(Request $request, array $except = []);
 }

@@ -5,6 +5,7 @@ namespace Spark\Utils;
 use Spark\Contracts\Utils\HttpUtilContract;
 use Spark\Exceptions\Utils\PingUtilException;
 use Spark\Helpers\HttpResponse;
+use Spark\Helpers\Traits\HttpConfigurable;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -13,21 +14,12 @@ use Spark\Support\Traits\Macroable;
  * A helper class for making HTTP requests in PHP using cURL. Supports GET, POST, PUT, PATCH, and DELETE methods,
  * as well as custom headers, options, user agents, and file downloads.
  * 
- * @method static HttpResponse get(string $url, array $params = [])
- * @method static HttpResponse post(string $url, array $params = [])
- * @method static HttpResponse put(string $url, array $params = [])
- * @method static HttpResponse patch(string $url, array $params = [])
- * @method static HttpResponse delete(string $url, array $params = [])
- * 
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Http implements HttpUtilContract
 {
-    use Macroable {
-        __call as macroCall;
-        __callStatic as macroStaticCall;
-    }
+    use Macroable, HttpConfigurable;
 
     /**
      * Constructor for the ping class.
@@ -65,6 +57,11 @@ class Http implements HttpUtilContract
 
         $startedAt = microtime(true);
 
+        // Build URL with query parameters
+        if (!empty($params)) {
+            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
+        }
+
         // Default cURL options for the request
         $defaultOptions = [
             CURLOPT_FOLLOWLOCATION => true,
@@ -76,7 +73,7 @@ class Http implements HttpUtilContract
             CURLOPT_ENCODING => 'utf-8',
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_HTTPHEADER => $this->config['headers'],
-            CURLOPT_URL => $url . (!empty($params) ? '?' . http_build_query($params) : '')
+            CURLOPT_URL => $url
         ];
 
         // Set up file download if specified
@@ -146,136 +143,142 @@ class Http implements HttpUtilContract
     }
 
     /**
+     * Add a header to the internal headers array.
+     * 
+     * @param string $header Header string in "Key: Value" format
+     * @return void
+     */
+    protected function addHeader(string $header): void
+    {
+        $this->config['headers'][] = $header;
+    }
+
+    /**
+     * Set a cURL option in the internal options array.
+     * 
+     * @param int $option cURL option constant
+     * @param mixed $value Option value
+     * @return void
+     */
+    protected function setOption(int $option, mixed $value): void
+    {
+        $this->config['options'][$option] = $value;
+    }
+
+    /**
      * Sets a single cURL option.
-     *
+     * 
+     * @deprecated Use withOption() instead for fluent interface
      * @param int $key The cURL option constant.
      * @param mixed $value The value for the option.
      * @return self
      */
     public function option(int $key, mixed $value): self
     {
-        $this->config['options'][$key] = $value;
-        return $this;
+        return $this->withOption($key, $value);
     }
 
     /**
      * Sets multiple cURL options at once.
-     *
+     * 
+     * @deprecated Use withOptions() instead for fluent interface
      * @param array $options Associative array of cURL options.
      * @return self
      */
     public function options(array $options): self
     {
-        $this->config['options'] = array_replace($this->config['options'], $options);
-        return $this;
+        return $this->withOptions($options);
     }
 
     /**
      * Sets the User-Agent header for the request.
-     *
+     * 
+     * @deprecated Use withUserAgent() instead for consistency
      * @param string $useragent The User-Agent string.
      * @return self
      */
     public function useragent(string $useragent): self
     {
-        $this->config['options'][CURLOPT_USERAGENT] = $useragent;
-        return $this;
+        return $this->withUserAgent($useragent);
     }
 
     /**
      * Sets the Content-Type header for the request.
-     *
+     * 
+     * @deprecated Use withContentType() instead for consistency
      * @param string $type The Content-Type string (e.g., 'application/json').
      * @return self
      */
     public function contentType(string $type): self
     {
-        $this->config['headers'][] = "Content-Type: $type";
-        return $this;
+        return $this->withContentType($type);
     }
 
     /**
      * Sets the Accept header for the request.
-     *
+     * 
+     * @deprecated Use withAccept() instead for consistency
      * @param string $type The Accept string (e.g., 'application/json').
      * @return self
      */
     public function accept(string $type): self
     {
-        $this->config['headers'][] = "Accept: $type";
-        return $this;
+        return $this->withAccept($type);
     }
 
     /**
      * Adds a custom header to the request.
-     *
+     * 
+     * @deprecated Use withHeader() instead for consistency
      * @param string $key Header name.
      * @param string $value Header value.
      * @return self
      */
     public function header(string $key, string $value): self
     {
-        $this->config['headers'][] = "$key: $value";
-        return $this;
+        return $this->withHeader($key, $value);
     }
 
     /**
      * Adds multiple custom headers to the request.
-     *
+     * 
+     * @deprecated Use withHeaders() instead for consistency
      * @param array $headers Associative array of headers (key => value).
      * @return self
      */
     public function headers(array $headers): self
     {
-        foreach ($headers as $key => $value) {
-            $this->header($key, $value);
-        }
-        return $this;
+        return $this->withHeaders($headers);
     }
 
     /**
      * Add Cookies to the request.
      * 
-     * This method allows you to set cookies for the request.
-     * The cookies will be sent in the "Cookie" header.
-     * 
+     * @deprecated Use withCookies() instead for consistency
      * @param array $cookies Associative array of cookies (key => value).
      * @return self
      */
     public function cookie(array $cookies): self
     {
-        $cookies = array_map(
-            fn($key, $value) => "$key=$value",
-            array_keys($cookies),
-            $cookies
-        );
-
-        $this->config['headers'][] = "Cookie: " . implode('; ', $cookies);
-
-        return $this;
+        return $this->withCookies($cookies);
     }
 
     /**
      * Sets the cookie jar file path for storing cookies.
-     *
+     * 
+     * @deprecated Use withCookieJar() instead for consistency
      * @param string $cookieJar The file path to the cookie jar.
      * @return self
      */
     public function cookieJar(string $cookieJar): self
     {
-        if (!is_file($cookieJar)) {
-            touch($cookieJar);
-        }
-
-        $this->config['options'][CURLOPT_COOKIEJAR] = $cookieJar;
-        $this->config['options'][CURLOPT_COOKIEFILE] = $cookieJar;
-
-        return $this;
+        return $this->withCookieJar($cookieJar);
     }
 
     /**
      * Sets a proxy for the request.
-     *
+     * 
+     * @deprecated Use withProxy() instead for consistency
      * @param string $proxy The proxy URL (e.g., 'http://proxy.example.com:8080').
      * @param string $proxyAuth Optional proxy authentication in the format 'username:password'.
      * @param array $options Additional cURL options for the proxy.
@@ -283,15 +286,10 @@ class Http implements HttpUtilContract
      */
     public function setProxy(string $proxy, string $proxyAuth = '', array $options = []): self
     {
-        $this->config['options'][CURLOPT_PROXY] = $proxy;
-
-        if (!empty($proxyAuth)) {
-            $this->config['options'][CURLOPT_PROXYAUTH] = CURLAUTH_BASIC;
-            $this->config['options'][CURLOPT_PROXYUSERPWD] = $proxyAuth;
-        }
+        $this->withProxy($proxy, $proxyAuth);
 
         foreach ($options as $option => $value) {
-            $this->config['options'][$option] = $value;
+            $this->setOption($option, $value);
         }
 
         return $this;
@@ -313,26 +311,98 @@ class Http implements HttpUtilContract
      * Sets fields for a POST request.
      *
      * @param array|string $fields The fields to include in the POST body. Can be an array or string.
+     * @param string|null $contentType The Content-Type header value (auto-detected if null)
      * @return self
      */
-    public function postFields(array|string $fields, ?bool $isJson = null): self
+    public function postFields(array|string $fields, null|string $contentType = null): self
     {
-        if ($isJson === null) {
-            $isJson = is_array($fields); // Determine if the fields are JSON based on their type
+        if ($contentType === null && is_array($fields)) {
+            $contentType = 'application/json';
         }
+        // Auto-detect content type for string fields
+        elseif ($contentType === null && is_string($fields)) {
+            $decoded = json_decode($fields, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $contentType = 'application/json';
+            }
+        }
+
+        $contentType ??= 'application/x-www-form-urlencoded';
 
         // Set the Content-Type header
-        if ($isJson) {
-            $this->contentType('application/json');
-        } else {
-            $this->contentType('application/x-www-form-urlencoded');
-        }
+        $this->withContentType($contentType);
 
-        return $this->options([
+        // Prepare post fields based on content type
+        $postFields = $contentType === 'application/json' && is_array($fields) ? json_encode($fields) :
+            (is_array($fields) && $contentType === 'application/x-www-form-urlencoded' ? http_build_query($fields) : $fields);
+
+        return $this->withOptions([CURLOPT_POSTFIELDS => $postFields]);
+    }
+
+    /**
+     * Send a GET request.
+     * 
+     * @param string $url Target URL
+     * @param array $params Query parameters
+     * @return HttpResponse
+     */
+    public function get(string $url, array $params = []): HttpResponse
+    {
+        return $this->send($url, $params);
+    }
+
+    /**
+     * Send a POST request.
+     * 
+     * @param string $url Target URL
+     * @param array|string $data POST data
+     * @return HttpResponse
+     */
+    public function post(string $url, array|string $data = []): HttpResponse
+    {
+        return $this->postFields($data)->withOptions([
             CURLOPT_POST => 1,
-            CURLOPT_POSTFIELDS => $isJson && is_array($fields) ? json_encode($fields) :
-                (is_array($fields) ? http_build_query($fields) : $fields)
-        ]);
+            CURLOPT_CUSTOMREQUEST => 'POST',
+        ])->send($url);
+    }
+
+    /**
+     * Send a PUT request.
+     * 
+     * @param string $url Target URL
+     * @param array|string $data PUT data
+     * @return HttpResponse
+     */
+    public function put(string $url, array|string $data = []): HttpResponse
+    {
+        return $this->withOption(CURLOPT_CUSTOMREQUEST, 'PUT')
+            ->postFields($data)->send($url);
+    }
+
+    /**
+     * Send a PATCH request.
+     * 
+     * @param string $url Target URL
+     * @param array|string $data PATCH data
+     * @return HttpResponse
+     */
+    public function patch(string $url, array|string $data = []): HttpResponse
+    {
+        return $this->withOption(CURLOPT_CUSTOMREQUEST, 'PATCH')
+            ->postFields($data)->send($url);
+    }
+
+    /**
+     * Send a DELETE request.
+     * 
+     * @param string $url Target URL
+     * @param array|string $data DELETE data
+     * @return HttpResponse
+     */
+    public function delete(string $url, array|string $data = []): HttpResponse
+    {
+        return $this->withOption(CURLOPT_CUSTOMREQUEST, 'DELETE')
+            ->postFields($data)->send($url);
     }
 
     /**
@@ -357,47 +427,5 @@ class Http implements HttpUtilContract
             'response' => $response,
             'duration_ms' => $duration,
         ]);
-    }
-
-    /**
-     * Handles dynamic method calls for HTTP methods (GET, POST, PUT, PATCH, DELETE).
-     *
-     * @param string $name The HTTP method name.
-     * @param array $arguments The arguments for the method.
-     * @return mixed The response from the HTTP request or the result of the macro call.
-     * @throws PingUtilException If the HTTP method is not supported.
-     */
-    public function __call(string $name, array $arguments): mixed
-    {
-        if (static::hasMacro($name)) {
-            return $this->macroCall($name, $arguments);
-        }
-
-        $method = strtoupper($name);
-        if (in_array($method, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])) {
-            $this->option(CURLOPT_CUSTOMREQUEST, $method);
-
-            return $this->send(...$arguments);
-        }
-
-        throw new PingUtilException("Undefined Method: {$name}");
-    }
-
-    /**
-     * Handles static calls by creating a new instance and calling the dynamic method.
-     * specially for: get, post, put, patch, delete methods.
-     *
-     * @param string $name The HTTP method name.
-     * @param array $arguments The arguments for the method.
-     * @return mixed The response from the dynamic method call.
-     */
-    public static function __callStatic($name, $arguments)
-    {
-        if (static::hasMacro($name)) {
-            return static::macroStaticCall($name, $arguments);
-        }
-
-        $ping = new static();
-        return $ping->$name(...$arguments);
     }
 }

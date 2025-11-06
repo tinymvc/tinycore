@@ -402,10 +402,10 @@ class Router implements RouterContract
                 // Add route-specific middleware to the middleware stack
                 $middleware->queue($route['middleware']);
 
-                // Execute middleware stack and return response if middleware stops request
-                $middlewareResponse = $middleware->process($request, fn($payload) => $payload, (array) ($route['withoutMiddleware'] ?? []));
-                if ($middlewareResponse instanceof Response) {
-                    return $middlewareResponse;
+                // Execute middleware stack - check for early returns (auth failures, redirects, etc.)
+                $middlewareResponse = $middleware->process($request, (array) ($route['withoutMiddleware'] ?? []));
+                if ($middlewareResponse !== null) {
+                    return $this->parseHttpResponse($middlewareResponse);
                 }
 
                 env('debug') && event('app:middlewaresHandled', $middleware->getStack());

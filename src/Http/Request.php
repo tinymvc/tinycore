@@ -854,6 +854,20 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Retrieves a sanitized request value by key.
+     * 
+     * @param string $key The key to retrieve the sanitized value for.
+     * @param array $allowedTags An array of allowed HTML tags for sanitization.
+     * 
+     * @return ?string The sanitized value associated with the given key, or null if the key does not exist.
+     */
+    public function safe(string $key, array $allowedTags = []): ?string
+    {
+        return (new Sanitizer($this->all([$key])))
+            ->safe($key, $allowedTags);
+    }
+
+    /**
      * Magic Method: Retrieves a request value by key.
      * 
      * @param string $name The key to retrieve the value for.

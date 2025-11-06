@@ -163,6 +163,16 @@ class HttpResponse implements Arrayable, ArrayAccess, \Stringable
     }
 
     /**
+     * Check if the response status is exactly 200 OK.
+     *
+     * @return bool True if status is 200, false otherwise.
+     */
+    public function ok(): bool
+    {
+        return $this->isOk();
+    }
+
+    /**
      * Check if the response was successful (2xx status code).
      *
      * @return bool True if successful, false otherwise.
@@ -170,6 +180,36 @@ class HttpResponse implements Arrayable, ArrayAccess, \Stringable
     public function isSuccess(): bool
     {
         return $this->status >= 200 && $this->status < 300;
+    }
+
+    /**
+     * Check if the response was successful (2xx status code).
+     *
+     * @return bool True if successful, false otherwise.
+     */
+    public function isSuccessful(): bool
+    {
+        return $this->isSuccess();
+    }
+
+    /**
+     * Check if the response was successful (2xx status code).
+     *
+     * @return bool True if successful, false otherwise.
+     */
+    public function success(): bool
+    {
+        return $this->isSuccess();
+    }
+
+    /**
+     * Check if the response was successful (2xx status code).
+     *
+     * @return bool True if successful, false otherwise.
+     */
+    public function successful(): bool
+    {
+        return $this->isSuccess();
     }
 
     /**

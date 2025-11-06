@@ -11,6 +11,7 @@ use Spark\Exceptions\Http\Input\ValidationFailedException;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Helpers\HttpResponse;
+use Spark\Pipeline;
 use Spark\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
@@ -1807,5 +1808,39 @@ if (!function_exists('is_cli')) {
     function is_cli(): bool
     {
         return php_sapi_name() === 'cli';
+    }
+}
+
+if (!function_exists('tracer_log')) {
+    /**
+     * Log a message using the Tracer instance.
+     *
+     * This function logs a message using the Tracer instance, which provides
+     * methods for tracing and logging application events.
+     *
+     * @param string $message The message to be logged.
+     * @return void
+     */
+    function tracer_log(string $message): void
+    {
+        Tracer::$instance->log($message);
+    }
+}
+
+if (!function_exists('pipeline')) {
+    /**
+     * Create a new Pipeline instance.
+     *
+     * This function initializes a new Pipeline instance with the given payload.
+     * The Pipeline instance provides a convenient interface for processing
+     * the payload through a series of stages.
+     *
+     * @param mixed $payload The initial payload to be processed by the pipeline.
+     *
+     * @return Pipeline The Pipeline instance initialized with the given payload.
+     */
+    function pipeline($payload = null): Pipeline
+    {
+        return new Pipeline($payload);
     }
 }

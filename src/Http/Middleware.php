@@ -6,7 +6,6 @@ use Spark\Contracts\Http\MiddlewareContract;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
-use Spark\Http\Response;
 use Spark\Support\Traits\Macroable;
 use Closure;
 
@@ -98,22 +97,21 @@ class Middleware implements MiddlewareContract
      * - Memory efficient
      * 
      * @param Request $request
-     * @param Closure $destination Final handler (controller action)
      * @param array $except Middleware aliases to exclude from execution
-     * @return mixed Response from middleware or final destination
+     * @return mixed Response from middleware if early return, null otherwise
      */
-    public function process(Request $request, Closure $destination, array $except = [])
+    public function process(Request $request, array $except = [])
     {
-        // Fast path: no middleware = direct execution
-        if (empty($this->stack)) {
-            return $destination($request);
+        // Filter out excepted middlewares
+        $stack = array_filter($this->stack ?? [], fn($m) => !in_array($m, $except));
+
+        // Fast path: all middlewares excluded = no early return
+        if (empty($stack)) {
+            return null;
         }
 
-        // Filter out excepted middlewares
-        $stack = array_filter($this->stack, fn($m) => !in_array($m, $except));
-
         // Use optimized pipeline processing
-        return $this->createPipeline($request, $destination, $stack);
+        return $this->createPipeline($request, fn() => null, $stack);
     }
 
     /**
@@ -132,44 +130,15 @@ class Middleware implements MiddlewareContract
         $pipeline = array_reduce(
             array_reverse($stack), // Process in reverse to build pipeline
             fn(Closure $carry, string $middlewareName) => function (Request $request) use ($carry, $middlewareName) {
+                // Resolve middleware into callable
                 $middleware = $this->resolveMiddleware($middlewareName);
-
-                // Execute middleware with proper next callback
-                $response = $middleware($request, $carry);
-
-                // Handle early returns (framework standard behavior)
-                if ($response instanceof Request) {
-                    return $response; // Continue pipeline
-                }
-
-                // Early return - convert to proper response
-                return $this->parseHttpResponse($response);
+                return $middleware($request, $carry); // Execute middleware and return result
             },
             $destination // Final destination becomes the innermost handler
         );
 
         // Execute the built pipeline
         return $pipeline($request);
-    }
-
-    /**
-     * Parse middleware response into proper HTTP response
-     * 
-     * @param mixed $response
-     * @return Response
-     */
-    private function parseHttpResponse($response): Response
-    {
-        // Already a Response object
-        if ($response instanceof Response) {
-            return $response;
-        }
-
-        // Handle different response types efficiently
-        return match (true) {
-            is_int($response) => new Response(statusCode: $response), // HTTP status code
-            default => new Response($response, 200)
-        };
     }
 
     /**
