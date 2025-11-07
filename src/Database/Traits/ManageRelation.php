@@ -53,7 +53,29 @@ trait ManageRelation
     }
 
     /**
-     * Eager load polymorphic relationships (Laravel-like).
+     * Eager load relationships with filters.
+     * 
+     * This method allows you to eager load a relationship with specific filters applied.
+     * It accepts the relationship name and an associative array of filters,
+     * and returns a QueryBuilder instance with the filtered relationship loaded.
+     * 
+     * @param string $relation The relationship name
+     * @param string|array $filters Associative array or raw SQL of filters to apply
+     * @return QueryBuilder
+     */
+    public function withFiltered(string $relation, string|array $filters): QueryBuilder
+    {
+        return $this->with([
+            $relation => fn($query) => $query->where($filters)
+        ]);
+    }
+
+    /**
+     * Eager load polymorphic relationships
+     * 
+     * This method allows you to eager load polymorphic relationships for the model.
+     * It accepts the relationship name, a morph map, and optional type/id column names,
+     * and returns a QueryBuilder instance with the polymorphic relationship loaded.
      * 
      * @param string $relation The polymorphic relationship name
      * @param array $morphMap Array mapping morph types to their relationships
