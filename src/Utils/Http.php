@@ -27,7 +27,7 @@ class Http extends HttpRequest implements HttpUtilContract
      *
      * @var null|string|resource
      */
-    private null|string|resource $download = null;
+    private mixed $download = null;
 
     /**
      * The Http constructor.
