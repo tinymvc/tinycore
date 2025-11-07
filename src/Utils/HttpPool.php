@@ -3,8 +3,9 @@
 namespace Spark\Utils;
 
 use Spark\Exceptions\Utils\PingUtilException;
-use Spark\Helpers\PendingRequest;
+use Spark\Helpers\HttpRequest;
 use Spark\Helpers\HttpResponse;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class HttpPool
@@ -17,6 +18,8 @@ use Spark\Helpers\HttpResponse;
  */
 class HttpPool
 {
+    use Macroable;
+
     /** @var array Pending requests to be executed */
     private array $pendingRequests = [];
 
@@ -40,9 +43,9 @@ class HttpPool
      * 
      * @param string $url The target URL
      * @param array $params Optional query parameters
-     * @return PendingRequest
+     * @return HttpRequest
      */
-    public function get(string $url, array $params = []): PendingRequest
+    public function get(string $url, array $params = []): HttpRequest
     {
         return $this->addRequest('GET', $url, $params);
     }
@@ -51,10 +54,10 @@ class HttpPool
      * Add a POST request to the pool.
      * 
      * @param string $url The target URL
-     * @param array $data The POST data
-     * @return PendingRequest
+     * @param string|array $data The POST data
+     * @return HttpRequest
      */
-    public function post(string $url, array $data = []): PendingRequest
+    public function post(string $url, string|array $data = []): HttpRequest
     {
         return $this->addRequest('POST', $url, [], $data);
     }
@@ -63,10 +66,10 @@ class HttpPool
      * Add a PUT request to the pool.
      * 
      * @param string $url The target URL
-     * @param array $data The PUT data
-     * @return PendingRequest
+     * @param string|array $data The PUT data
+     * @return HttpRequest
      */
-    public function put(string $url, array $data = []): PendingRequest
+    public function put(string $url, string|array $data = []): HttpRequest
     {
         return $this->addRequest('PUT', $url, [], $data);
     }
@@ -75,10 +78,10 @@ class HttpPool
      * Add a PATCH request to the pool.
      * 
      * @param string $url The target URL
-     * @param array $data The PATCH data
-     * @return PendingRequest
+     * @param string|array $data The PATCH data
+     * @return HttpRequest
      */
-    public function patch(string $url, array $data = []): PendingRequest
+    public function patch(string $url, string|array $data = []): HttpRequest
     {
         return $this->addRequest('PATCH', $url, [], $data);
     }
@@ -87,12 +90,12 @@ class HttpPool
      * Add a DELETE request to the pool.
      * 
      * @param string $url The target URL
-     * @param array $params Optional query parameters
-     * @return PendingRequest
+     * @param string|array $data The DELETE data
+     * @return HttpRequest
      */
-    public function delete(string $url, array $params = []): PendingRequest
+    public function delete(string $url, string|array $data = []): HttpRequest
     {
-        return $this->addRequest('DELETE', $url, $params);
+        return $this->addRequest('DELETE', $url, [], $data);
     }
 
     /**
@@ -102,17 +105,56 @@ class HttpPool
      * @param string $url Target URL
      * @param array $params Query parameters
      * @param array $data POST/PUT/PATCH data
-     * @return PendingRequest
+     * @return HttpRequest
      */
-    private function addRequest(string $method, string $url, array $params = [], array $data = []): PendingRequest
+    private function addRequest(string $method, string $url, array $params = [], array $data = []): HttpRequest
     {
         $key = $this->nextKey ?? count($this->pendingRequests);
         $this->nextKey = null;
 
-        $request = new PendingRequest($method, $url, $params, $data, $key);
+        $request = new HttpRequest($method, $url, $params, $data, $key);
         $this->pendingRequests[$key] = $request;
 
         return $request;
+    }
+
+    /**
+     * Get all pending requests.
+     * 
+     * @return array Array of HttpPendingRequest objects
+     */
+    public function getPendingRequests(): array
+    {
+        return $this->pendingRequests;
+    }
+
+    /**
+     * Clear all pending requests.
+     */
+    public function clearPendingRequests(): void
+    {
+        $this->pendingRequests = [];
+    }
+
+    /**
+     * Set the pending requests.
+     * 
+     * @param array $requests Array of HttpPendingRequest objects
+     */
+    public function setPendingRequests(array $requests): void
+    {
+        $this->pendingRequests = $requests;
+    }
+
+    /**
+     * Execute all pending requests concurrently.
+     * 
+     * @return array Array of HttpResponse objects
+     * @throws PingUtilException
+     */
+    public function executePendingRequests(): array
+    {
+        return $this->execute($this->pendingRequests);
     }
 
     /**
@@ -138,7 +180,7 @@ class HttpPool
 
         // Add all requests to the multi handle
         foreach ($requests as $request) {
-            if (!$request instanceof PendingRequest) {
+            if (!$request instanceof HttpRequest) {
                 continue;
             }
 

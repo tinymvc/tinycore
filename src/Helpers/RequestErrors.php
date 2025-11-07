@@ -2,6 +2,7 @@
 
 namespace Spark\Helpers;
 
+use Spark\Contracts\Support\Arrayable;
 use Spark\Http\Session;
 
 /**
@@ -12,7 +13,7 @@ use Spark\Http\Session;
  *
  * @package Spark\Helpers
  */
-class RequestErrors
+class RequestErrors implements Arrayable, \IteratorAggregate, \Stringable
 {
     /**
      * @var array Stores error messages for fields
@@ -57,6 +58,24 @@ class RequestErrors
     public function getOld(string $field, ?string $default = null): ?string
     {
         return $this->attributes[$field] ?? $default;
+    }
+
+    /**
+     * Get the old value of the given field.
+     * 
+     * This method is an alias for the getOld method.
+     * 
+     * @param string $field
+     *   The field name.
+     * @param ?string $default
+     *   The default value to return if the field does not exist.
+     * 
+     * @return string|null
+     *   The old value of the given field.
+     */
+    public function old(string $field, ?string $default = null): ?string
+    {
+        return $this->getOld($field, $default);
     }
 
     /**
@@ -145,6 +164,133 @@ class RequestErrors
     }
 
     /**
+     * Get all error messages.
+     *
+     * @return array
+     */
+    public function getMessages(): array
+    {
+        return $this->messages;
+    }
+
+    /**
+     * Get all attributes from the previous request.
+     *
+     * @return array
+     */
+    public function getAttributes(): array
+    {
+        return $this->attributes;
+    }
+
+    /**
+     * Set error messages.
+     *
+     * @param array $messages
+     * @return void
+     */
+    public function setMessages(array $messages): void
+    {
+        $this->messages = $messages;
+    }
+
+    /**
+     * Set attributes from the previous request.
+     *
+     * @param array $attributes
+     * @return void
+     */
+    public function setAttributes(array $attributes): void
+    {
+        $this->attributes = $attributes;
+    }
+
+    /**
+     * Add an error message for a specific field.
+     *
+     * @param string $field
+     * @param string $message
+     * @return void
+     */
+    public function addMessage(string $field, string $message): void
+    {
+        $this->messages[$field][] = $message;
+    }
+
+    /**
+     * Add an attribute from the previous request.
+     *
+     * @param string $field
+     * @param string $value
+     * @return void
+     */
+    public function addAttribute(string $field, string $value): void
+    {
+        $this->attributes[$field] = $value;
+    }
+
+    /**
+     * Clear all error messages.
+     *
+     * @return void
+     */
+    public function clearMessages(): void
+    {
+        $this->messages = [];
+    }
+
+    /**
+     * Clear all attributes from the previous request.
+     *
+     * @return void
+     */
+    public function clearAttributes(): void
+    {
+        $this->attributes = [];
+    }
+
+    /**
+     * Clear all error messages and attributes.
+     *
+     * @return void
+     */
+    public function clearAll(): void
+    {
+        $this->clearMessages();
+        $this->clearAttributes();
+    }
+
+    /**
+     * Get the number of error messages.
+     *
+     * @return int
+     */
+    public function count(): int
+    {
+        return count($this->messages);
+    }
+
+    /**
+     * Check if there are no error messages.
+     *
+     * @return bool
+     */
+    public function isEmpty(): bool
+    {
+        return !$this->any();
+    }
+
+    /**
+     * Check if there are any error messages.
+     *
+     * @return bool
+     */
+    public function isNotEmpty(): bool
+    {
+        return $this->any();
+    }
+
+    /**
      * Convert the error object to a string.
      *
      * This method returns the first error message from the collection
@@ -152,8 +298,36 @@ class RequestErrors
      *
      * @return string The first error message or an empty string if no errors exist.
      */
-    public function __toString()
+    public function __toString(): string
     {
         return $this->any() ? $this->getFirstError() : '';
+    }
+
+    /**
+     * Convert the error messages to an array.
+     *
+     * @return array The error messages as an array.
+     */
+    public function toArray(): array
+    {
+        return $this->all();
+    }
+
+    /**
+     * Get an iterator for the items.
+     * 
+     * This method allows the model to be iterated over like an array.
+     * 
+     * @template TKey of array-key
+     *
+     * @template-covariant TValue
+     *
+     * @implements \ArrayAccess<TKey, TValue>
+     *
+     * @return \ArrayIterator<TKey, TValue>
+     */
+    public function getIterator(): \Traversable
+    {
+        return new \ArrayIterator($this->all());
     }
 }

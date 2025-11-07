@@ -11,11 +11,24 @@ use Spark\Utils\HttpPool;
  * 
  * Facade for the Http utility class.
  * 
- * @method static HttpResponse get(string $url, array $params = []) Send a GET request
- * @method static HttpResponse post(string $url, array $params = []) Send a POST request
- * @method static HttpResponse put(string $url, array $params = []) Send a PUT request
- * @method static HttpResponse patch(string $url, array $params = []) Send a PATCH request
- * @method static HttpResponse delete(string $url, array $params = []) Send a DELETE request
+ * @method static HttpResponse get(string $url, array $params = [])
+ * @method static HttpResponse post(string $url, array $params = [])
+ * @method static HttpResponse put(string $url, array $params = [])
+ * @method static HttpResponse patch(string $url, array $params = [])
+ * @method static HttpResponse patch(string $url, array $params = [])
+ * @method static HttpResponse send(string $url, array $params = [])
+ * @method static BaseHttp option(int $key, mixed $value)
+ * @method static BaseHttp options(array $options)
+ * @method static BaseHttp useragent(string $useragent)
+ * @method static BaseHttp contentType(string $type)
+ * @method static BaseHttp accept(string $type)
+ * @method static BaseHttp header(string $key, string $value)
+ * @method static BaseHttp headers(array $headers)
+ * @method static BaseHttp cookie(array $cookies)
+ * @method static BaseHttp cookieJar(string $cookieJar)
+ * @method static BaseHttp proxy(string $proxy, string $proxyAuth = '')
+ * @method static BaseHttp download(string $location, bool $force = false)
+ * @method static BaseHttp postFields(array|string $fields, null|string $contentType = null)
  * 
  * @package Spark\Facades
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>

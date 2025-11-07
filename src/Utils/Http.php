@@ -5,7 +5,7 @@ namespace Spark\Utils;
 use Spark\Contracts\Utils\HttpUtilContract;
 use Spark\Exceptions\Utils\PingUtilException;
 use Spark\Helpers\HttpResponse;
-use Spark\Helpers\Traits\HttpConfigurable;
+use Spark\Helpers\HttpRequest;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -17,27 +17,56 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Http implements HttpUtilContract
+class Http extends HttpRequest implements HttpUtilContract
 {
-    use Macroable, HttpConfigurable;
+    use Macroable;
 
     /**
-     * Constructor for the ping class.
+     * File path to download response to.
      *
-     * Initializes an instance of the ping class with optional configuration settings.
-     * The settings are merged with the default configuration and can be used to customize the cURL options,
-     * user agent, and download behavior.
-     *
-     * @param array $config Optional configuration settings. See the reset method for available options.
+     * @var null|string|resource
      */
-    public function __construct(private array $config = [])
+    private null|string|resource $download = null;
+
+    /**
+     * The Http constructor.
+     * 
+     * Initializes a new HTTP request with the specified method, URL, parameters, 
+     * data, download file, and key.
+     * 
+     * @param string $method HTTP method
+     * @param string $url Target URL
+     * @param array $params Query parameters
+     * @param string|array $data POST/PUT/PATCH/DELETE data
+     * @throws PingUtilException If cURL extension is not loaded
+     */
+    public function __construct(string $method, string $url, array $params = [], string|array $data = [])
     {
         // Check if cURL extension is loaded
         if (!extension_loaded('curl')) {
             throw new PingUtilException('cURL extension is not loaded.');
         }
 
-        $this->reset($config);
+        // Call parent constructor
+        parent::__construct($method, $url, $params, $data);
+    }
+
+    /**
+     * Resets the current configuration back to default, optionally overriding
+     * certain configuration settings.
+     * 
+     * @param string $method HTTP method (GET, POST, etc.)
+     * @param string $url Target URL
+     * @param array $params Query parameters
+     * @param string|array $data Request body data
+     * @param string|int $key Request key
+     */
+    public function reset(string $method, string $url, array $params = [], string|array $data = []): void
+    {
+        $this->setMethod($method);
+        $this->setUrl($url);
+        $this->setParams($params);
+        $this->setData($data);
     }
 
     /**
@@ -50,40 +79,23 @@ class Http implements HttpUtilContract
      */
     public function send(string $url, array $params = []): HttpResponse
     {
-        $curl = curl_init();
-        if ($curl === false) {
-            throw new PingUtilException('Failed to initialize cURL.');
-        }
+        $this->setUrl($url);
+        $this->setParams($params);
 
         $startedAt = microtime(true);
 
-        // Build URL with query parameters
-        if (!empty($params)) {
-            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($params);
-        }
-
-        // Default cURL options for the request
-        $defaultOptions = [
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_ENCODING => 'utf-8',
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_HTTPHEADER => $this->config['headers'],
-            CURLOPT_URL => $url
-        ];
+        $curl = $this->buildCurlHandle();
 
         // Set up file download if specified
-        if ($this->config['download']) {
-            $download = fopen($this->config['download'], 'w+');
-            $defaultOptions[CURLOPT_FILE] = $download;
-        }
+        if (isset($this->download) && is_string($this->download)) {
+            if (is_file($this->download)) {
+                unlink($this->download); // Remove existing file if it exists
+            }
 
-        curl_setopt_array($curl, $defaultOptions);
-        curl_setopt_array($curl, $this->config['options']);
+            // Open the file for writing
+            $this->download = fopen($this->download, 'w+');
+            curl_setopt($curl, CURLOPT_FILE, $this->download);
+        }
 
         // Start output buffering to capture the response body
         ob_start();
@@ -110,59 +122,25 @@ class Http implements HttpUtilContract
         ];
 
         // Close file if download was specified
-        if ($this->config['download']) {
-            fclose($download);
+        if (isset($this->download) && is_resource($this->download)) {
+            fclose($this->download);
         }
 
-        $this->logHttpRequest($url, [
-            'url' => $url,
-            'method' => $this->config['options'][CURLOPT_CUSTOMREQUEST] ?? 'GET',
-            'params' => $params,
-            'headers' => $this->config['headers'],
-        ], $response, $startedAt);
+        $this->triggerHttpRequestEvent(
+            $this->getFullUrl(),
+            [
+                'method' => $this->getMethod(),
+                'url' => $url,
+                'params' => $this->getParams(),
+                'body' => $this->getData(),
+                'headers' => $this->getHeaders(),
+            ],
+            $response,
+            $startedAt
+        );
 
         // The response data, including body, status code, final URL, and content length.
         return new HttpResponse($response);
-    }
-
-    /**
-     * Resets the current configuration.
-     *
-     * Resets the current configuration back to default, optionally overriding
-     * certain configuration settings.
-     *
-     * @param array $config An associative array of configuration settings.
-     */
-    public function reset(array $config = []): void
-    {
-        $this->config = array_merge([
-            'headers' => [],
-            'options' => [],
-            'download' => null,
-        ], $config);
-    }
-
-    /**
-     * Add a header to the internal headers array.
-     * 
-     * @param string $header Header string in "Key: Value" format
-     * @return void
-     */
-    protected function addHeader(string $header): void
-    {
-        $this->config['headers'][] = $header;
-    }
-
-    /**
-     * Set a cURL option in the internal options array.
-     * 
-     * @param int $option cURL option constant
-     * @param mixed $value Option value
-     * @return void
-     */
-    protected function setOption(int $option, mixed $value): void
-    {
-        $this->config['options'][$option] = $value;
     }
 
     /**
@@ -281,16 +259,11 @@ class Http implements HttpUtilContract
      * @deprecated Use withProxy() instead for consistency
      * @param string $proxy The proxy URL (e.g., 'http://proxy.example.com:8080').
      * @param string $proxyAuth Optional proxy authentication in the format 'username:password'.
-     * @param array $options Additional cURL options for the proxy.
      * @return self
      */
-    public function setProxy(string $proxy, string $proxyAuth = '', array $options = []): self
+    public function proxy(string $proxy, string $proxyAuth = ''): self
     {
         $this->withProxy($proxy, $proxyAuth);
-
-        foreach ($options as $option => $value) {
-            $this->setOption($option, $value);
-        }
 
         return $this;
     }
@@ -299,11 +272,16 @@ class Http implements HttpUtilContract
      * Sets the file path to download the response to.
      *
      * @param string $location File path for download.
+     * @param bool $force Whether to overwrite the file if it already exists.
      * @return self
      */
-    public function download(string $location): self
+    public function download(string $location, bool $force = false): self
     {
-        $this->config['download'] = $location;
+        if (is_file($location) && !$force) {
+            throw new \RuntimeException("File already exists at {$location}. Use force=true to overwrite.");
+        }
+
+        $this->download = $location;
         return $this;
     }
 
@@ -316,27 +294,8 @@ class Http implements HttpUtilContract
      */
     public function postFields(array|string $fields, null|string $contentType = null): self
     {
-        if ($contentType === null && is_array($fields)) {
-            $contentType = 'application/json';
-        }
-        // Auto-detect content type for string fields
-        elseif ($contentType === null && is_string($fields)) {
-            $decoded = json_decode($fields, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $contentType = 'application/json';
-            }
-        }
-
-        $contentType ??= 'application/x-www-form-urlencoded';
-
-        // Set the Content-Type header
-        $this->withContentType($contentType);
-
-        // Prepare post fields based on content type
-        $postFields = $contentType === 'application/json' && is_array($fields) ? json_encode($fields) :
-            (is_array($fields) && $contentType === 'application/x-www-form-urlencoded' ? http_build_query($fields) : $fields);
-
-        return $this->withOptions([CURLOPT_POSTFIELDS => $postFields]);
+        $this->withPostFields($fields, $contentType);
+        return $this;
     }
 
     /**
@@ -348,6 +307,7 @@ class Http implements HttpUtilContract
      */
     public function get(string $url, array $params = []): HttpResponse
     {
+        $this->setMethod('GET');
         return $this->send($url, $params);
     }
 
@@ -360,10 +320,11 @@ class Http implements HttpUtilContract
      */
     public function post(string $url, array|string $data = []): HttpResponse
     {
-        return $this->postFields($data)->withOptions([
-            CURLOPT_POST => 1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-        ])->send($url);
+        $this->postFields($data)
+            ->withOption(CURLOPT_POST, 1)
+            ->setMethod('POST');
+
+        return $this->send($url);
     }
 
     /**
@@ -375,8 +336,10 @@ class Http implements HttpUtilContract
      */
     public function put(string $url, array|string $data = []): HttpResponse
     {
-        return $this->withOption(CURLOPT_CUSTOMREQUEST, 'PUT')
-            ->postFields($data)->send($url);
+        $this->postFields($data)
+            ->setMethod('PUT');
+
+        return $this->send($url);
     }
 
     /**
@@ -388,8 +351,10 @@ class Http implements HttpUtilContract
      */
     public function patch(string $url, array|string $data = []): HttpResponse
     {
-        return $this->withOption(CURLOPT_CUSTOMREQUEST, 'PATCH')
-            ->postFields($data)->send($url);
+        $this->postFields($data)
+            ->setMethod('PATCH');
+
+        return $this->send($url);
     }
 
     /**
@@ -401,8 +366,10 @@ class Http implements HttpUtilContract
      */
     public function delete(string $url, array|string $data = []): HttpResponse
     {
-        return $this->withOption(CURLOPT_CUSTOMREQUEST, 'DELETE')
-            ->postFields($data)->send($url);
+        $this->postFields($data)
+            ->setMethod('DELETE');
+
+        return $this->send($url);
     }
 
     /**
@@ -413,7 +380,7 @@ class Http implements HttpUtilContract
      * @param array $response The response data from the request.
      * @param float $startedAt The timestamp when the request started.
      */
-    private function logHttpRequest(string $url, array $payload, array $response, float $startedAt): void
+    private function triggerHttpRequestEvent(string $url, array $payload, array $response, float $startedAt): void
     {
         if (!env('debug')) {
             return; // Skip logging in non-debug mode
