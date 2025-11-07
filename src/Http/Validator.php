@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Http\Input;
+namespace Spark\Http;
 
 use Spark\Contracts\Http\Input\ValidatorContract;
 use Spark\Support\Str;

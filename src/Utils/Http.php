@@ -7,6 +7,7 @@ use Spark\Exceptions\Utils\PingUtilException;
 use Spark\Helpers\HttpResponse;
 use Spark\Helpers\HttpRequest;
 use Spark\Support\Traits\Macroable;
+use Spark\Utils\Helpers\HttpPool;
 
 /**
  * Class Http
@@ -40,8 +41,12 @@ class Http extends HttpRequest implements HttpUtilContract
      * @param string|array $data POST/PUT/PATCH/DELETE data
      * @throws PingUtilException If cURL extension is not loaded
      */
-    public function __construct(string $method, string $url, array $params = [], string|array $data = [])
-    {
+    public function __construct(
+        string $method = 'GET',
+        string $url = '',
+        array $params = [],
+        string|array $data = []
+    ) {
         // Check if cURL extension is loaded
         if (!extension_loaded('curl')) {
             throw new PingUtilException('cURL extension is not loaded.');
@@ -141,6 +146,41 @@ class Http extends HttpRequest implements HttpUtilContract
 
         // The response data, including body, status code, final URL, and content length.
         return new HttpResponse($response);
+    }
+
+    /**
+     * Send multiple HTTP requests concurrently (in parallel).
+     * 
+     * This method allows you to send multiple HTTP requests at the same time,
+     * which is much faster than sending them sequentially.
+     * 
+     * Example:
+     * ```php
+     * $responses = Http::pool(fn($pool) => [
+     *     $pool->get('https://api.example.com/users'),
+     *     $pool->post('https://api.example.com/posts', ['title' => 'Hello']),
+     *     $pool->as('custom')->get('https://api.example.com/comments'),
+     * ]);
+     * 
+     * // Access responses by index or key
+     * $users = $responses[0]->json();
+     * $posts = $responses[1]->json();
+     * $comments = $responses['custom']->json();
+     * ```
+     * 
+     * @param callable $callback A callback that receives a Pool instance and returns an array of requests
+     * @return array An array of HttpResponse objects, keyed by their index or custom key
+     */
+    public function pool(callable $callback): array
+    {
+        $pool = new HttpPool();
+        $requests = $callback($pool);
+
+        if (!is_array($requests)) {
+            throw new PingUtilException('Pool callback must return an array of requests.');
+        }
+
+        return $pool->execute($requests);
     }
 
     /**

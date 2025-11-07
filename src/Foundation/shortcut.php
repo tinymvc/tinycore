@@ -16,8 +16,8 @@ use Spark\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
-use Spark\Http\Input\Sanitizer;
-use Spark\Http\Input\Validator;
+use Spark\Http\Sanitizer;
+use Spark\Http\Validator;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Http\Session;
@@ -1571,12 +1571,11 @@ if (!function_exists('http')) {
      *
      * @param string|null $url Optional. The URL to make the request to.
      * @param array $params Optional. The query parameters for the request.
-     * @param array $config Optional. The configuration for the request.
      * @return Http|HttpResponse The HTTP instance or the response from the request.
      */
-    function http(?string $url = null, array $params = [], array $config = []): Http|HttpResponse
+    function http(?string $url = null, array $params = []): Http|HttpResponse
     {
-        $http = new Http($config);
+        $http = new Http('GET');
 
         if ($url !== null) {
             return $http->send($url, $params);

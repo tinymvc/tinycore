@@ -33,8 +33,8 @@ class HttpRequest
      * @param string|int $key Request key
      */
     public function __construct(
-        private string $method,
-        private string $url,
+        private string $method = 'GET',
+        private string $url = '',
         private array $params = [],
         private string|array $data = [],
         private string|int $key = 0

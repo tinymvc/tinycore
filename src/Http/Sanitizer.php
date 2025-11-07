@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Http\Input;
+namespace Spark\Http;
 
 use ArrayAccess;
 use Spark\Contracts\Http\Input\SanitizerContract;

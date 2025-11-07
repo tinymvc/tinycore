@@ -5,9 +5,7 @@ namespace Spark\Http;
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
-use Spark\Helpers\RequestErrors;
-use Spark\Http\Input\Sanitizer;
-use Spark\Http\Input\Validator;
+use Spark\Helpers\RequestInputErrors;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -841,7 +839,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param string|array $filter Optional filter to apply to the input data.
      * @param mixed $default Default value to return if the filter is a string and the key does not exist.
-     * @return \Spark\Http\Input\Sanitizer|mixed An instance of Sanitizer with the request data.
+     * @return \Spark\Http\Sanitizer|mixed An instance of Sanitizer with the request data.
      */
     public function input(string|array $filter = [], $default = null): mixed
     {
@@ -1136,12 +1134,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * The method returns the error object from the session flash data.
      * The error object contains the error messages and attributes from the previous request.
      *
-     * @return \Spark\Helpers\RequestErrors
+     * @return \Spark\Helpers\RequestInputErrors
      *   The error object.
      */
-    public function getErrorObject(): RequestErrors
+    public function getErrorObject(): RequestInputErrors
     {
-        return $this->errorObject ??= app(RequestErrors::class);
+        return $this->errorObject ??= app(RequestInputErrors::class);
     }
 
     /**

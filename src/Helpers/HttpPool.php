@@ -1,10 +1,8 @@
 <?php
 
-namespace Spark\Utils;
+namespace Spark\Helpers;
 
 use Spark\Exceptions\Utils\PingUtilException;
-use Spark\Helpers\HttpRequest;
-use Spark\Helpers\HttpResponse;
 use Spark\Support\Traits\Macroable;
 
 /**

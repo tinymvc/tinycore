@@ -13,7 +13,7 @@ use Spark\Http\Session;
  *
  * @package Spark\Helpers
  */
-class RequestErrors implements Arrayable, \IteratorAggregate, \Stringable
+class RequestInputErrors implements Arrayable, \IteratorAggregate, \Stringable
 {
     /**
      * @var array Stores error messages for fields
