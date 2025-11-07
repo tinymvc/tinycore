@@ -223,6 +223,16 @@ class HttpResponse implements Arrayable, ArrayAccess, \Stringable
     }
 
     /**
+     * Check if the response was a failure (non-2xx status code).
+     *
+     * @return bool True if failed, false otherwise.
+     */
+    public function failed(): bool
+    {
+        return !$this->isSuccess();
+    }
+
+    /**
      * Check if the response was a server error (5xx status code).
      *
      * @return bool True if server error, false otherwise.

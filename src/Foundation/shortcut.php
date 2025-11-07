@@ -1,5 +1,6 @@
 <?php
 
+use Spark\Concurrency;
 use Spark\Console\Commands;
 use Spark\Container;
 use Spark\Contracts\Support\Arrayable;
@@ -1846,5 +1847,25 @@ if (!function_exists('pipeline')) {
     function pipeline($payload = null): Pipeline
     {
         return new Pipeline($payload);
+    }
+}
+
+if (!function_exists('concurrency')) {
+    /**
+     * Create a new Concurrency instance or run tasks concurrently.
+     *
+     * This function either creates a new Concurrency instance or runs
+     * the provided tasks concurrently using the Concurrency class.
+     *
+     * @param null|array $tasks An optional array of tasks to run concurrently.
+     * @return array|Concurrency The Concurrency instance or the results of the concurrent tasks.
+     */
+    function concurrency(null|array $tasks = null): array|Concurrency
+    {
+        if (func_num_args() > 0) {
+            return Concurrency::run($tasks);
+        }
+
+        return new Concurrency();
     }
 }

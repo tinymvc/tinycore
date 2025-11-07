@@ -293,6 +293,20 @@ class Auth implements AuthContract, ArrayAccess
     }
 
     /**
+     * Generates a JWT token for the currently logged in user with an optional payload.
+     *
+     * This method creates a JWT token that includes the user's ID and an expiration time.
+     * Additional payload data can be included by passing an associative array.
+     *
+     * @param array $payload Optional associative array of additional payload data to include in the token.
+     * @return string The generated JWT token as a string.
+     */
+    public function createToken(array $payload): string
+    {
+        return $this->getJwtToken($this->getUser(), $payload);
+    }
+
+    /**
      * Logs out the current user by deleting the session and user properties.
      *
      * @return void
