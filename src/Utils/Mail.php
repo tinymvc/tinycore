@@ -119,6 +119,19 @@ class Mail extends PHPMailer implements MailUtilContract
     }
 
     /**
+     * Enable or disable SMTP keep-alive.
+     *
+     * This method sets the SMTPKeepAlive property to the specified value.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function smtpKeepAlive(): self
+    {
+        $this->SMTPKeepAlive = true;
+        return $this;
+    }
+
+    /**
      * Set the email body content using a template.
      *
      * This method allows you to set the email body content using a template.

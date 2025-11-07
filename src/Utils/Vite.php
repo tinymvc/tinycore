@@ -135,7 +135,7 @@ class Vite implements ViteUtilContract
             return $this->config['running'] = false;
         }
 
-        return $this->config['running'] = http(url: $this->serverUrl($entry), config: [CURLOPT_TIMEOUT => 10, CURLOPT_NOBODY => true])->isOk();
+        return $this->config['running'] = http(url: $this->serverUrl($entry), options: [CURLOPT_TIMEOUT => 10, CURLOPT_NOBODY => true])->isOk();
     }
 
     /**

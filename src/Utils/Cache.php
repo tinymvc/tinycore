@@ -128,7 +128,7 @@ class Cache implements CacheUtilContract
      */
     public function unload(): void
     {
-        $this->__destruct();
+        $this->saveChanges();
         $this->cached = false;
         $this->changed = false;
         $this->erased = false;
@@ -319,6 +319,28 @@ class Cache implements CacheUtilContract
     }
 
     /**
+     * Forgets specified cache entries (alias for erase).
+     *
+     * @param string|array $keys Cache key(s) to forget.
+     * @return self
+     */
+    public function forget(string|array $keys): self
+    {
+        return $this->erase($keys);
+    }
+
+    /**
+     * Removes specified cache entries (alias for erase).
+     *
+     * @param string|array $keys Cache key(s) to remove.
+     * @return self
+     */
+    public function remove(string|array $keys): self
+    {
+        return $this->erase($keys);
+    }
+
+    /**
      * Erases expired cache entries based on their timestamps and expiration times.
      *
      * @return self
@@ -434,27 +456,29 @@ class Cache implements CacheUtilContract
      */
     public function saveChanges(): void
     {
-        if ($this->changed) {
-            // Set a temp directory to store caches. 
-            $cacheDir = dir_path(config('cache_dir'));
-
-            // Check if cache directory exists, else create a new directory.
-            if (!fm()->ensureDirectoryWritable($cacheDir)) {
-                throw new FailedToSaveCacheFileException("Cache directory is not writable.");
-            }
-
-            // Save updated cache data into local filesystem.
-            file_put_contents(
-                $this->cachePath,
-                json_encode($this->cacheData, JSON_UNESCAPED_UNICODE),
-                LOCK_EX
-            );
-
-            // Log cache saved event in debug mode.
-            env('debug') && event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
-
-            $this->changed = false;
+        if (!$this->changed) {
+            return; // No changes to save.
         }
+
+        // Set a temp directory to store caches. 
+        $cacheDir = dir_path(config('cache_dir'));
+
+        // Check if cache directory exists, else create a new directory.
+        if (!fm()->ensureDirectoryWritable($cacheDir)) {
+            throw new FailedToSaveCacheFileException("Cache directory is not writable.");
+        }
+
+        // Save updated cache data into local filesystem.
+        file_put_contents(
+            $this->cachePath,
+            json_encode($this->cacheData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            LOCK_EX
+        );
+
+        // Log cache saved event in debug mode.
+        env('debug') && event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
+
+        $this->changed = false;
     }
 
     /**
@@ -462,6 +486,6 @@ class Cache implements CacheUtilContract
      */
     public function __destruct()
     {
-        $this->saveChanges();
+        $this->changed && $this->saveChanges();
     }
 }

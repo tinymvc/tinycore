@@ -1569,13 +1569,18 @@ if (!function_exists('http')) {
      * This function fetches the HTTP instance and, if a URL is provided,
      * makes a request using the provided parameters and configuration.
      *
+     * @param string $method Optional. The HTTP method to use for the request. Default is 'GET'.
      * @param string|null $url Optional. The URL to make the request to.
      * @param array $params Optional. The query parameters for the request.
+     * @param array $headers Optional. The headers for the request.
+     * @param array $options Optional. Additional options for the HTTP request.
      * @return Http|HttpResponse The HTTP instance or the response from the request.
      */
-    function http(?string $url = null, array $params = []): Http|HttpResponse
+    function http(string $method = 'GET', null|string $url = null, array $params = [], array $headers = [], array $options = []): Http|HttpResponse
     {
-        $http = new Http('GET');
+        $http = new Http($method);
+        $http->withHeaders($headers);
+        $http->withOptions($options);
 
         if ($url !== null) {
             return $http->send($url, $params);

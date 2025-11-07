@@ -4,10 +4,10 @@ namespace Spark\Utils;
 
 use Spark\Contracts\Utils\HttpUtilContract;
 use Spark\Exceptions\Utils\PingUtilException;
+use Spark\Helpers\HttpPool;
 use Spark\Helpers\HttpResponse;
 use Spark\Helpers\HttpRequest;
 use Spark\Support\Traits\Macroable;
-use Spark\Utils\Helpers\HttpPool;
 
 /**
  * Class Http
@@ -193,7 +193,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function option(int $key, mixed $value): self
     {
-        return $this->withOption($key, $value);
+        $this->withOption($key, $value);
+        return $this;
     }
 
     /**
@@ -205,7 +206,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function options(array $options): self
     {
-        return $this->withOptions($options);
+        $this->withOptions($options);
+        return $this;
     }
 
     /**
@@ -217,7 +219,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function useragent(string $useragent): self
     {
-        return $this->withUserAgent($useragent);
+        $this->withUserAgent($useragent);
+        return $this;
     }
 
     /**
@@ -229,7 +232,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function contentType(string $type): self
     {
-        return $this->withContentType($type);
+        $this->withContentType($type);
+        return $this;
     }
 
     /**
@@ -241,7 +245,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function accept(string $type): self
     {
-        return $this->withAccept($type);
+        $this->withAccept($type);
+        return $this;
     }
 
     /**
@@ -254,7 +259,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function header(string $key, string $value): self
     {
-        return $this->withHeader($key, $value);
+        $this->withHeader($key, $value);
+        return $this;
     }
 
     /**
@@ -266,7 +272,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function headers(array $headers): self
     {
-        return $this->withHeaders($headers);
+        $this->withHeaders($headers);
+        return $this;
     }
 
     /**
@@ -278,7 +285,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function cookie(array $cookies): self
     {
-        return $this->withCookies($cookies);
+        $this->withCookies($cookies);
+        return $this;
     }
 
     /**
@@ -290,7 +298,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function cookieJar(string $cookieJar): self
     {
-        return $this->withCookieJar($cookieJar);
+        $this->withCookieJar($cookieJar);
+        return $this;
     }
 
     /**
@@ -304,7 +313,6 @@ class Http extends HttpRequest implements HttpUtilContract
     public function proxy(string $proxy, string $proxyAuth = ''): self
     {
         $this->withProxy($proxy, $proxyAuth);
-
         return $this;
     }
 
@@ -361,7 +369,6 @@ class Http extends HttpRequest implements HttpUtilContract
     public function post(string $url, array|string $data = []): HttpResponse
     {
         $this->postFields($data)
-            ->withOption(CURLOPT_POST, 1)
             ->setMethod('POST');
 
         return $this->send($url);
