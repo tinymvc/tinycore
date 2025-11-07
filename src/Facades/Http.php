@@ -1,5 +1,7 @@
 <?php
 
+namespace Spark\Facades;
+
 use Spark\Facades\Facade;
 use Spark\Helpers\HttpResponse;
 use Spark\Utils\Http as BaseHttp;
