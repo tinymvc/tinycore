@@ -303,7 +303,13 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function createToken(array $payload): string
     {
-        return $this->getJwtToken($this->getUser(), $payload);
+        $user = $this->getUser();
+
+        if (!isset($user)) {
+            throw new \RuntimeException('No authenticated user found to create JWT token.');
+        }
+
+        return $this->getJwtToken($user, $payload);
     }
 
     /**

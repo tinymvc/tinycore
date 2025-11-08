@@ -18,10 +18,10 @@ class HttpRequest
     use Macroable;
 
     /** @var array Request headers */
-    private array $headers = [];
+    protected array $headers = [];
 
     /** @var array cURL options */
-    private array $options = [];
+    protected array $options = [];
 
     /**
      * Constructor.
@@ -33,11 +33,11 @@ class HttpRequest
      * @param string|int $key Request key
      */
     public function __construct(
-        private string $method = 'GET',
-        private string $url = '',
-        private array $params = [],
-        private string|array $data = [],
-        private string|int $key = 0
+        protected string $method = 'GET',
+        protected string $url = '',
+        protected array $params = [],
+        protected string|array $data = [],
+        protected string|int $key = 0
     ) {
     }
 
@@ -284,6 +284,10 @@ class HttpRequest
      */
     public function withPostFields(array|string $fields, null|string $contentType = null): self
     {
+        if (empty($fields)) {
+            return $this; // No fields to set
+        }
+
         if ($contentType === null && is_array($fields)) {
             $contentType = 'application/json';
         }

@@ -72,6 +72,10 @@ class Http extends HttpRequest implements HttpUtilContract
         $this->setUrl($url);
         $this->setParams($params);
         $this->setData($data);
+
+        $this->download = null; // Reset download file
+        $this->options = []; // Reset cURL options
+        $this->headers = []; // Reset headers
     }
 
     /**
