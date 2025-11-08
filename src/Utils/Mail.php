@@ -311,6 +311,9 @@ class Mail extends PHPMailer implements MailUtilContract
         parent::clearCCs();
         parent::clearBCCs();
         parent::clearReplyTos();
+        parent::clearAllRecipients();
+        parent::clearAttachments();
+        parent::clearCustomHeaders();
 
         $this->Subject = '';
         $this->Body = '';
