@@ -84,8 +84,8 @@ class Hash implements HashContract
             throw new InvalidEncryptingKeyException('The provided key must be at least 32 characters long.');
         }
 
-        // Hash the key using SHA-256
-        $this->key = hash('sha256', $key);
+        // Derive a proper 32-byte binary key using HKDF (Key Derivation Function)
+        $this->key = hash_hkdf('sha256', $key, 32, 'aes-256-encryption');
     }
 
     /**
@@ -93,12 +93,18 @@ class Hash implements HashContract
      * 
      * The algorithm should be one of the supported algorithms by the password_hash function.
      * 
-     * @param string $algorithm The algorithm to use for password hashing.
-     * 
-     * @see https://www.php.net/manual/en/password.constants.php
+     * @param string|int $algorithm The algorithm to use for password hashing.
+     * @throws \InvalidArgumentException If the algorithm is not supported.
      */
-    public function setPasswordAlgorithm(string $algorithm): void
+    public function setPasswordAlgorithm(string|int $algorithm): void
     {
+        // Validate that the algorithm is supported
+        $supportedAlgorithms = [PASSWORD_BCRYPT, PASSWORD_ARGON2I, PASSWORD_ARGON2ID];
+
+        if (!in_array($algorithm, $supportedAlgorithms, true)) {
+            throw new \InvalidArgumentException('Unsupported password hashing algorithm.');
+        }
+
         $this->passwordAlgorithm = $algorithm;
     }
 
@@ -271,7 +277,7 @@ class Hash implements HashContract
     }
 
     /**
-     * Encrypts a string using AES-256-CBC symmetric encryption.
+     * Encrypts a string using AES-256-CBC symmetric encryption with HMAC authentication.
      *
      * @param string $value The plaintext string to encrypt.
      * @return string The encrypted string, base64 encoded.
@@ -283,17 +289,21 @@ class Hash implements HashContract
         $iv = random_bytes(openssl_cipher_iv_length('AES-256-CBC'));
 
         // Encrypt the value
-        $cipherText = openssl_encrypt($value, 'AES-256-CBC', $this->key, 0, $iv);
+        $cipherText = openssl_encrypt($value, 'AES-256-CBC', $this->key, OPENSSL_RAW_DATA, $iv);
 
         // Check if encryption was successful
         if ($cipherText === false) {
             throw new EncryptionFailedException('Encryption failed.');
         }
 
-        // Use JSON encoding for cleaner and safer storage of IV and ciphertext
+        // Create HMAC for authentication (prevents tampering)
+        $hmac = hash_hmac('sha256', $iv . $cipherText, $this->key, true);
+
+        // Use JSON encoding for cleaner and safer storage of IV, ciphertext, and HMAC
         $encryptedData = json_encode([
-            'cipherText' => $cipherText,
-            'iv' => base64_encode($iv)
+            'cipherText' => base64_encode($cipherText),
+            'iv' => base64_encode($iv),
+            'hmac' => base64_encode($hmac)
         ]);
 
         if ($encryptedData === false) {
@@ -325,12 +335,28 @@ class Hash implements HashContract
         }
 
         $iv = base64_decode($data['iv'], true);
+        $cipherText = base64_decode($data['cipherText'], true);
 
-        if ($iv === false) {
-            throw new DecryptionFailedException('Invalid IV format.');
+        if ($iv === false || $cipherText === false) {
+            throw new DecryptionFailedException('Invalid IV or ciphertext format.');
         }
 
-        $plainText = openssl_decrypt($data['cipherText'], 'AES-256-CBC', $this->key, 0, $iv);
+        // Verify HMAC if present (for authenticated encryption)
+        if (!empty($data['hmac'])) {
+            $hmac = base64_decode($data['hmac'], true);
+
+            if ($hmac === false) {
+                throw new DecryptionFailedException('Invalid HMAC format.');
+            }
+
+            $calculatedHmac = hash_hmac('sha256', $iv . $cipherText, $this->key, true);
+
+            if (!hash_equals($hmac, $calculatedHmac)) {
+                throw new DecryptionFailedException('HMAC verification failed. Data may have been tampered with.');
+            }
+        }
+
+        $plainText = openssl_decrypt($cipherText, 'AES-256-CBC', $this->key, OPENSSL_RAW_DATA, $iv);
 
         if ($plainText === false) {
             throw new DecryptionFailedException('Decryption failed.');
@@ -340,13 +366,172 @@ class Hash implements HashContract
     }
 
     /**
-     * Generate a cryptographically secure random string.
+     * Generate a cryptographically secure random string (hex-encoded).
      *
-     * @param int $length The number of bytes to generate.
-     * @return string The generated random string.
+     * @param int $length The number of bytes to generate (result will be $length * 2 characters).
+     * @return string The generated random hex string.
      */
     public function random(int $length = 32): string
     {
         return bin2hex(random_bytes($length));
+    }
+
+    /**
+     * Generate cryptographically secure random bytes.
+     *
+     * @param int $length The number of bytes to generate.
+     * @return string The generated random bytes.
+     */
+    public function randomBytes(int $length = 32): string
+    {
+        return random_bytes($length);
+    }
+
+    /**
+     * Generate a simple hash (without HMAC) using the specified algorithm.
+     * Useful for file checksums, non-cryptographic purposes.
+     *
+     * @param string $value The value to hash.
+     * @param string $algo The hashing algorithm (default: sha256).
+     * @return string The hash value.
+     */
+    public function hash(string $value, string $algo = 'sha256'): string
+    {
+        return hash($algo, $value);
+    }
+
+    /**
+     * Generate an HMAC hash.
+     *
+     * @param string $value The value to hash.
+     * @param string $algo The hashing algorithm (default: sha256).
+     * @return string The HMAC hash.
+     */
+    public function hmac(string $value, string $algo = 'sha256'): string
+    {
+        return hash_hmac($algo, $value, $this->key);
+    }
+
+    /**
+     * Encrypt an array by serializing it first.
+     *
+     * @param array $data The array to encrypt.
+     * @return string The encrypted string.
+     * @throws EncryptionFailedException
+     */
+    public function encryptArray(array $data): string
+    {
+        return $this->encrypt(serialize($data));
+    }
+
+    /**
+     * Decrypt a string and unserialize it to an array.
+     *
+     * @param string $encrypted The encrypted string.
+     * @return array The decrypted array.
+     * @throws DecryptionFailedException
+     */
+    public function decryptArray(string $encrypted): array
+    {
+        $decrypted = $this->decrypt($encrypted);
+        $data = unserialize($decrypted);
+
+        if (!is_array($data)) {
+            throw new DecryptionFailedException('Decrypted data is not a valid array.');
+        }
+
+        return $data;
+    }
+
+    /**
+     * Alias for encrypt method.
+     *
+     * @param string $value The plaintext string to encrypt.
+     * @return string The encrypted string.
+     * @throws EncryptionFailedException
+     */
+    public function encryptString(string $value): string
+    {
+        return $this->encrypt($value);
+    }
+
+    /**
+     * Alias for decrypt method.
+     *
+     * @param string $encrypted The encrypted string.
+     * @return string The decrypted string.
+     * @throws DecryptionFailedException
+     */
+    public function decryptString(string $encrypted): string
+    {
+        return $this->decrypt($encrypted);
+    }
+
+    /**
+     * Timing-attack safe string comparison (alias for equals).
+     *
+     * @param string $known The known string.
+     * @param string $user The user-provided string.
+     * @return bool True if equal, false otherwise.
+     */
+    public function isEqual(string $known, string $user): bool
+    {
+        return $this->equals($known, $user);
+    }
+
+    /**
+     * Hash a password using Bcrypt algorithm.
+     *
+     * @param string $password The password to hash.
+     * @param array $options Optional Bcrypt options.
+     * @return string The hashed password.
+     */
+    public function bcrypt(string $password, array $options = []): string
+    {
+        $options = array_merge(['cost' => 12], $options);
+        return password_hash($password, PASSWORD_BCRYPT, $options);
+    }
+
+    /**
+     * Hash a password using Argon2i algorithm.
+     *
+     * @param string $password The password to hash.
+     * @param array $options Optional Argon2 options.
+     * @return string The hashed password.
+     */
+    public function argon2i(string $password, array $options = []): string
+    {
+        $options = array_merge($this->passwordOptions, $options);
+        return password_hash($password, PASSWORD_ARGON2I, $options);
+    }
+
+    /**
+     * Hash a password using Argon2id algorithm.
+     *
+     * @param string $password The password to hash.
+     * @param array $options Optional Argon2 options.
+     * @return string The hashed password.
+     */
+    public function argon2id(string $password, array $options = []): string
+    {
+        $options = array_merge($this->passwordOptions, $options);
+        return password_hash($password, PASSWORD_ARGON2ID, $options);
+    }
+
+    /**
+     * Generate a version 4 UUID.
+     *
+     * @return string The generated UUID.
+     */
+    public function uuid(): string
+    {
+        $data = random_bytes(16);
+
+        // Set version to 0100 (UUID v4)
+        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+        // Set bits 6-7 to 10
+        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 }

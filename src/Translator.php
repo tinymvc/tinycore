@@ -155,7 +155,7 @@ class Translator implements TranslatorContract
     private function replaceNamedPlaceholders(string $text, array $args): string
     {
         // If args is associative array, replace by key names
-        if ($this->isAssociativeArray($args)) {
+        if (!array_is_list($args)) {
             foreach ($args as $key => $value) {
                 $text = str_replace(":$key", $value, $text);
             }
@@ -170,17 +170,6 @@ class Translator implements TranslatorContract
         }
 
         return $text;
-    }
-
-    /**
-     * Checks if an array is associative.
-     *
-     * @param array $array The array to check.
-     * @return bool True if the array is associative, false otherwise.
-     */
-    private function isAssociativeArray(array $array): bool
-    {
-        return array_keys($array) !== range(0, count($array) - 1);
     }
 
     /**

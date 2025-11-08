@@ -131,9 +131,10 @@ class Pipeline
      * If the condition is true, the specified pipes will be added.
      * 
      * @param bool $condition The condition to check.
-     * @param callable|string ...$pipes One or more pipes to be added if the condition is true.
+     * @param callable|string|array ...$pipes One or more pipes to be added if the condition is true.
+     * @return self The current instance of the Pipeline class for method chaining.
      */
-    public function when(bool $condition, callable|string ...$pipes): self
+    public function when(bool $condition, callable|string|array ...$pipes): self
     {
         if ($condition) {
             $this->through(...$pipes);
@@ -148,9 +149,10 @@ class Pipeline
      * If the condition is false, the specified pipes will be added.
      * 
      * @param bool $condition The condition to check.
-     * @param callable|string ...$pipes One or more pipes to be added if the condition
+     * @param callable|string|array ...$pipes One or more pipes to be added if the condition is false.
+     * @return self The current instance of the Pipeline class for method chaining.
      */
-    public function unless(bool $condition, callable|string ...$pipes): self
+    public function unless(bool $condition, callable|string|array ...$pipes): self
     {
         return $this->when(!$condition, ...$pipes);
     }
@@ -163,6 +165,7 @@ class Pipeline
      * 
      * @param Closure $handler The error handler function that will be called with the exception, payload, and context.
      * @param bool $stopOnError Whether to stop execution on the first error encountered.
+     * @return self The current instance of the Pipeline class for method chaining.
      */
     public function onError(Closure $handler, bool $stopOnError = true): self
     {
@@ -225,6 +228,9 @@ class Pipeline
     public function then(?callable $destination = null): mixed
     {
         try {
+            // Create a temporary copy of pipes to avoid mutation
+            $originalPipes = $this->pipes;
+
             if ($destination) {
                 $this->pipes[] = $this->resolvePipe($destination);
             }
@@ -233,10 +239,18 @@ class Pipeline
                 fn() => $this->executePipeline($this->payload)
             );
 
+            // Restore original pipes to avoid mutation
+            $this->pipes = $originalPipes;
+
             $this->log('Pipeline completed successfully');
             return $result;
 
         } catch (Throwable $e) {
+            // Restore pipes even on error
+            if (isset($originalPipes)) {
+                $this->pipes = $originalPipes;
+            }
+
             $this->log("Pipeline failed: {$e->getMessage()}", 'error');
 
             if ($this->errorHandler) {
@@ -383,11 +397,8 @@ class Pipeline
             return $pipe->handle($payload, $next);
         }
 
-        // For regular callables
-        $result = $pipe($payload, $next, $this->context);
-
-        // If the pipe doesn't call $next, we call it with the result
-        return $result ?? $next($payload);
+        // For regular callables, pass payload, next, and context
+        return $pipe($payload, $next, $this->context);
     }
 
     /**
@@ -446,13 +457,24 @@ class Pipeline
      * This method resolves an array-based pipe, which is expected to contain a class name,
      * method name, and optional parameters.
      * 
+     * @param array $pipe The pipe array containing class, method, and optional parameters.
      * @return callable The resolved pipe as a callable.
+     * @throws InvalidArgumentException If the array doesn't have required elements or method doesn't exist.
      */
     private function resolveArrayPipe(array $pipe): callable
     {
+        if (count($pipe) < 2) {
+            throw new InvalidArgumentException('Array pipe must contain at least [class, method]');
+        }
+
         [$class, $method, $parameters] = array_pad($pipe, 3, []);
 
-        $instance = is_string($class) ? new $class(...$parameters) : $class;
+        $instance = is_string($class) ? new $class(...(array) $parameters) : $class;
+
+        if (!method_exists($instance, $method)) {
+            $className = is_object($instance) ? get_class($instance) : (string) $instance;
+            throw new InvalidArgumentException("Method {$method} does not exist on {$className}");
+        }
 
         return [$instance, $method];
     }
@@ -496,11 +518,13 @@ class Pipeline
         $this->pipes = [];
         $this->middleware = [];
         $this->errorHandler = null;
+        $this->stopOnError = true;
         $this->context = [];
         $this->logs = [];
         $this->payload = null;
+        $this->debug = false;
 
-        return $this; // return the current instance for method chaining
+        return $this;
     }
 
     /**

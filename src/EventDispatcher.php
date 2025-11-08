@@ -108,6 +108,18 @@ class EventDispatcher implements EventDispatcherContract
     }
 
     /**
+     * Alias for getListeners method to retrieve all registered event listeners.
+     * 
+     * @return array
+     *   An associative array where keys are event names and values are arrays
+     *   of callables registered as listeners for the events.
+     */
+    public function get(?string $eventName = null): array
+    {
+        return $this->getListeners($eventName);
+    }
+
+    /**
      * Removes all registered event listeners.
      *
      * This method is useful in scenarios where you need to reset the event
@@ -125,6 +137,16 @@ class EventDispatcher implements EventDispatcherContract
         }
 
         $this->listeners = [];
+    }
+
+    /**
+     * Alias for clearListeners method to remove all registered event listeners.
+     * 
+     * @return void
+     */
+    public function clear(?string $eventName = null): void
+    {
+        $this->clearListeners($eventName);
     }
 
     /**

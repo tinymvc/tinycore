@@ -97,9 +97,28 @@ class Container implements ContainerContract
      *
      * @param string $alias The alias name.
      * @param string $abstract The abstract name.
+     * @throws InvalidAliasException If alias points to itself or would create a circular reference.
      */
     public function alias(string $alias, string $abstract): void
     {
+        // Prevent self-referencing aliases
+        if ($alias === $abstract) {
+            throw new InvalidAliasException("Alias [{$alias}] cannot reference itself.");
+        }
+
+        // Check if adding this alias would create a circular reference
+        if (isset($this->aliases[$abstract])) {
+            try {
+                $resolved = $this->resolveAlias($abstract);
+                if ($resolved === $alias) {
+                    throw new InvalidAliasException("Circular alias detected between [{$alias}] and [{$abstract}].");
+                }
+            } catch (InvalidAliasException $e) {
+                // If resolveAlias throws, we're about to create a circular reference
+                throw new InvalidAliasException("Adding alias [{$alias}] for [{$abstract}] would create a circular reference.");
+            }
+        }
+
         $this->aliases[$alias] = $abstract;
     }
 
@@ -147,6 +166,44 @@ class Container implements ContainerContract
         }
 
         return $this->build($this->bindings[$abstract]);
+    }
+
+    /**
+     * Resolve and return an instance from the container (alias for get).
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     * @param array $parameters Additional parameters for construction (optional).
+     * @return mixed The resolved instance.
+     */
+    public function make(string $abstract, array $parameters = []): mixed
+    {
+        // If parameters provided, we need to build with parameters
+        if (!empty($parameters)) {
+            $abstract = $this->resolveAlias($abstract);
+            $concrete = $this->bindings[$abstract] ?? $abstract;
+
+            // For closures, pass parameters
+            if (is_callable($concrete)) {
+                return $concrete($this, ...$parameters);
+            }
+
+            // For classes, we'd need to inject parameters into constructor
+            // This is a simplified version - could be enhanced
+            return $this->build($concrete);
+        }
+
+        return $this->get($abstract);
+    }
+
+    /**
+     * Resolve an instance from the container (alias for get).
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     * @return mixed The resolved instance.
+     */
+    public function resolve(string $abstract): mixed
+    {
+        return $this->get($abstract);
     }
 
     /**
@@ -231,7 +288,7 @@ class Container implements ContainerContract
     {
         $methodParams = $reflector->getParameters();
         $dependencies = [];
-        $isAssociative = $this->isAssociativeArray($parameters);
+        $isAssociative = !array_is_list($parameters);
         $positionalIndex = 0;
 
         foreach ($methodParams as $param) {
@@ -280,18 +337,82 @@ class Container implements ContainerContract
     }
 
     /**
-     * Check if an array is associative.
+     * Register an existing instance as a singleton in the container.
      *
-     * @param array $array The array to check.
-     * @return bool True if the array is associative, false otherwise.
+     * @param string $abstract The abstract name.
+     * @param mixed $instance The instance to register.
+     * @return void
      */
-    private function isAssociativeArray(array $array): bool
+    public function instance(string $abstract, mixed $instance): void
     {
-        if (empty($array)) {
-            return false;
-        }
+        $this->instances[$abstract] = $instance;
+    }
 
-        return array_keys($array) !== range(0, count($array) - 1);
+    /**
+     * Determine if a given abstract type has been bound.
+     *
+     * @param string $abstract The abstract name.
+     * @return bool
+     */
+    public function bound(string $abstract): bool
+    {
+        return isset($this->bindings[$abstract]) || isset($this->instances[$abstract]) || isset($this->aliases[$abstract]);
+    }
+
+    /**
+     * Determine if a given abstract type has been resolved.
+     *
+     * @param string $abstract The abstract name.
+     * @return bool
+     */
+    public function resolved(string $abstract): bool
+    {
+        $abstract = $this->resolveAlias($abstract);
+
+        return isset($this->instances[$abstract]) && $this->instances[$abstract] !== null;
+    }
+
+    /**
+     * Get the alias for an abstract if available.
+     *
+     * @param string $abstract The abstract name.
+     * @return string The alias or the original abstract.
+     */
+    public function getAlias(string $abstract): string
+    {
+        return $this->aliases[$abstract] ?? $abstract;
+    }
+
+    /**
+     * Remove an alias.
+     *
+     * @param string $alias The alias to remove.
+     * @return void
+     */
+    public function removeAlias(string $alias): void
+    {
+        unset($this->aliases[$alias]);
+    }
+
+    /**
+     * Determine if the container has a given alias.
+     *
+     * @param string $alias The alias name.
+     * @return bool
+     */
+    public function isAlias(string $alias): bool
+    {
+        return isset($this->aliases[$alias]);
+    }
+
+    /**
+     * Get all registered aliases.
+     *
+     * @return array
+     */
+    public function getAliases(): array
+    {
+        return $this->aliases;
     }
 
     /**
@@ -419,7 +540,7 @@ class Container implements ContainerContract
      *
      * @return void
      */
-    public function flush()
+    public function flush(): void
     {
         $this->bindings = [];
         $this->instances = [];
