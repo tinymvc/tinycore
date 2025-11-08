@@ -35,11 +35,22 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
      * 
      * @param string $absoluteUrl The full URL to parse
      * @param array $parameters Optional route parameters
+     * @throws \InvalidArgumentException If the URL is invalid or cannot be parsed
      */
     public function __construct(string $absoluteUrl, array $parameters = [])
     {
+        if (empty($absoluteUrl)) {
+            throw new \InvalidArgumentException('URL cannot be empty.');
+        }
+
         $this->absoluteUrl = $absoluteUrl;
-        $this->components = parse_url($absoluteUrl) ?: [];
+        $parsed = parse_url($absoluteUrl);
+
+        if ($parsed === false) {
+            throw new \InvalidArgumentException("Invalid URL: {$absoluteUrl}");
+        }
+
+        $this->components = $parsed;
         $this->parameters = $parameters;
     }
 
@@ -82,7 +93,7 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
             'fragment' => $this->getFragment(),
             'parsedPath' => $this->buildParsedPath(),
             'parameters' => $this->parameters,
-            default => $this->parameters[$name] ?? $name
+            default => $this->parameters[$name] ?? null
         };
     }
 
@@ -850,6 +861,7 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
      * 
      * @param array $components Associative array of URL components
      * @return self A new Url instance with the constructed URL
+     * @throws \InvalidArgumentException If required components are missing
      */
     public static function fromComponents(array $components): self
     {
@@ -857,6 +869,11 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
 
         if (isset($components['scheme'])) {
             $url .= $components['scheme'] . '://';
+        } else {
+            // Default to https if no scheme provided but host exists
+            if (isset($components['host'])) {
+                $url .= 'https://';
+            }
         }
 
         if (isset($components['host'])) {
@@ -867,18 +884,154 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
             $url .= ':' . $components['port'];
         }
 
-        if (isset($components['path'])) {
-            $url .= $components['path'];
-        }
+        $path = $components['path'] ?? '/';
+        $url .= $path;
 
         if (isset($components['query'])) {
-            $url .= '?' . $components['query'];
+            $url .= '?' . ltrim($components['query'], '?');
         }
 
         if (isset($components['fragment'])) {
-            $url .= '#' . $components['fragment'];
+            $url .= '#' . ltrim($components['fragment'], '#');
         }
 
-        return new self($url ?: '/');
+        // Ensure we have at least a minimal valid URL
+        if (empty($url)) {
+            throw new \InvalidArgumentException('Cannot create URL from empty components.');
+        }
+
+        return new self($url);
+    }
+
+    /**
+     * Create URL from string with validation
+     * 
+     * @param string $url The URL string
+     * @return self A new Url instance
+     * @throws \InvalidArgumentException If the URL is invalid
+     */
+    public static function parse(string $url): self
+    {
+        return new self($url);
+    }
+
+    /**
+     * Get the base URL (scheme + host + port)
+     * 
+     * @return string The base URL
+     */
+    public function getBaseUrl(): string
+    {
+        $base = $this->getScheme() . '://' . $this->getHost();
+
+        $port = $this->getPort();
+        if ($port && !in_array($port, [80, 443])) {
+            $base .= ":$port";
+        }
+
+        return $base;
+    }
+
+    /**
+     * Get the full URL without query and fragment
+     * 
+     * @return string The URL without query and fragment
+     */
+    public function getPathUrl(): string
+    {
+        return $this->getBaseUrl() . $this->getPath();
+    }
+
+    /**
+     * Check if URL is relative
+     * 
+     * @return bool True if URL is relative, false otherwise
+     */
+    public function isRelative(): bool
+    {
+        return empty($this->components['scheme']) && empty($this->components['host']);
+    }
+
+    /**
+     * Check if URL is absolute
+     * 
+     * @return bool True if URL is absolute, false otherwise
+     */
+    public function isAbsolute(): bool
+    {
+        return !$this->isRelative();
+    }
+
+    /**
+     * Get a specific query parameter
+     * 
+     * @param string $key The parameter key
+     * @param mixed $default The default value if parameter doesn't exist
+     * @return mixed The parameter value or default
+     */
+    public function getQueryParam(string $key, mixed $default = null): mixed
+    {
+        $params = $this->getQueryParams();
+        return $params[$key] ?? $default;
+    }
+
+    /**
+     * Check if a query parameter exists
+     * 
+     * @param string $key The parameter key
+     * @return bool True if parameter exists, false otherwise
+     */
+    public function hasQueryParam(string $key): bool
+    {
+        $params = $this->getQueryParams();
+        return array_key_exists($key, $params);
+    }
+
+    /**
+     * Get the domain (host without subdomain)
+     * 
+     * @return string|null The domain or null if cannot be determined
+     */
+    public function getDomain(): ?string
+    {
+        $host = $this->getHost();
+
+        if (empty($host)) {
+            return null;
+        }
+
+        // Simple domain extraction (last two parts)
+        $parts = explode('.', $host);
+        $count = count($parts);
+
+        if ($count < 2) {
+            return $host;
+        }
+
+        return $parts[$count - 2] . '.' . $parts[$count - 1];
+    }
+
+    /**
+     * Get the subdomain
+     * 
+     * @return string|null The subdomain or null if none exists
+     */
+    public function getSubdomain(): ?string
+    {
+        $host = $this->getHost();
+
+        if (empty($host)) {
+            return null;
+        }
+
+        $parts = explode('.', $host);
+        $count = count($parts);
+
+        if ($count <= 2) {
+            return null;
+        }
+
+        // Return everything except the last two parts
+        return implode('.', array_slice($parts, 0, $count - 2));
     }
 }
