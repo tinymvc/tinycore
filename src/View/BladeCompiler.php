@@ -49,13 +49,23 @@ class BladeCompiler implements BladeCompilerContract
      * @param string $templatePath
      * @param string $compiledPath
      * @return void
+     * @throws \RuntimeException
      */
     public function compile(string $templatePath, string $compiledPath): void
     {
-        $content = file_get_contents($templatePath);
+        $content = @file_get_contents($templatePath);
+
+        if ($content === false) {
+            throw new \RuntimeException("Failed to read template file: {$templatePath}");
+        }
+
         $compiled = $this->compileString($content);
 
-        file_put_contents($compiledPath, $compiled);
+        $result = @file_put_contents($compiledPath, $compiled);
+
+        if ($result === false) {
+            throw new \RuntimeException("Failed to write compiled template: {$compiledPath}");
+        }
     }
 
     /**
@@ -482,7 +492,7 @@ class BladeCompiler implements BladeCompilerContract
         $content = trim($content);
 
         // Escape single quotes and backslashes for PHP string
-        $escaped = str_replace(['\\', "'"], ['\\\\', "\\'"], $content);
+        $escaped = addslashes($content);
 
         return $escaped;
     }
@@ -530,6 +540,11 @@ class BladeCompiler implements BladeCompilerContract
             }
 
             $name = substr($attributesString, $nameStart, $i - $nameStart);
+
+            // Skip empty names
+            if (empty($name)) {
+                continue;
+            }
 
             if ($name[0] === '$') {
                 $name = substr($name, 1);
@@ -906,16 +921,16 @@ class BladeCompiler implements BladeCompilerContract
             'case' => 'case %s:',
             'vite' => 'echo vite(%s);',
             'method' => 'echo method(%s);',
-            'checked' => "echo (%s) ? 'checked=\"true\"' : '';",
-            'disabled' => "echo (%s) ? 'disabled=\"true\"' : '';",
-            'selected' => "echo (%s) ? 'selected=\"true\"' : '';",
-            'readonly' => "echo (%s) ? 'readonly=\"true\"' : '';",
-            'required' => "echo (%s) ? 'required=\"true\"' : '';",
+            'checked' => "echo (%s) ? 'checked=\"checked\"' : '';",
+            'disabled' => "echo (%s) ? 'disabled=\"disabled\"' : '';",
+            'selected' => "echo (%s) ? 'selected=\"selected\"' : '';",
+            'readonly' => "echo (%s) ? 'readonly=\"readonly\"' : '';",
+            'required' => "echo (%s) ? 'required=\"required\"' : '';",
             'style' => "echo 'style=\"' . \$this->compileStyleArray(%s) . '\"';",
             'class' => "echo 'class=\"' . \$this->compileClassArray(%s) . '\"';",
             'attributes' => "echo \$this->compileAttributesArray(%s);",
-            'errors' => "if(\errors()->any() && \errors()->has('%s')): foreach(\errors()->get('%s') as \$message):",
-            'error' => "if(\errors()->any() && \errors()->has('%s')): \$message = \errors()->first('%s');",
+            'errors' => "if(errors()->any() && errors()->has('%s')): foreach(errors()->get('%s') as \$message):",
+            'error' => "if(errors()->any() && errors()->has('%s')): \$message = errors()->first('%s');",
         ];
 
         $singleLineDirectives = [
@@ -926,7 +941,7 @@ class BladeCompiler implements BladeCompilerContract
             'csrf' => '<?= csrf(); ?>',
             'else' => '<?php else: ?>',
             'endif' => '<?php endif; ?>',
-            'enderrors' => '<?php endif; ?>',
+            'enderrors' => '<?php endforeach; endif; ?>',
             'enderror' => '<?php endif; ?>',
             'auth' => '<?php if(!is_guest()): ?>',
             'guest' => '<?php if(is_guest()): ?>',
@@ -1152,7 +1167,14 @@ class BladeCompiler implements BladeCompilerContract
             return true;
         }
 
-        return filemtime($templatePath) > filemtime($compiledPath);
+        $templateTime = @filemtime($templatePath);
+        $compiledTime = @filemtime($compiledPath);
+
+        if ($templateTime === false || $compiledTime === false) {
+            return true;
+        }
+
+        return $templateTime > $compiledTime;
     }
 
     /**
@@ -1162,9 +1184,18 @@ class BladeCompiler implements BladeCompilerContract
      */
     public function clearCache(): void
     {
+        if (!is_dir($this->cachePath)) {
+            return;
+        }
+
         $files = glob("{$this->cachePath}/*.php");
+
+        if ($files === false) {
+            return;
+        }
+
         foreach ($files as $file) {
-            unlink($file);
+            is_file($file) && @unlink($file);
         }
     }
 }

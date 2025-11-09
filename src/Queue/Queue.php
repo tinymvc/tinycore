@@ -8,7 +8,6 @@ use Laravel\SerializableClosure\SerializableClosure;
 use RuntimeException;
 use Spark\Console\Prompt;
 use Spark\Queue\Contracts\QueueContract;
-use Spark\EventDispatcher;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
@@ -271,19 +270,7 @@ class Queue implements QueueContract
             'scheduledTime' => $job->getScheduledTime()->format('c'), // Save the scheduled time as string.
             'repeat' => $job->getRepeat(), // Save the repeat as it is.
             'priority' => $job->getPriority(), // Save the priority as it is.
-            'eventListeners' => collect(
-                $job->getEventDispatcher()->getListeners()
-            )
-                ->mapWithKeys(fn($events, $eventName) => [
-                    $eventName => array_map(
-                        fn($event) => [
-                            'priority' => $event['priority'],
-                            'callback' => $this->serializeCallback($event['callback'])
-                        ],
-                        $events
-                    )
-                ])
-                ->all(), // Save the events as it is.
+            'errorCallback' => $this->serializeCallback($job->getErrorCallback()),
         ];
     }
 
@@ -303,23 +290,11 @@ class Queue implements QueueContract
     private function unserializeJob(array $job): Job
     {
         return new Job(
-            $this->unserializeCallback($job['callback']), // Unserialize the callback and set it.
-            new DateTime($job['scheduledTime']), // Set the scheduled time using the ISO 8601 string.
-            $job['repeat'], // Set the repeat as it is.
-            new EventDispatcher(
-                collect($job['eventListeners'])
-                    ->mapWithKeys(fn($events, $eventName) => [
-                        $eventName => array_map(
-                            fn($event) => [
-                                'priority' => $event['priority'],
-                                'callback' => $this->unserializeCallback($event['callback'])
-                            ], // Unserialize the callback and set it.
-                            $events
-                        )
-                    ])
-                    ->all() // Set the event listeners as they are.
-            ),
-            $job['priority'] // Set the priority as it is.
+            callback: $this->unserializeCallback($job['callback']), // Unserialize the callback and set it.
+            scheduledTime: new DateTime($job['scheduledTime']), // Set the scheduled time using the ISO 8601 string.
+            repeat: $job['repeat'], // Set the repeat as it is.
+            priority: $job['priority'], // Set the priority as it is.
+            onFailed: $this->unserializeCallback($job['errorCallback']), // Set the error callback as it is.
         );
     }
 

@@ -4,8 +4,8 @@ namespace Spark\Queue;
 
 use DateTime;
 use Spark\Queue\Contracts\JobContract;
-use Spark\EventDispatcher;
 use Spark\Foundation\Application;
+use Spark\Queue\Exceptions\FailedToResolveJobError;
 use Spark\Support\Traits\Macroable;
 use Throwable;
 
@@ -39,10 +39,6 @@ class Job implements JobContract
      *   The repeat interval to use when requeueing the job. If no
      *   repeat is given, the job is not requeued after it is processed.
      *
-     * @param EventDispatcher|null $eventDispatcher
-     *   The event dispatcher to use for dispatching events. If no event
-     *   dispatcher is given, a new instance is created.
-     *
      * @param int $priority
      *   The priority to use for the job. Lower numbers are processed
      *   first.
@@ -51,8 +47,8 @@ class Job implements JobContract
         private $callback,
         private null|string|DateTime $scheduledTime = null,
         private ?string $repeat = null,
-        private ?EventDispatcher $eventDispatcher = null,
-        private int $priority = 0
+        private int $priority = 0,
+        private $onFailed = null,
     ) {
         // If the scheduled time is a string, convert it to a DateTime object.
         if (is_string($scheduledTime)) {
@@ -61,9 +57,6 @@ class Job implements JobContract
 
         // If the scheduled time is not provided, set it to the current time.
         $this->scheduledTime ??= new DateTime();
-
-        // Create a new EventDispatcher instance.
-        $this->eventDispatcher ??= new EventDispatcher();
     }
 
     /**
@@ -143,63 +136,20 @@ class Job implements JobContract
     }
 
     /**
-     * Sets the error handling closure for the job.
+     * Sets the failure callback for the job.
      *
-     * This method allows specifying a closure that will be executed
-     * if an error occurs during the job's execution. The closure
-     * should contain logic to handle any exceptions or errors that
-     * may arise.
+     * This method sets the callback function that will be executed
+     * if the job fails during processing.
      *
-     * @param Closure $callback
-     *   A callback to handle errors that occur during execution.
+     * @param string|array|callable $callback
+     *   The callback function to execute on job failure.
      *
      * @return self
      *   Returns the current Job instance for method chaining.
      */
     public function catch(string|array|callable $callback): self
     {
-        $this->eventDispatcher->addListener('error', $callback);
-
-        return $this;
-    }
-
-    /**
-     * Sets the closure to execute before the job starts.
-     *
-     * This method allows specifying a closure that will be executed
-     * immediately before the job starts. The closure
-     * should contain logic that needs to run before the job does.
-     *
-     * @param string|array|callable $callback
-     *   A callback to execute before the job.
-     *
-     * @return self
-     *   Returns the current Job instance for method chaining.
-     */
-    public function before(string|array|callable $callback): self
-    {
-        $this->eventDispatcher->addListener('before', $callback);
-
-        return $this;
-    }
-
-    /**
-     * Sets the closure to execute after the job has been completed.
-     *
-     * This method allows specifying a closure that will be executed
-     * immediately after the job has been completed. The closure
-     * should contain logic that needs to run after the job has finished executing.
-     *
-     * @param string|array|callable $callback
-     *   A callback to execute after the job has been completed.
-     *
-     * @return self
-     *   Returns the current Job instance for method chaining.
-     */
-    public function after(string|array|callable $callback): self
-    {
-        $this->eventDispatcher->addListener('after', $callback);
-
+        $this->onFailed = $callback;
         return $this;
     }
 
@@ -214,19 +164,18 @@ class Job implements JobContract
      */
     public function handle(): void
     {
-        // Call the 'before' event listeners to execute any code that needs to be run before the job is processed.
-        $this->eventDispatcher->dispatch('before', $this);
-
         try {
             // Execute the job's closure function.
-            Application::$app->resolve($this->callback, [$this]);
+            Application::$app->resolve($this->callback, ['job' => $this]);
         } catch (Throwable $e) {
             // Call the 'error' event listeners to execute any code that needs to be run when an error occurs during the job processing.
-            $this->eventDispatcher->dispatch('error', $e, $this);
-        }
+            if (isset($this->onFailed)) {
+                Application::$app->resolve($this->onFailed, ['error' => $e, 'job' => $this]);
+            }
 
-        // Call the 'after' event listeners to execute any code that needs to be run after the job has been completed.
-        $this->eventDispatcher->dispatch('after', $this);
+            // Re-throw the exception as a FailedToResolveJobError
+            throw new FailedToResolveJobError("Failed to resolve job callback: " . $e->getMessage(), 0, $e);
+        }
     }
 
     /**
@@ -255,6 +204,17 @@ class Job implements JobContract
     }
 
     /**
+     * Returns the error callback function associated with the job.
+     *
+     * @return null|string|array|callable
+     *   The error callback function associated with the job.
+     */
+    public function getErrorCallback(): null|string|array|callable
+    {
+        return $this->onFailed;
+    }
+
+    /**
      * Returns the repeat string as a CRON expression.
      *
      * If the repeat string is not a valid CRON expression, it is prefixed with a "+" sign.
@@ -280,19 +240,6 @@ class Job implements JobContract
     public function getScheduledTime(): DateTime
     {
         return $this->scheduledTime;
-    }
-
-    /**
-     * Returns the event dispatcher that was set when the job was created.
-     *
-     * The event dispatcher is used to dispatch events when the job is executed.
-     *
-     * @return EventDispatcher
-     *   The event dispatcher.
-     */
-    public function getEventDispatcher(): EventDispatcher
-    {
-        return $this->eventDispatcher;
     }
 
     /**

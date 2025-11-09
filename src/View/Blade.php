@@ -4,7 +4,6 @@ namespace Spark\View;
 
 use Spark\Foundation\Application;
 use Spark\Http\Request;
-use Spark\Http\Session;
 use Spark\Support\Traits\Macroable;
 use Spark\View\BladeCompiler;
 use Spark\View\Contracts\BladeCompilerContract;
@@ -110,7 +109,6 @@ class Blade implements BladeContract
         self::$shared = array_merge([
             'app' => Application::$app,
             'request' => Application::$app->get(Request::class),
-            'session' => Application::$app->get(Session::class),
             'errors' => Application::$app->get(Request::class)->getErrorObject(),
         ], self::$shared);
     }
@@ -182,9 +180,9 @@ class Blade implements BladeContract
     /**
      * Get the Blade compiler instance
      * 
-     * @return BladeCompiler
+     * @return \Spark\View\Contracts\BladeCompilerContract
      */
-    public function getCompiler(): BladeCompiler
+    public function getCompiler(): BladeCompilerContract
     {
         return $this->compiler;
     }
@@ -559,11 +557,10 @@ class Blade implements BladeContract
                 if ($value) {
                     $compiledClasses[] = $value;
                 }
-            } else {
-                // Conditional class like 'font-bold' => $isActive
-                if ($value) {
-                    $compiledClasses[] = $key;
-                }
+            }
+            // Conditional class like 'font-bold' => $isActive
+            elseif ($value) {
+                $compiledClasses[] = $key;
             }
         }
 
@@ -587,11 +584,10 @@ class Blade implements BladeContract
                 if ($value) {
                     $compiledAttributes[] = $value;
                 }
-            } else {
-                // Conditional attribute like 'disabled' => $isDisabled
-                if ($value) {
-                    $compiledAttributes[] = "$key=\"$value\"";
-                }
+            }
+            // Conditional attribute like 'disabled' => $isDisabled
+            elseif ($value) {
+                $compiledAttributes[] = strpos($key, '=') !== false ? $key : "$key=\"$value\"";
             }
         }
 
@@ -615,11 +611,10 @@ class Blade implements BladeContract
                 if ($value) {
                     $compiledStyles[] = $value;
                 }
-            } else {
-                // Conditional style like 'font-weight: bold' => $isActive
-                if ($value) {
-                    $compiledStyles[] = $key;
-                }
+            }
+            // Key-value pair style like 'color' => 'red' or conditional 'font-weight' => $isActive
+            elseif ($value) {
+                $compiledStyles[] = strpos($key, ':') !== false ? $key : "$key: $value";
             }
         }
 
