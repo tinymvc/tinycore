@@ -204,15 +204,13 @@ class HttpPool
 
             // Get response data
             $body = curl_multi_getcontent($curl);
-            $response = [
-                'body' => $body ?: '',
-                'status' => curl_getinfo($curl, CURLINFO_HTTP_CODE),
-                'last_url' => curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-                'length' => curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-                'headers' => curl_getinfo($curl, CURLINFO_HEADER_OUT),
-            ];
-
-            $responses[$key] = new HttpResponse($response);
+            $responses[$key] = new HttpResponse(
+                body: $body ?: '',
+                status: curl_getinfo($curl, CURLINFO_HTTP_CODE),
+                lastUrl: curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+                length: curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
+                headers: (array) curl_getinfo($curl, CURLINFO_HEADER_OUT) ?: [],
+            );
 
             // Clean up
             curl_multi_remove_handle($multiHandle, $curl);

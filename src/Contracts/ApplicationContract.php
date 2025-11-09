@@ -2,7 +2,7 @@
 
 namespace Spark\Contracts;
 
-use Spark\Container;
+use Spark\Contracts\ContainerContract;
 
 /**
  * Interface defining the contract for the Application class.
@@ -33,9 +33,9 @@ interface ApplicationContract
      * The container is a dependency injection container that resolves
      * services and dependencies.
      *
-     * @return Container The container instance.
+     * @return ContainerContract The container instance.
      */
-    public function getContainer(): Container;
+    public function getContainer(): ContainerContract;
 
     /**
      * Returns the root path of the application.

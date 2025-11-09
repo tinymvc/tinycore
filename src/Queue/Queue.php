@@ -136,11 +136,11 @@ class Queue implements QueueContract
      * This method will remove the job with the given ID from the queue and mark
      * the queue as changed.
      *
-     * @param string $id The ID of the job to be removed.
+     * @param int|string $id The ID of the job to be removed.
      *
      * @return void
      */
-    public function removeJob(string $id): void
+    public function removeJob(int|string $id): void
     {
         unset($this->jobs[$id]);
         $this->isChanged = true;
@@ -154,14 +154,16 @@ class Queue implements QueueContract
      * rescheduled for the next time. If the job is not repeated, it will be
      * removed from the queue.
      * 
-     * @param int $maxJobs The maximum number of jobs to run in this execution.
+     * @param null|int $maxJobs The maximum number of jobs to run in this execution.
      * @return void
      */
-    public function run(int $maxJobs): void
+    public function run(?int $maxJobs = null): void
     {
         if (empty($this->getJobs())) {
             return;
         }
+
+        $maxJobs ??= 500; // Default maximum number of jobs to run.
 
         $now = new DateTime();
 
@@ -182,10 +184,7 @@ class Queue implements QueueContract
 
             // If the job is scheduled for the past, execute it.
             if ($job->getScheduledTime() <= $now) {
-                // Otherwise, remove it from the queue.
-                unset($this->jobs[$id]);
-
-                $this->save(); // Save the jobs to the queue file.
+                $this->removeJob($id); // Remove the job from the queue.
 
                 if (is_cli()) {
                     Prompt::message("Running job <bold>#$id</bold>", 'info');
@@ -216,6 +215,8 @@ class Queue implements QueueContract
 
         // If any jobs were run, display the time and memory used.
         $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
+
+        $this->save(); // Save the queue after running jobs.
     }
 
     /**
@@ -239,7 +240,7 @@ class Queue implements QueueContract
      */
     private function loadJobs(): void
     {
-        $rawJobs = file_get_contents($this->storageFile);
+        $rawJobs = @file_get_contents($this->storageFile);
 
         if ($rawJobs === false) {
             throw new FailedToLoadJobsException('Failed to load jobs.');
@@ -326,7 +327,7 @@ class Queue implements QueueContract
             $callback = serialize(new SerializableClosure($callback));
         } else {
             // Otherwise, serialize it using var_export.
-            $callback = var_export($callback, return: true);
+            $callback = var_export($callback, true);
         }
 
         return $callback;
@@ -378,7 +379,7 @@ class Queue implements QueueContract
             ->sortByDesc('priority');
 
         // Save the jobs to the queue file.
-        $isSaved = file_put_contents($this->storageFile, $jobs->toJson(), LOCK_EX);
+        $isSaved = @file_put_contents($this->storageFile, $jobs->toJson(), LOCK_EX);
 
         if ($isSaved === false) {
             throw new FailedToSaveJobsException('Failed to save jobs.');
@@ -440,7 +441,7 @@ class Queue implements QueueContract
     private function makeSureQueueFileIsValid(string $queueFile): void
     {
         // If the queue file does not exist, try to create it.
-        if (!file_exists($queueFile) && !touch($queueFile)) {
+        if (!is_file($queueFile) && !touch($queueFile)) {
             throw new InvalidStorageFileException('Failed to create the queue file.');
         }
         // If the queue file is not writable, try to make it so.

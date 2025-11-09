@@ -55,6 +55,16 @@ interface ContainerContract
     public function addServiceProvider($provider): void;
 
     /**
+     * Boots all registered service providers.
+     * 
+     * This method calls the `boot` method on each registered service
+     * provider to initialize them.
+     * 
+     * @return void
+     */
+    public function bootServiceProviders(): void;
+
+    /**
      * Check if a binding exists.
      *
      * @param string $abstract The abstract name of the class or interface.
@@ -77,6 +87,20 @@ interface ContainerContract
     public function get(string $abstract): mixed;
 
     /**
+     * Resolve a binding with parameters.
+     *
+     * If the binding is a singleton, returns the same instance each time it is
+     * requested. If the binding is not a singleton, a new instance is created
+     * each time it is requested.
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     * @param array $parameters The parameters to pass to the constructor.
+     *
+     * @return mixed The resolved instance.
+     */
+    public function make(string $abstract, array $parameters = []): mixed;
+
+    /**
      * Calls a class method or a closure with the given parameters.
      *
      * This method supports three formats to call a class method or a closure.
@@ -97,4 +121,48 @@ interface ContainerContract
      * @return mixed The result of calling the method or closure.
      */
     public function call(array|string|callable $abstract, array $parameters = []): mixed;
+
+    /**
+     * Register an existing instance as a binding.
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     * @param mixed $instance The instance to register.
+     */
+    public function instance(string $abstract, mixed $instance): void;
+
+    /**
+     * Check if a binding is registered.
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     *
+     * @return bool True if the binding is registered, false otherwise.
+     */
+    public function bound(string $abstract): bool;
+
+    /**
+     * Check if a binding has been resolved.
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     *
+     * @return bool True if the binding has been resolved, false otherwise.
+     */
+    public function resolved(string $abstract): bool;
+
+    /**
+     * Remove a binding from the container.
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     */
+    public function forget(string $abstract): void;
+
+    /**
+     * Reset a binding in the container.
+     *
+     * This method removes the existing binding and re-registers it with
+     * the given concrete implementation.
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     * @param callable|string|null $concrete The new concrete implementation.
+     */
+    public function reset(string $abstract, callable|string|null $concrete = null): void;
 }

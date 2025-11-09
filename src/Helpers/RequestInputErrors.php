@@ -16,16 +16,6 @@ use Spark\Http\Session;
 class RequestInputErrors implements Arrayable, \IteratorAggregate, \Stringable
 {
     /**
-     * @var array Stores error messages for fields
-     */
-    private array $messages = [];
-
-    /**
-     * @var array Stores attributes from the previous request
-     */
-    private array $attributes = [];
-
-    /**
      * Construct the error object.
      *
      * This method sets the error messages and attributes from the session
@@ -34,10 +24,18 @@ class RequestInputErrors implements Arrayable, \IteratorAggregate, \Stringable
      *
      * @return void
      */
-    public function __construct(Session $session)
-    {
-        $this->messages = $session->getFlash('errors', []);
-        $this->attributes = $session->getFlash('input', []);
+    public function __construct(
+        /**
+         * @var array Stores error messages for fields
+         */
+        private array $messages = [],
+
+        /**
+         * @var array Stores attributes from the previous request
+         */
+        private array $attributes = [],
+    ) {
+
     }
 
     /**

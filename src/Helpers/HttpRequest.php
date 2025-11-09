@@ -484,14 +484,12 @@ class HttpRequest
             throw new PingUtilException('cURL Error: ' . curl_error($curl));
         }
 
-        $response = [
-            'body' => $body,
-            'status' => curl_getinfo($curl, CURLINFO_HTTP_CODE),
-            'last_url' => curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-            'length' => curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-            'headers' => curl_getinfo($curl, CURLINFO_HEADER_OUT),
-        ];
-
-        return new HttpResponse($response);
+        return new HttpResponse(
+            body: $body ?: '',
+            status: curl_getinfo($curl, CURLINFO_HTTP_CODE),
+            lastUrl: curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+            length: curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
+            headers: (array) curl_getinfo($curl, CURLINFO_HEADER_OUT) ?: [],
+        );
     }
 }

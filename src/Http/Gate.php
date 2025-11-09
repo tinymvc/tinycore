@@ -20,6 +20,14 @@ class Gate implements GateContract
     use Macroable;
 
     /**
+     * Array of callbacks to run before an ability check.
+     * If any before callback returns non-null, its boolean value is used as the result.
+     *
+     * @var array<int, callable>
+     */
+    private array $beforeCallbacks = [];
+
+    /**
      * Array of defined abilities.
      * Each ability is associated with a closure that receives parameters (the user and any extra arguments).
      *
@@ -28,14 +36,6 @@ class Gate implements GateContract
     public function __construct(private array $definitions = [])
     {
     }
-
-    /**
-     * Array of callbacks to run before an ability check.
-     * If any before callback returns non-null, its boolean value is used as the result.
-     *
-     * @var array<int, callable>
-     */
-    private array $beforeCallbacks = [];
 
     /**
      * Define a new ability.

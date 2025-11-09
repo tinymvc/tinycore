@@ -20,14 +20,14 @@ class Image implements ImageUtilContract
     use Macroable;
 
     /**
-     * @var resource $image The GD image resource.
+     * @var GdImage|resource|null $image The GD image resource.
      */
-    private $image;
+    private GdImage|null $image = null;
 
     /**
      * @var array $info Information about the image (dimensions, MIME type, etc.).
      */
-    private array $info;
+    private array $info = [];
 
     /**
      * Constructor for the image class.
@@ -61,7 +61,10 @@ class Image implements ImageUtilContract
         $this->imageSource = $imageSource;
 
         // Clear the GD image resource
-        unset($this->image);
+        if (isset($this->image)) {
+            imagedestroy($this->image);
+            $this->image = null;
+        }
 
         // Check is GD php extension is loaded or not.
         if (!extension_loaded('gd')) {
@@ -95,10 +98,13 @@ class Image implements ImageUtilContract
         }
 
         // Extract images information, size, dimensions, extension etc...
-        $this->info = array_merge(
-            getimagesize($this->imageSource),
-            pathinfo($this->imageSource)
-        );
+        $imageSize = @getimagesize($this->imageSource);
+
+        if ($imageSize === false) {
+            throw new ImageUtilException("Failed to get image size for: {$this->imageSource}");
+        }
+
+        $this->info = array_merge($imageSize, pathinfo($this->imageSource));
     }
 
     /**
@@ -164,10 +170,15 @@ class Image implements ImageUtilContract
     {
         if (!isset($this->image)) {
             $this->image = match ($this->getInfo('mime')) {
-                'image/jpeg', 'image/jpg' => imagecreatefromjpeg($this->imageSource),
-                'image/png' => imagecreatefrompng($this->imageSource),
-                default => throw new ImageUtilException("Unsupported image type: {$this->imageSource}"),
+                'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($this->imageSource),
+                'image/png' => @imagecreatefrompng($this->imageSource),
+                'image/gif' => @imagecreatefromgif($this->imageSource),
+                default => throw new ImageUtilException("Unsupported image type: {$this->getInfo('mime')}"),
             };
+
+            if ($this->image === false) {
+                throw new ImageUtilException("Failed to create image from: {$this->imageSource}");
+            }
         }
 
         return $this->image;
@@ -188,24 +199,42 @@ class Image implements ImageUtilContract
     /**
      * Compresses the image.
      * 
-     * @param int $quality The compression quality (0-100 for JPEG, 0-9 for PNG).
+     * @param int $quality The compression quality (0-100 for JPEG/GIF, 0-100 for PNG where higher is better).
      * @param string|null $destination The file path to save the compressed image.
      * 
      * @return bool Returns true on success, false on failure.
+     * 
+     * @throws ImageUtilException If quality is out of range.
      */
     public function compress(int $quality = 75, $destination = null): bool
     {
+        if ($quality < 0 || $quality > 100) {
+            throw new ImageUtilException("Quality must be between 0 and 100, got: {$quality}");
+        }
+
         $destination ??= $this->imageSource;
         $image = $this->getImage();
 
         if (file_exists($destination)) {
-            unlink($destination);
+            if (!@unlink($destination)) {
+                throw new ImageUtilException("Failed to delete existing file: {$destination}");
+            }
         }
 
-        return match ($this->getInfo('mime')) {
-            'image/png' => imagepng($image, $destination, round(9 * ($quality / 100))),
-            default => imagejpeg($image, $destination, $quality),
+        // For PNG: Convert quality 0-100 to compression 0-9 (inverted: high quality = low compression)
+        // quality 100 = compression 0 (no compression, best quality)
+        // quality 0 = compression 9 (max compression, worst quality)
+        $result = match ($this->getInfo('mime')) {
+            'image/png' => @imagepng($image, $destination, (int) round(9 - (9 * ($quality / 100)))),
+            'image/gif' => @imagegif($image, $destination),
+            default => @imagejpeg($image, $destination, $quality),
         };
+
+        if ($result === false) {
+            throw new ImageUtilException("Failed to save compressed image to: {$destination}");
+        }
+
+        return $result;
     }
 
     /**
@@ -216,9 +245,19 @@ class Image implements ImageUtilContract
      * @param string|null $destination The file path to save the resized image.
      * 
      * @return bool Returns true on success, false on failure.
+     * 
+     * @throws ImageUtilException If dimensions are invalid.
      */
     public function resize(int $imgWidth, int $imgHeight, ?string $destination = null): bool
     {
+        if ($imgWidth <= 0 || $imgHeight <= 0) {
+            throw new ImageUtilException("Image dimensions must be positive, got: {$imgWidth}x{$imgHeight}");
+        }
+
+        if ($imgWidth > 10000 || $imgHeight > 10000) {
+            throw new ImageUtilException("Image dimensions too large (max 10000x10000): {$imgWidth}x{$imgHeight}");
+        }
+
         $destination ??= $this->imageSource;
         [$width, $height] = $this->getInfo();
 
@@ -230,7 +269,11 @@ class Image implements ImageUtilContract
             ? [$width / ($height / $imgHeight), $imgHeight]
             : [$imgWidth, $height / ($width / $imgWidth)];
 
-        $photo = imagecreatetruecolor($imgWidth, $imgHeight);
+        $photo = @imagecreatetruecolor($imgWidth, $imgHeight);
+
+        if ($photo === false) {
+            throw new ImageUtilException("Failed to create image with dimensions: {$imgWidth}x{$imgHeight}");
+        }
 
         if ($this->getInfo('mime') === 'image/png') {
             imagealphablending($photo, false);
@@ -240,10 +283,13 @@ class Image implements ImageUtilContract
         }
 
         if (file_exists($destination)) {
-            unlink($destination);
+            if (!@unlink($destination)) {
+                imagedestroy($photo);
+                throw new ImageUtilException("Failed to delete existing file: {$destination}");
+            }
         }
 
-        imagecopyresampled(
+        $resampled = imagecopyresampled(
             $photo,
             $image,
             intval(0 - ($newWidth - $imgWidth) / 2),
@@ -256,10 +302,25 @@ class Image implements ImageUtilContract
             intval($height)
         );
 
-        return match ($this->getInfo('mime')) {
-            'image/png' => imagepng($photo, $destination),
-            default => imagejpeg($photo, $destination),
+        if ($resampled === false) {
+            imagedestroy($photo);
+            throw new ImageUtilException("Failed to resample image");
+        }
+
+        $result = match ($this->getInfo('mime')) {
+            'image/png' => @imagepng($photo, $destination),
+            'image/gif' => @imagegif($photo, $destination),
+            default => @imagejpeg($photo, $destination),
         };
+
+        // Free memory
+        imagedestroy($photo);
+
+        if ($result === false) {
+            throw new ImageUtilException("Failed to save resized image to: {$destination}");
+        }
+
+        return $result;
     }
 
     /**
@@ -294,9 +355,11 @@ class Image implements ImageUtilContract
     /**
      * Rotates the image by the specified degree.
      * 
-     * @param float $degrees The degree of rotation (clockwise).
+     * @param float $degrees The degree of rotation (counter-clockwise).
      * 
      * @return bool Returns true on success, false on failure.
+     * 
+     * @throws ImageUtilException If rotation fails.
      */
     public function rotate(float $degrees): bool
     {
@@ -306,11 +369,37 @@ class Image implements ImageUtilContract
             imagesavealpha($image, true);
         }
 
-        $rotated = imagerotate($image, $degrees, 0);
+        $rotated = @imagerotate($image, $degrees, 0);
 
-        return match ($this->getInfo('mime')) {
-            'image/png' => imagepng($rotated, $this->imageSource),
-            default => imagejpeg($rotated, $this->imageSource),
+        if ($rotated === false) {
+            throw new ImageUtilException("Failed to rotate image by {$degrees} degrees");
+        }
+
+        $result = match ($this->getInfo('mime')) {
+            'image/png' => @imagepng($rotated, $this->imageSource),
+            'image/gif' => @imagegif($rotated, $this->imageSource),
+            default => @imagejpeg($rotated, $this->imageSource),
         };
+
+        // Update the cached image resource and free the old one
+        if ($result !== false) {
+            imagedestroy($this->image);
+            $this->image = $rotated;
+        } else {
+            imagedestroy($rotated);
+            throw new ImageUtilException("Failed to save rotated image to: {$this->imageSource}");
+        }
+
+        return $result;
+    }
+
+    /**
+     * Destructor to clean up image resources.
+     */
+    public function __destruct()
+    {
+        if (isset($this->image)) {
+            imagedestroy($this->image);
+        }
     }
 }

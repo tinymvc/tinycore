@@ -6,6 +6,7 @@ use Spark\Console\Commands;
 use Spark\Console\Console;
 use Spark\Container;
 use Spark\Contracts\ApplicationContract;
+use Spark\Contracts\ContainerContract;
 use Spark\Database\DB;
 use Spark\EventDispatcher;
 use Spark\Exceptions\Http\AuthorizationException;
@@ -45,8 +46,8 @@ class Application implements ApplicationContract, \ArrayAccess
     /** @var Application Singleton instance of the application. */
     public static Application $app;
 
-    /** @var Container Dependency injection container. */
-    private Container $container;
+    /** @var ContainerContract Dependency injection container. */
+    private ContainerContract $container;
 
     /** @var array Array to store exception handlers. */
     private array $exceptions = [];
@@ -167,9 +168,9 @@ class Application implements ApplicationContract, \ArrayAccess
      * This container manages the application's services and dependencies,
      * providing a way to register and resolve them.
      *
-     * @return Container The dependency injection container instance.
+     * @return ContainerContract The dependency injection container instance.
      */
-    public function getContainer(): Container
+    public function getContainer(): ContainerContract
     {
         return $this->container;
     }

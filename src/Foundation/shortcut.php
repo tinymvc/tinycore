@@ -1518,7 +1518,7 @@ if (!function_exists('passcode')) {
      */
     function passcode(string $password, ?string $hash = null): bool|string
     {
-        return hashing()->password($password, $hash);
+        return hashing()->password(...func_get_args());
     }
 }
 

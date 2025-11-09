@@ -1139,7 +1139,17 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function getErrorObject(): RequestInputErrors
     {
-        return $this->errorObject ??= app(RequestInputErrors::class);
+        if (isset($this->errorObject)) {
+            return $this->errorObject;
+        }
+
+        /** @var \Spark\Http\Session $session */
+        $session = app(Session::class);
+
+        return $this->errorObject = new RequestInputErrors(
+            $session->getFlash('errors', []),
+            $session->getFlash('input', []),
+        );
     }
 
     /**
@@ -1151,7 +1161,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function errors(null|array|string $field = null): mixed
     {
-        if ($field !== null) {
+        if (func_num_args() > 0) {
             foreach ((array) $field as $name) {
                 if ($this->getErrorObject()->has($name)) {
                     return true;

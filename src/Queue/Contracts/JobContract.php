@@ -18,13 +18,13 @@ interface JobContract
      * The repeat option can be set to a string that represents the interval
      * when the job should be repeated. If set to null, the job won't be repeated.
      *
-     * @param string|null $repeat
+     * @param string $repeat
      *     The repeat option.
      *
      * @return self
      *     The job instance.
      */
-    public function repeat(?string $repeat): self;
+    public function repeat(string $repeat): self;
 
     /**
      * Sets the priority for the job.

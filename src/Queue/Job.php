@@ -46,7 +46,7 @@ class Job implements JobContract
     public function __construct(
         private $callback,
         private null|string|DateTime $scheduledTime = null,
-        private ?string $repeat = null,
+        private null|string $repeat = null,
         private int $priority = 0,
         private $onFailed = null,
     ) {
@@ -65,13 +65,13 @@ class Job implements JobContract
      * This method sets the interval string that
      * determines how often the job should be repeated.
      *
-     * @param ?string $repeat
+     * @param string $repeat
      *   The interval string for repeating the job.
      *
      * @return self
      *   Returns the current Job instance for method chaining.
      */
-    public function repeat(?string $repeat): self
+    public function repeat(string $repeat): self
     {
         $repeatSteps = [
             'daily' => '1 day',
@@ -85,6 +85,54 @@ class Job implements JobContract
 
         $this->repeat = $repeatSteps[$repeat] ?? $repeat;
 
+        return $this;
+    }
+
+    /**
+     * Sets the job to repeat every hour.
+     *
+     * @return self
+     *   Returns the current Job instance for method chaining.
+     */
+    public function repeatHourly(): self
+    {
+        $this->repeat = '1 hour';
+        return $this;
+    }
+
+    /**
+     * Sets the job to repeat every day.
+     *
+     * @return self
+     *   Returns the current Job instance for method chaining.
+     */
+    public function repeatDaily(): self
+    {
+        $this->repeat = '1 day';
+        return $this;
+    }
+
+    /**
+     * Sets the job to repeat every week.
+     *
+     * @return self
+     *   Returns the current Job instance for method chaining.
+     */
+    public function repeatWeekly(): self
+    {
+        $this->repeat = '1 week';
+        return $this;
+    }
+
+    /**
+     * Sets the job to repeat every month.
+     *
+     * @return self
+     *   Returns the current Job instance for method chaining.
+     */
+    public function repeatMonthly(): self
+    {
+        $this->repeat = '1 month';
         return $this;
     }
 
@@ -270,7 +318,7 @@ class Job implements JobContract
     public function dispatch(?string $id = null): void
     {
         /** @var \Spark\Queue\Queue $queue */
-        $queue = Application::$app->get(Queue::class);
+        $queue = Application::$app->make(Queue::class);
         $queue->addJob($this, $id);
     }
 

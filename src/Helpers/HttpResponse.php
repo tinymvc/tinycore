@@ -16,11 +16,6 @@ use Spark\Contracts\Support\Arrayable;
  */
 class HttpResponse implements Arrayable, ArrayAccess, \Stringable
 {
-    public mixed $body = ''; // The response body
-    public int $status = 0; // The HTTP status code
-    public string $lastUrl = ''; // The last URL after redirects
-    public int $length = 0; // The content length of the response
-    public array $headers = []; // The response headers
     public array $json; // The JSON-decoded response body
 
     /**
@@ -28,13 +23,13 @@ class HttpResponse implements Arrayable, ArrayAccess, \Stringable
      *
      * @param array $response The response data.
      */
-    public function __construct(array $response)
-    {
-        $this->body = $response['body'] ?? '';
-        $this->status = $response['status'] ?? 0;
-        $this->lastUrl = $response['last_url'] ?? '';
-        $this->length = $response['length'] ?? 0;
-        $this->headers = isset($response['headers']) && $response['headers'] ? $response['headers'] : [];
+    public function __construct(
+        public mixed $body = '', // The response body
+        public int $status = 0, // The HTTP status code
+        public string $lastUrl = '', // The last URL after redirects
+        public int $length = 0, // The content length of the response
+        public array $headers = [], // The response headers
+    ) {
     }
 
     /**

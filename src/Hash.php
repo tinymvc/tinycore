@@ -205,8 +205,8 @@ class Hash implements HashContract
      */
     public function password(string $password, ?string $hash = null): bool|string
     {
-        if ($hash !== null) {
-            return $this->validatePassword($password, $hash);
+        if (func_num_args() === 2) {
+            return $this->validatePassword($password, $hash ?? '');
         }
 
         return $this->hashPassword($password);
@@ -421,7 +421,7 @@ class Hash implements HashContract
      */
     public function encryptArray(array $data): string
     {
-        return $this->encrypt(serialize($data));
+        return $this->encrypt(json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
     }
 
     /**
@@ -434,7 +434,7 @@ class Hash implements HashContract
     public function decryptArray(string $encrypted): array
     {
         $decrypted = $this->decrypt($encrypted);
-        $data = unserialize($decrypted);
+        $data = json_decode($decrypted, true);
 
         if (!is_array($data)) {
             throw new DecryptionFailedException('Decrypted data is not a valid array.');

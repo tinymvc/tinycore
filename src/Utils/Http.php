@@ -123,11 +123,11 @@ class Http extends HttpRequest implements HttpUtilContract
 
         // Execute the cURL request and gather response data
         $response = [
-            'body' => $body,
+            'body' => $body ?: '',
             'status' => curl_getinfo($curl, CURLINFO_HTTP_CODE),
-            'last_url' => curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+            'lastUrl' => curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
             'length' => curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-            'headers' => curl_getinfo($curl, CURLINFO_HEADER_OUT),
+            'headers' => (array) curl_getinfo($curl, CURLINFO_HEADER_OUT) ?: [],
         ];
 
         // Close file if download was specified
@@ -149,7 +149,7 @@ class Http extends HttpRequest implements HttpUtilContract
         );
 
         // The response data, including body, status code, final URL, and content length.
-        return new HttpResponse($response);
+        return new HttpResponse(...$response);
     }
 
     /**
