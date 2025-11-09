@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Exceptions\Http\Input;
+namespace Spark\Exceptions\Http;
 
 use Exception;
 

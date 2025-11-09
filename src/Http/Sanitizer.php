@@ -3,7 +3,7 @@
 namespace Spark\Http;
 
 use ArrayAccess;
-use Spark\Contracts\Http\Input\SanitizerContract;
+use Spark\Contracts\Http\SanitizerContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Support\Collection;
 use Spark\Support\Str;

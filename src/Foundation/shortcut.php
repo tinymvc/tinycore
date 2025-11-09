@@ -8,7 +8,7 @@ use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
-use Spark\Exceptions\Http\Input\ValidationFailedException;
+use Spark\Exceptions\Http\ValidationFailedException;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Helpers\HttpResponse;

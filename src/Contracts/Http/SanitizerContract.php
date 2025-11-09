@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Http\Input;
+namespace Spark\Contracts\Http;
 
 /**
  * Interface SanitizerUtilContract

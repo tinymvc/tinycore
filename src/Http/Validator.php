@@ -2,7 +2,7 @@
 
 namespace Spark\Http;
 
-use Spark\Contracts\Http\Input\ValidatorContract;
+use Spark\Contracts\Http\ValidatorContract;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 
