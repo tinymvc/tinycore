@@ -308,11 +308,15 @@ class Queue implements QueueContract
      * @param string|array|callable $callback
      *   The callback to be serialized.
      *
-     * @return string
+     * @return null|string
      *   The serialized string representation of the callback.
      */
-    private function serializeCallback(string|array|callable $callback): string
+    private function serializeCallback(null|string|array|callable $callback): null|string
     {
+        if ($callback === null) {
+            return null;
+        }
+
         if ($callback instanceof Closure) {
             // If the callback is a Closure, check if the SerializableClosure package is installed.
             // If not, throw an exception.
@@ -345,8 +349,12 @@ class Queue implements QueueContract
      * @return string|array|callable
      *   The unserialized callback.
      */
-    private function unserializeCallback(string $callback): string|array|callable
+    private function unserializeCallback(null|string $callback): null|string|array|callable
     {
+        if ($callback === null) {
+            return null;
+        }
+
         if (strpos($callback, 'SerializableClosure') !== false) {
             // If the callback is serialized, unserialize it using unserialize.
             $callback = unserialize($callback)->getClosure();
