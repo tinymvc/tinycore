@@ -3031,7 +3031,7 @@ class QueryBuilder implements QueryBuilderContract
     private function wrapOrValue(string $value): string
     {
         if (
-            strpos($value, '?') !== false ||
+            str_contains($value, '?') ||
             preg_match('/:\w+/', $value) ||
             preg_match('/\([^)]*\)/', $value)
         ) {
@@ -3050,8 +3050,8 @@ class QueryBuilder implements QueryBuilderContract
     private function wrapJoinOn(string $on): string
     {
         // Determine the operator used in the ON clause
-        $operator = strpos($on, '=') !== false ? '=' :
-            (strpos($on, '!=') !== false ? '!=' : null);
+        $operator = str_contains($on, '=') ? '=' :
+            (str_contains($on, '!=') ? '!=' : null);
 
         if ($operator) {
             // Split the ON clause into its components
@@ -3076,7 +3076,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function addBindings(string $sql, string|array $bindings = []): void
     {
-        if (is_array($bindings) && strpos($sql, '?') === false && preg_match('/\:(\w+)/', $sql)) {
+        if (is_array($bindings) && !str_contains($sql, '?') && preg_match('/\:(\w+)/', $sql)) {
             $this->bindings = array_merge($this->bindings, $bindings);
         } else {
             $this->param($bindings);

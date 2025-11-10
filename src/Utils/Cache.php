@@ -15,7 +15,7 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Cache implements CacheUtilContract
+class Cache implements CacheUtilContract, \ArrayAccess
 {
     use Macroable;
 
@@ -112,8 +112,8 @@ class Cache implements CacheUtilContract
             $this->cached = true;
 
             // Retrieve all cached entries for this object.
-            $this->cacheData = file_exists($this->cachePath)
-                ? json_decode(file_get_contents($this->cachePath), true)
+            $this->cacheData = @file_exists($this->cachePath)
+                ? (array) json_decode(@file_get_contents($this->cachePath), true)
                 : [];
         }
 
@@ -190,19 +190,6 @@ class Cache implements CacheUtilContract
      * @param string|null $expire Optional expiration time.
      * @return mixed
      */
-    public function remember(string $key, callable $callback, ?string $expire = null): mixed
-    {
-        return $this->load($key, $callback, $expire);
-    }
-
-    /**
-     * Loads data from cache or generates it using a callback if not present.
-     *
-     * @param string $key The cache key.
-     * @param callable $callback Function to generate the data if not cached.
-     * @param string|null $expire Optional expiration time.
-     * @return mixed
-     */
     public function load(string $key, callable $callback, ?string $expire = null): mixed
     {
         // Erase expired entries if enabled.
@@ -217,6 +204,19 @@ class Cache implements CacheUtilContract
 
         // Retrieve entry from cache.
         return $this->retrieve($key);
+    }
+
+    /**
+     * Loads data from cache or generates it using a callback if not present.
+     *
+     * @param string $key The cache key.
+     * @param callable $callback Function to generate the data if not cached.
+     * @param string|null $expire Optional expiration time.
+     * @return mixed
+     */
+    public function remember(string $key, callable $callback, ?string $expire = null): mixed
+    {
+        return $this->load($key, $callback, $expire);
     }
 
     /**
@@ -313,9 +313,9 @@ class Cache implements CacheUtilContract
      * @param string|array $keys Cache key(s) to delete.
      * @return self
      */
-    public function delete(string|array $keys): self
+    public function delete(string|array ...$keys): self
     {
-        return $this->erase($keys);
+        return $this->erase(...$keys);
     }
 
     /**
@@ -324,9 +324,9 @@ class Cache implements CacheUtilContract
      * @param string|array $keys Cache key(s) to forget.
      * @return self
      */
-    public function forget(string|array $keys): self
+    public function forget(string|array ...$keys): self
     {
-        return $this->erase($keys);
+        return $this->erase(...$keys);
     }
 
     /**
@@ -335,9 +335,9 @@ class Cache implements CacheUtilContract
      * @param string|array $keys Cache key(s) to remove.
      * @return self
      */
-    public function remove(string|array $keys): self
+    public function remove(string|array ...$keys): self
     {
-        return $this->erase($keys);
+        return $this->erase(...$keys);
     }
 
     /**
@@ -479,6 +479,51 @@ class Cache implements CacheUtilContract
         env('debug') && event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
 
         $this->changed = false;
+    }
+
+    /**
+     * ArrayAccess method to check if a cache key exists.
+     * 
+     * @param mixed $offset The cache key.
+     * @return bool
+     */
+    public function offsetExists(mixed $offset): bool
+    {
+        return $this->has($offset);
+    }
+
+    /**
+     * ArrayAccess method to retrieve a cache entry.
+     * 
+     * @param mixed $offset The cache key.
+     * @return mixed
+     */
+    public function offsetGet(mixed $offset): mixed
+    {
+        return $this->retrieve($offset);
+    }
+
+    /**
+     * ArrayAccess method to store a cache entry.
+     * 
+     * @param mixed $offset The cache key.
+     * @param mixed $value The data to cache.
+     * @return void
+     */
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        $this->store($offset, $value);
+    }
+
+    /**
+     * ArrayAccess method to erase a cache entry.
+     * 
+     * @param mixed $offset The cache key.
+     * @return void
+     */
+    public function offsetUnset(mixed $offset): void
+    {
+        $this->erase($offset);
     }
 
     /**

@@ -439,7 +439,7 @@ if (!function_exists('url')) {
             return $home_url ??= new Url(home_url('/'), $parameters);
         }
 
-        if (strpos($path, '://') === false) {
+        if (!str_contains($path, '://')) {
             $path = home_url($path); // Resolve relative path to absolute URL
         }
 
@@ -1175,7 +1175,7 @@ if (!function_exists('__')) {
      */
     function __(string $text, $arg = null, array $args = [], array $args2 = []): string
     {
-        return get(Translator::class)
+        return Application::$app->make(Translator::class)
             ->translate($text, $arg, $args, $args2);
     }
 }
@@ -1736,7 +1736,7 @@ if (!function_exists('fm')) {
      */
     function fm(): FileManager
     {
-        return filemanager();
+        return new FileManager;
     }
 }
 
@@ -1769,7 +1769,7 @@ if (!function_exists('arr_from_set')) {
         }
 
         // If the value is a string and a delimiter is provided, split it into an array
-        if (is_string($value) && $delimiter && strpos($value, $delimiter) !== false) {
+        if (is_string($value) && $delimiter && str_contains($value, $delimiter)) {
             $value = explode($delimiter, $value);
             $value = array_map('trim', $value); // Trim each value in the array
         }

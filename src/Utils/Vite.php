@@ -79,17 +79,29 @@ class Vite implements ViteUtilContract
     public function __toString(): string
     {
         $viteModules = '';
+        $entry = $this->config('entry');
         if (
-            strpos($this->config('entry'), '.jsx') !== false ||
-            strpos($this->config('entry'), '.tsx') !== false
+            str_contains($entry, '.jsx') ||
+            str_contains($entry, '.tsx')
         ) {
-            $viteModules = $this->reactRefreshTag($this->config('entry'));
+            $viteModules = $this->reactRefreshTag($entry);
         }
 
-        return $viteModules
-            . $this->jsTag($this->config('entry'))
-            . $this->jsPreloadImports($this->config('entry'))
-            . $this->cssTag($this->config('entry'));
+        return $viteModules . $this->importModules($entry);
+    }
+
+    /**
+     * Generates the HTML tags for importing JavaScript and CSS modules.
+     * 
+     * @return string The combined HTML string of JavaScript and CSS tags.
+     */
+    public function importModules(?string $entry = null): string
+    {
+        $entry ??= $this->config('entry');
+
+        return $this->jsTag($entry)
+            . $this->jsPreloadImports($entry)
+            . $this->cssTag($entry);
     }
 
 
@@ -99,7 +111,7 @@ class Vite implements ViteUtilContract
      * @param null|string $entry The entry file name.
      * @return string The HTML script tag for React Refresh runtime.
      */
-    private function reactRefreshTag(?string $entry = null): string
+    public function reactRefreshTag(?string $entry = null): string
     {
         $entry ??= $this->config('entry');
         $tag = '';
@@ -135,7 +147,7 @@ class Vite implements ViteUtilContract
             return $this->config['running'] = false;
         }
 
-        return $this->config['running'] = http(url: $this->serverUrl($entry), options: [CURLOPT_TIMEOUT => 10, CURLOPT_NOBODY => true])->isOk();
+        return $this->config['running'] = http(url: $this->serverUrl($entry))->ok();
     }
 
     /**

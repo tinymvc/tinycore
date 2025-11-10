@@ -355,7 +355,7 @@ class Queue implements QueueContract
             return null;
         }
 
-        if (strpos($callback, 'SerializableClosure') !== false) {
+        if (str_contains($callback, 'SerializableClosure')) {
             // If the callback is serialized, unserialize it using unserialize.
             $callback = unserialize($callback)->getClosure();
         } else {

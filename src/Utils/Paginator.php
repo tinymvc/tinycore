@@ -4,6 +4,7 @@ namespace Spark\Utils;
 
 use ArrayAccess;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
 use Spark\Support\Traits\Macroable;
 
@@ -15,7 +16,7 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \IteratorAggregate
+class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, ArrayAccess, \IteratorAggregate
 {
     use Macroable;
 
@@ -421,6 +422,18 @@ class Paginator implements PaginatorUtilContract, Arrayable, ArrayAccess, \Itera
             'keyword' => $this->keyword(),
             'data' => $this->data(),
         ];
+    }
+
+    /**
+     * Converts the paginator instance to a JSON string.
+     * 
+     * @param int $options JSON encoding options.
+     * 
+     * @return string
+     */
+    public function toJson($options = 0): string
+    {
+        return json_encode($this->toArray(), $options);
     }
 
     /**

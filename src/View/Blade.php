@@ -442,8 +442,6 @@ class Blade implements BladeContract
      */
     private function renderCompiledTemplate(string $compiledPath, array $context): string
     {
-        extract($context);
-
         // Store current global sections state
         $previousSections = $GLOBALS['sections'] ?? null;
 
@@ -456,6 +454,8 @@ class Blade implements BladeContract
 
         $started = microtime(true);
         $startedMemory = memory_get_usage(true);
+
+        extract($context); // Unpack context variables
 
         ob_start();
         include dir_path($compiledPath);
@@ -586,7 +586,7 @@ class Blade implements BladeContract
             }
             // Conditional attribute like 'disabled' => $isDisabled
             elseif ($value) {
-                $compiledAttributes[] = strpos($key, '=') !== false ? $key : "$key=\"$value\"";
+                $compiledAttributes[] = str_contains($key, '=') ? $key : "$key=\"$value\"";
             }
         }
 
@@ -613,7 +613,7 @@ class Blade implements BladeContract
             }
             // Key-value pair style like 'color' => 'red' or conditional 'font-weight' => $isActive
             elseif ($value) {
-                $compiledStyles[] = strpos($key, ':') !== false ? $key : "$key: $value";
+                $compiledStyles[] = str_contains($key, ':') ? $key : "$key: $value";
             }
         }
 

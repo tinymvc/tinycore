@@ -78,7 +78,7 @@ class StubCreation
         // Determine subfolders from the name using delimiters
         $subFolders = [];
         foreach (['/', '\\', '.'] as $char) {
-            if (strpos($name, $char) !== false) {
+            if (str_contains($name, $char)) {
                 $subFolders = explode($char, $name);
                 $name = array_pop($subFolders);
                 break;

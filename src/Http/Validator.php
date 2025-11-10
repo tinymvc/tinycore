@@ -71,7 +71,7 @@ class Validator implements ValidatorContract
                 // Parse rule name and parameters
                 $ruleName = $rule;
                 $ruleParams = [];
-                if (strpos($rule, ':') !== false) {
+                if (str_contains($rule, ':')) {
                     [$ruleName, $ruleParams] = array_map('trim', explode(':', $rule, 2));
                     $ruleParams = array_map('trim', explode(',', $ruleParams));
                 }

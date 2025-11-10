@@ -78,8 +78,9 @@ class Uploader implements UploaderUtilContract
         $uploadDir ??= config('upload_dir');
 
         if ($uploadTo) {
-            $uploadDir = dir_path($uploadDir . DIRECTORY_SEPARATOR . $uploadTo);
+            $uploadDir = dir_path($uploadDir . '/' . $uploadTo);
         }
+
         // Set the upload directory
         return $this->setUploadDir($uploadDir);
     }
@@ -96,7 +97,7 @@ class Uploader implements UploaderUtilContract
         // Ensure the upload directory exists and is writable
         if (!fm()->ensureDirectoryWritable($uploadDir)) {
             // Make the upload directory writable
-            throw new UploaderUtilException(__('Upload directory is not writable.'), 502);
+            throw new UploaderUtilException(__('Upload directory is not writable.'));
         }
 
         $this->uploadDir = dir_path($uploadDir);
@@ -151,13 +152,13 @@ class Uploader implements UploaderUtilContract
                 $result = $result && $this->delete($f);
             }
             return $result;
-        } else {
-            if ($this->driver) {
-                return $this->driver->delete($file);
-            }
-
-            return fm()->delete(upload_dir($file));
         }
+
+        if ($this->driver) {
+            return $this->driver->delete($file);
+        }
+
+        return fm()->delete(upload_dir($file));
     }
 
     /**
@@ -198,18 +199,18 @@ class Uploader implements UploaderUtilContract
     {
         // Validate file size
         if (isset($this->maxSize) && $file['size'] > ($this->maxSize * 1024)) {
-            throw new UploaderUtilException(__('File size exceeds the maximum limit.'), 503);
+            throw new UploaderUtilException(__('File size exceeds the maximum limit.'));
         }
 
         // Validate file extension
         $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
         if (!empty($this->extensions) && !in_array(strtolower($extension), $this->extensions)) {
-            throw new UploaderUtilException(__('Invalid file extension.'), 504);
+            throw new UploaderUtilException(__('Invalid file extension. Only %s are accepted.', implode(', ', $this->extensions)));
         }
 
         // Check if additional image options are set
         $additionalImageOptions = (isset($this->compress) || isset($this->resize) || isset($this->resizes)) &&
-            in_array($extension, ['jpg', 'jpeg', 'png']);
+            in_array($extension, ['jpg', 'jpeg', 'png', 'gif']);
 
         // Create a unique file name
         $filename = $this->generateUniqueFileName($file['name']);
@@ -218,11 +219,11 @@ class Uploader implements UploaderUtilContract
         // Move the uploaded file to the destination
         if ($this->driver && !$additionalImageOptions) {
             if (!$this->handleUpload($file['tmp_name'], $destination)) {
-                throw new UploaderUtilException(__('Failed to move uploaded file.'), 505);
+                throw new UploaderUtilException(__('Failed to move uploaded file.'));
             }
         } else {
             if (!move_uploaded_file($file['tmp_name'], $destination)) {
-                throw new UploaderUtilException(__('Failed to move uploaded file.'), 505);
+                throw new UploaderUtilException(__('Failed to move uploaded file.'));
             }
         }
 
@@ -261,7 +262,7 @@ class Uploader implements UploaderUtilContract
                         }
 
                         // Throw an exception if the upload failed
-                        throw new UploaderUtilException(__('Failed to upload file using driver: %s', $e->getMessage()), 506);
+                        throw new UploaderUtilException(__('Failed to upload file using driver: %s', $e->getMessage()));
                     }
                 }
             }
@@ -305,13 +306,13 @@ class Uploader implements UploaderUtilContract
         // Replace non-alphanumeric characters with a hyphen
         $baseName = preg_replace('/[^a-zA-Z0-9]+/u', '-', $baseName);
 
-        // Limit the length of the base name (50 characters) while keeping multibyte safety
-        $baseName = mb_substr($baseName, 0, 50, 'UTF-8');
+        // Limit the length of the base name (60 characters) while keeping multibyte safety
+        $baseName = mb_substr($baseName, 0, 60, 'UTF-8');
 
         // Ensure the file name is unique
         return sprintf(
             '%s.%s',
-            uniqid("{$baseName}_"),
+            uniqid($baseName . '_', true),
             $extension
         );
     }

@@ -245,7 +245,7 @@ class MakeStubCommandsHandler
 
         $hasSubFolder = false;
         foreach (['/', '\\', '.'] as $char) {
-            if (strpos($name, $char) !== false) {
+            if (str_contains($name, $char)) {
                 $hasSubFolder = true;
                 break;
             }

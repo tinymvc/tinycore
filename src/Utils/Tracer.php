@@ -116,6 +116,12 @@ class Tracer implements TracerUtilContract
      */
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
+        // Ensure the storage directory is writable
+        if (!is_writable(storage_dir())) {
+            $this->alertStorageNotWritable();
+            exit(1);
+        }
+
         // Log the error message unless it's from Tinker context
         !$this->isFromTinkerContext($file) && $this->log("$type: $message in $file on line $line"); // Log the error message
 
@@ -171,6 +177,28 @@ class Tracer implements TracerUtilContract
     }
 
     /**
+     * Alerts the user that the storage directory is not writable.
+     * Outputs a message in CLI or HTML format based on the context.
+     * 
+     * @return void
+     */
+    private function alertStorageNotWritable(): void
+    {
+        if (is_cli()) {
+            Prompt::message('Attention!', 'danger');
+            Prompt::message('The storage directory is not writable. Please check the permissions.', 'warning');
+            return; // Exit after CLI message
+        }
+
+        echo <<<HTML
+            <div style="font-family: Arial, sans-serif;margin: 30px 20px;border: 2px solid red;padding: 20px;border-radius: 10px;background-color: #ffe6e6;color: red;">
+                <h1 style="font-size: 36px;font-weight: bold;margin: 0px 0px 10px 0px;">Attention!</h1>
+                <p style="font-size: 18px;margin: 0px;">The <b><u>storage</u></b> directory is not writable. Please check the permissions.</p>
+            </div>
+        HTML;
+    }
+
+    /**
      * Checks if the error originated from the Tinker context.
      * 
      * @param string $file The file path where the error occurred.
@@ -179,7 +207,7 @@ class Tracer implements TracerUtilContract
      */
     private function isFromTinkerContext(string $file): bool
     {
-        return is_cli() && strpos($file, dir_path('src/Foundation/Services/Tinker.php')) !== false;
+        return is_cli() && str_contains($file, dir_path('src/Foundation/Services/Tinker.php'));
     }
 
     /**

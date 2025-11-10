@@ -415,7 +415,7 @@ class HttpRequest
         // Build URL with query parameters
         $url = $this->url;
         if (!empty($this->params)) {
-            $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($this->params);
+            $url .= (!str_contains($url, '?') ? '?' : '&') . http_build_query($this->params);
         }
         return $url;
     }

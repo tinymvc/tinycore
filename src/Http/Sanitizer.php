@@ -651,7 +651,7 @@ class Sanitizer implements SanitizerContract, ArrayAccess, Arrayable, \Stringabl
         foreach ($config as $field => $type) {
             // Check if the type is a string with multiple options
             // If so, split it into an array of types
-            if (is_string($type) && strpos($type, '|') !== false) {
+            if (is_string($type) && str_contains($type, '|')) {
                 $type = explode('|', $type);
             }
 
