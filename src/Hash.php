@@ -330,30 +330,23 @@ class Hash implements HashContract
 
         $data = json_decode($decodedData, true);
 
-        if (!is_array($data) || empty($data['cipherText']) || empty($data['iv'])) {
+        if (!is_array($data) || empty($data['cipherText'] ?? '') || empty($data['iv'] ?? '') || empty($data['hmac'] ?? '')) {
             throw new DecryptionFailedException('Invalid encrypted data format.');
         }
 
         $iv = base64_decode($data['iv'], true);
         $cipherText = base64_decode($data['cipherText'], true);
+        $hmac = base64_decode($data['hmac'], true);
 
-        if ($iv === false || $cipherText === false) {
-            throw new DecryptionFailedException('Invalid IV or ciphertext format.');
+        if ($iv === false || $cipherText === false || $hmac === false) {
+            throw new DecryptionFailedException('Invalid encrypted data components.');
         }
 
-        // Verify HMAC if present (for authenticated encryption)
-        if (!empty($data['hmac'])) {
-            $hmac = base64_decode($data['hmac'], true);
+        // Verify HMAC (for authenticated encryption)
+        $calculatedHmac = hash_hmac('sha256', $iv . $cipherText, $this->key, true);
 
-            if ($hmac === false) {
-                throw new DecryptionFailedException('Invalid HMAC format.');
-            }
-
-            $calculatedHmac = hash_hmac('sha256', $iv . $cipherText, $this->key, true);
-
-            if (!hash_equals($hmac, $calculatedHmac)) {
-                throw new DecryptionFailedException('HMAC verification failed. Data may have been tampered with.');
-            }
+        if (!hash_equals($hmac, $calculatedHmac)) {
+            throw new DecryptionFailedException('HMAC verification failed. Data may have been tampered with.');
         }
 
         $plainText = openssl_decrypt($cipherText, 'AES-256-CBC', $this->key, OPENSSL_RAW_DATA, $iv);
@@ -421,7 +414,7 @@ class Hash implements HashContract
      */
     public function encryptArray(array $data): string
     {
-        return $this->encrypt(json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        return $this->encrypt(json_encode($data));
     }
 
     /**
