@@ -916,9 +916,10 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function hasAccessor(string $name): bool
     {
         $method = sprintf('get%sAttribute', Str::studly($name));
+        $method2 = sprintf('%sAttribute', Str::camel($name));
 
         return method_exists($this, $method) ||
-            method_exists($this, Str::camel($name));
+            method_exists($this, $method2);
     }
 
     /**
@@ -934,8 +935,8 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             return $this->{$method}($value);
         }
 
-        $method = Str::camel($name); // Try camelCase method name
-        return ($this->{$method})->get($value);
+        $method2 = sprintf('%sAttribute', Str::camel($name));
+        return ($this->{$method2})->get($value);
     }
 
     /**
@@ -947,9 +948,10 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function hasMutator(string $name): bool
     {
         $method = sprintf('set%sAttribute', Str::studly($name));
+        $method2 = sprintf('%sAttribute', Str::camel($name));
 
         return method_exists($this, $method)
-            || method_exists($this, Str::camel($name));
+            || method_exists($this, $method2);
     }
 
     /**
@@ -966,8 +968,8 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             return $this->{$method}($value);
         }
 
-        $method = Str::camel($name); // Try camelCase method name
-        return ($this->{$method})->set($value);
+        $method2 = sprintf('%sAttribute', Str::camel($name));
+        return ($this->{$method2})->set($value);
     }
 
     /**
