@@ -118,7 +118,7 @@ class Tracer implements TracerUtilContract
     {
         // Ensure the storage directory is writable
         if (!is_writable(storage_dir())) {
-            $this->alertStorageNotWritable();
+            $this->renderRawError('Attention!', 'The storage directory is not writable. Please check the permissions.');
             exit(1);
         }
 
@@ -182,20 +182,21 @@ class Tracer implements TracerUtilContract
      * 
      * @return void
      */
-    private function alertStorageNotWritable(): void
+    public function renderRawError(string $type, string $message): void
     {
         if (is_cli()) {
-            Prompt::message('Attention!', 'danger');
-            Prompt::message('The storage directory is not writable. Please check the permissions.', 'warning');
-            return; // Exit after CLI message
+            Prompt::message($type, 'danger');
+            Prompt::message($message, 'warning');
+            exit(1); // Exit after CLI message
         }
 
         echo <<<HTML
             <div style="font-family: Arial, sans-serif;margin: 30px 20px;border: 2px solid red;padding: 20px;border-radius: 10px;background-color: #ffe6e6;color: red;">
-                <h1 style="font-size: 36px;font-weight: bold;margin: 0px 0px 10px 0px;">Attention!</h1>
-                <p style="font-size: 18px;margin: 0px;">The <b><u>storage</u></b> directory is not writable. Please check the permissions.</p>
+                <h1 style="font-size: 36px;font-weight: bold;margin: 0px 0px 10px 0px;">{$type}</h1>
+                <p style="font-size: 18px;margin: 0px;">{$message}</p>
             </div>
         HTML;
+        exit(1);
     }
 
     /**
