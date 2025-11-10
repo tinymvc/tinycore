@@ -6,14 +6,14 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Http\Session;
 
 /**
- * Class HttpRequestErrors
+ * Class InputErrors - HTTP Request input validation errors
  *
  * This class handles HTTP request errors, providing methods to retrieve error messages,
  * old input values, and check for the existence of errors.
  *
  * @package Spark\Helpers
  */
-class RequestInputErrors implements Arrayable, \IteratorAggregate, \Stringable
+class InputErrors implements Arrayable, \IteratorAggregate, \Stringable
 {
     /**
      * Construct the error object.

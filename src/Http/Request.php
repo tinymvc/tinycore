@@ -5,7 +5,7 @@ namespace Spark\Http;
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
-use Spark\Helpers\RequestInputErrors;
+use Spark\Helpers\InputErrors;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -1134,10 +1134,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * The method returns the error object from the session flash data.
      * The error object contains the error messages and attributes from the previous request.
      *
-     * @return \Spark\Helpers\RequestInputErrors
+     * @return \Spark\Helpers\InputErrors
      *   The error object.
      */
-    public function getErrorObject(): RequestInputErrors
+    public function getErrorObject(): InputErrors
     {
         if (isset($this->errorObject)) {
             return $this->errorObject;
@@ -1146,7 +1146,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         /** @var \Spark\Http\Session $session */
         $session = app(Session::class);
 
-        return $this->errorObject = new RequestInputErrors(
+        return $this->errorObject = new InputErrors(
             $session->getFlash('errors', []),
             $session->getFlash('input', []),
         );

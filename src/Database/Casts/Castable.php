@@ -1,13 +1,13 @@
 <?php
 
-namespace Spark\Database\Traits;
+namespace Spark\Database\Casts;
 
 use Spark\Database\Contracts\CastsAttributes;
 use Spark\Support\Collection;
 use Spark\Utils\Carbon;
 
 /**
- * Trait Casts
+ * Trait Castable
  *
  * This trait provides functionality to cast model attributes
  * to specific data types when accessing or storing them.
@@ -15,7 +15,7 @@ use Spark\Utils\Carbon;
  * @package Spark\Database
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-trait Casts
+trait Castable
 {
     /**
      * Cast an attribute to a native PHP type.

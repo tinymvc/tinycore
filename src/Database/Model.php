@@ -5,12 +5,12 @@ namespace Spark\Database;
 use ArrayAccess;
 use ArrayIterator;
 use IteratorAggregate;
+use Spark\Database\Casts\Castable;
 use Spark\Database\Contracts\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
-use Spark\Database\Traits\Casts;
 use Spark\Database\Traits\HasRelation;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
@@ -98,7 +98,7 @@ use Traversable;
  */
 abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate, Jsonable
 {
-    use HasRelation, Casts, Macroable {
+    use HasRelation, Castable, Macroable {
         __call as macroCall;
         __callStatic as staticMacroCall;
     }
@@ -531,7 +531,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         foreach ($this->attributes as $key => $value) {
             // Check for accessor first (highest priority)
             if ($this->hasAccessor($key)) {
-                $attributes[$key] = $this->getAttributeValue($key);
+                $attributes[$key] = $this->getAttributeValue($key, $value);
             }
             // Use the already processed value (cast during loading in decodeSavedData)
             else {
@@ -554,7 +554,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
         if (property_exists($this, 'appends')) {
             foreach ((array) $this->appends as $key) {
                 if ($this->hasAccessor($key)) {
-                    $attributes[$key] = $this->getAttributeValue($key);
+                    $attributes[$key] = $this->getAttributeValue($key, $this->attributes[$key] ?? null);
                 }
             }
         }
@@ -654,7 +654,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     {
         // Check for accessor first (highest priority)
         if ($this->hasAccessor($offset)) {
-            return $this->getAttributeValue($offset);
+            return $this->getAttributeValue($offset, $this->attributes[$offset] ?? null);
         }
 
         // Get raw value
@@ -735,7 +735,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function get(string $name, $default = null): mixed
     {
         if ($this->hasAccessor($name)) {
-            return $this->getAttributeValue($name);
+            return $this->getAttributeValue($name, $this->attributes[$name] ?? $default);
         }
 
         $attributes = array_merge($this->attributes, $this->getRelations());
@@ -916,7 +916,9 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function hasAccessor(string $name): bool
     {
         $method = sprintf('get%sAttribute', Str::studly($name));
-        return method_exists($this, $method);
+
+        return method_exists($this, $method) ||
+            method_exists($this, Str::camel($name));
     }
 
     /**
@@ -925,10 +927,15 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      * @param string $name The name of the attribute.
      * @return mixed The value of the attribute.
      */
-    public function getAttributeValue(string $name): mixed
+    public function getAttributeValue(string $name, $value): mixed
     {
         $method = sprintf('get%sAttribute', Str::studly($name));
-        return $this->{$method}();
+        if (method_exists($this, $method)) {
+            return $this->{$method}($value);
+        }
+
+        $method = Str::camel($name); // Try camelCase method name
+        return ($this->{$method})->get($value);
     }
 
     /**
@@ -940,7 +947,9 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function hasMutator(string $name): bool
     {
         $method = sprintf('set%sAttribute', Str::studly($name));
-        return method_exists($this, $method);
+
+        return method_exists($this, $method)
+            || method_exists($this, Str::camel($name));
     }
 
     /**
@@ -953,7 +962,12 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     public function mutateAttribute(string $name, mixed $value): mixed
     {
         $method = sprintf('set%sAttribute', Str::studly($name));
-        return $this->{$method}($value);
+        if (method_exists($this, $method)) {
+            return $this->{$method}($value);
+        }
+
+        $method = Str::camel($name); // Try camelCase method name
+        return ($this->{$method})->set($value);
     }
 
     /**

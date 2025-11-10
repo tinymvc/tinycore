@@ -20,9 +20,7 @@ use Throwable;
  */
 class Auth implements AuthContract, ArrayAccess
 {
-    use Macroable {
-        __call as macroCall;
-    }
+    use Macroable;
 
     /**
      * @var ?Model The currently logged in user.
@@ -469,22 +467,6 @@ class Auth implements AuthContract, ArrayAccess
     public function offsetSet($key, $value): void
     {
         $this->{$key} = $value;
-    }
-
-    /**
-     * Magic method call for the admin user methods.
-     *
-     * @param string $method
-     * @param array $args
-     * @return mixed
-     */
-    public function __call(string $method, array $args)
-    {
-        if (static::hasMacro($method)) {
-            return $this->macroCall($method, $args);
-        }
-
-        return $this->getUser()->{$method}(...$args);
     }
 
     /**
