@@ -19,6 +19,20 @@ interface GateContract
     public function define(string $ability, string|array|callable $callback): void;
 
     /**
+     * Register a callback to run before all ability checks.
+     * 
+     * @param string|array|callable $callback
+     */
+    public function before(string|array|callable $callback): void;
+
+    /**
+     * Register a callback to run after all ability checks.
+     * 
+     * @param string|array|callable $callback
+     */
+    public function after(string|array|callable $callback): void;
+
+    /**
      * Determine if the given ability is allowed.
      * 
      * @param string $ability
@@ -49,5 +63,41 @@ interface GateContract
      * @throws \Spark\Exceptions\Http\AuthorizationException
      */
     public function authorize(string $ability, mixed ...$arguments): void;
+
+    /**
+     * Determine if any of the given abilities are allowed.
+     * 
+     * @param iterable|string $abilities
+     * @param mixed  ...$arguments
+     * 
+     * @return bool
+     */
+    public function any(iterable|string $abilities, mixed ...$arguments): bool;
+
+    /**
+     * Determine if all of the given abilities are denied.
+     * 
+     * @param iterable|string $abilities
+     * @param mixed  ...$arguments
+     * 
+     * @return bool
+     */
+    public function none(iterable|string $abilities, mixed ...$arguments): bool;
+
+    /**
+     * Determine if the given ability has been defined.
+     * 
+     * @param string $ability
+     * 
+     * @return bool
+     */
+    public function has(string $ability): bool;
+
+    /**
+     * Get all of the defined abilities.
+     * 
+     * @return array<string, callable>
+     */
+    public function abilities(): array;
 
 }

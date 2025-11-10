@@ -316,9 +316,7 @@ class EventDispatcher implements EventDispatcherContract
                     return $result;
                 }
             } catch (\Throwable $e) {
-                if (function_exists('logger')) {
-                    logger()->error("Event listener failed for [{$eventName}]: " . $e->getMessage());
-                }
+                tracer_log("Event listener failed for [{$eventName}]: " . $e->getMessage());
 
                 if (env('debug')) {
                     throw $e;

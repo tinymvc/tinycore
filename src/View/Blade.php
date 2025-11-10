@@ -109,7 +109,6 @@ class Blade implements BladeContract
         self::$shared = array_merge([
             'app' => Application::$app,
             'request' => Application::$app->get(Request::class),
-            'errors' => Application::$app->get(Request::class)->getErrorObject(),
         ], self::$shared);
     }
 

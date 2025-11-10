@@ -3,7 +3,6 @@
 namespace Spark\Helpers;
 
 use Spark\Contracts\Support\Arrayable;
-use Spark\Http\Session;
 
 /**
  * Class InputErrors - HTTP Request input validation errors
@@ -13,7 +12,7 @@ use Spark\Http\Session;
  *
  * @package Spark\Helpers
  */
-class InputErrors implements Arrayable, \IteratorAggregate, \Stringable
+class InputErrors implements Arrayable, \ArrayAccess, \IteratorAggregate, \Stringable
 {
     /**
      * Construct the error object.
@@ -158,7 +157,7 @@ class InputErrors implements Arrayable, \IteratorAggregate, \Stringable
      */
     public function getFirstError(): ?string
     {
-        return current($this->messages);
+        return $this->first(array_key_first($this->messages) ?? '');
     }
 
     /**
@@ -216,6 +215,17 @@ class InputErrors implements Arrayable, \IteratorAggregate, \Stringable
     }
 
     /**
+     * Remove all error messages for a specific field.
+     *
+     * @param string $field
+     * @return void
+     */
+    public function removeMessage(string $field): void
+    {
+        unset($this->messages[$field]);
+    }
+
+    /**
      * Add an attribute from the previous request.
      *
      * @param string $field
@@ -225,6 +235,17 @@ class InputErrors implements Arrayable, \IteratorAggregate, \Stringable
     public function addAttribute(string $field, string $value): void
     {
         $this->attributes[$field] = $value;
+    }
+
+    /**
+     * Remove an attribute from the previous request.
+     *
+     * @param string $field
+     * @return void
+     */
+    public function removeAttribute(string $field): void
+    {
+        unset($this->attributes[$field]);
     }
 
     /**
@@ -308,7 +329,7 @@ class InputErrors implements Arrayable, \IteratorAggregate, \Stringable
      */
     public function toArray(): array
     {
-        return $this->all();
+        return $this->all(merge: true);
     }
 
     /**
@@ -326,6 +347,51 @@ class InputErrors implements Arrayable, \IteratorAggregate, \Stringable
      */
     public function getIterator(): \Traversable
     {
-        return new \ArrayIterator($this->all());
+        return new \ArrayIterator($this->toArray());
+    }
+
+    /**
+     * Check if an error exists for the given offset.
+     *
+     * @param mixed $offset
+     * @return bool
+     */
+    public function offsetExists($offset): bool
+    {
+        return $this->has($offset);
+    }
+
+    /**
+     * Get the error message for the given offset.
+     *
+     * @param mixed $offset
+     * @return mixed
+     */
+    public function offsetGet($offset): mixed
+    {
+        return $this->first($offset);
+    }
+
+    /**
+     * Set an error message for the given offset.
+     *
+     * @param mixed $offset
+     * @param mixed $value
+     * @return void
+     */
+    public function offsetSet($offset, $value): void
+    {
+        $this->addMessage($offset, $value);
+    }
+
+    /**
+     * Unset the error message for the given offset.
+     *
+     * @param mixed $offset
+     * @return void
+     */
+    public function offsetUnset($offset): void
+    {
+        $this->removeMessage($offset);
     }
 }
