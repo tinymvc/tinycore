@@ -193,7 +193,7 @@ class EventDispatcher implements EventDispatcherContract
                 tracer_log("Event listener failed for [{$eventName}]: " . $e->getMessage());
 
                 // Re-throw if in debug mode
-                if (env('debug')) {
+                if (is_debug_mode()) {
                     throw $e;
                 }
             }
@@ -318,7 +318,7 @@ class EventDispatcher implements EventDispatcherContract
             } catch (\Throwable $e) {
                 tracer_log("Event listener failed for [{$eventName}]: " . $e->getMessage());
 
-                if (env('debug')) {
+                if (is_debug_mode()) {
                     throw $e;
                 }
             }

@@ -1766,7 +1766,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function max($field, $name = null): float
     {
-        $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
         $this->select($column);
 
         return $this->fetch(PDO::FETCH_COLUMN)->first();
@@ -1780,7 +1780,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function min($field, $name = null): float
     {
-        $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
         $this->select($column);
 
         return $this->fetch(PDO::FETCH_COLUMN)->first();
@@ -1794,7 +1794,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function sum($field, $name = null): float
     {
-        $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
         $this->select($column);
 
         return $this->fetch(PDO::FETCH_COLUMN)->first();
@@ -1808,7 +1808,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function avg($field, $name = null): float
     {
-        $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')' . (!$name === null ? " AS $name" : '');
+        $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
         $this->select($column);
 
         return $this->fetch(PDO::FETCH_COLUMN)->first();
@@ -2188,6 +2188,16 @@ class QueryBuilder implements QueryBuilderContract
     public function fetchAssoc(): self
     {
         return $this->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Specifies that results should be fetched as numeric arrays.
+     *
+     * @return self
+     */
+    public function fetchColumn(): self
+    {
+        return $this->fetch(PDO::FETCH_COLUMN);
     }
 
     /**
@@ -3094,7 +3104,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function log(float $started, int $startedMemory, string $sql, array $bindings = []): void
     {
-        if (!env('debug')) {
+        if (!is_debug_mode()) {
             return; // Skip in non-debug mode.
         }
 

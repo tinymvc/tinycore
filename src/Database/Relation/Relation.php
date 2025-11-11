@@ -67,6 +67,16 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
     }
 
     /**
+     * Get the parent model instance.
+     * 
+     * @return Model|null
+     */
+    protected function getParentModel(): ?Model
+    {
+        return $this->model;
+    }
+
+    /**
      * Get the configuration for the relationship.
      * This method must be implemented by subclasses to return
      * the specific configuration for the relationship.

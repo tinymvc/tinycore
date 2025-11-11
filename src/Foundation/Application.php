@@ -163,6 +163,19 @@ class Application implements ApplicationContract, \ArrayAccess
     }
 
     /**
+     * Checks if the application is running in debug mode.
+     *
+     * This method checks the 'debug' key in the environment variables
+     * to determine if the application is in debug mode.
+     *
+     * @return bool True if the application is in debug mode, false otherwise.
+     */
+    public function isDebugMode(): bool
+    {
+        return (bool) ($this->env['debug'] ?? false);
+    }
+
+    /**
      * Retrieves the application's dependency injection container.
      *
      * This container manages the application's services and dependencies,
@@ -367,11 +380,11 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function run(): void
     {
-        env('debug') && event('app:booting');
+        $this->isDebugMode() && event('app:booting');
         try {
             $this->container->bootServiceProviders();
 
-            env('debug') && event('app:booted');
+            $this->isDebugMode() && event('app:booted');
 
             $this->container
                 ->get(Router::class)
@@ -382,7 +395,7 @@ class Application implements ApplicationContract, \ArrayAccess
                 )
                 ->send();
 
-            env('debug') && event('app:terminated');
+            $this->isDebugMode() && event('app:terminated');
         } catch (RouteNotFoundException) {
             abort(error: 404, message: 'Route not found');
         } catch (ItemNotFoundException) {

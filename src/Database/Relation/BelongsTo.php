@@ -60,4 +60,55 @@ class BelongsTo extends Relation
             'callback' => $this->callback,
         ];
     }
+
+    /**
+     * Associate the model instance to the given parent.
+     * 
+     * @param Model $model The parent model to associate with.
+     * @return Model The child model instance.
+     */
+    public function associate(Model $model): Model
+    {
+        $child = $this->getParentModel();
+
+        if (!$child) {
+            throw new \RuntimeException('Cannot associate without a child model instance.');
+        }
+
+        // Set the foreign key to the parent's owner key value
+        $child->{$this->foreignKey} = $model->{$this->ownerKey};
+
+        // Also set the relationship in memory
+        $caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3)[2]['function'] ?? null;
+        if ($caller) {
+            $child->setRelation($caller, $model);
+        }
+
+        return $child;
+    }
+
+    /**
+     * Dissociate the model instance from its parent.
+     * 
+     * @return Model The child model instance.
+     */
+    public function dissociate(): Model
+    {
+        $child = $this->getParentModel();
+
+        if (!$child) {
+            throw new \RuntimeException('Cannot dissociate without a child model instance.');
+        }
+
+        // Clear the foreign key
+        $child->{$this->foreignKey} = null;
+
+        // Also clear the relationship in memory
+        $caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3)[2]['function'] ?? null;
+        if ($caller) {
+            $child->unsetRelation($caller);
+        }
+
+        return $child;
+    }
 }

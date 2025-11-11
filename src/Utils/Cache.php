@@ -476,7 +476,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
         );
 
         // Log cache saved event in debug mode.
-        env('debug') && event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
+        is_debug_mode() && event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
 
         $this->changed = false;
     }

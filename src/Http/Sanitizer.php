@@ -2,9 +2,9 @@
 
 namespace Spark\Http;
 
-use ArrayAccess;
 use Spark\Contracts\Http\SanitizerContract;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Collection;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
@@ -104,7 +104,7 @@ use Spark\Support\Traits\Macroable;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Sanitizer implements SanitizerContract, ArrayAccess, Arrayable, \Stringable
+class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, \ArrayAccess, \IteratorAggregate
 {
     use Macroable {
         __call as macroCall;
@@ -773,6 +773,35 @@ class Sanitizer implements SanitizerContract, ArrayAccess, Arrayable, \Stringabl
     public function copy(): self
     {
         return clone $this;
+    }
+
+    /**
+     * Converts the sanitizer data array to a JSON string.
+     *
+     * @param int $options JSON encoding options.
+     * @return string The JSON representation of the sanitizer data.
+     */
+    public function toJson($options = 0): string
+    {
+        return json_encode($this->toArray(), $options);
+    }
+
+    /**
+     * Get an iterator for the items.
+     * 
+     * This method allows the model to be iterated over like an array.
+     * 
+     * @template TKey of array-key
+     *
+     * @template-covariant TValue
+     *
+     * @implements \ArrayAccess<TKey, TValue>
+     *
+     * @return \ArrayIterator<TKey, TValue>
+     */
+    public function getIterator(): \Traversable
+    {
+        return new \ArrayIterator($this->toArray());
     }
 
     /**

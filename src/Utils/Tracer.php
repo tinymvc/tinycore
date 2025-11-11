@@ -116,10 +116,11 @@ class Tracer implements TracerUtilContract
      */
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
-        // Ensure the storage directory is writable
+        // Ensure the storage directory is writable to store error logs 
+        // and store compiled error templates.
         if (!is_writable(storage_dir())) {
-            $this->renderRawError('Attention!', 'The storage directory is not writable. Please check the permissions.');
-            exit(1);
+            $this->displayRawError('Attention!', 'The storage directory is not writable. Please check the permissions.');
+            return;
         }
 
         // Log the error message unless it's from Tinker context
@@ -150,7 +151,7 @@ class Tracer implements TracerUtilContract
             exit(1);
         }
 
-        if (config('debug')) {
+        if (is_debug_mode()) {
             // Clear any previous output
             if (ob_get_length()) {
                 ob_end_clean();
@@ -177,12 +178,14 @@ class Tracer implements TracerUtilContract
     }
 
     /**
-     * Alerts the user that the storage directory is not writable.
-     * Outputs a message in CLI or HTML format based on the context.
+     * Renders a simple raw error message.
+     * 
+     * @param string $type The type of error.
+     * @param string $message The error message.
      * 
      * @return void
      */
-    public function renderRawError(string $type, string $message): void
+    public function displayRawError(string $type, string $message): void
     {
         if (is_cli()) {
             Prompt::message($type, 'danger');
@@ -190,13 +193,18 @@ class Tracer implements TracerUtilContract
             exit(1); // Exit after CLI message
         }
 
+        // Set HTTP response code to 500 for server error.
+        if (!headers_sent()) {
+            http_response_code(500);
+        }
+
         echo <<<HTML
-            <div style="font-family: Arial, sans-serif;margin: 30px 20px;border: 2px solid red;padding: 20px;border-radius: 10px;background-color: #ffe6e6;color: red;">
+            <div style="font-family: Arial, sans-serif;margin: 20px 10px;border: 2px solid red;padding: 20px;border-radius: 6px;background-color: #ffe6e6;color: red;">
                 <h1 style="font-size: 36px;font-weight: bold;margin: 0px 0px 10px 0px;">{$type}</h1>
                 <p style="font-size: 18px;margin: 0px;">{$message}</p>
             </div>
         HTML;
-        exit(1);
+        exit;
     }
 
     /**

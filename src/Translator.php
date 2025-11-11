@@ -222,7 +222,7 @@ class Translator implements TranslatorContract
      */
     private function loadLanguageFile(string $lang_file): void
     {
-        if (env('debug')) {
+        if (is_debug_mode()) {
             $started = microtime(true);
             $startedMemory = memory_get_usage(true);
 

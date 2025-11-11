@@ -85,6 +85,20 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private object $errorObject;
 
     /**
+     * Sanitizer instance for all input data.
+     * 
+     * @var Sanitizer
+     */
+    private Sanitizer $input;
+
+    /**
+     * Sanitizer instance for validated input data.
+     * 
+     * @var Sanitizer
+     */
+    private Sanitizer $validated;
+
+    /**
      * request constructor.
      * 
      * Initializes request properties based on global server data.
@@ -837,18 +851,28 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Creates an Sanitizer instance with the current request data.
      * 
-     * @param string|array $filter Optional filter to apply to the input data.
+     * @param null|string|array $filter Optional filter to apply to the input data.
      * @param mixed $default Default value to return if the filter is a string and the key does not exist.
      * @return \Spark\Http\Sanitizer|mixed An instance of Sanitizer with the request data.
      */
-    public function input(string|array $filter = [], $default = null): mixed
+    public function input(null|string|array $filter = null, $default = null): mixed
     {
-        $input = $this->all((array) $filter);
-        if (is_string($filter)) {
-            return $input[$filter] ?? $default;
+        // Initialize the Sanitizer instance if not already done.
+        if (!isset($this->input)) {
+            $this->input = new Sanitizer($this->all());
         }
 
-        return new Sanitizer($input);
+        // Return filtered input based on the provided filter.
+        if ($filter !== null && is_array($filter)) {
+            return $this->input->only($filter);
+        }
+
+        // Return a single input value if filter is a string.
+        if ($filter !== null && is_string($filter)) {
+            return $this->input->get($filter, $default);
+        }
+
+        return $this->input; // Return the Sanitizer instance.
     }
 
     /**
@@ -861,8 +885,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function safe(string $key, array $allowedTags = []): ?string
     {
-        return (new Sanitizer($this->all([$key])))
-            ->safe($key, $allowedTags);
+        return $this->input()->safe($key, $allowedTags);
     }
 
     /**
@@ -1092,7 +1115,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function validate(array $rules): Sanitizer
     {
-        $attributes = $this->all(array_keys($rules)); // Get the attributes from the current request
         $validator = new Validator(); // Get the validator instance
 
         if (!$validator->validate($rules, $this->all())) { // Validate the request
@@ -1118,14 +1140,35 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             } else {
                 // Store the errors in the session flash data
                 back()
-                    ->withErrors($errors)
-                    ->withInput($attributes)
+                    ->withErrors($errors) // Attach the error messages
+                    ->withInput($this->all(array_keys($rules))) // Preserve input values
                     ->send(); // Redirect the user back to the previous page
             }
             exit; // Exit the script to prevent further execution
         }
 
-        return new Sanitizer($attributes); // Return the validated attributes
+        return $this->validated = $validator->validated(); // Return the validated attributes
+    }
+
+    /**
+     * Get the validated data as a Sanitizer instance.
+     *
+     * This method returns the validated data from the request as a Sanitizer instance.
+     * It assumes that the validate() method has been called previously to perform validation.
+     *
+     * @return \Spark\Http\Sanitizer
+     *   The validated data as a Sanitizer instance.
+     *
+     * @throws \RuntimeException
+     *   If no data has been validated yet.
+     */
+    public function validated(): Sanitizer
+    {
+        if (!isset($this->validated)) {
+            throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
+        }
+
+        return $this->validated;
     }
 
     /**
@@ -1147,8 +1190,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $session = app(Session::class);
 
         return $this->errorObject = new InputErrors(
-            $session->getFlash('errors', []),
-            $session->getFlash('input', []),
+            messages: $session->getFlash('errors', []),
+            attributes: $session->getFlash('input', []),
         );
     }
 

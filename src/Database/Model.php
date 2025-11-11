@@ -2,9 +2,6 @@
 
 namespace Spark\Database;
 
-use ArrayAccess;
-use ArrayIterator;
-use IteratorAggregate;
 use Spark\Database\Casts\Castable;
 use Spark\Database\Contracts\ModelContract;
 use Spark\Contracts\Support\Arrayable;
@@ -14,7 +11,6 @@ use Spark\Database\QueryBuilder;
 use Spark\Database\Traits\HasRelation;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
-use Traversable;
 
 /**
  * Class Model
@@ -96,7 +92,7 @@ use Traversable;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorAggregate, Jsonable
+abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess, \IteratorAggregate
 {
     use HasRelation, Castable, Macroable {
         __call as macroCall;
@@ -306,8 +302,14 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
             $status = $this->query()->update($data, $condition);
 
             // If update fails and no record exists, insert a new record.
-            if (!$status && $this->query()->where($condition)->notExists()) {
-                $status = $this->query()->insert($data);
+            if (!$status) {
+                try {
+                    if ($this->query()->where($condition)->notExists()) {
+                        $status = $this->query()->insert($data);
+                    }
+                } catch (\Exception $e) {
+                    $status = false; // Return false on exception.
+                }
             }
         } else {
             $status = $this->query()->insert($data);
@@ -361,7 +363,7 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
     {
         if (!isset($this->fillable) && !isset($this->guarded)) {
             throw new InvalidModelFillableException(
-                'Either fillable or guarded must be defined for the modal: ' . static::class
+                'Either fillable or guarded must be defined for the model: ' . static::class
             );
         }
 
@@ -892,9 +894,9 @@ abstract class Model implements ModelContract, Arrayable, ArrayAccess, IteratorA
      *
      * @return \ArrayIterator<TKey, TValue>
      */
-    public function getIterator(): Traversable
+    public function getIterator(): \Traversable
     {
-        return new ArrayIterator($this->toArray());
+        return new \ArrayIterator($this->toArray());
     }
 
     /**

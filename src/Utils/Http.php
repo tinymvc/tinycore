@@ -433,7 +433,7 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     private function triggerHttpRequestEvent(string $url, array $payload, array $response, float $startedAt): void
     {
-        if (!env('debug')) {
+        if (!is_debug_mode()) {
             return; // Skip logging in non-debug mode
         }
 

@@ -138,11 +138,17 @@ abstract class CsrfProtection implements MiddlewareInterface
     protected function checkCsrfToken(): void
     {
         if (empty(session('csrf_token'))) {
-            $token = bin2hex(random_bytes(32));
-            $token_encrypted = get(Hash::class)->encrypt($token);
+            /** @var \Spark\Hash $hash The Hash instance */
+            $hash = app(Hash::class);
+            $token = $hash->random(32);
+            $encrypted = $hash->encrypt($token);
 
             // Set the CSRF token as a cookie
-            cookie(['XSRF-TOKEN', $token_encrypted, ['path' => '/', 'secure' => true, 'httponly' => false, 'samesite' => 'Strict']]);
+            cookie(
+                'XSRF-TOKEN',
+                $encrypted,
+                ['path' => '/', 'secure' => true, 'httponly' => false, 'samesite' => 'Strict']
+            );
 
             // Store the token in the session
             session(['csrf_token' => $token]);

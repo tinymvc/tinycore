@@ -389,7 +389,7 @@ class DB implements DBContract
      */
     private function log(float $started, string $sql, int $startedMemory): void
     {
-        if (!env('debug')) {
+        if (!is_debug_mode()) {
             return; // Skip in non-debug mode.
         }
 

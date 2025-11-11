@@ -32,6 +32,14 @@ class Router implements RouterContract
     private array $groupStack = [];
 
     /**
+     * @var array|callable|null $fallback
+     * 
+     * The fallback route handler for when no routes match.
+     * If set, this will be called instead of throwing RouteNotFoundException.
+     */
+    private $fallback = null;
+
+    /**
      * Construct a new router.
      *
      * @param array $routes An array of routes that should be added to the router.
@@ -152,6 +160,20 @@ class Router implements RouterContract
      */
     public function match(array $methods, string $path, callable|string|array $callback): Route
     {
+        $methods = array_map('strtoupper', $methods);
+
+        // Validate HTTP methods
+        if (is_debug_mode()) {
+            $validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+            $invalidMethods = array_filter($methods, fn($method) => !in_array($method, $validMethods));
+            if (!empty($invalidMethods)) {
+                trigger_error(
+                    sprintf('Invalid HTTP methods "%s" provided to match(). Valid methods: %s', implode(', ', $invalidMethods), implode(', ', $validMethods)),
+                    E_USER_WARNING
+                );
+            }
+        }
+
         return new Route($path, $methods, $callback);
     }
 
@@ -202,6 +224,19 @@ class Router implements RouterContract
             header("Location: $to", true, $status);
             exit;
         });
+    }
+
+    /**
+     * Register a fallback route for when no other routes match.
+     *
+     * @param callable|string|array $callback The handler or callback for the fallback route.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function fallback(callable|string|array $callback): self
+    {
+        $this->fallback = $callback;
+        return $this;
     }
 
     /**
@@ -304,6 +339,13 @@ class Router implements RouterContract
 
         // Store the route by name if given, otherwise add to unnamed routes array
         if (!empty($name)) {
+            // Check for duplicate route names in production
+            if (isset($this->routes[$name]) && is_debug_mode()) {
+                trigger_error(
+                    sprintf('Route name "%s" is already registered and will be overwritten.', $name),
+                    E_USER_WARNING
+                );
+            }
             $this->routes[$name] = $route;
         } else {
             $this->routes[] = $route;
@@ -359,20 +401,36 @@ class Router implements RouterContract
 
             if (is_array($context)) {
                 foreach ($context as $key => $value) {
-                    $pattern = sprintf('/\{%s\??\}/', preg_quote($key, '/'));
-                    $route = preg_replace($pattern, $value, $route);
+                    // Escape the replacement value to prevent regex injection
+                    $escapedValue = preg_replace('/[\$\\\\]/', '\\\\$0', (string) $value);
+                    $pattern = sprintf('/\{%s\??\}/', preg_quote((string) $key, '/'));
+                    $route = preg_replace($pattern, $escapedValue, $route, 1);
                 }
             } else {
-                // Replace any non-specified dynamic parameters
-                $route = preg_replace('/\{[a-zA-Z]+\??\}/', $context, $route);
+                // Escape the replacement value
+                $escapedContext = preg_replace('/[\$\\\\]/', '\\\\$0', (string) $context);
+                // Replace the first non-optional dynamic parameter
+                $route = preg_replace('/\{[a-zA-Z0-9_]+\}/', $escapedContext, $route, 1);
             }
         }
 
         // Remove unresolved optional parameters
-        $route = preg_replace('/\{[a-zA-Z]+\??\}/', '', $route);
+        $route = preg_replace('/\{[a-zA-Z0-9_]+\?\}/', '', $route);
 
         // Remove trailing wildcard
         return rtrim($route, '*/');
+    }
+
+    /**
+     * Check if a named route exists.
+     *
+     * @param string $name The name of the route.
+     *
+     * @return bool True if the route exists, false otherwise.
+     */
+    public function has(string $name): bool
+    {
+        return isset($this->routes[$name]);
     }
 
     /**
@@ -397,7 +455,7 @@ class Router implements RouterContract
         // Iterate through all routes to find a match
         foreach ($this->routes as $route) {
             if ($this->matchRoute($route['method'], $route['path'], $request)) {
-                env('debug') && event('app:routeMatched', $route);
+                is_debug_mode() && event('app:routeMatched', $route);
 
                 // Add route-specific middleware to the middleware stack
                 $middleware->queue($route['middleware']);
@@ -408,7 +466,7 @@ class Router implements RouterContract
                     return $this->parseHttpResponse($middlewareResponse);
                 }
 
-                env('debug') && event('app:middlewaresHandled', $middleware->getStack());
+                is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
 
                 // Handle view rendering or instantiate a class for callback if specified
                 if (isset($route['template'])) {
@@ -417,11 +475,23 @@ class Router implements RouterContract
 
                 $response = $container->call($route['callback'], $request->getRouteParams());
 
-                env('debug') && event('app:routeDispatched');
+                is_debug_mode() && event('app:routeDispatched');
 
-                // Call the matched route's callback
+                // Return the response from the route's callback
                 return $this->parseHttpResponse($response);
             }
+        }
+
+        // If no route matched and a fallback is defined, use it
+        if ($this->fallback !== null) {
+            is_debug_mode() && event('app:routeFallback');
+
+            $response = $container->call($this->fallback, $request->getRouteParams());
+
+            is_debug_mode() && event('app:routeDispatched');
+
+            // Return the response from the fallback route's callback
+            return $this->parseHttpResponse($response);
         }
 
         // Throw an exception for no matching route
@@ -474,6 +544,7 @@ class Router implements RouterContract
      * Replaces '/' with '\/' and '*' with '(.*)'. Also replaces optional dynamic
      * parameters (/{param?}/) with optional groups (?:/([a-zA-Z0-9_-]+))? and
      * required dynamic parameters (/{param}/) with required groups ([a-zA-Z0-9_-]+).
+     * The {id} parameter is specifically matched as numeric only for security.
      *
      * @param string $routePath The route path to escape.
      *
@@ -482,7 +553,7 @@ class Router implements RouterContract
     private function escapeRoutePath(string $routePath): string
     {
         $pattern = preg_replace(
-            ['/\/\{[a-zA-Z]+\?\}/', '/\{id+\}/', '/\{[a-zA-Z]+\}/'],
+            ['/\/\{[a-zA-Z0-9_]+\?\}/', '/\{id\}/', '/\{[a-zA-Z0-9_]+\}/'],
             ['(?:/([a-zA-Z0-9_-]+))?', '([0-9]+)', '([a-zA-Z0-9_-]+)'],
             $routePath
         );

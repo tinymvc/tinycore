@@ -51,7 +51,7 @@ if (!function_exists('app')) {
     function app(?string $abstract = null): mixed
     {
         if ($abstract !== null) {
-            return get($abstract);
+            return Application::$app->make($abstract);
         }
 
         return Application::$app;
@@ -66,7 +66,7 @@ if (!function_exists('container')) {
      */
     function container(): Container
     {
-        return app()->getContainer();
+        return Application::$app->getContainer();
     }
 }
 
@@ -85,7 +85,7 @@ if (!function_exists('call')) {
      */
     function call(array|string|callable $abstract, array $parameters = []): mixed
     {
-        return container()->call($abstract, $parameters);
+        return Application::$app->resolve($abstract, $parameters);
     }
 }
 
@@ -102,7 +102,7 @@ if (!function_exists('get')) {
      */
     function get(string $abstract)
     {
-        return app()->get($abstract);
+        return Application::$app->get($abstract);
     }
 }
 
@@ -116,7 +116,7 @@ if (!function_exists('has')) {
      */
     function has(string $abstract): bool
     {
-        return app()->has($abstract);
+        return Application::$app->has($abstract);
     }
 }
 
@@ -131,7 +131,7 @@ if (!function_exists('bind')) {
      */
     function bind(string $abstract, $concrete = null): void
     {
-        app()->bind($abstract, $concrete);
+        Application::$app->bind($abstract, $concrete);
     }
 }
 
@@ -147,7 +147,7 @@ if (!function_exists('singleton')) {
      */
     function singleton(string $abstract, $concrete = null): void
     {
-        app()->singleton($abstract, $concrete);
+        Application::$app->singleton($abstract, $concrete);
     }
 }
 
@@ -158,16 +158,17 @@ if (!function_exists('request')) {
      * @param string|string[] $key The key to retrieve from the request data.
      * @param mixed $default The default value to return if the key does not exist.
      *
-     * @return Request|mixed The current request instance or the value of the specified key from the request data.
+     * @return \Spark\Http\Request|mixed The current request instance or the value of the specified key from the request data.
      */
     function request($key = null, $default = null): mixed
     {
         if ($key !== null) {
-            return get(Request::class)->input($key, $default);
+            return Application::$app->make(Request::class)
+                ->input($key, $default);
         }
 
         // Return the current request instance.
-        return get(Request::class);
+        return Application::$app->make(Request::class);
     }
 }
 
@@ -191,7 +192,7 @@ if (!function_exists('response')) {
         }
 
         // Return the existing Response instance from the container.
-        return get(Response::class);
+        return Application::$app->make(Response::class);
     }
 }
 
@@ -259,6 +260,7 @@ if (!function_exists('session')) {
      */
     function session($param = null, $default = null): mixed
     {
+        /** @var \Spark\Http\Session $session */
         $session = get(Session::class);
 
         if (is_array($param)) {
@@ -1031,9 +1033,10 @@ if (!function_exists('gate')) {
      */
     function gate(string|null $ability = null, string|array|callable|null $callback = null): Gate
     {
+        /** @var \Spark\Http\Gate $gate */
         $gate = get(Gate::class);
 
-        if ($ability !== null && $callback !== null) {
+        if (func_num_args() === 2) {
             $gate->define($ability, $callback);
         }
 
@@ -1056,6 +1059,7 @@ if (!function_exists('event')) {
      */
     function event(null|array|string $eventName = null, ...$args): EventDispatcher
     {
+        /** @var \Spark\EventDispatcher $event */
         $event = get(EventDispatcher::class);
 
         // If an array of events is provided with no additional arguments, add listeners.
@@ -1086,12 +1090,20 @@ if (!function_exists('job')) {
      * The callback is the function that will be executed when the job is processed.
      *
      * @param string|array|callable $callback The callback function to be executed when the job is processed.
-     * @param mixed ...$config Additional arguments to pass to the Job constructor.
+     * @param null|string|DateTime $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
+     * @param null|string $repeat The repeat interval for the job. Default is null (no repeat).
+     * @param int $priority The priority of the job. Default is 0 (normal priority).
+     * @param null|string|array|callable $onFailed The callback to be executed if the job fails. Default is null (no callback).
      * @return Job The new Job instance.
      */
-    function job(string|array|callable $callback, ...$config): Job
-    {
-        return new Job($callback, ...$config);
+    function job(
+        string|array|callable $callback,
+        null|string|DateTime $scheduledTime = null,
+        null|string $repeat = null,
+        int $priority = 0,
+        null|string|array|callable $onFailed = null,
+    ): Job {
+        return new Job($callback, $scheduledTime, $repeat, $priority, $onFailed);
     }
 }
 
@@ -1102,15 +1114,23 @@ if (!function_exists('dispatch')) {
      * This function creates a new job instance using the provided callback
      * and any additional arguments. The job is then dispatched to the queue
      * for processing.
-     *
-     * @param string|array|callable $callback The callback function to be executed by the job.
-     * @param mixed ...$config Additional arguments to pass to the Job constructor.
+     * 
+     * @param string|array|callable $callback The callback function to be executed when the job is processed.
+     * @param null|string|DateTime $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
+     * @param null|string $repeat The repeat interval for the job. Default is null (no repeat).
+     * @param int $priority The priority of the job. Default is 0 (normal priority).
+     * @param null|string|array|callable $onFailed The callback to be executed if the job fails. Default is null (no callback).
      * @return void
      */
-    function dispatch(string|array|callable $callback, ...$config): void
-    {
+    function dispatch(
+        string|array|callable $callback,
+        null|string|DateTime $scheduledTime = null,
+        null|string $repeat = null,
+        int $priority = 0,
+        null|string|array|callable $onFailed = null,
+    ): void {
         // Create a new job instance.
-        $job = job($callback, ...$config);
+        $job = job($callback, $scheduledTime, $repeat, $priority, $onFailed);
 
         // Dispatch the job to the queue.
         $job->dispatch();
@@ -1188,14 +1208,16 @@ if (!function_exists('vite')) {
      * The Vite instance provides a convenient interface for interacting with the
      * development server and production build processes.
      *
-     * @param string|array $config The configuration for the Vite instance.
+     * @param null|string|array $config The configuration for the Vite instance.
      *
      * @return Vite The Vite instance initialized with the given configuration.
      */
-    function vite(string|array $config = []): Vite
+    function vite(null|string|array $config = null): Vite
     {
+        /** @var \Spark\Utils\Vite $vite The vite instance */
         $vite = get(Vite::class);
-        if (func_num_args() > 0) {
+
+        if ($config !== null) {
             return $vite->configure($config);
         }
 
@@ -1273,27 +1295,39 @@ if (!function_exists('cookie')) {
     /**
      * Retrieve or set a cookie value.
      *
-     * This function allows you to either retrieve the value of a cookie by name,
-     * or set a new cookie using an array of parameters. When setting a cookie,
-     * the parameters should be passed in an array format compatible with setcookie().
-     *
-     * @param array|string $param The name of the cookie to retrieve, or an array of parameters to set a cookie.
-     * @param mixed $default The default value to return if the cookie is not set and a string name is provided.
-     * @return mixed The value of the cookie if retrieving, or the result of setcookie() if setting.
+     * @param string $name Cookie name
+     * @param mixed $value Cookie value (null to get, any value to set)
+     * @param int|array $expiresOrOptions Expiration time in seconds OR array of setcookie options
+     * @return mixed Cookie value when getting, bool when setting
      */
-    function cookie(array|string $param, $default = null): mixed
+    function cookie(string $name, mixed $value = null, int|array $expiresOrOptions = 0): mixed
     {
-        // Check if setting a cookie
-        if (is_array($param)) {
-            $values = array_values($param);
-            $_COOKIE[$values[0]] = $values[1];
-
-            // Set the cookie using the provided parameters
-            return setcookie(...$param);
+        // Get cookie
+        if ($value === null) {
+            return $_COOKIE[$name] ?? null;
         }
 
-        // Retrieve the cookie value or return the default value if not set
-        return $_COOKIE[$param] ?? $default;
+        // Set cookie - normalize options
+        if (is_int($expiresOrOptions)) {
+            $expiresOrOptions = ['expires' => $expiresOrOptions > 0 ? time() + $expiresOrOptions : ($expiresOrOptions < 0 ? time() - abs($expiresOrOptions) : 0)];
+        }
+
+        // Merge with defaults
+        $defaults = [
+            'expires' => 0,
+            'path' => '/',
+            'domain' => '',
+            'secure' => false,
+            'httponly' => true,
+            'samesite' => 'Lax'
+        ];
+        $expiresOrOptions = array_merge($defaults, $expiresOrOptions);
+
+        // Update $_COOKIE for immediate availability
+        $_COOKIE[$name] = $value;
+
+        // Set the cookie
+        return setcookie($name, $value, $expiresOrOptions);
     }
 }
 
@@ -1454,17 +1488,19 @@ if (!function_exists('command')) {
      * This function fetches the Commands instance and, if arguments are provided,
      * adds a new command using the provided arguments.
      *
-     * @param mixed ...$args Optional. Parameters for adding a new command.
-     * @return Commands The Commands instance.
+     * @param null|string $name The name of the command to add.
+     * @param null|string|array|callable $callback The callback to execute for the command
+     * @param string $description An optional description for the command.
+     * @return \Spark\Console\Commands The Commands instance.
      */
-    function command(...$args): Commands
+    function command(null|string $name = null, null|string|array|callable $callback = null, string $description = ''): Commands
     {
-        // Retrieve the Commands instance
+        /** @var \Spark\Console\Commands $command Retrieve the Commands instance */
         $command = get(Commands::class);
 
         // If arguments are provided, add a new command
-        if (!empty($args)) {
-            $command->addCommand(...$args);
+        if (func_num_args() > 0) {
+            $command->addCommand($name, $callback, $description);
         }
 
         // Return the Commands instance
@@ -1816,6 +1852,22 @@ if (!function_exists('is_cli')) {
     }
 }
 
+if (!function_exists('is_debug_mode')) {
+    /**
+     * Determine if the application is running in debug mode.
+     *
+     * This function checks the application's configuration to see if
+     * debug mode is enabled, which is typically used for development
+     * and troubleshooting purposes.
+     *
+     * @return bool True if the application is in debug mode, false otherwise.
+     */
+    function is_debug_mode(): bool
+    {
+        return Application::$app->isDebugMode();
+    }
+}
+
 if (!function_exists('tracer_log')) {
     /**
      * Log a message using the Tracer instance.
@@ -1858,11 +1910,11 @@ if (!function_exists('concurrency')) {
      * the provided tasks concurrently using the Concurrency class.
      *
      * @param null|array $tasks An optional array of tasks to run concurrently.
-     * @return array|Concurrency The Concurrency instance or the results of the concurrent tasks.
+     * @return \Spark\Concurrency|array The Concurrency instance or the results of the concurrent tasks.
      */
-    function concurrency(null|array $tasks = null): array|Concurrency
+    function concurrency(null|array $tasks = null): mixed
     {
-        if (func_num_args() > 0) {
+        if ($tasks !== null) {
             return Concurrency::run($tasks);
         }
 
