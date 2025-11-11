@@ -33,7 +33,7 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
      *
      * @var string|null
      */
-    private ?string $caller = null;
+    protected ?string $caller = null;
 
     /**
      * Create a new Relation instance.
@@ -43,7 +43,7 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
      * 
      * @param Model|null $model The model instance that this relationship belongs to.
      */
-    public function __construct(private ?Model $model = null)
+    public function __construct(protected ?Model $model = null)
     {
         $this->caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4)[3]['function'] ?? null;
     }
@@ -57,7 +57,7 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
      * 
      * @return array|Collection|Model The related models, which can be an array, a Collection, or a single Model instance.
      */
-    private function getModels(): array|Collection|Model
+    protected function getModels(): array|Collection|Model
     {
         if (isset($this->model) && isset($this->caller)) {
             return $this->model->getRelationshipAttribute($this->caller);

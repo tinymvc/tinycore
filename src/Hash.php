@@ -205,8 +205,8 @@ class Hash implements HashContract
      */
     public function password(string $password, ?string $hash = null): bool|string
     {
-        if (func_num_args() === 2) {
-            return $this->validatePassword($password, $hash ?? '');
+        if ($hash !== null) {
+            return $this->validatePassword($password, $hash);
         }
 
         return $this->hashPassword($password);

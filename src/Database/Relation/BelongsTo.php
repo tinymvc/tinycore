@@ -29,11 +29,11 @@ class BelongsTo extends Relation
      * @param Model|null $model The model instance that this relationship belongs to.
      */
     public function __construct(
-        private string $related,
-        private ?string $foreignKey = null,
-        private ?string $ownerKey = null,
-        private bool $lazy = true,
-        private ?Closure $callback = null,
+        protected string $related,
+        protected ?string $foreignKey = null,
+        protected ?string $ownerKey = null,
+        protected bool $lazy = true,
+        protected ?Closure $callback = null,
         ?Model $model = null
     ) {
         parent::__construct($model);

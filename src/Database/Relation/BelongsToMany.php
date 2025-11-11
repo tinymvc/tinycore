@@ -33,15 +33,15 @@ class BelongsToMany extends Relation
      * @param Model|null $model The model instance that this relationship belongs to.
      */
     public function __construct(
-        private string $related,
-        private ?string $table = null,
-        private ?string $foreignPivotKey = null,
-        private ?string $relatedPivotKey = null,
-        private ?string $parentKey = null,
-        private ?string $relatedKey = null,
-        private bool $lazy = true,
-        private array $append = [],
-        private ?Closure $callback = null,
+        protected string $related,
+        protected ?string $table = null,
+        protected ?string $foreignPivotKey = null,
+        protected ?string $relatedPivotKey = null,
+        protected ?string $parentKey = null,
+        protected ?string $relatedKey = null,
+        protected bool $lazy = true,
+        protected array $append = [],
+        protected ?Closure $callback = null,
         ?Model $model = null,
     ) {
         parent::__construct($model);
@@ -154,7 +154,7 @@ class BelongsToMany extends Relation
      * 
      * @param array|int $ids The IDs to sync.
      * @param bool $detaching Whether to detach missing models.
-     * @return array Array with 'attached', 'detached', and 'updated' keys.
+     * @return array Array with 'attached', and 'detached' keys.
      */
     public function sync($ids, bool $detaching = true): array
     {
@@ -170,11 +170,7 @@ class BelongsToMany extends Relation
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before syncing related models.");
         }
 
-        $changes = [
-            'attached' => [],
-            'detached' => [],
-            'updated' => [],
-        ];
+        $changes = ['attached' => [], 'detached' => []];
 
         // Normalize the input
         if (!is_array($ids)) {
@@ -236,10 +232,7 @@ class BelongsToMany extends Relation
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before toggling related models.");
         }
 
-        $changes = [
-            'attached' => [],
-            'detached' => [],
-        ];
+        $changes = ['attached' => [], 'detached' => []];
 
         $ids = is_array($ids) ? $ids : [$ids];
 

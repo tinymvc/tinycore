@@ -53,6 +53,36 @@ class Commands implements CommandsContract
     }
 
     /**
+     * Registers multiple commands in the Commands instance.
+     *
+     * @param array $commands
+     *   An associative array where the key is the command name and the value
+     *   is an array containing the command's configuration (callback, description, etc.).
+     *
+     * @return $this
+     *   The Commands instance.
+     */
+    public function addCommands(array $commands): self
+    {
+        foreach ($commands as $name => $config) {
+            $this->commands[$name] = $config;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Retrieves all registered commands.
+     *
+     * @return array
+     *   An associative array of all registered commands.
+     */
+    public function getAllCommands(): array
+    {
+        return $this->commands;
+    }
+
+    /**
      * Removes a command from the Commands instance.
      *
      * This method allows you to remove a command by its name.

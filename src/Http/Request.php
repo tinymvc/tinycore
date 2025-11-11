@@ -460,10 +460,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function query(?string $key = null, $default = null): mixed
     {
-        if (func_num_args() === 0) {
-            return new Sanitizer($this->queryParams);
+        if ($key !== null) {
+            return $this->queryParams[$key] ?? $default;
         }
-        return $this->queryParams[$key] ?? $default;
+        return new Sanitizer($this->queryParams);
     }
 
     /**
@@ -486,10 +486,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function post(?string $key = null, $default = null): mixed
     {
-        if (func_num_args() === 0) {
-            return new Sanitizer($this->postParams);
+        if ($key !== null) {
+            return $this->postParams[$key] ?? $default;
         }
-        return $this->postParams[$key] ?? $default;
+        return new Sanitizer($this->postParams);
     }
 
     /**
@@ -1204,7 +1204,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function errors(null|array|string $field = null): mixed
     {
-        if (func_num_args() > 0) {
+        if ($field !== null) {
             foreach ((array) $field as $name) {
                 if ($this->getErrorObject()->has($name)) {
                     return true;
@@ -1242,7 +1242,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         /** @var \Spark\Http\Session $session */
         $session = app(Session::class);
 
-        if (func_num_args() > 0) {
+        if ($key !== null) {
             return $session->get($key, $default);
         }
 

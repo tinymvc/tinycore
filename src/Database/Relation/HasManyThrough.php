@@ -37,15 +37,15 @@ class HasManyThrough extends Relation
      * 
      */
     public function __construct(
-        private string $related,
-        private string $through,
-        private ?string $firstKey = null,
-        private ?string $secondKey = null,
-        private ?string $localKey = null,
-        private ?string $secondLocalKey = null,
-        private bool $lazy = true,
-        private array $append = [],
-        private ?Closure $callback = null,
+        protected string $related,
+        protected string $through,
+        protected ?string $firstKey = null,
+        protected ?string $secondKey = null,
+        protected ?string $localKey = null,
+        protected ?string $secondLocalKey = null,
+        protected bool $lazy = true,
+        protected array $append = [],
+        protected ?Closure $callback = null,
         ?Model $model = null
     ) {
         parent::__construct($model);

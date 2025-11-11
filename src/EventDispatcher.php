@@ -107,7 +107,7 @@ class EventDispatcher implements EventDispatcherContract
      */
     public function getListeners(?string $eventName = null): array
     {
-        if (func_num_args() === 1) {
+        if ($eventName !== null) {
             return $this->listeners[$eventName] ?? [];
         }
 
@@ -138,7 +138,7 @@ class EventDispatcher implements EventDispatcherContract
      */
     public function clearListeners(?string $eventName = null): void
     {
-        if (func_num_args() === 1) {
+        if ($eventName !== null) {
             unset($this->listeners[$eventName]);
             return;
         }
