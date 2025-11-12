@@ -140,11 +140,11 @@ trait CreateDeleteForHasRelation
      * Delete related model(s) based on specific conditions.
      * 
      * @param null|int|string|array $conditions Conditions to filter which related models to delete.
-     * @return bool True if deletion was successful, false otherwise.
+     * @return int The number of deleted models.
      * 
      * @throws \RuntimeException If the parent model instance is not set or the local key is missing.
      */
-    public function deleteAll(null|int|string|array $conditions = null): bool
+    public function deleteAll(null|int|string|array $conditions = null): int
     {
         $parent = $this->getParentModel();
 
@@ -163,25 +163,23 @@ trait CreateDeleteForHasRelation
         $query = $relatedClass::where($this->foreignKey, $foreignKeyValue);
 
         if ($conditions !== null) {
-            if (is_array($conditions)) {
-                foreach ($conditions as $key => $value) {
-                    $query->where($key, $value);
-                }
+            if (is_int($conditions)) {
+                $query->where($relatedClass::$primaryKey, $conditions);
             } else {
-                $query->where('id', $conditions);
+                $query->where($conditions);
             }
         }
 
-        return $query->delete() > 0;
+        return $query->delete();
     }
 
     /**
      * Delete related model(s) based on specific conditions.
      * 
      * @param int|string|array|null $conditions Conditions to filter which related models to delete.
-     * @return bool True if deletion was successful, false otherwise.
+     * @return int The number of deleted models.
      */
-    public function deleteWhere(int|string|array $conditions): bool
+    public function deleteWhere(int|string|array $conditions): int
     {
         return $this->deleteAll($conditions);
     }
@@ -190,9 +188,9 @@ trait CreateDeleteForHasRelation
      * Delete a related model by its ID.
      * 
      * @param int $id The ID of the related model to delete.
-     * @return bool True if deletion was successful, false otherwise.
+     * @return int The number of deleted models.
      */
-    public function deleteById(int $id): bool
+    public function deleteById(int $id): int
     {
         return $this->deleteWhere($id);
     }

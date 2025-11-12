@@ -427,7 +427,7 @@ class QueryBuilder implements QueryBuilderContract
             $column = $column->toArray();
         }
 
-        if ($column === null) {
+        if (empty($column)) {
             return $this;
         } elseif ($column instanceof Closure) {
             return $this->grouped($column);
@@ -456,7 +456,9 @@ class QueryBuilder implements QueryBuilderContract
             );
 
             $this->bindings[$columnPlaceholder] = $value;
-        } elseif (is_array($column) && $operator === null && $value === null) {
+        }
+        // Associative Array where clause.
+        elseif (is_array($column) && !array_is_list($column) && $operator === null && $value === null) {
             // Create a where clause from array conditions.
             $keys = array_keys($column);
             $values = array_values($column);
@@ -500,7 +502,15 @@ class QueryBuilder implements QueryBuilderContract
                 return $this; // Return early as where clauses are already added.
             }
 
-        } elseif (is_string($column) && $operator === null && $value === null) {
+        }
+        // List of where clauses.
+        elseif (is_array($column) && array_is_list($column) && $operator === null && $value === null) {
+            foreach ($column as $item) {
+                $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $andOr, $not);
+            }
+        }
+        // Single String where clause.
+        elseif (is_string($column) && $operator === null && $value === null) {
             // Simply add a where clause from string.
             $command = "{$andOr} {$column}";
         } else {
@@ -1455,7 +1465,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $where  Optional WHERE clause to specify which records to update.
      * @return bool
      */
-    public function update(array|Arrayable $data, $where = null): bool
+    public function update(array|Arrayable $data, $where = null): int
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -1516,23 +1526,23 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->resetWhere();
 
-        // Returns true if records are successfully updated, false otherwise.
-        $status = $statement->rowCount() > 0;
+        // Returns the number of affected rows.
+        $count = $statement->rowCount();
 
-        if (!$status && $this->isUsingModel()) {
+        if ($count === 0 && $this->isUsingModel()) {
             $this->getModelBeingUsed()->restoreOriginal();
         }
 
-        return $status; // Return true if rows were affected, false otherwise.
+        return $count; // Number of affected rows
     }
 
     /**
      * Deletes records from the database based on specified conditions.
      *
      * @param mixed $where  Optional WHERE clause to specify which records to delete.
-     * @return bool
+     * @return int Returns the number of affected rows.
      */
-    public function delete($where = null): bool
+    public function delete($where = null): int
     {
         // Apply related model condition if necessary
         if ($this->isUsingModel()) {
@@ -1574,8 +1584,8 @@ class QueryBuilder implements QueryBuilderContract
         // Reset current query builder.
         $this->resetWhere();
 
-        // Returns true if records are successfully deleted, false otherwise.
-        return $statement->rowCount() > 0;
+        // Returns the number of affected rows.
+        return $statement->rowCount();
     }
 
     /**
@@ -1584,10 +1594,10 @@ class QueryBuilder implements QueryBuilderContract
      * This method removes all records from the table without logging individual row deletions.
      * It is faster than a DELETE statement and resets any auto-increment counters.
      *
-     * @return bool Returns true on success, false on failure.
+     * @return int Returns the number of affected rows.
      * @throws QueryBuilderException If the statement preparation or execution fails.
      */
-    public function truncate(): bool
+    public function truncate(): int
     {
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
@@ -1610,7 +1620,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->log($started, $startedMemory, $sql, []);
 
-        return true;
+        return $statement->rowCount();
     }
 
     /**

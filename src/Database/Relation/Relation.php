@@ -6,6 +6,7 @@ use ArrayAccess;
 use ArrayIterator;
 use IteratorAggregate;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Jsonable;
 use Spark\Database\Model;
 use Spark\Support\Collection;
 use Traversable;
@@ -19,13 +20,9 @@ use Traversable;
  *
  * This Class also handle direct relationship call such as: $post->user() instead of $post->user
  * 
- * @template TKey of array-key
- *
- * @template-covariant TValue
- *
- * @implements \ArrayAccess<TKey, TValue>
+ * @package Spark\Database\Relation
  */
-abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
+abstract class Relation implements ArrayAccess, Arrayable, Jsonable, IteratorAggregate
 {
     /**
      * The name of the caller method that initiated the relation call.
@@ -131,6 +128,12 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
 
     /**
      * Get an iterator for the items.
+     * 
+     * @template TKey of array-key
+     *
+     * @template-covariant TValue
+     *
+     * @implements \ArrayAccess<TKey, TValue>
      *
      * @return \ArrayIterator<TKey, TValue>
      */
@@ -155,6 +158,19 @@ abstract class Relation implements ArrayAccess, Arrayable, IteratorAggregate
         }
 
         return $data ?? [];
+    }
+
+    /**
+     * Convert the related models to JSON.
+     * This method returns the JSON representation of the related models,
+     * which can be used for serialization or other purposes.
+     * 
+     * @param int $options Options for json_encode.
+     * @return string The JSON representation of the related models.
+     */
+    public function toJson($options = 0): string
+    {
+        return json_encode($this->toArray(), $options);
     }
 
     /**

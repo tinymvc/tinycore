@@ -46,17 +46,17 @@ interface QueryBuilderContract
      *
      * @param array|Arrayable $data The data to update.
      * @param mixed $where The condition to use for the update.
-     * @return bool True if the update was successful, false otherwise.
+     * @return int The number of affected rows.
      */
-    public function update(array|Arrayable $data, $where = null): bool;
+    public function update(array|Arrayable $data, $where = null): int;
 
     /**
      * Delete data from the database.
      *
      * @param mixed $where The condition to use for the delete.
-     * @return bool True if the delete was successful, false otherwise.
+     * @return int The number of affected rows.
      */
-    public function delete($where = null): bool;
+    public function delete($where = null): int;
 
     /**
      * Set the fields to select from the database.
