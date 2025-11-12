@@ -30,6 +30,18 @@ use Spark\Hash as BaseHash;
  * @method static string encrypt(string $value)
  * @method static string decrypt(string $encrypted)
  * @method static string random(int $length = 32)
+ * @method static string randomBytes(int $length = 32)
+ * @method static string hash(string $value, string $algo = 'sha256')
+ * @method static string hmac(string $value, string $algo = 'sha256')
+ * @method static string encryptArray(array $data) 
+ * @method static array decryptArray(string $encrypted) 
+ * @method static string encryptString(string $value)
+ * @method static string decryptString(string $encrypted)
+ * @method static bool isEqual(string $known, string $user) 
+ * @method static string bcrypt(string $password, array $options = [])
+ * @method static string argon2i(string $password, array $options = [])
+ * @method static string argon2id(string $password, array $options = [])
+ * @method static string uuid()
  * 
  * @package Spark\Facades
  * 

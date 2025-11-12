@@ -4,6 +4,7 @@ namespace Spark\View;
 
 use Spark\Foundation\Application;
 use Spark\Http\Request;
+use Spark\Http\Session;
 use Spark\Support\Traits\Macroable;
 use Spark\View\BladeCompiler;
 use Spark\View\Contracts\BladeCompilerContract;
@@ -106,10 +107,16 @@ class Blade implements BladeContract
         $this->compiler = new BladeCompiler($this->cachePath);
 
         // Merge shared data with the application context
-        self::$shared = array_merge([
-            'app' => Application::$app,
-            'request' => Application::$app->get(Request::class),
-        ], self::$shared);
+        self::$shared = array_merge(['app' => Application::$app], self::$shared);
+
+        if (!is_cli()) {
+            // Add request, session, and errors to shared data
+            self::$shared = array_merge([
+                'request' => Application::$app->get(Request::class),
+                'session' => Application::$app->get(Session::class),
+                'errors' => Application::$app->get(Request::class)->getErrorObject(),
+            ], self::$shared);
+        }
     }
 
     /**

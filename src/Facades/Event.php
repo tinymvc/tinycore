@@ -20,6 +20,14 @@ use Spark\EventDispatcher;
  * @method static void dispatch(string $eventName, ...$args)
  * @method static void dispatchIf(string $eventName, bool $condition, ...$args)
  * @method static void dispatchUnless(string $eventName, bool $condition, ...$args)
+ * @method static void once(string $eventName, callable|string|array $listener, int $priority = 0)
+ * @method static mixed until(string $eventName, ...$args)
+ * @method static void halt()
+ * @method static int countListeners(?string $eventName = null)
+ * @method static array getEventNames()
+ * @method static bool hasEvent(string $eventName)
+ * @method static void subscribe(array $events, int $priority = 0)
+ * @method static void flush()
  * 
  * @package Spark\Facades
  * 

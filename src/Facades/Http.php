@@ -12,10 +12,10 @@ use Spark\Utils\Http as BaseHttp;
  * Facade for the Http utility class.
  * 
  * @method static HttpResponse get(string $url, array $params = [])
- * @method static HttpResponse post(string $url, array $params = [])
- * @method static HttpResponse put(string $url, array $params = [])
- * @method static HttpResponse patch(string $url, array $params = [])
- * @method static HttpResponse patch(string $url, array $params = [])
+ * @method static HttpResponse post(string $url, array $data = [])
+ * @method static HttpResponse put(string $url, array $data = [])
+ * @method static HttpResponse patch(string $url, array $data = [])
+ * @method static HttpResponse delete(string $url, array $data = [])
  * @method static HttpResponse send(string $url, array $params = [])
  * @method static BaseHttp option(int $key, mixed $value)
  * @method static BaseHttp options(array $options)
