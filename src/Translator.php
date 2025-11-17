@@ -5,6 +5,11 @@ namespace Spark;
 use Spark\Contracts\TranslatorContract;
 use Spark\Support\Traits\Macroable;
 
+use function count;
+use function in_array;
+use function is_array;
+use function sprintf;
+
 /**
  * Class Translator
  * 

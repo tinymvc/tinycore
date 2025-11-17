@@ -5,6 +5,7 @@ namespace Spark;
 use Closure;
 use InvalidArgumentException;
 use Throwable;
+use function count;
 
 /**
  * Simple Concurrency Class
@@ -128,11 +129,9 @@ class Concurrency
         }
 
         // Check if parallel execution is available
-        if ($this->canUseParallel()) {
-            $this->results = $this->executeParallel();
-        } else {
-            $this->results = $this->executeSequential();
-        }
+        $this->results = $this->canUseParallel()
+            ? $this->executeParallel()
+            : $this->executeSequential();
 
         return $this->results;
     }

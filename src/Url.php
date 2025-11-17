@@ -8,6 +8,11 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
+use function array_key_exists;
+use function array_slice;
+use function count;
+use function in_array;
+use function is_array;
 
 /**
  * Class Url
@@ -704,7 +709,7 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
         }
 
         // Prefix matching
-        if ($normalizedPattern !== '' && str_starts_with($routePath . '/', $normalizedPattern . '/')) {
+        if ($normalizedPattern !== '' && str_starts_with("$routePath/", "$normalizedPattern/")) {
             return true;
         }
 
@@ -800,7 +805,7 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
             $pattern
         );
 
-        return '/^' . $pattern . '$/i';
+        return "/^$pattern\$/i";
     }
 
     /**
@@ -829,8 +834,8 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
         $scheme = $this->getScheme();
 
         return $port === null ||
-            ($scheme === 'http' && $port === 80) ||
-            ($scheme === 'https' && $port === 443);
+            $scheme === 'http' && $port === 80 ||
+            $scheme === 'https' && $port === 443;
     }
 
     /**

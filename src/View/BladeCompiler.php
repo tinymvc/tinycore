@@ -4,6 +4,11 @@ namespace Spark\View;
 
 use InvalidArgumentException;
 use Spark\View\Contracts\BladeCompilerContract;
+use function count;
+use function in_array;
+use function is_string;
+use function sprintf;
+use function strlen;
 
 /**
  * Class BladeCompiler
@@ -137,7 +142,7 @@ class BladeCompiler implements BladeCompilerContract
         return preg_replace_callback('/\@php(.*?)\@endphp/s', function ($matches) {
             $key = '__RAW_BLOCK_' . count($this->rawBlocks) . '__';
             $content = trim($matches[1]);
-            $this->rawBlocks[$key] = "<?php" . ($content ? "\n    " . $content . "\n" : "") . "?>";
+            $this->rawBlocks[$key] = "<?php" . ($content ? "\n    $content\n" : "") . "?>";
             return $key;
         }, $template);
     }
@@ -254,7 +259,6 @@ class BladeCompiler implements BladeCompilerContract
         }, $template);
     }
 
-
     /**
      * Compile x-components with content: <x-component>content</x-component>
      */
@@ -363,7 +367,7 @@ class BladeCompiler implements BladeCompilerContract
                         $replacement = "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
 
                         // Replace the entire component
-                        $totalLength = ($nextClose + strlen($closeTag)) - $pos;
+                        $totalLength = $nextClose + strlen($closeTag) - $pos;
                         $template = substr_replace($template, $replacement, $pos, $totalLength);
 
                         $offset = $pos + strlen($replacement);

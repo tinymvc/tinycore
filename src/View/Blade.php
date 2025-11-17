@@ -11,6 +11,7 @@ use Spark\View\Contracts\BladeCompilerContract;
 use Spark\View\Contracts\BladeContract;
 use Spark\View\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\View\Exceptions\ViewException;
+use function is_array;
 
 /**
  * Class Blade

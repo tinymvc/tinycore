@@ -8,6 +8,11 @@ use Spark\Contracts\PipeInterface;
 use Spark\Support\Traits\Macroable;
 use Throwable;
 use Closure;
+use function count;
+use function get_class;
+use function is_array;
+use function is_object;
+use function is_string;
 
 /**
  * Pipeline class for managing a series of processing steps (pipes).

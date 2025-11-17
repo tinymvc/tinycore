@@ -15,6 +15,13 @@ use Spark\Exceptions\Container\FailedToResolveParameterException;
 use Spark\Exceptions\Container\InvalidAliasException;
 use Spark\Exceptions\Container\MethodDoesNotExistsException;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
+use function count;
+use function get_class;
+use function in_array;
+use function is_array;
+use function is_object;
+use function is_string;
 
 /**
  * Class Container

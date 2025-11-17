@@ -7,6 +7,11 @@ use Spark\Exceptions\Hash\DecryptionFailedException;
 use Spark\Exceptions\Hash\EncryptionFailedException;
 use Spark\Exceptions\Hash\InvalidEncryptingKeyException;
 use Spark\Support\Traits\Macroable;
+use function chr;
+use function in_array;
+use function is_array;
+use function ord;
+use function strlen;
 
 /**
  * Class Hash

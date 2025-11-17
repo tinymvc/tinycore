@@ -6,6 +6,7 @@ use Spark\Contracts\EventDispatcherContract;
 use Spark\Exceptions\InvalidEventCallbackException;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
+use function count;
 
 /**
  * Class EventDispatcher
