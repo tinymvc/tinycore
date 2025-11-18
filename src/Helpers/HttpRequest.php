@@ -4,6 +4,7 @@ namespace Spark\Helpers;
 
 use Spark\Exceptions\Utils\PingUtilException;
 use Spark\Support\Traits\Macroable;
+use function is_array;
 
 /**
  * Class PendingRequest
@@ -433,6 +434,9 @@ class HttpRequest
             throw new PingUtilException('Failed to initialize cURL.');
         }
 
+        // Get the HTTP method in uppercase
+        $method = strtoupper($this->method);
+
         // Default options
         $defaultOptions = [
             CURLOPT_URL => $this->getFullUrl(),
@@ -444,11 +448,11 @@ class HttpRequest
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_ENCODING => 'utf-8',
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => $this->method,
+            CURLOPT_CUSTOMREQUEST => $method,
         ];
 
         // Handle POST/PUT/PATCH/DELETE data
-        if (!empty($this->data) && in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
+        if (!empty($this->data) && in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
             $this->withPostFields($this->data);
         }
 

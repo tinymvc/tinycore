@@ -12,6 +12,7 @@ use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
 use Spark\Support\Traits\Macroable;
+use function sprintf;
 
 /**
  * A job queue that stores the jobs in a JSON file.

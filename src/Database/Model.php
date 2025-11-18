@@ -11,6 +11,14 @@ use Spark\Database\QueryBuilder;
 use Spark\Database\Traits\HasRelation;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
+use function func_get_args;
+use function in_array;
+use function is_array;
+use function is_bool;
+use function is_int;
+use function is_null;
+use function sprintf;
 
 /**
  * Class Model
@@ -421,7 +429,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 $data[$key] = json_encode($value);
             }
             // Handle Scalar values
-            elseif (is_int($value) || is_bool($value) || is_null($value)) {
+            elseif ($value === null || is_int($value) || is_bool($value)) {
                 $data[$key] = $value;
             }
             // Fallback: Convert all other values to string

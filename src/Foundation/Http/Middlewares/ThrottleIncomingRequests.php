@@ -6,6 +6,8 @@ use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Exceptions\TooManyRequests;
 use Spark\Http\Request;
 use Spark\Utils\Cache;
+use function count;
+use function sprintf;
 
 /**
  * Middleware to throttle requests based on IP address.

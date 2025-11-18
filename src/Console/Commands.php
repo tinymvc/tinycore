@@ -4,6 +4,8 @@ namespace Spark\Console;
 
 use Spark\Console\Contracts\CommandsContract;
 use Spark\Support\Traits\Macroable;
+use function is_array;
+use function strlen;
 
 /**
  * Class Commands

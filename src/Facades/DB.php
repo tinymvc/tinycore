@@ -6,6 +6,7 @@ use Spark\Database\DB as Database;
 use Spark\Database\QueryBuilder;
 use PDO;
 use PDOStatement;
+use function func_get_args;
 
 /**
  * Facade DB

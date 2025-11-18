@@ -6,6 +6,7 @@ use PHPMailer\PHPMailer\PHPMailer;
 use Spark\Contracts\Utils\MailUtilContract;
 use Spark\Facades\Blade;
 use Spark\Support\Traits\Macroable;
+use function sprintf;
 
 /**
  * Utility class for sending emails.

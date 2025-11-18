@@ -6,6 +6,7 @@ use Spark\Contracts\Http\GateContract;
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
+use function is_string;
 
 /**
  * Class Gate

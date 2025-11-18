@@ -3,6 +3,7 @@
 namespace Spark\Helpers;
 
 use Spark\Contracts\Support\Arrayable;
+use function count;
 
 /**
  * Class InputErrors - HTTP Request input validation errors

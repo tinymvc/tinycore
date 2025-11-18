@@ -7,6 +7,9 @@ use PDOStatement;
 use Spark\Database\Contracts\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
 use Spark\Support\Traits\Macroable;
+use function in_array;
+use function is_array;
+use function sprintf;
 
 /**
  * Class Database

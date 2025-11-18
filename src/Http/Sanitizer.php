@@ -8,6 +8,11 @@ use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Collection;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
+use function array_slice;
+use function is_array;
+use function is_int;
+use function is_string;
+use function strval;
 
 /**
  * Class Sanitizer

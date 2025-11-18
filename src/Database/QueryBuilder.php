@@ -14,6 +14,13 @@ use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
+use function is_array;
+use function is_bool;
+use function is_int;
+use function is_null;
+use function is_object;
+use function is_string;
+use function sprintf;
 
 /**
  * Class Query
@@ -2562,7 +2569,7 @@ class QueryBuilder implements QueryBuilderContract
             . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
             . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
             . (isset($this->query['limit']) || isset($this->query['offset']) ? ' LIMIT ' . (isset($this->query['offset'], $this->query['limit']) ? "{$this->query['offset']}, {$this->query['limit']}" : $this->query['limit']) : '')
-            . (isset($this->query['unions']) ? $this->query['unions'] : '');
+            . ($this->query['unions'] ?? '');
     }
 
     /**
@@ -3012,7 +3019,7 @@ class QueryBuilder implements QueryBuilderContract
         if (is_bool($value)) {
             return PDO::PARAM_BOOL;
         }
-        if (is_null($value)) {
+        if ($value === null) {
             return PDO::PARAM_NULL;
         }
         return PDO::PARAM_STR;

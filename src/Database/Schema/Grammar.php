@@ -7,6 +7,10 @@ use Spark\Database\Schema\Exceptions\SqliteAlterFailedException;
 use Spark\Database\Schema\Exceptions\InvalidForeignKeyException;
 use Spark\Database\Schema\Exceptions\UnsupportedDatabaseDriverException;
 use Spark\Support\Traits\Macroable;
+use function in_array;
+use function is_array;
+use function is_bool;
+use function is_string;
 
 /**
  * Class Grammar

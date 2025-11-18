@@ -7,6 +7,9 @@ use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use Spark\Support\Str;
+use function in_array;
+use function is_array;
+use function is_string;
 
 /**
  * ManageRelation Trait

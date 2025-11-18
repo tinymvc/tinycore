@@ -5,6 +5,10 @@ namespace Spark\Utils;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use function func_get_args;
+use function is_array;
+use function sprintf;
+use function strlen;
 
 /**
  * FileManager class provides utility methods for file and directory operations.

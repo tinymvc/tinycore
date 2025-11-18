@@ -8,6 +8,9 @@ use Spark\Helpers\HttpPool;
 use Spark\Helpers\HttpResponse;
 use Spark\Helpers\HttpRequest;
 use Spark\Support\Traits\Macroable;
+use function is_array;
+use function is_resource;
+use function is_string;
 
 /**
  * Class Http
@@ -198,6 +201,19 @@ class Http extends HttpRequest implements HttpUtilContract
     public function option(int $key, mixed $value): self
     {
         $this->withOption($key, $value);
+        return $this;
+    }
+
+    /**
+     * Sets the HTTP method for the request.
+     * 
+     * @deprecated Use withMethod() instead for fluent interface
+     * @param string $method The HTTP method (e.g., 'GET', 'POST').
+     * @return self
+     */
+    public function method(string $method): self
+    {
+        $this->setMethod($method);
         return $this;
     }
 

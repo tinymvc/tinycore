@@ -4,6 +4,8 @@ namespace Spark\Foundation\Http\Middlewares;
 
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Http\Request;
+use function in_array;
+use function is_array;
 
 /**
  * CORS (Cross-Origin Resource Sharing) middleware class.

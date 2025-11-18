@@ -8,6 +8,8 @@ use Spark\Contracts\Http\AuthDriverContract;
 use Spark\Database\Model;
 use Spark\Support\Traits\Macroable;
 use Throwable;
+use function intval;
+use function is_array;
 
 /**
  * Class Auth
@@ -115,7 +117,7 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         // Return the currently logged in user
-        return $this->user;
+        return $this->user ??= null;
     }
 
     /**

@@ -6,6 +6,8 @@ use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
+use function is_array;
+use function is_string;
 
 /**
  * Class Response

@@ -7,6 +7,8 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
 use Spark\Support\Traits\Macroable;
+use function array_slice;
+use function sprintf;
 
 /**
  * Class Paginator

@@ -15,6 +15,9 @@ use Spark\Database\Relation\HasOne;
 use Spark\Database\Relation\HasOneThrough;
 use Spark\Database\Relation\Relation;
 use Spark\Support\Str;
+use function array_key_exists;
+use function is_array;
+use function is_string;
 
 /**
  * Laravel-style Mini ORM (Object Relational Mapping)

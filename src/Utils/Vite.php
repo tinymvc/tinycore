@@ -4,6 +4,8 @@ namespace Spark\Utils;
 
 use Spark\Contracts\Utils\ViteUtilContract;
 use Spark\Support\Traits\Macroable;
+use function is_string;
+use function sprintf;
 
 /**
  * Class Vite
@@ -160,7 +162,7 @@ class Vite implements ViteUtilContract
     {
         $url = $this->isRunning($entry) ? $this->serverUrl($entry) : $this->assetUrl($entry);
 
-        return $url ? '<script type="module" crossorigin src="' . $url . '"></script>' : '';
+        return $url ? sprintf('<script type="module" crossorigin src="%s"></script>', $url) : '';
     }
 
     /**
@@ -177,7 +179,7 @@ class Vite implements ViteUtilContract
 
         return array_reduce(
             $this->importsUrls($entry),
-            fn($res, $url) => $res . '<link rel="modulepreload" href="' . $url . '">',
+            fn($res, $url) => $res . sprintf('<link rel="modulepreload" href="%s">', $url),
             ''
         );
     }
@@ -196,7 +198,7 @@ class Vite implements ViteUtilContract
 
         return array_reduce(
             $this->cssUrls($entry),
-            fn($tags, $url) => $tags . '<link rel="stylesheet" href="' . $url . '">',
+            fn($tags, $url) => $tags . sprintf('<link rel="stylesheet" href="%s">', $url),
             ''
         );
     }

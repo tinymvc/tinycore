@@ -6,6 +6,10 @@ use Spark\Console\Prompt;
 use Spark\Database\Contracts\MigrationContract;
 use Spark\Database\Exceptions\InvalidMigrationFile;
 use Throwable;
+use function array_slice;
+use function count;
+use function is_object;
+use function sprintf;
 
 /**
  * Class Migration

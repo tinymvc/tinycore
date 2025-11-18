@@ -7,6 +7,11 @@ use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Helpers\InputErrors;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
+use function count;
+use function func_get_args;
+use function in_array;
+use function is_array;
 
 /**
  * Class Request

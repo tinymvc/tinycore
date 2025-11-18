@@ -6,6 +6,7 @@ use Spark\Console\Contracts\ConsoleContract;
 use Spark\Console\Exceptions\NotAllowedException;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
+use function array_slice;
 
 class Console implements ConsoleContract
 {

@@ -5,6 +5,9 @@ namespace Spark\Routing;
 use Spark\Foundation\Application;
 use Spark\Routing\Contracts\RouteGroupContract;
 use Spark\Routing\Exceptions\InvalidGroupAttributeException;
+use function in_array;
+use function is_array;
+use function is_string;
 
 /**
  * Class RouteGroup

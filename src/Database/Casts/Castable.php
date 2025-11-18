@@ -5,6 +5,8 @@ namespace Spark\Database\Casts;
 use Spark\Database\Contracts\CastsAttributes;
 use Spark\Support\Collection;
 use Spark\Utils\Carbon;
+use function is_bool;
+use function is_string;
 
 /**
  * Trait Castable

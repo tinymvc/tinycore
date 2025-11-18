@@ -5,6 +5,15 @@ namespace Spark\Http;
 use Spark\Contracts\Http\ValidatorContract;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
+use function array_slice;
+use function count;
+use function in_array;
+use function intval;
+use function is_array;
+use function is_bool;
+use function is_scalar;
+use function is_string;
+use function strlen;
 
 /**
  * Class Validator

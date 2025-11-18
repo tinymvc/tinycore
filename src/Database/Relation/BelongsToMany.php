@@ -5,6 +5,7 @@ namespace Spark\Database\Relation;
 use Closure;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
+use function is_array;
 
 /**
  * Class BelongsToMany

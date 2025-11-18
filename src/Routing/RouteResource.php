@@ -4,6 +4,7 @@ namespace Spark\Routing;
 
 use Spark\Foundation\Application;
 use Spark\Routing\Contracts\RouteResourceContract;
+use function is_array;
 
 /**
  * Class RouteResource

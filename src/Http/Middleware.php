@@ -8,6 +8,9 @@ use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
 use Spark\Support\Traits\Macroable;
 use Closure;
+use function in_array;
+use function is_array;
+use function is_string;
 
 /**
  * Class Middleware

@@ -6,6 +6,10 @@ use Spark\Contracts\Utils\UploaderUtilContract;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Exceptions\Utils\UploaderUtilException;
 use Spark\Support\Traits\Macroable;
+use function count;
+use function in_array;
+use function is_array;
+use function is_string;
 
 /**
  * Class uploader

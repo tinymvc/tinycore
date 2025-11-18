@@ -4,6 +4,7 @@ namespace Spark\Helpers;
 
 use Spark\Exceptions\Utils\PingUtilException;
 use Spark\Support\Traits\Macroable;
+use function count;
 
 /**
  * Class HttpPool

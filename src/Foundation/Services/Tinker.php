@@ -16,6 +16,20 @@ use Spark\Utils\Http;
 use Spark\Utils\Image;
 use Spark\Utils\Mail;
 use Throwable;
+use function array_slice;
+use function count;
+use function get_class;
+use function gettype;
+use function in_array;
+use function is_array;
+use function is_bool;
+use function is_int;
+use function is_null;
+use function is_object;
+use function is_resource;
+use function is_string;
+use function sprintf;
+use function strlen;
 
 /**
  * Tinker - Interactive PHP Shell for TinyMVC
@@ -544,7 +558,7 @@ class Tinker
 
         echo "\n" . $this->color('=> ', 'green');
 
-        if (is_null($value)) {
+        if ($value === null) {
             echo $this->color('null', 'gray');
         } elseif (is_bool($value)) {
             echo $this->color($value ? 'true' : 'false', 'yellow');
@@ -610,7 +624,7 @@ class Tinker
                 $items[] = $formattedValue;
             } else {
                 $keyDisplay = is_string($key) ? $this->color("\"$key\"", 'cyan') : $this->color((string) $key, 'magenta');
-                $items[] = $keyDisplay . " => $formattedValue";
+                $items[] = "$keyDisplay => $formattedValue";
             }
             $i++;
         }
