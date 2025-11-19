@@ -6,6 +6,8 @@ use DateTime;
 use DateTimeZone;
 use InvalidArgumentException;
 use Spark\Contracts\Support\Arrayable;
+use function is_string;
+use function sprintf;
 
 /**
  * Custom DateTime Utility Class

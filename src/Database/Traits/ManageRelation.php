@@ -450,14 +450,80 @@ trait ManageRelation
      */
     public function withCount(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1, string $boolean = 'AND'): QueryBuilder
     {
+        return $this->withAggregate($relation, 'count', '*', $callback);
+    }
+
+    /**
+     * Add a sum aggregate for a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column to sum
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function withSum(string $relation, string $column, ?Closure $callback = null): QueryBuilder
+    {
+        return $this->withAggregate($relation, 'sum', $column, $callback);
+    }
+
+    /**
+     * Add an average aggregate for a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column to average
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function withAvg(string $relation, string $column, ?Closure $callback = null): QueryBuilder
+    {
+        return $this->withAggregate($relation, 'avg', $column, $callback);
+    }
+
+    /**
+     * Add a minimum aggregate for a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column to get minimum value
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function withMin(string $relation, string $column, ?Closure $callback = null): QueryBuilder
+    {
+        return $this->withAggregate($relation, 'min', $column, $callback);
+    }
+
+    /**
+     * Add a maximum aggregate for a relationship.
+     * 
+     * @param string $relation The relationship name
+     * @param string $column The column to get maximum value
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    public function withMax(string $relation, string $column, ?Closure $callback = null): QueryBuilder
+    {
+        return $this->withAggregate($relation, 'max', $column, $callback);
+    }
+
+    /**
+     * Add an aggregate subquery for a relationship (DRY implementation for all aggregate functions).
+     * 
+     * @param string $relation The relationship name
+     * @param string $function The aggregate function (count, sum, avg, min, max)
+     * @param string $column The column to aggregate
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return QueryBuilder
+     */
+    private function withAggregate(string $relation, string $function, string $column, ?Closure $callback = null): QueryBuilder
+    {
         $model = $this->getRelatedModel();
         $relationConfig = $model->getRelationshipConfig($relation);
 
-        // Add a custom field to select the count
-        $countAlias = $relation . '_count';
+        // Create alias based on function type
+        $alias = $relation . '_' . $function;
 
-        // Build the subquery for counting
-        $this->addCountSubquery($relationConfig, $relation, $countAlias, $callback);
+        // Build the subquery with the specified aggregate function
+        $this->addAggregateSubquery($relationConfig, $relation, $alias, $function, $column, $callback);
 
         return $this;
     }
@@ -583,7 +649,7 @@ trait ManageRelation
      */
     private function addHasConstraint(array $relationConfig, string $relation, string $operator, int $count, string $boolean, ?Closure $callback = null): QueryBuilder
     {
-        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback);
+        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, 'count', '*');
 
         $sql = "({$subquery['sql']}) {$operator} {$count}";
 
@@ -598,18 +664,23 @@ trait ManageRelation
      * 
      * @param array $relationConfig The relationship configuration
      * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @param string $function The aggregate function (count, sum, avg, min, max)
+     * @param string $column The column to aggregate
      * @return array The subquery SQL
      */
-    private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null): array
+    private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null, string $function = 'count', string $column = '*'): array
     {
         $relatedModel = new $relationConfig['related'];
         $relatedTable = $relatedModel::$table ?? $this->getTableFromClass($relationConfig['related']);
+
+        // Build the aggregate expression
+        $aggregateExpression = $this->buildAggregateExpression($function, $column, $relatedTable);
 
         switch ($relationConfig['type']) {
             case 'hasOne':
             case 'hasMany':
                 $query = $relatedModel->query()
-                    ->select('COUNT(*)')
+                    ->select($aggregateExpression)
                     ->whereRaw(
                         $this->grammar->wrapTable($relatedTable) . "." . $this->grammar->wrapColumn($relationConfig['foreignKey']) . " = " .
                         $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['localKey'])
@@ -618,7 +689,7 @@ trait ManageRelation
 
             case 'belongsTo':
                 $query = $relatedModel->query()
-                    ->select('COUNT(*)')
+                    ->select($aggregateExpression)
                     ->whereRaw(
                         $this->grammar->wrapTable($relatedTable) . "." . $this->grammar->wrapColumn($relationConfig['ownerKey']) . " = " .
                         $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['foreignKey'])
@@ -627,7 +698,7 @@ trait ManageRelation
 
             case 'belongsToMany':
                 $query = $relatedModel->query()
-                    ->select('COUNT(*)')
+                    ->select($aggregateExpression)
                     ->join(
                         $relationConfig['table'],
                         $relationConfig['table'] . ".{$relationConfig['relatedPivotKey']}",
@@ -646,7 +717,7 @@ trait ManageRelation
                 $throughTable = $throughModel::$table ?? $this->getTableFromClass($relationConfig['through']);
 
                 $query = $relatedModel->query()
-                    ->select('COUNT(*)')
+                    ->select($aggregateExpression)
                     ->join(
                         $throughTable,
                         $throughTable . ".{$relationConfig['secondLocalKey']}",
@@ -672,6 +743,33 @@ trait ManageRelation
     }
 
     /**
+     * Build the aggregate expression for SQL.
+     * 
+     * @param string $function The aggregate function (count, sum, avg, min, max)
+     * @param string $column The column to aggregate
+     * @param string $relatedTable The related table name
+     * @return string The aggregate expression
+     */
+    private function buildAggregateExpression(string $function, string $column, string $relatedTable): string
+    {
+        $function = strtoupper($function);
+
+        // Handle COUNT(*) special case
+        if ($function === 'COUNT' && $column === '*') {
+            return 'COUNT(*)';
+        }
+
+        // For other aggregates, ensure column is properly qualified
+        if ($column !== '*' && !str_contains($column, '.')) {
+            $column = "$relatedTable.$column";
+        }
+
+        $wrappedColumn = $column === '*' ? '*' : $this->grammar->wrapColumn($column);
+
+        return "{$function}({$wrappedColumn})";
+    }
+
+    /**
      * Add the related table prefix to a column name.
      *
      * @param string $relation The relationship name
@@ -691,19 +789,21 @@ trait ManageRelation
     }
 
     /**
-     * Add a count subquery to the main query.
+     * Add an aggregate subquery to the main query (DRY implementation).
      * 
      * @param array $relationConfig The relationship configuration
      * @param string $relation The relationship name
-     * @param string $alias The alias for the count column
+     * @param string $alias The alias for the aggregate column
+     * @param string $function The aggregate function (count, sum, avg, min, max)
+     * @param string $column The column to aggregate
      * @param Closure|null $callback Optional callback to add constraints to the relationship query
      * @return void
      */
-    private function addCountSubquery(array $relationConfig, string $relation, string $alias, ?Closure $callback = null): void
+    private function addAggregateSubquery(array $relationConfig, string $relation, string $alias, string $function, string $column, ?Closure $callback = null): void
     {
-        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback);
+        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, $function, $column);
 
-        // Modify the select to include the count subquery
+        // Modify the select to include the aggregate subquery
         $currentSelect = $this->query['select'] ?: '*';
         $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) as {$alias}";
 
@@ -719,10 +819,6 @@ trait ManageRelation
      */
     private function getSubquerySQL(QueryBuilder $query): array
     {
-        // This is a simplified approach - in a real implementation, 
-        // you might need to build the SQL string manually or extend QueryBuilder
-        // to expose its internal SQL building methods
-
         $table = $query->getTableName();
         $select = $query->query['select'] ?: 'COUNT(*)';
         $joins = $query->query['joins'] ?? '';

@@ -8,6 +8,7 @@ use Spark\Foundation\Application;
 use Spark\Queue\Exceptions\FailedToResolveJobError;
 use Spark\Support\Traits\Macroable;
 use Throwable;
+use function is_string;
 
 /**
  * Class Job

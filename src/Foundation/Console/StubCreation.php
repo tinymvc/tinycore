@@ -7,6 +7,7 @@ use Spark\Console\Prompt;
 use Spark\Support\Pluralizer;
 use Spark\Support\Str;
 use Spark\Utils\FileManager;
+use function is_array;
 
 /**
  * Class StubCreation

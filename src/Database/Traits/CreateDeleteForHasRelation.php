@@ -3,6 +3,7 @@
 namespace Spark\Database\Traits;
 
 use Spark\Database\Model;
+use function is_int;
 
 /**
  * Trait providing methods to delete HasOne, HasMany related 

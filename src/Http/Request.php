@@ -12,6 +12,7 @@ use function count;
 use function func_get_args;
 use function in_array;
 use function is_array;
+use function is_string;
 
 /**
  * Class Request
@@ -87,7 +88,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * @var object
      */
-    private object $errorObject;
+    private InputErrors $inputErrors;
 
     /**
      * Sanitizer instance for all input data.
@@ -1185,16 +1186,16 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @return \Spark\Helpers\InputErrors
      *   The error object.
      */
-    public function getErrorObject(): InputErrors
+    public function getInputErrors(): InputErrors
     {
-        if (isset($this->errorObject)) {
-            return $this->errorObject;
+        if (isset($this->inputErrors)) {
+            return $this->inputErrors;
         }
 
         /** @var \Spark\Http\Session $session */
         $session = app(Session::class);
 
-        return $this->errorObject = new InputErrors(
+        return $this->inputErrors = new InputErrors(
             messages: $session->getFlash('errors', []),
             attributes: $session->getFlash('input', []),
         );
@@ -1211,14 +1212,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         if ($field !== null) {
             foreach ((array) $field as $name) {
-                if ($this->getErrorObject()->has($name)) {
+                if ($this->getInputErrors()->has($name)) {
                     return true;
                 }
             }
             return false;
         }
 
-        return $this->getErrorObject();
+        return $this->getInputErrors();
     }
 
     /**
@@ -1230,7 +1231,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function old(string $field, ?string $default = null): ?string
     {
-        return $this->getErrorObject()->getOld($field, $default);
+        return $this->getInputErrors()->getOld($field, $default);
     }
 
     /**

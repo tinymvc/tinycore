@@ -24,7 +24,6 @@ use function in_array;
 use function is_array;
 use function is_bool;
 use function is_int;
-use function is_null;
 use function is_object;
 use function is_resource;
 use function is_string;
@@ -756,7 +755,7 @@ class Tinker
             }
         }
 
-        if (is_null($value)) {
+        if ($value === null) {
             return $this->color('null', 'gray');
         } elseif (is_bool($value)) {
             return $this->color($value ? 'true' : 'false', 'yellow');

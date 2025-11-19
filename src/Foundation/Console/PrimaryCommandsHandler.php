@@ -10,6 +10,7 @@ use Spark\Utils\FileManager;
 use function in_array;
 use function intval;
 use function is_string;
+use function sprintf;
 use function strlen;
 
 /**

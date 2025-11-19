@@ -8,6 +8,7 @@ use Spark\Database\Exceptions\InvalidMigrationFile;
 use Throwable;
 use function array_slice;
 use function count;
+use function in_array;
 use function is_object;
 use function sprintf;
 

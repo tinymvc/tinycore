@@ -11,6 +11,7 @@ use function in_array;
 use function is_array;
 use function is_bool;
 use function is_string;
+use function sprintf;
 
 /**
  * Class Grammar
@@ -442,32 +443,12 @@ class Grammar implements GrammarContract
      */
     public function compileRenameColumn(string $table, string $from, string $to): string
     {
-        return match ($this->driver) {
-            'mysql', 'pgsql' => "ALTER TABLE {$this->wrapTable($table)} " .
-            "RENAME COLUMN {$this->wrapColumn($from)} TO {$this->wrapColumn($to)}",
-            'sqlite' => $this->compileSQLiteRename($table, $from, $to),
-            default => ''
-        };
-    }
+        if ($this->isSQLite()) {
+            throw new SqliteAlterFailedException('SQLite requires special handling for column renames');
+        }
 
-    /**
-     * Compile a column rename operation for SQLite.
-     *
-     * SQLite does not support renaming columns directly, so
-     * this method throws an exception to indicate that the
-     * operation is not supported.
-     *
-     * @param string $table
-     * @param string $from
-     * @param string $to
-     * @return string
-     * @throws SqliteAlterFailedException
-     */
-    private function compileSQLiteRename(string $table, string $from, string $to): string
-    {
-        // SQLite only supports renaming through table recreation
-        // This would require more complex implementation
-        throw new SqliteAlterFailedException('SQLite requires special handling for column renames');
+        return "ALTER TABLE {$this->wrapTable($table)} " .
+            "RENAME COLUMN {$this->wrapColumn($from)} TO {$this->wrapColumn($to)}";
     }
 
     /**

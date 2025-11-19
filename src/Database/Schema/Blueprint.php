@@ -6,6 +6,7 @@ use Spark\Database\Schema\Contracts\BlueprintContract;
 use Spark\Database\Schema\Exceptions\InvalidBlueprintArgumentException;
 use Spark\Support\Traits\Macroable;
 use function is_array;
+use function sprintf;
 
 /**
  * Class Blueprint

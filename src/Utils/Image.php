@@ -7,6 +7,7 @@ use Spark\Contracts\Utils\ImageUtilContract;
 use Spark\Exceptions\Utils\ImageUtilException;
 use Spark\Support\Traits\Macroable;
 use function intval;
+use function sprintf;
 
 /**
  * Class Image

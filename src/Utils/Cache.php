@@ -5,6 +5,7 @@ namespace Spark\Utils;
 use Spark\Contracts\Utils\CacheUtilContract;
 use Spark\Exceptions\Utils\FailedToSaveCacheFileException;
 use Spark\Support\Traits\Macroable;
+use function is_array;
 
 /**
  * Class Cache

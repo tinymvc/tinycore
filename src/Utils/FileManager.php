@@ -597,7 +597,7 @@ class FileManager
 
         $newFilename = $filename;
 
-        while (static::exists($directory . '/' . $newFilename)) {
+        while (static::exists("$directory/$newFilename")) {
             $newFilename = $name . '_' . $counter . ($extension ? '.' . $extension : '');
             $counter++;
         }

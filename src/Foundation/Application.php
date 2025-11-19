@@ -30,6 +30,7 @@ use Spark\Utils\Tracer;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
 use Throwable;
+use function get_class;
 
 /**
  * The Application class is the main entry point to the framework.

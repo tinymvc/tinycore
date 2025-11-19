@@ -17,7 +17,6 @@ use function in_array;
 use function is_array;
 use function is_bool;
 use function is_int;
-use function is_null;
 use function sprintf;
 
 /**
@@ -42,6 +41,10 @@ use function sprintf;
  * @method static QueryBuilder whereRelationFindInSet(string $relation, string $column, $value)
  * @method static QueryBuilder whereRelationJson(string $relation, string $column, string $key, $value)
  * @method static QueryBuilder withCount(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1)
+ * @method static QueryBuilder withSum(string $relation, string $column, ?Closure $callback = null)
+ * @method static QueryBuilder withAvg(string $relation, string $column, ?Closure $callback = null)
+ * @method static QueryBuilder withMin(string $relation, string $column, ?Closure $callback = null)
+ * @method static QueryBuilder withMax(string $relation, string $column, ?Closure $callback = null)
  * @method static int|array insert(array|Arrayable $data, array $config = [])
  * @method static int|array bulkUpdate(array|Arrayable $data, array $config = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
@@ -370,7 +373,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     private function getFillableData(): array
     {
-        if (!isset($this->fillable) && !isset($this->guarded)) {
+        // Check if either 'guarded' or 'fillable' property exists in the model.
+        $existsGuarded = property_exists($this, 'guarded');
+        $existsFillable = property_exists($this, 'fillable');
+        if (!$existsGuarded && !$existsFillable) {
             throw new InvalidModelFillableException(
                 'Either fillable or guarded must be defined for the model: ' . static::class
             );
@@ -378,8 +384,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         $data = [];
 
-        $fillable = $this->fillable ?? [];
-        $guarded = $this->guarded ?? [];
+        $guarded = $existsGuarded ? (array) $this->guarded : [];
+        $fillable = $existsFillable ? (array) $this->fillable : [];
 
         foreach ($this->attributes as $key => $value) {
             // If fillable is defined, only allow fillable fields unless guarded explicitly restricts it.
@@ -833,6 +839,21 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function hasOriginal(): bool
     {
         return isset($this->tracking['__original_attributes']);
+    }
+
+    /**
+     * Check if the model or a specific field is dirty (has changes).
+     *
+     * @param string|null $field The specific field to check for changes. If null, checks the entire model.
+     * @return bool True if the model or the specified field has changes, false otherwise.
+     */
+    public function isDirty(?string $field = null): bool
+    {
+        if ($field !== null) {
+            return in_array($field, array_keys($this->getChanges()));
+        }
+
+        return $this->hasChanges();
     }
 
     /**
