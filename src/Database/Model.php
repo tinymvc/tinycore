@@ -27,6 +27,7 @@ use function sprintf;
  * It includes CRUD operations, data decoding, and dynamic method invocation.
  *
  * @method static QueryBuilder with($relations)
+ * @method static QueryBuilder withFiltered(string $relation, string|array $filters)
  * @method static QueryBuilder has(string $relation, string $operator = '>=', int $count = 1)
  * @method static QueryBuilder doesntHave(string $relation)
  * @method static QueryBuilder whereHas(string $relation, ?Closure $callback = null, string $operator = '>=', int $count = 1)
