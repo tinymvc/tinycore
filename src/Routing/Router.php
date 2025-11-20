@@ -11,6 +11,7 @@ use Spark\Routing\Exceptions\InvalidNamedRouteException;
 use Spark\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Macroable;
 use function count;
+use function in_array;
 use function is_array;
 use function is_int;
 use function sprintf;
@@ -533,8 +534,8 @@ class Router implements RouterContract
             // Map matched segments to parameter names
             $matches = $this->getRouteParameters($routePath, $matches);
 
-            // Set router parameters into reqouest class and return as route matched.
-            $request->setRouteParams($matches);
+            // Set router parameters into request class and return as route matched.
+            $request->mergeRouteParams($matches);
             return true;
         }
 
@@ -588,7 +589,10 @@ class Router implements RouterContract
                         fn($name) => str_replace('?', '', $name),
                         $names[1]
                     ),
-                    $matches
+                    array_map(
+                        fn($value) => trim($value, ' /'),
+                        $matches
+                    )
                 );
             }
         }

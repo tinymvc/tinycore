@@ -116,22 +116,41 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     }
 
     /**
+     * The data array to be sanitized.
+     *
+     * @var Collection
+     */
+    public Collection $data;
+
+    /**
      * Constructs a new sanitizer instance with optional initial data.
      *
      * @param array $data Key-value data array to be sanitized.
      */
-    public function __construct(private array $data = [])
+    public function __construct(array|Arrayable $data = [])
     {
+        $this->setData($data);
     }
 
     /**
      * Sets the data array to be sanitized.
      *
-     * @param array $data Key-value data array to be set.
+     * @param array|Arrayable $data Key-value data array to be set.
      * @return self Returns the current instance for method chaining.
      */
-    public function setData(array $data): self
+    public function setData(array|Arrayable $data): self
     {
+        // Convert to Collection if not already
+        if (!$data instanceof Collection) {
+            if ($data instanceof Arrayable) {
+                $data = $data->toArray(); // Convert Arrayable to array
+            }
+
+            if (is_array($data)) {
+                $data = collect($data); // Convert array to Collection
+            }
+        }
+
         $this->data = $data;
         return $this;
     }
@@ -510,7 +529,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function set(string $key, mixed $value): void
     {
-        $this->data[$key] = $value;
+        $this->data->put($key, $value);
     }
 
     /**
@@ -522,7 +541,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function get(string $key, $default = null): mixed
     {
-        return $this->data[$key] ?? $default;
+        return $this->data->get($key, $default);
     }
 
     /**
@@ -533,7 +552,41 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function has(string $key): bool
     {
-        return isset($this->data[$key]);
+        return $this->data->has($key);
+    }
+
+    /**
+     * Checks if any of the specified keys exist in the sanitizer data array.
+     *
+     * @param array|string ...$keys Keys to check.
+     * @return bool True if any key exists, false otherwise.
+     */
+    public function hasAny(array|string ...$keys): bool
+    {
+        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        foreach ($keys as $key) {
+            if ($this->has($key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks if all of the specified keys exist in the sanitizer data array.
+     *
+     * @param array|string ...$keys Keys to check.
+     * @return bool True if all keys exist, false otherwise.
+     */
+    public function hasAll(array|string ...$keys): bool
+    {
+        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        foreach ($keys as $key) {
+            if (!$this->has($key)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -543,7 +596,27 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function all(): array
     {
-        return $this->data;
+        return $this->data->all();
+    }
+
+    /**
+     * Checks if the sanitizer data array is empty.
+     *
+     * @return bool True if empty, false otherwise.
+     */
+    public function isEmpty(): bool
+    {
+        return $this->data->isEmpty();
+    }
+
+    /**
+     * Checks if the sanitizer data array is not empty.
+     *
+     * @return bool True if not empty, false otherwise.
+     */
+    public function isNotEmpty(): bool
+    {
+        return $this->data->isNotEmpty();
     }
 
     /**
@@ -599,7 +672,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function offsetUnset($key): void
     {
-        unset($this->data[$key]);
+        $this->data->forget($key);
     }
 
     /**
@@ -709,8 +782,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     public function only(array|string ...$keys): self
     {
         $keys = is_array($keys[0]) ? $keys[0] : $keys;
-        $filteredData = array_intersect_key($this->data, array_flip($keys));
-        return new self($filteredData);
+        return new self($this->data->only($keys));
     }
 
     /**
@@ -722,8 +794,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     public function except(array|string ...$keys): self
     {
         $keys = is_array($keys[0]) ? $keys[0] : $keys;
-        $filteredData = array_diff_key($this->data, array_flip($keys));
-        return new self($filteredData);
+        return new self($this->data->except($keys));
     }
 
     /**
@@ -734,8 +805,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function map(callable $callback): self
     {
-        $mappedData = array_map($callback, $this->data);
-        return new self($mappedData);
+        return new self($this->data->map($callback));
     }
 
     /**
@@ -746,8 +816,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function filter(null|callable $callback = null): self
     {
-        $filteredData = array_filter($this->data, $callback);
-        return new self($filteredData);
+        return new self($this->data->filter($callback));
     }
 
     /**
@@ -757,7 +826,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function toCollection(): Collection
     {
-        return new Collection($this->data);
+        return $this->data;
     }
 
     /**
@@ -767,7 +836,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function toArray(): array
     {
-        return $this->data;
+        return $this->data->toArray();
     }
 
     /**
@@ -817,7 +886,7 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
      */
     public function __toString(): string
     {
-        return $this->text(array_key_first($this->data), true) ?? '';
+        return $this->text($this->data->first(), true) ?? '';
     }
 
     /**

@@ -6,10 +6,10 @@ use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Helpers\InputErrors;
+use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function count;
-use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -19,6 +19,10 @@ use function is_string;
  * 
  * Handles and manages HTTP request data for the application, including
  * query parameters, POST data, file uploads, and server variables.
+ * 
+ * @template TKey of array-key
+ *
+ * @template-covariant TValue
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
@@ -30,55 +34,61 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * HTTP request method (e.g., GET, POST).
      * @var string
      */
-    private string $method;
+    public string $method;
 
     /**
      * Requested URI path.
      * @var string
      */
-    private string $path;
+    public string $path;
 
     /**
      * Root URL of the application (protocol and host).
      * @var string
      */
-    private string $rootUrl;
+    public string $rootUrl;
 
     /**
      * Full URL of the current request.
      * @var string
      */
-    private string $url;
+    public string $url;
 
     /**
      * Query parameters from the URL.
-     * @var array
+     * @var Collection
      */
-    private array $queryParams;
+    public Collection $query;
 
     /**
      * Parameters from POST data.
-     * @var array
+     * @var Collection
      */
-    private array $postParams;
+    public Collection $post;
 
     /**
      * Uploaded files data.
-     * @var array
+     * @var Collection
      */
-    private array $fileUploads;
+    public Collection $files;
+
+    /**
+     * Request headers.
+     * @var Collection
+     */
+    public Collection $headers;
 
     /**
      * Server parameters, including headers.
-     * @var array
+     * @var Collection
      */
-    private array $serverParams;
+    public Collection $server;
 
     /**
      * Additional route parameters.
-     * @var array
+     * @var Collection
      */
-    private array $routeParams;
+    public Collection $route;
 
     /**
      * The error object.
@@ -86,23 +96,23 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * This property contains the error messages
      * when the validation fails.
      *
-     * @var object
+     * @var InputErrors
      */
-    private InputErrors $inputErrors;
+    public InputErrors $errors;
 
     /**
      * Sanitizer instance for all input data.
      * 
      * @var Sanitizer
      */
-    private Sanitizer $input;
+    public Sanitizer $input;
 
     /**
      * Sanitizer instance for validated input data.
      * 
      * @var Sanitizer
      */
-    private Sanitizer $validated;
+    public Sanitizer $validated;
 
     /**
      * request constructor.
@@ -111,15 +121,24 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function __construct()
     {
+        // Parse and set the request method, path, root URL, and full URL.
         $this->method = $this->parseRequestMethod();
         $this->path = $this->parsePath();
         $this->rootUrl = $this->parseRootUrl();
         $this->url = $this->parseUrl();
-        $this->serverParams = $_SERVER;
-        $this->fileUploads = $_FILES;
-        $this->queryParams = $_GET;
-        $this->postParams = $_POST;
-        $this->postParams = array_merge($this->postParams, $this->parsePhpInput());
+
+
+        // Initialize collections for server parameters, headers, files, query, and post data.
+        $this->headers = collect($this->parseAllHeaders());
+        $this->server = collect($this->parseServerParams());
+        $this->files = collect($_FILES);
+        $this->query = collect($_GET);
+        $this->post = collect(array_merge($_POST, $this->parsePhpInput()));
+
+        // Initialize Sanitizer instances for input and validated data.
+        $this->route = new Collection();
+        $this->validated = new Sanitizer();
+        $this->input = new Sanitizer($this->all());
     }
 
     /**
@@ -158,13 +177,72 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Parses all HTTP request headers from the $_SERVER superglobal.
+     * 
+     * @return array An associative array of all HTTP request headers.
+     */
+    private function parseAllHeaders(): array
+    {
+        $headers = [];
+        foreach ($_SERVER as $key => $value) {
+            if (!str_starts_with($key, 'HTTP_')) {
+                continue; // Skip non-header entries
+            }
+            $headers[$this->parseHeaderKey($key)] = $value;
+        }
+        return $headers;
+    }
+
+    /**
+     * Converts a $_SERVER key to a standard HTTP header name.
+     * 
+     * @param string $key The $_SERVER key (e.g., 'HTTP_USER_AGENT').
+     * @return string The corresponding HTTP header name (e.g., 'user-agent').
+     */
+    private function parseHeaderKey(string $key): string
+    {
+        // Remove the 'HTTP_' prefix
+        $header = substr($key, 5);
+
+        // Convert to standard header format (e.g., 'USER_AGENT' to 'user-agent')
+        $header = $this->parseServerKey($header);
+
+        return $header;
+    }
+
+    /**
+     * Converts a server key to a standardized format.
+     * 
+     * @param string $key The server key to convert.
+     * @return string The standardized key.
+     */
+    private function parseServerKey(string $key): string
+    {
+        return str_replace(['_', ' '], '-', strtolower($key));
+    }
+
+    /**
+     * Parses server parameters from the $_SERVER superglobal.
+     * 
+     * @return array An associative array of server parameters.
+     */
+    private function parseServerParams(): array
+    {
+        $serverParams = [];
+        foreach ($_SERVER as $key => $value) {
+            $serverParams[$this->parseServerKey($key)] = $value;
+        }
+        return $serverParams;
+    }
+
+    /**
      * Parses raw POST input data in JSON format.
      * 
      * @return array Parsed JSON data as an associative array.
      */
     private function parsePhpInput(): array
     {
-        if (in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE']) && empty($this->postParams)) {
+        if (in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE']) && empty($_POST)) {
             // Get the raw POST data from the php://input stream.
             $params = file_get_contents('php://input');
 
@@ -248,19 +326,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Sets the route parameters associated with the current request.
-     * 
-     * Route parameters are typically set by the router when a route is matched.
-     * They can also be set manually using this method.
-     * 
-     * @param array<string, mixed> $params Associative array of route parameters.
-     */
-    public function setRouteParams(array $params): void
-    {
-        $this->routeParams = $params;
-    }
-
-    /**
      * Retrieves a route parameter value by key.
      *
      * @param string $key The key of the route parameter.
@@ -270,43 +335,18 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function getRouteParam(string $key, ?string $default = null): ?string
     {
-        return $this->routeParams[$key] ?? $default;
+        return $this->route->get($key, $default);
     }
 
     /**
      * Checks if a route parameter exists.
      * 
-     * @param string $key The key of the route parameter to check.
+     * @param string|array $key The route parameter key(s) to check.
      * @return bool True if the route parameter exists, false otherwise.
      */
-    public function hasRouteParam(string $key): bool
+    public function hasRouteParam(string|array $key): bool
     {
-        return isset($this->routeParams[$key]);
-    }
-
-    /**
-     * Retrieves all route parameters associated with the current request.
-     * 
-     * Route parameters are typically set by the router when a route is matched.
-     * They can also be set manually using setRouteParams.
-     * 
-     * @return array An associative array of all route parameters.
-     */
-    public function getRouteParams(): array
-    {
-        return $this->routeParams ?? [];
-    }
-
-    /**
-     * Alias for getRouteParam to maintain consistency with other parameter retrieval methods.
-     * 
-     * @param string $key The key of the route parameter.
-     * @param ?string $default The default value to return if the key does not exist.
-     * @return ?string The value associated with the given key, or the default value if the key does not exist.
-     */
-    public function routeParam(string $key, ?string $default = null): ?string
-    {
-        return $this->getRouteParam($key, $default);
+        return $this->route->has($key);
     }
 
     /**
@@ -462,14 +502,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param ?string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return mixed The parameter value or default.
+     * @return \Spark\Http\Sanitizer|mixed The parameter value or default.
      */
     public function query(?string $key = null, $default = null): mixed
     {
         if ($key !== null) {
-            return $this->queryParams[$key] ?? $default;
+            return $this->query->get($key, $default);
         }
-        return new Sanitizer($this->queryParams);
+        return new Sanitizer($this->query);
     }
 
     /**
@@ -480,7 +520,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function hasQuery(string $key): bool
     {
-        return isset($this->queryParams[$key]);
+        return $this->query->has($key);
     }
 
     /**
@@ -488,14 +528,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param ?string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return mixed The parameter value or default.
+     * @return \Spark\Http\Sanitizer|mixed The parameter value or default.
      */
     public function post(?string $key = null, $default = null): mixed
     {
         if ($key !== null) {
-            return $this->postParams[$key] ?? $default;
+            return $this->post->get($key, $default);
         }
-        return new Sanitizer($this->postParams);
+        return new Sanitizer($this->post);
     }
 
     /**
@@ -506,7 +546,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function hasPost(string $key): bool
     {
-        return isset($this->postParams[$key]);
+        return $this->post->has($key);
     }
 
     /**
@@ -518,7 +558,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function file(string $key, $default = null): mixed
     {
-        return $this->fileUploads[$key] ?? $default;
+        return $this->files->get($key, $default);
     }
 
     /**
@@ -529,11 +569,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function hasFile(string $key): bool
     {
-        if (!isset($this->fileUploads[$key]['size'])) {
+        $file = $this->files->get($key);
+        if (!isset($file['size'])) {
             return false;
         }
 
-        $size = $this->fileUploads[$key]['size'];
+        $size = $file['size'];
 
         // Handle multiple files (array of sizes) or a single file (integer size)
         if (is_array($size)) {
@@ -556,8 +597,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function all(array $filter = []): array
     {
-        // Prepare all inputs from $_GET, $_POST, and $_FILES.
-        $output = array_merge($this->queryParams, $this->postParams, $this->fileUploads);
+        // Prepare all inputs from query, post, and files collections.
+        $output = $this->query->merge($this->post)->merge($this->files)->all();
 
         // Filter inputs if needed.
         if (!empty($filter)) {
@@ -576,25 +617,25 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Retrieves only the specified request data.
      *
-     * @param array|string $filter An array of keys to include in the result.
+     * @param array|string $keys An array of keys to include in the result.
      * @return array The filtered request data.
      */
-    public function only(array|string $filter): array
+    public function only(array|string ...$keys): array
     {
-        $filter = is_array($filter) ? $filter : func_get_args();
-        return $this->all($filter);
+        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        return $this->all($keys);
     }
 
     /**
      * Retrieves all request data except the specified keys.
      *
-     * @param array|string $filter An array of keys to exclude from the result.
+     * @param array|string $keys An array of keys to exclude from the result.
      * @return array The filtered request data.
      */
-    public function except(array|string $filter): array
+    public function except(array|string ...$keys): array
     {
-        $filter = is_array($filter) ? $filter : func_get_args();
-        return array_diff_key($this->all(), array_flip($filter));
+        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        return array_diff_key($this->all(), array_flip($keys));
     }
 
     /**
@@ -606,8 +647,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function server(string $key, $default = null): ?string
     {
-        $key = str_replace('-', '_', strtoupper($key));
-        return $this->serverParams[$key] ?? $default;
+        return $this->server->get($this->parseServerKey($key), $default);
     }
 
     /**
@@ -619,8 +659,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function header(string $name, $defaultValue = null): ?string
     {
-        $name = "HTTP_$name";
-        return $this->server($name, $defaultValue);
+        return $this->headers->get($this->parseHeaderKey($name), $defaultValue);
     }
 
     /**
@@ -726,7 +765,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function setServerParam(string $key, string $value): void
     {
-        $this->serverParams[$key] = $value;
+        $this->server->put($key, $value);
     }
 
     /**
@@ -740,7 +779,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function setQueryParam(string $key, string $value): void
     {
-        $this->queryParams[$key] = $value;
+        $this->query->put($key, $value);
     }
 
     /**
@@ -754,7 +793,35 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function setPostParam(string $key, string $value): void
     {
-        $this->postParams[$key] = $value;
+        $this->post->put($key, $value);
+    }
+
+    /**
+     * Sets a route parameter by key.
+     * 
+     * This method adds or updates a route parameter in the current request.
+     *
+     * @param string $key The name of the route parameter.
+     * @param string $value The value to set for the route parameter.
+     * @return void
+     */
+    public function setRouteParam(string $key, string $value): void
+    {
+        $this->route->put($key, $value);
+    }
+
+    /**
+     * Sets a file upload by key.
+     * 
+     * This method adds or updates a file upload in the current request.
+     *
+     * @param string $key The name of the file upload.
+     * @param array $value The file upload array to set.
+     * @return void
+     */
+    public function setFile(string $key, array $value): void
+    {
+        $this->files->put($key, $value);
     }
 
     /**
@@ -765,7 +832,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function mergeServerParams(array $params): void
     {
-        $this->serverParams = array_merge($this->serverParams, $params);
+        $this->server = $this->server->merge($params);
     }
 
     /**
@@ -776,7 +843,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function mergeQueryParams(array $params): void
     {
-        $this->queryParams = array_merge($this->queryParams, $params);
+        $this->query = $this->query->merge($params);
     }
 
     /**
@@ -787,47 +854,102 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function mergePostParams(array $params): void
     {
-        $this->postParams = array_merge($this->postParams, $params);
+        $this->post = $this->post->merge($params);
+    }
+
+    /**
+     * Merge the route parameters with additional key-value pairs.
+     * 
+     * @param array $params Associative array of route parameters to extend.
+     * @return void
+     */
+    public function mergeRouteParams(array $params): void
+    {
+        $this->route = $this->route->merge($params);
+    }
+
+    /**
+     * Merge the file uploads with additional key-value pairs.
+     * 
+     * @param array $params Associative array of file uploads to extend.
+     * @return void
+     */
+    public function mergeFiles(array $params): void
+    {
+        $this->files = $this->files->merge($params);
     }
 
     /**
      * Return the associative array of POST parameters.
      * 
-     * @return array POST parameters for the current request.
+     * @return Collection POST parameters for the current request.
      */
-    public function getPostParams(): array
+    public function getPostParams(): Collection
     {
-        return $this->postParams;
+        return $this->post;
     }
 
     /**
      * Get the associative array of query parameters.
      *
-     * @return array Query parameters for the current request.
+     * @return Collection Query parameters for the current request.
      */
-    public function getQueryParams(): array
+    public function getQueryParams(): Collection
     {
-        return $this->queryParams;
+        return $this->query;
     }
 
     /**
      * Get the associative array of server parameters.
      *
-     * @return array Server parameters for the current request.
+     * @return Collection Server parameters for the current request.
      */
-    public function getServerParams(): array
+    public function getServerParams(): Collection
     {
-        return $this->serverParams;
+        return $this->server;
     }
 
     /**
      * Return the array of file uploads.
      * 
-     * @return array Array of file uploads.
+     * @return Collection Array of file uploads.
      */
-    public function getFileUploads(): array
+    public function getFileUploads(): Collection
     {
-        return $this->fileUploads;
+        return $this->files;
+    }
+
+    /**
+     * Retrieves all request headers.
+     * 
+     * @return Collection A collection of all request headers.
+     */
+    public function getHeaders(): Collection
+    {
+        return $this->headers;
+    }
+
+    /**
+     * Retrieves all uploaded files associated with the current request.
+     * 
+     * @return Collection<TKey, TValue> A collection of all uploaded files.
+     */
+    public function getFiles(): Collection
+    {
+        return $this->files;
+    }
+
+    /**
+     * Retrieves all route parameters associated with the current request.
+     * 
+     * Route parameters are typically set by the router when a route is matched.
+     * They can also be set manually using mergeRouteParams.
+     * 
+     * @return Collection<TKey, TValue> A collection of all route parameters.
+     */
+    public function getRouteParams(): Collection
+    {
+        return $this->route;
     }
 
     /**
@@ -863,11 +985,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function input(null|string|array $filter = null, $default = null): mixed
     {
-        // Initialize the Sanitizer instance if not already done.
-        if (!isset($this->input)) {
-            $this->input = new Sanitizer($this->all());
-        }
-
         // Return filtered input based on the provided filter.
         if ($filter !== null && is_array($filter)) {
             return $this->input->only($filter);
@@ -891,7 +1008,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function safe(string $key, array $allowedTags = []): ?string
     {
-        return $this->input()->safe($key, $allowedTags);
+        return $this->input->safe($key, $allowedTags);
     }
 
     /**
@@ -903,13 +1020,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function __get($name): mixed
     {
-        return match (true) {
-            $this->hasQuery($name) => $this->query($name),
-            $this->hasPost($name) => $this->post($name),
-            $this->hasFile($name) => $this->file($name),
-            $this->hasRouteParam($name) => $this->getRouteParam($name),
-            default => null
-        };
+        return $this->offsetGet($name);
     }
 
     /**
@@ -958,7 +1069,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function offsetExists($name): bool
     {
-        return $this->{$name} !== null && $this->{$name} !== '';
+        $val = $this->offsetGet($name);
+        return $val !== null && $val !== ''; // Check for non-null and non-empty values
     }
 
     /**
@@ -970,10 +1082,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function offsetUnset($name): void
     {
         match (true) {
-            $this->hasQuery($name) => $this->setQueryParam($name, null),
-            $this->hasPost($name) => $this->setPostParam($name, null),
-            $this->hasFile($name) => $this->fileUploads[$name] = null,
-            $this->hasRouteParam($name) => $this->routeParams[$name] = null,
+            $this->hasQuery($name) => $this->query->forget($name),
+            $this->hasPost($name) => $this->post->forget($name),
+            $this->hasFile($name) => $this->files->forget($name),
+            $this->hasRouteParam($name) => $this->route->forget($name),
+            default => null,
         };
     }
 
@@ -985,7 +1098,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function offsetGet($name): mixed
     {
-        return $this->{$name};
+        return match (true) {
+            $this->hasQuery($name) => $this->query($name),
+            $this->hasPost($name) => $this->post($name),
+            $this->hasFile($name) => $this->file($name),
+            $this->hasRouteParam($name) => $this->getRouteParam($name),
+            default => null
+        };
     }
 
     /**
@@ -1000,18 +1119,19 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * If the key corresponds to a query parameter, it will be set using
      * setQueryParam. If it corresponds to a post parameter, it will be set
      * using setPostParam. If it corresponds to a file upload, it will be added
-     * to the fileUploads array. If it corresponds to a route parameter, it will
-     * be added to the routeParams array.
+     * to the files collection. If it corresponds to a route parameter, it will
+     * be added to the route collection.
      *
      * @return void
      */
     public function offsetSet($name, $value): void
     {
         match (true) {
-            $this->hasQuery($name) => $this->setQueryParam($name, $value),
-            $this->hasPost($name) => $this->setPostParam($name, $value),
-            $this->hasFile($name) => $this->fileUploads[$name] = $value,
-            $this->hasRouteParam($name) => $this->routeParams[$name] = $value,
+            $this->hasQuery($name) => $this->query->put($name, $value),
+            $this->hasPost($name) => $this->post->put($name, $value),
+            $this->hasFile($name) => $this->files->put($name, $value),
+            $this->hasRouteParam($name) => $this->route->put($name, $value),
+            default => null,
         };
     }
 
@@ -1019,10 +1139,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * Get an iterator for the items.
      * 
      * This method allows the model to be iterated over like an array.
-     * 
-     * @template TKey of array-key
-     *
-     * @template-covariant TValue
      *
      * @implements \ArrayAccess<TKey, TValue>
      *
@@ -1170,7 +1286,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function validated(): Sanitizer
     {
-        if (!isset($this->validated)) {
+        if ($this->validated->isEmpty()) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
         }
 
@@ -1188,16 +1304,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function getInputErrors(): InputErrors
     {
-        if (isset($this->inputErrors)) {
-            return $this->inputErrors;
-        }
-
-        /** @var \Spark\Http\Session $session */
-        $session = app(Session::class);
-
-        return $this->inputErrors = new InputErrors(
-            messages: $session->getFlash('errors', []),
-            attributes: $session->getFlash('input', []),
+        return $this->errors ??= new InputErrors(
+            messages: $this->session()->getFlash('errors', []),
+            attributes: $this->session()->getFlash('input', []),
         );
     }
 
@@ -1212,14 +1321,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         if ($field !== null) {
             foreach ((array) $field as $name) {
-                if ($this->getInputErrors()->has($name)) {
+                if ($this->errors->has($name)) {
                     return true;
                 }
             }
             return false;
         }
 
-        return $this->getInputErrors();
+        return $this->errors;
     }
 
     /**
@@ -1231,7 +1340,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function old(string $field, ?string $default = null): ?string
     {
-        return $this->getInputErrors()->getOld($field, $default);
+        return $this->errors->getOld($field, $default);
     }
 
     /**
