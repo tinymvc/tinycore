@@ -202,7 +202,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private function parseHeaderKey(string $key): string
     {
         // Remove the 'HTTP_' prefix
-        $header = substr($key, 5);
+        $header = str_ireplace(['HTTP_', 'http-'], '', $key);
 
         // Convert to standard header format (e.g., 'USER_AGENT' to 'user-agent')
         $header = $this->parseServerKey($header);
