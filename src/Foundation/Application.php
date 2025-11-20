@@ -80,8 +80,7 @@ class Application implements ApplicationContract, \ArrayAccess
         $this->container->singleton(Translator::class);
         $this->container->singleton(DB::class);
         $this->container->singleton(Hash::class);
-        $this->container->singleton(EventDispatcher::class);
-        $this->container->singleton(Gate::class);
+        $this->container->singleton(Blade::class);
         $this->container->singleton(Queue::class);
         $this->container->singleton(Router::class);
 
@@ -91,7 +90,8 @@ class Application implements ApplicationContract, \ArrayAccess
             $this->container->singleton(Request::class);
             $this->container->singleton(Response::class);
             $this->container->singleton(Middleware::class);
-            $this->container->singleton(Blade::class);
+            $this->container->singleton(EventDispatcher::class);
+            $this->container->singleton(Gate::class);
             $this->container->singleton(Vite::class);
             $this->container->singleton(
                 Auth::class,

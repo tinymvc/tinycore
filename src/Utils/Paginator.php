@@ -550,7 +550,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, ArrayAcce
     {
         return home_url(
             request()->getPath() . '?' . http_build_query(
-                array_merge(request()->getQueryParams(), [$this->keyword() => $page])
+                request()->getQueryParams()->merge([$this->keyword() => $page])->all()
             )
         );
     }

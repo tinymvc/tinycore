@@ -2,6 +2,7 @@
 
 namespace Spark\Utils;
 
+use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\UploaderUtilContract;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Exceptions\Utils\UploaderUtilException;
@@ -10,6 +11,7 @@ use function count;
 use function in_array;
 use function is_array;
 use function is_string;
+use function sprintf;
 
 /**
  * Class uploader
@@ -111,13 +113,15 @@ class Uploader implements UploaderUtilContract
     /**
      * Uploads a file or multiple files.
      *
-     * @param string|array $files The file(s) to upload.
+     * @param string|array|Arrayable $files The file(s) to upload.
      * @return string|array Returns the file path(s) of the uploaded file(s).
      */
-    public function upload(string|array $files): string|array
+    public function upload(string|array|Arrayable $files): string|array
     {
         if (is_string($files)) {
             $files = request()->file($files, []);
+        } elseif ($files instanceof Arrayable) {
+            $files = $files->toArray();
         }
 
         $this->multiple ??= is_array($files['name']) && count($files['name']) > 1;

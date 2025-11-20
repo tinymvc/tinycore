@@ -2,6 +2,8 @@
 
 namespace Spark\Contracts\Utils;
 
+use Spark\Contracts\Support\Arrayable;
+
 /**
  * Interface UploaderUtilContract
  *
@@ -13,10 +15,10 @@ interface UploaderUtilContract
     /**
      * Uploads a file or multiple files.
      * 
-     * @param array $files Array containing file details (e.g., $_FILES['file']).
+     * @param string|array|Arrayable $files Array containing file details (e.g., $_FILES['file']).
      * @return string|array Returns the file path(s) of the uploaded file(s).
      */
-    public function upload(array $files): string|array;
+    public function upload(string|array|Arrayable $files): string|array;
 
     /**
      * Deletes a file or multiple files.
