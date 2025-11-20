@@ -110,12 +110,12 @@ class Blade implements BladeContract
         // Merge shared data with the application context
         self::$shared = array_merge(['app' => Application::$app], self::$shared);
 
-        if (!is_cli()) {
-            // Add request, session, and errors to shared data
+        // Add request, session, and errors to shared data if not in CLI
+        if (!is_cli() && Application::$app->resolved(Request::class)) {
             self::$shared = array_merge([
                 'request' => Application::$app->get(Request::class),
                 'session' => Application::$app->get(Session::class),
-                'errors' => Application::$app->get(Request::class)->getInputErrors(),
+                'errors' => Application::$app->get(abstract: Request::class)->getInputErrors(),
             ], self::$shared);
         }
     }

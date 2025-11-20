@@ -473,6 +473,11 @@ class Router implements RouterContract
 
                 is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
 
+                // Initialize Input Errors on Request Class if session is resolved 
+                if ($container->resolved(\Spark\Http\Session::class)) {
+                    $request->getInputErrors();
+                }
+
                 // Handle view rendering or instantiate a class for callback if specified
                 if (isset($route['template'])) {
                     $route['callback'] = fn() => view($route['template']);

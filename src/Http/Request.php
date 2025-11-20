@@ -127,7 +127,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->rootUrl = $this->parseRootUrl();
         $this->url = $this->parseUrl();
 
-
         // Initialize collections for server parameters, headers, files, query, and post data.
         $this->headers = collect($this->parseAllHeaders());
         $this->server = collect($this->parseServerParams());
@@ -413,13 +412,16 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Checks if the current request method matches any of the specified methods.
      * 
-     * @param string|array $methods The method or array of methods to check against.
+     * @param string|array ...$methods The method or array of methods to check against.
      * @return bool True if the current request method is in the specified methods, false otherwise.
      */
-    public function isMethod(string|array $methods): bool
+    public function isMethod(string|array ...$methods): bool
     {
+        // Flatten the methods array if a single array argument is provided
+        $methods = is_array($methods[0]) ? $methods[0] : $methods;
+
         // Convert the methods to an array of uppercase strings
-        $methods = array_map('strtoupper', (array) $methods);
+        $methods = array_map('strtoupper', $methods);
 
         // Check if the current request method is in the list of methods
         return in_array($this->method, $methods);

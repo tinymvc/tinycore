@@ -262,6 +262,17 @@ class Application implements ApplicationContract, \ArrayAccess
     }
 
     /**
+     * Checks if a given abstract has been resolved in the container.
+     *
+     * @param string $abstract The abstract name or class name of the service or value to be checked.
+     * @return bool True if the abstract has been resolved, false otherwise.
+     */
+    public function resolved(string $abstract): bool
+    {
+        return $this->container->resolved($abstract);
+    }
+
+    /**
      * Calls a service or a value from the dependency injection container.
      *
      * This method takes an abstract name or class name and resolves it by
