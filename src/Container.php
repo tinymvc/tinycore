@@ -9,7 +9,6 @@ use ReflectionParameter;
 use ReflectionUnionType;
 use ReflectionMethod;
 use Spark\Contracts\ContainerContract;
-use Spark\Contracts\Support\Arrayable;
 use Spark\Exceptions\Container\BuildServiceException;
 use Spark\Exceptions\Container\ClassDoesNotExistsException;
 use Spark\Exceptions\Container\FailedToResolveParameterException;
@@ -180,15 +179,11 @@ class Container implements ContainerContract
      * Resolve and return an instance from the container (alias for get).
      *
      * @param string $abstract The abstract name of the class or interface.
-     * @param Arrayable|array $parameters Additional parameters for construction (optional).
+     * @param array $parameters Additional parameters for construction (optional).
      * @return mixed The resolved instance.
      */
-    public function make(string $abstract, Arrayable|array $parameters = []): mixed
+    public function make(string $abstract, array $parameters = []): mixed
     {
-        if (!is_array($parameters)) {
-            $parameters = $parameters->toArray(); // Convert to array
-        }
-
         // If parameters provided, we need to build with parameters
         if (!empty($parameters)) {
             $abstract = $this->resolveAlias($abstract);
@@ -234,19 +229,15 @@ class Container implements ContainerContract
      * container if the parameter is not given.
      *
      * @param array|string|callable $abstract The class name, method name or a closure.
-     * @param Arrayable|array $parameters The parameters to pass to the method or closure.
+     * @param array $parameters The parameters to pass to the method or closure.
      *
      * @throws MethodDoesNotExistsException If the class does not exist, the method does not exist, or
      *                   the method parameters cannot be resolved.
      *
      * @return mixed The result of calling the method or closure.
      */
-    public function call(array|string|callable $abstract, Arrayable|array $parameters = []): mixed
+    public function call(array|string|callable $abstract, array $parameters = []): mixed
     {
-        if (!is_array($parameters)) {
-            $parameters = $parameters->toArray(); // Convert to array
-        }
-
         // If it's a closure or function (but not an array callable), just call it with dependencies
         if (is_callable($abstract) && !is_array($abstract)) {
             $reflectionFunction = new ReflectionFunction($abstract);

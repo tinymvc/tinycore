@@ -2,8 +2,6 @@
 
 namespace Spark\Contracts;
 
-use Spark\Contracts\Support\Arrayable;
-
 /**
  * Interface for a container class.
  *
@@ -96,11 +94,11 @@ interface ContainerContract
      * each time it is requested.
      *
      * @param string $abstract The abstract name of the class or interface.
-     * @param Arrayable|array $parameters The parameters to pass to the constructor.
+     * @param array $parameters The parameters to pass to the constructor.
      *
      * @return mixed The resolved instance.
      */
-    public function make(string $abstract, Arrayable|array $parameters = []): mixed;
+    public function make(string $abstract, array $parameters = []): mixed;
 
     /**
      * Calls a class method or a closure with the given parameters.
@@ -118,11 +116,11 @@ interface ContainerContract
      * container if the parameter is not given.
      *
      * @param array|string|callable $abstract The class name, method name or a closure.
-     * @param Arrayable|array $parameters The parameters to pass to the method or closure.
+     * @param array $parameters The parameters to pass to the method or closure.
      *
      * @return mixed The result of calling the method or closure.
      */
-    public function call(array|string|callable $abstract, Arrayable|array $parameters = []): mixed;
+    public function call(array|string|callable $abstract, array $parameters = []): mixed;
 
     /**
      * Register an existing instance as a binding.

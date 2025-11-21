@@ -55,6 +55,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public string $url;
 
     /**
+     * Additional route parameters.
+     * @var array
+     */
+    public array $routeParams;
+
+    /**
      * Query parameters from the URL.
      * @var Collection
      */
@@ -85,10 +91,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public Collection $server;
 
     /**
-     * Additional route parameters.
-     * @var Collection
+     * Sanitizer instance for all input data.
+     * 
+     * @var Sanitizer
      */
-    public Collection $route;
+    public Sanitizer $input;
 
     /**
      * The error object.
@@ -99,13 +106,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @var InputErrors
      */
     public InputErrors $errors;
-
-    /**
-     * Sanitizer instance for all input data.
-     * 
-     * @var Sanitizer
-     */
-    public Sanitizer $input;
 
     /**
      * Sanitizer instance for validated input data.
@@ -135,7 +135,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->post = collect(array_merge($_POST, $this->parsePhpInput()));
 
         // Initialize Sanitizer instances for input and validated data.
-        $this->route = new Collection();
+        $this->routeParams = [];
         $this->validated = new Sanitizer();
         $this->input = new Sanitizer($this->all());
     }
@@ -334,7 +334,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function getRouteParam(string $key, ?string $default = null): ?string
     {
-        return $this->route->get($key, $default);
+        return $this->routeParams[$key] ?? $default;
     }
 
     /**
@@ -345,7 +345,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function hasRouteParam(string|array $key): bool
     {
-        return $this->route->has($key);
+        return isset($this->routeParams[$key]);
     }
 
     /**
@@ -809,7 +809,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function setRouteParam(string $key, string $value): void
     {
-        $this->route->put($key, $value);
+        $this->routeParams[$key] = $value;
     }
 
     /**
@@ -867,7 +867,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function mergeRouteParams(array $params): void
     {
-        $this->route = $this->route->merge($params);
+        $this->routeParams = array_merge($this->routeParams, $params);
     }
 
     /**
@@ -947,11 +947,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * Route parameters are typically set by the router when a route is matched.
      * They can also be set manually using mergeRouteParams.
      * 
-     * @return Collection<TKey, TValue> A collection of all route parameters.
+     * @return array A associative array of all route parameters.
      */
-    public function getRouteParams(): Collection
+    public function getRouteParams(): array
     {
-        return $this->route;
+        return $this->routeParams;
     }
 
     /**
@@ -1087,7 +1087,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $this->hasQuery($name) => $this->query->forget($name),
             $this->hasPost($name) => $this->post->forget($name),
             $this->hasFile($name) => $this->files->forget($name),
-            $this->hasRouteParam($name) => $this->route->forget($name),
+            $this->hasRouteParam($name) => $this->routeParams[$name] = null,
             default => null,
         };
     }
@@ -1132,7 +1132,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $this->hasQuery($name) => $this->query->put($name, $value),
             $this->hasPost($name) => $this->post->put($name, $value),
             $this->hasFile($name) => $this->files->put($name, $value),
-            $this->hasRouteParam($name) => $this->route->put($name, $value),
+            $this->hasRouteParam($name) => $this->routeParams[$name] = $value,
             default => null,
         };
     }
