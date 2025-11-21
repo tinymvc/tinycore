@@ -59,7 +59,6 @@ use function sprintf;
  * @method Collection reverse()
  * @method Collection shuffle()
  * @method Collection sliding($size = 2, $step = 1)
- * @method Collection skip($count)
  * @method Collection skipUntil($value)
  * @method Collection skipWhile($value)
  * @method Collection slice($offset, $length = null)

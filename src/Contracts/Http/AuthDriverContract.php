@@ -34,4 +34,11 @@ interface AuthDriverContract
      * @return \Spark\Database\Model|false
      */
     public function getUser(): Model|false;
+
+    /**
+     * Check and return the ID of the currently logged-in user.
+     *
+     * @return int
+     */
+    public function checkId(): int;
 }

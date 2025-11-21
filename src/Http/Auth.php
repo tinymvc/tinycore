@@ -51,7 +51,7 @@ class Auth implements AuthContract, ArrayAccess
             'cache_name' => 'auth_cache',
             'cache_expire' => '10 minutes',
             'guest_route' => 'login',
-            'logged_in_route' => 'dashboard',
+            'redirect_route' => 'dashboard',
             'cookie_enabled' => true,
             'cookie_name' => 'auth',
             'cookie_expire' => '6 months',
@@ -60,7 +60,7 @@ class Auth implements AuthContract, ArrayAccess
             'driver' => null,
         ], $config);
 
-        $this->checkAuthId(); // Check and set the authentication ID from the session
+        $this->check(); // Check and set the authentication ID from the session
     }
 
     /**
@@ -209,13 +209,13 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return string The route path for logged in users.
      */
-    public function getLoggedInRoute(): string
+    public function getRedirectRoute(): string
     {
         if ($this->session->hasFlash('__auth_redirect')) {
             return $this->session->getFlash('__auth_redirect');
         }
 
-        return route_url($this->config['logged_in_route']);
+        return route_url($this->config['redirect_route']);
     }
 
     /**
@@ -225,7 +225,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function isGuest(): bool
     {
-        return !$this->isLoggedIn();
+        return !$this->isLogged();
     }
 
     /**
@@ -233,7 +233,7 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return bool True if the user is logged in, false otherwise.
      */
-    public function isLoggedIn(): bool
+    public function isLogged(): bool
     {
         return $this->hasId() && $this->getUser() !== null;
     }
@@ -261,13 +261,15 @@ class Auth implements AuthContract, ArrayAccess
             $tokenExpire = strtotime($this->config['cookie_expire'] ?? '1 year');
 
             // add user hashed token in cookie with expiration
-            $token = encrypt(json_encode(['id' => $user->id, 'expire' => $tokenExpire]));
+            $token = encrypt(['id' => $user->id, 'expire' => $tokenExpire]);
 
             // set cookie with token and expiration
-            setcookie($this->config['cookie_name'], $token, $tokenExpire, '/', '', true, true);
-
-            // set cookie for current request
-            $_COOKIE[$this->config['cookie_name']] = $token;
+            cookie($this->config['cookie_name'], $token, [
+                'expires' => $tokenExpire,
+                'path' => '/',
+                'secure' => true,
+                'httponly' => true,
+            ]);
         }
     }
 
@@ -334,8 +336,7 @@ class Auth implements AuthContract, ArrayAccess
 
         // destroy cookie auth if enabled
         if (isset($this->config['cookie_name'])) {
-            setcookie($this->config['cookie_name'], '', time() - 3600, '/', '', true, true);
-            unset($_COOKIE[$this->config['cookie_name']]);
+            cookie($this->config['cookie_name'], expiresOrOptions: -3600);
         }
     }
 
@@ -366,6 +367,8 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function refresh(): void
     {
+        $this->check(); // Ensure the authentication state is up to date
+
         if ($this->isGuest()) {
             return;
         }
@@ -383,7 +386,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __get(string $name)
     {
-        return $this->getUser()->{$name};
+        return $this->offsetGet($name);
     }
 
     /**
@@ -395,7 +398,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __set(string $name, $value)
     {
-        $this->getUser()->{$name} = $value;
+        $this->offsetSet($name, $value);
     }
 
     /**
@@ -406,7 +409,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __isset(string $name)
     {
-        return isset($this->getUser()->{$name});
+        return $this->offsetExists($name);
     }
 
     /**
@@ -417,7 +420,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function __unset(string $name)
     {
-        unset($this->getUser()->{$name});
+        $this->offsetUnset($name);
     }
 
     /**
@@ -431,7 +434,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetExists($key): bool
     {
-        return isset($this->{$key});
+        return isset($this->getUser()->{$key});
     }
 
     /**
@@ -442,7 +445,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetUnset($key): void
     {
-        unset($this->{$key});
+        unset($this->getUser()->{$key});
     }
 
     /**
@@ -455,7 +458,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetGet($key): mixed
     {
-        return $this->{$key};
+        return $this->getUser()->{$key};
     }
 
     /**
@@ -468,7 +471,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetSet($key, $value): void
     {
-        $this->{$key} = $value;
+        $this->getUser()->{$key} = $value;
     }
 
     /**
@@ -487,7 +490,7 @@ class Auth implements AuthContract, ArrayAccess
         if (isset($token)) {
             try {
                 // Attempt to decrypt the cookie value
-                $token = json_decode(decrypt($token), true);
+                $token = decrypt($token);
 
                 // Verify that the decrypted value is an array with an 'id' and 'expire' key
                 if (is_array($token) && isset($token['expire'], $token['id']) && carbon($token['expire'])->isFuture()) {
@@ -512,14 +515,14 @@ class Auth implements AuthContract, ArrayAccess
      */
     private function checkJwtAuth(): ?int
     {
-        $authHeader = request()->header('Authorization');
+        $authHeader = request()->header('authorization');
 
         if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
             $token = $matches[1];
 
             try {
                 $payload = decrypt($token);
-                if (isset($payload['id'], $payload['exp']) && carbon($payload['exp'])->isFuture()) {
+                if (is_array($payload) && isset($payload['id'], $payload['exp']) && carbon($payload['exp'])->isFuture()) {
                     return $payload['id'];
                 }
             } catch (Throwable $e) {
@@ -540,8 +543,13 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return void
      */
-    private function checkAuthId(): void
+    public function check(): void
     {
+        if ($this->hasDriver()) {
+            $this->id = $this->getDriver()->checkId();
+            return; // If a driver is set, use it to check the ID
+        }
+
         if (!$this->session->has($this->config['session_key']) && $this->config['cookie_enabled']) {
             $this->checkCookieAuth(); // Check cookie authentication if enabled
         }

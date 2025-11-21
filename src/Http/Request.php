@@ -1407,7 +1407,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isAuthenticated(): bool
     {
-        return $this->auth()->isLoggedIn();
+        return $this->auth()->isLogged();
     }
 
     /**

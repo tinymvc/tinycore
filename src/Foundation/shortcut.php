@@ -944,7 +944,7 @@ if (!function_exists('is_guest')) {
     }
 }
 
-if (!function_exists('is_logged_in')) {
+if (!function_exists('is_logged')) {
     /**
      * Determine if the current request is made by an authenticated user.
      * 
@@ -953,9 +953,9 @@ if (!function_exists('is_logged_in')) {
      * 
      * @return bool True if the request is made by an authenticated user, false otherwise.
      */
-    function is_logged_in(): bool
+    function is_logged(): bool
     {
-        return auth()->isLoggedIn();
+        return auth()->isLogged();
     }
 }
 

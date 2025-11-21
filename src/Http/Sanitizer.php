@@ -47,7 +47,6 @@ use function strval;
  * @method bool isJson($field)
  * @method bool isUrl($field, array $protocols = [])
  * @method bool isUuid($field, $version = null)
- * @method bool isUlid($field)
  * @method string kebab($field)
  * @method int length($field, $encoding = null)
  * @method string limit($field, $limit = 100, $end = '...', $preserveWords = false)
