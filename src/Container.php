@@ -185,7 +185,7 @@ class Container implements ContainerContract
      */
     public function make(string $abstract, Arrayable|array $parameters = []): mixed
     {
-        if ($parameters instanceof Arrayable) {
+        if (!is_array($parameters)) {
             $parameters = $parameters->toArray(); // Convert to array
         }
 
@@ -243,7 +243,7 @@ class Container implements ContainerContract
      */
     public function call(array|string|callable $abstract, Arrayable|array $parameters = []): mixed
     {
-        if ($parameters instanceof Arrayable) {
+        if (!is_array($parameters)) {
             $parameters = $parameters->toArray(); // Convert to array
         }
 

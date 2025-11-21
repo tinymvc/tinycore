@@ -7,6 +7,7 @@ use Spark\Console\Console;
 use Spark\Container;
 use Spark\Contracts\ApplicationContract;
 use Spark\Contracts\ContainerContract;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Database\DB;
 use Spark\EventDispatcher;
 use Spark\Exceptions\Http\AuthorizationException;
@@ -238,11 +239,12 @@ class Application implements ApplicationContract, \ArrayAccess
      * container.
      *
      * @param string $abstract The abstract name or class name of the service or value to be resolved.
+     * @param Arrayable|array $parameters An array or Arrayable of parameters to be passed to the resolved service or value.
      * @return mixed The resolved service or value.
      */
-    public function make(string $abstract): mixed
+    public function make(string $abstract, Arrayable|array $parameters = []): mixed
     {
-        return $this->container->get($abstract);
+        return $this->container->make($abstract, $parameters);
     }
 
     /**
@@ -253,10 +255,10 @@ class Application implements ApplicationContract, \ArrayAccess
      * calling it as a function. The resolved value is then returned.
      *
      * @param array|string|callable $abstract The abstract name or class name of the service or value to be resolved.
-     * @param array $parameters An array of parameters to be passed to the resolved service or value.
+     * @param Arrayable|array $parameters An array of parameters to be passed to the resolved service or value.
      * @return mixed The resolved service or value.
      */
-    public function resolve(array|string|callable $abstract, array $parameters = []): mixed
+    public function resolve(array|string|callable $abstract, Arrayable|array $parameters = []): mixed
     {
         return $this->container->call($abstract, $parameters);
     }
@@ -279,10 +281,10 @@ class Application implements ApplicationContract, \ArrayAccess
      * calling it as a function. The resolved value is then returned.
      *
      * @param array|string|callable $abstract The abstract name or class name of the service or value to be resolved.
-     * @param array $parameters An array of parameters to be passed to the resolved service or value.
+     * @param Arrayable|array $parameters An array of parameters to be passed to the resolved service or value.
      * @return mixed The resolved service or value.
      */
-    public function call(array|string|callable $abstract, array $parameters = []): mixed
+    public function call(array|string|callable $abstract, Arrayable|array $parameters = []): mixed
     {
         return $this->container->call($abstract, $parameters);
     }
