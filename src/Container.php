@@ -70,6 +70,20 @@ class Container implements ContainerContract
     private array $reflectionCache = [];
 
     /**
+     * Contextual bindings for specific classes.
+     *
+     * @var array<string, array<string, callable|string>>
+     */
+    private array $contextualBindings = [];
+
+    /**
+     * The current context being built.
+     *
+     * @var array<string>
+     */
+    private array $buildStack = [];
+
+    /**
      * Bind a class or interface to a concrete implementation.
      *
      * The concrete implementation can be a class, a closure, or an interface.
@@ -127,6 +141,21 @@ class Container implements ContainerContract
         }
 
         $this->aliases[$alias] = $abstract;
+    }
+
+    /**
+     * Define a contextual binding.
+     *
+     * @param string|array $concrete The concrete class(es) that needs the dependency.
+     * @return self The container instance.
+     */
+    public function when(string|array $concrete, string $needs, callable|string $give)
+    {
+        foreach ((array) $concrete as $alias) {
+            $this->contextualBindings[$alias][$needs] = $give;
+        }
+
+        return $this;
     }
 
     /**
@@ -554,6 +583,8 @@ class Container implements ContainerContract
         $this->reflectionCache = [];
         $this->providers = [];
         $this->aliases = [];
+        $this->contextualBindings = [];
+        $this->buildStack = [];
     }
 
     /**
@@ -597,10 +628,16 @@ class Container implements ContainerContract
             return $reflection->newInstance();
         }
 
+        // Add this concrete to the build stack for contextual binding resolution
+        $this->buildStack[] = $concrete;
+
         $dependencies = array_map(
             fn($param) => $this->resolveParameter($param),
             $constructor->getParameters()
         );
+
+        // Remove from build stack after building
+        array_pop($this->buildStack);
 
         return $reflection->newInstanceArgs($dependencies);
     }
@@ -623,14 +660,30 @@ class Container implements ContainerContract
         $type = $param->getType();
 
         if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-            return $this->get($type->getName());
+            $typeName = $type->getName();
+
+            // Check for contextual binding
+            $concrete = $this->getContextualConcrete($typeName);
+            if ($concrete !== null) {
+                return $this->build($concrete);
+            }
+
+            return $this->get($typeName);
         }
 
         if ($type instanceof ReflectionUnionType) {
             // Handle union types (e.g., int|string)
             foreach ($type->getTypes() as $unionType) {
                 if ($unionType instanceof ReflectionNamedType && !$unionType->isBuiltin()) {
-                    return $this->get($unionType->getName());
+                    $typeName = $unionType->getName();
+
+                    // Check for contextual binding
+                    $concrete = $this->getContextualConcrete($typeName);
+                    if ($concrete !== null) {
+                        return $this->build($concrete);
+                    }
+
+                    return $this->get($typeName);
                 }
             }
         }
@@ -640,5 +693,24 @@ class Container implements ContainerContract
         }
 
         throw new FailedToResolveParameterException("Unable to resolve parameter {$param->getName()}.");
+    }
+
+    /**
+     * Get the contextual concrete implementation for the given abstract.
+     *
+     * @param string $abstract The abstract type to resolve.
+     * @return callable|string|null The concrete implementation or null if not found.
+     */
+    private function getContextualConcrete(string $abstract): callable|string|null
+    {
+        if (!empty($this->buildStack)) {
+            $currentContext = end($this->buildStack);
+
+            if (isset($this->contextualBindings[$currentContext][$abstract])) {
+                return $this->contextualBindings[$currentContext][$abstract];
+            }
+        }
+
+        return null;
     }
 }
