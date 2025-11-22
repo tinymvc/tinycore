@@ -33,7 +33,7 @@ class Auth implements AuthContract, ArrayAccess
     protected ?Model $user;
 
     /** @var string The fully qualified class name of the user model. */
-    protected string $userModel;
+    protected string $model;
 
     /** @var array Configuration settings for the Auth instance. */
     protected array $config;
@@ -58,7 +58,7 @@ class Auth implements AuthContract, ArrayAccess
         $this->session = \Spark\Foundation\Application::$app->make(Session::class);
 
         // Set the user model, defaulting to \App\Models\User if none is provided
-        $this->userModel = $model ?? \App\Models\User::class;
+        $this->model = $model ?? \App\Models\User::class;
 
         $this->config = array_merge([
             'session_key' => 'user_id',
@@ -116,13 +116,13 @@ class Auth implements AuthContract, ArrayAccess
                 $user = cache($this->config['cache_name'])
                     ->load(
                         key: $this->getId(),
-                        callback: fn() => $this->userModel::find($this->getId()) ?: null,
+                        callback: fn() => $this->model::find($this->getId()) ?: null,
                         expire: $this->config['cache_expire']
                     );
                 unload_cache($this->config['cache_name']); // Unload cache after use
             } else {
                 // Fetch user directly from the database if caching is not enabled
-                $user = $this->userModel::find($this->getId()) ?: null;
+                $user = $this->model::find($this->getId()) ?: null;
             }
 
             if (isset($user, $user->id)) {
@@ -195,7 +195,7 @@ class Auth implements AuthContract, ArrayAccess
     {
         $identifier = \Spark\Support\Arr::except($credentials, ['password']);
 
-        $user = $this->userModel::where($identifier)->first();
+        $user = $this->model::where($identifier)->first();
         if ($user && passcode($credentials['password'], $user->password)) {
             $this->login($user);
             return true;
@@ -527,7 +527,7 @@ class Auth implements AuthContract, ArrayAccess
                 $token = decrypt($cookieToken);
 
                 if ($this->config['use_remember_token']) {
-                    $userId = $this->userModel::column('id')->where('remember_token', $token)->first();
+                    $userId = $this->model::column('id')->where('remember_token', $token)->first();
                     if ($userId) {
                         $this->session->set($this->config['session_key'], $userId);
                     }
