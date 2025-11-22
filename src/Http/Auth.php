@@ -365,7 +365,7 @@ class Auth implements AuthContract, ArrayAccess
             }
 
             // Delete the authentication cookie by setting its expiration in the past
-            cookie($this->config['cookie_name'], expiresOrOptions: -3600);
+            cookie($this->config['cookie_name'], '', -3600);
         }
 
         // Delete the session variable and unset the user property.
