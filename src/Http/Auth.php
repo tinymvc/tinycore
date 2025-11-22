@@ -24,13 +24,22 @@ class Auth implements AuthContract, ArrayAccess
 {
     use Macroable;
 
+    /** @var Session The session instance used for managing user sessions. */
+    protected Session $session;
+
     /**
      * @var ?Model The currently logged in user.
      */
-    private ?Model $user;
+    protected ?Model $user;
+
+    /** @var string The fully qualified class name of the user model. */
+    protected string $userModel;
+
+    /** @var array Configuration settings for the Auth instance. */
+    protected array $config;
 
     /** @var int The ID of the currently logged in user. */
-    private int $id;
+    protected int $id;
 
     /**
      * Constructor for the Auth class.
@@ -39,24 +48,31 @@ class Auth implements AuthContract, ArrayAccess
      * and optional configuration settings.
      *
      * @param Session $session The session instance used for managing user sessions.
-     * @param string $userModel The fully qualified class name of the user model.
+     * @param string $model The fully qualified class name of the user model.
      * @param array $config Optional configuration array for customizing session key,
      *                      cache settings, and route redirections.
      */
-    public function __construct(private Session $session, private string $userModel, private array $config = [])
+    public function __construct(null|string $model = null, array $config = [])
     {
+        /** @var Session $session */
+        $this->session = \Spark\Foundation\Application::$app->make(Session::class);
+
+        // Set the user model, defaulting to \App\Models\User if none is provided
+        $this->userModel = $model ?? \App\Models\User::class;
+
         $this->config = array_merge([
             'session_key' => 'user_id',
             'cache_enabled' => false,
             'cache_name' => 'auth_cache',
             'cache_expire' => '10 minutes',
-            'guest_route' => 'login',
+            'login_route' => 'login',
             'redirect_route' => 'dashboard',
             'cookie_enabled' => true,
             'cookie_name' => 'auth',
             'cookie_expire' => '6 months',
             'jwt_enabled' => false,
             'jwt_expire' => '6 months',
+            'use_remember_token' => false,
             'driver' => null,
         ], $config);
 
@@ -196,9 +212,9 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return string The route path for guest users.
      */
-    public function getGuestRoute(): string
+    public function getLoginRoute(): string
     {
-        return route_url($this->config['guest_route']);
+        return route_url($this->config['login_route']);
     }
 
     /**
@@ -256,12 +272,23 @@ class Auth implements AuthContract, ArrayAccess
         $this->user = $user;
         $this->id = $user->id;
 
-        if ($remember && isset($this->config['cookie_name'])) {
+        if ($remember && $this->config['cookie_enabled']) {
             // set cookie expiration time
             $tokenExpire = strtotime($this->config['cookie_expire'] ?? '1 year');
 
             // add user hashed token in cookie with expiration
-            $token = encrypt(['id' => $user->id, 'expire' => $tokenExpire]);
+            if ($this->config['use_remember_token']) {
+                // generate a random token and store it in the database
+                $rememberToken = hasher()->random(16);
+                $token = encrypt($rememberToken);
+
+                // update the user's remember token in the database
+                $this->user->set('remember_token', $rememberToken);
+                $this->user->save(); // Save the updated user model
+            } else {
+                // create an encrypted token with user id and expiration
+                $token = encrypt(['id' => $user->id, 'expire' => $tokenExpire]);
+            }
 
             // set cookie with token and expiration
             cookie($this->config['cookie_name'], $token, [
@@ -303,7 +330,7 @@ class Auth implements AuthContract, ArrayAccess
      * @param array $payload Optional associative array of additional payload data to include in the token.
      * @return string The generated JWT token as a string.
      */
-    public function createToken(array $payload): string
+    public function createJwtToken(array $payload): string
     {
         $user = $this->getUser();
 
@@ -329,15 +356,22 @@ class Auth implements AuthContract, ArrayAccess
         // Erase the cache for the logged in user.
         $this->clearCache();
 
+        // destroy cookie auth if enabled
+        if ($this->config['cookie_enabled']) {
+            // Clear the remember token from the database
+            if ($this->hasId() && isset($this->user, $this->user['remember_token']) && $this->config['use_remember_token']) {
+                $this->user->set('remember_token', null);
+                $this->user->save(); // Save the updated user model
+            }
+
+            // Delete the authentication cookie by setting its expiration in the past
+            cookie($this->config['cookie_name'], expiresOrOptions: -3600);
+        }
+
         // Delete the session variable and unset the user property.
         $this->session->delete($this->config['session_key']);
         $this->user = null;
         $this->id = 0;
-
-        // destroy cookie auth if enabled
-        if (isset($this->config['cookie_name'])) {
-            cookie($this->config['cookie_name'], expiresOrOptions: -3600);
-        }
     }
 
     /**
@@ -484,13 +518,22 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return bool True if the user is authenticated via a cookie, false otherwise.
      */
-    private function checkCookieAuth(): void
+    protected function checkCookieAuth(): void
     {
-        $token = $_COOKIE[$this->config['cookie_name']] ?? null;
-        if (isset($token)) {
+        $cookieToken = $_COOKIE[$this->config['cookie_name']] ?? null;
+        if (!empty($cookieToken)) {
             try {
                 // Attempt to decrypt the cookie value
-                $token = decrypt($token);
+                $token = decrypt($cookieToken);
+
+                if ($this->config['use_remember_token']) {
+                    $userId = $this->userModel::column('id')->where('remember_token', $token)->first();
+                    if ($userId) {
+                        $this->session->set($this->config['session_key'], $userId);
+                    }
+
+                    return; // Exit after processing remember token
+                }
 
                 // Verify that the decrypted value is an array with an 'id' and 'expire' key
                 if (is_array($token) && isset($token['expire'], $token['id']) && carbon($token['expire'])->isFuture()) {
@@ -513,7 +556,7 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return ?int The user ID if authenticated via JWT, or null if not authenticated.
      */
-    private function checkJwtAuth(): ?int
+    protected function checkJwtAuth(): ?int
     {
         $authHeader = request()->header('authorization');
 
@@ -573,7 +616,7 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return bool True if a valid driver is set, false otherwise.
      */
-    private function hasDriver(): bool
+    protected function hasDriver(): bool
     {
         return isset($this->config['driver']) && $this->config['driver'] instanceof AuthDriverContract;
     }
@@ -587,7 +630,7 @@ class Auth implements AuthContract, ArrayAccess
      * @return AuthDriverContract The authentication driver instance.
      * @throws \RuntimeException If no valid authentication driver is set.
      */
-    private function getDriver(): AuthDriverContract
+    protected function getDriver(): AuthDriverContract
     {
         if (!$this->hasDriver()) {
             throw new \RuntimeException('No valid authentication driver is set.');

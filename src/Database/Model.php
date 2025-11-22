@@ -190,7 +190,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public static function create(array|Arrayable $data, bool $ignoreEmpty = false): static
     {
         $model = self::load($data, $ignoreEmpty);
-        $model->save();
+        $model->save(forceCreate: true);
 
         return $model; // Return the saved model instance.
     }
@@ -301,9 +301,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     /**
      * Saves the model to the database, either updating or creating a new entry.
      *
+     * @param bool $forceCreate If true, forces the creation of a new record even if the model has a primary key.
      * @return int|bool The ID of the saved model or false on failure.
      */
-    public function save(): int|bool
+    public function save(bool $forceCreate = false): int|bool
     {
         // Apply events for before save and encode array into json string. 
         $data = $this->encodeToSaveData($this->getFillableData());
@@ -314,7 +315,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $status = $this->query()->update($data, $condition);
 
             // If update fails and no record exists, insert a new record.
-            if (!$status) {
+            if (!$status && $forceCreate) {
                 try {
                     if ($this->query()->where($condition)->notExists()) {
                         $status = $this->query()->insert($data);

@@ -16,17 +16,20 @@ use Spark\Http\Auth as BaseAuth;
  * @method static int getId()
  * @method static int id()
  * @method static \App\Models\User|mixed user(?string $key = null, $default = null)
- * @method static string getGuestRoute()
- * @method static string getLoggedInRoute()
+ * @method static string getLoginRoute()
+ * @method static string getRedirectRoute()
  * @method static bool hasId()
  * @method static bool attempt(array $credentials)
  * @method static bool isGuest()
- * @method static bool isLoggedIn()
+ * @method static bool isLogged()
  * @method static void configure(array $config)
  * @method static void login(Model $user, bool $remember = false)
  * @method static void logout()
+ * @method static void check()
  * @method static void clearCache()
  * @method static void refresh()
+ * @method static string getJwtToken(Model $user, array $payload = [])
+ * @method static string createJwtToken(array $payload = [])
  * 
  * @package Spark\Facades
  * 

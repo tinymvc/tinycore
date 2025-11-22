@@ -39,9 +39,10 @@ interface ModelContract
     /**
      * Saves the model to the database.
      *
+     * @param bool $forceCreate Whether to force the creation of a new record.
      * @return int|bool The ID of the saved model or false on failure.
      */
-    public function save(): int|bool;
+    public function save(bool $forceCreate = false): int|bool;
 
     /**
      * Removes the model from the database.

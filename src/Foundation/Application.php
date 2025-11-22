@@ -93,10 +93,7 @@ class Application implements ApplicationContract, \ArrayAccess
             $this->container->singleton(EventDispatcher::class);
             $this->container->singleton(Gate::class);
             $this->container->singleton(Vite::class);
-            $this->container->singleton(
-                Auth::class,
-                fn() => new Auth(session: $this->container->get(Session::class), userModel: \App\Models\User::class)
-            );
+            $this->container->singleton(Auth::class);
         }
     }
 
