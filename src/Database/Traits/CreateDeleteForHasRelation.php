@@ -113,7 +113,7 @@ trait CreateDeleteForHasRelation
      * @param array $attributes The attributes to search for.
      * @return Model The found or newly created model instance.
      */
-    public function firstOrCreate(array $attributes = []): Model
+    public function firstOrCreate(array $attributes = [], array $values = []): Model
     {
         $parent = $this->getParentModel();
 
@@ -134,7 +134,7 @@ trait CreateDeleteForHasRelation
         ]);
 
         $relatedClass = $this->related;
-        return $relatedClass::firstOrCreate($attributes);
+        return $relatedClass::firstOrCreate($attributes, $values);
     }
 
     /**

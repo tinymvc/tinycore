@@ -200,20 +200,23 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
      * @param bool $ignoreEmpty If true, empty values will be ignored.
+     * @param array $uniqueBy Array of fields to uniquely identify the model.
+     * @param array|Arrayable $values Additional values to set if creating a new model.
      * @return static The saved model instance.
      */
-    public static function createOrUpdate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = []): static
+    public static function createOrUpdate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = [], array|Arrayable $values = []): static
     {
         $model = self::load($data, $ignoreEmpty);
 
         $data = $model->getFillableData();
 
         if (empty($uniqueBy)) {
-            $uniqueBy = [static::$primaryKey];
+            $uniqueBy = array_keys($data);
         }
 
         $where = array_intersect_key($data, array_flip($uniqueBy));
         $model = self::query()->where($where)->first();
+        $data = array_merge($data, $values instanceof Arrayable ? $values->toArray() : $values);
 
         if ($model) {
             $model->fill($data);
@@ -229,35 +232,47 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     /**
      * Retrieves the first model matching the given data or creates a new one if none exists.
      *
-     * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param array|Arrayable $attributes Key-value pairs of model properties.
+     * @param array|Arrayable $values Additional values to set if creating a new model.
      * @return static The found or newly created model instance.
      */
-    public static function firstOrCreate(array|Arrayable $data): static
+    public static function firstOrCreate(array|Arrayable $attributes, array|Arrayable $values = []): static
     {
-        $model = self::query()->where($data)->first();
+        $model = self::query()->where($attributes)->first();
 
         if ($model) {
             return $model;
         }
 
-        return self::create($data);
+        $attributes = array_merge(
+            $attributes instanceof Arrayable ? $attributes->toArray() : $attributes,
+            $values instanceof Arrayable ? $values->toArray() : $values
+        );
+
+        return self::create($attributes);
     }
 
     /**
      * Retrieves the first model matching the given data or returns a new instance if none exists.
      *
-     * @param array|Arrayable $data Key-value pairs of model properties.
+     * @param array|Arrayable $attributes Key-value pairs of model properties.
+     * @param array|Arrayable $values Additional values to set if creating a new model.
      * @return static The found model instance or a new instance with the given data.
      */
-    public static function firstOrNew(array|Arrayable $data): static
+    public static function firstOrNew(array|Arrayable $attributes, array|Arrayable $values = []): static
     {
-        $model = self::query()->where($data)->first();
+        $model = self::query()->where($attributes)->first();
 
         if ($model) {
             return $model;
         }
 
-        return self::load($data);
+        $attributes = array_merge(
+            $attributes instanceof Arrayable ? $attributes->toArray() : $attributes,
+            $values instanceof Arrayable ? $values->toArray() : $values
+        );
+
+        return self::load($attributes);
     }
 
     /**
@@ -266,11 +281,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array|Arrayable $data Key-value pairs of model properties.
      * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @param array $uniqueBy Array of fields to uniquely identify the model.
+     * @param array|Arrayable $values Additional values to set if creating a new model.
      * @return static The updated or created model instance.
      */
-    public static function updateOrCreate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = []): static
+    public static function updateOrCreate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = [], array|Arrayable $values = []): static
     {
-        return self::createOrUpdate($data, $ignoreEmpty, $uniqueBy);
+        return self::createOrUpdate($data, $ignoreEmpty, $uniqueBy, $values);
     }
 
     /**
