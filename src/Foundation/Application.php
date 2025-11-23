@@ -217,6 +217,23 @@ class Application implements ApplicationContract, \ArrayAccess
     }
 
     /**
+     * Registers a contextual binding in the application's dependency injection container.
+     *
+     * Contextual bindings allow you to specify different implementations
+     * of a service based on the context in which it is requested.
+     *
+     * @param string|array $concrete The concrete class or classes that require the binding.
+     * @param string $needs The abstract name or class name of the service to be resolved.
+     * @param callable|string $give The concrete value or factory function to provide the service.
+     * @return self
+     */
+    public function when(string|array $concrete, string $needs, callable|string $give): self
+    {
+        $this->container->when($concrete, $needs, $give);
+        return $this;
+    }
+
+    /**
      * Resolves a service or a value from the dependency injection container.
      *
      * @param string $abstract The abstract name or class name of the service or value to be resolved.
@@ -377,6 +394,66 @@ class Application implements ApplicationContract, \ArrayAccess
         }
 
         return $this;
+    }
+
+    /**
+     * Registers an event listener for a specific event.
+     *
+     * This method allows you to register a listener callback for a specific
+     * event. The listener will be called when the event is dispatched.
+     *
+     * @param string $event The name of the event to listen for.
+     * @param callable $listener The listener callback to be called when the event is dispatched.
+     * @return self
+     */
+    public function on(string $event, callable $listener): self
+    {
+        $this->eventDispatcher()->addListener($event, $listener);
+        return $this;
+    }
+
+    /**
+     * Removes an event listener for a specific event.
+     *
+     * This method allows you to remove a listener callback for a specific
+     * event. The listener will no longer be called when the event is dispatched.
+     *
+     * @param string $event The name of the event to remove the listener from.
+     * @param callable $listener The listener callback to be removed.
+     * @return self
+     */
+    public function off(string $event, callable $listener): self
+    {
+        $this->eventDispatcher()->removeListener($event, $listener);
+        return $this;
+    }
+
+    /**
+     * Retrieves the event dispatcher from the application's container.
+     *
+     * The event dispatcher is responsible for managing and dispatching events
+     * throughout the application.
+     *
+     * @return EventDispatcher The event dispatcher instance.
+     */
+    public function eventDispatcher(): EventDispatcher
+    {
+        return $this->container->get(EventDispatcher::class);
+    }
+
+    /**
+     * Dispatches an event with the given arguments.
+     *
+     * This method allows you to dispatch an event by its name, along with
+     * any additional arguments that should be passed to the event listeners.
+     *
+     * @param string $event The name of the event to dispatch.
+     * @param mixed ...$args Additional arguments to be passed to the event listeners.
+     * @return void
+     */
+    public function dispatchEvent(string $event, mixed ...$args): void
+    {
+        $this->eventDispatcher()->dispatch($event, ...$args);
     }
 
     /**

@@ -165,4 +165,21 @@ interface ContainerContract
      * @param callable|string|null $concrete The new concrete implementation.
      */
     public function reset(string $abstract, callable|string|null $concrete = null): void;
+
+
+    /**
+     * Define contextual bindings.
+     *
+     * This method allows you to specify that when a particular concrete
+     * implementation is being resolved, and it needs a specific dependency,
+     * the container should provide a specific implementation for that
+     * dependency.
+     *
+     * @param string|array $concrete The concrete class or classes that require the dependency.
+     * @param string $needs The dependency that is needed.
+     * @param callable|string $give The implementation to provide for the dependency.
+     *
+     * @return self
+     */
+    public function when(string|array $concrete, string $needs, callable|string $give): self;
 }

@@ -149,7 +149,7 @@ class Container implements ContainerContract
      * @param string|array $concrete The concrete class(es) that needs the dependency.
      * @return self The container instance.
      */
-    public function when(string|array $concrete, string $needs, callable|string $give)
+    public function when(string|array $concrete, string $needs, callable|string $give): self
     {
         foreach ((array) $concrete as $alias) {
             $this->contextualBindings[$alias][$needs] = $give;
