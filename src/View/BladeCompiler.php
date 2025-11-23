@@ -245,7 +245,7 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileSelfClosingXComponents(string $template): string
     {
-        $pattern = '/<x-([a-zA-Z0-9\-_.]+)([^>]*?)\/>/';
+        $pattern = '/<x-([a-zA-Z0-9\-_.:]+)([^>]*?)\/>/';
 
         return preg_replace_callback($pattern, function ($matches) {
             $componentName = $matches[1];
@@ -277,7 +277,7 @@ class BladeCompiler implements BladeCompilerContract
             // Find the component name
             $nameStart = $pos + 3; // Skip '<x-'
             $nameEnd = $nameStart;
-            while ($nameEnd < $length && (ctype_alnum($template[$nameEnd]) || in_array($template[$nameEnd], ['-', '_', '.']))) {
+            while ($nameEnd < $length && (ctype_alnum($template[$nameEnd]) || in_array($template[$nameEnd], ['-', '_', '.', ':']))) {
                 $nameEnd++;
             }
 
@@ -474,7 +474,7 @@ class BladeCompiler implements BladeCompilerContract
         }
 
         // Check for x-components (both self-closing and with content)
-        if (preg_match('/<x-[a-zA-Z0-9\-_.]+/', $content)) {
+        if (preg_match('/<x-[a-zA-Z0-9\-_.:]+/', $content)) {
             return true;
         }
 

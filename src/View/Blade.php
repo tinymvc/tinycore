@@ -311,8 +311,14 @@ class Blade implements BladeContract
      */
     public function component(string $component, array $context = []): string
     {
-        $componentPath = $this->getTemplatePath("components/$component");
-        $compiledPath = $this->compiler->getCompiledPath("components/$component");
+        if (str_contains($component, '::')) {
+            $component = str_replace('::', '::components/', $component);
+        } else {
+            $component = "components/$component";
+        }
+
+        $componentPath = $this->getTemplatePath($component);
+        $compiledPath = $this->compiler->getCompiledPath($component);
 
         // Compile component if needed
         if ($this->compiler->isExpired($componentPath, $compiledPath)) {
