@@ -1155,7 +1155,7 @@ class BladeCompiler implements BladeCompilerContract
      */
     public function getCompiledPath(string $template): string
     {
-        return $this->cachePath . '/' . str_replace(['/', '.'], '_', $template) . '_' . md5($template) . '.php';
+        return $this->cachePath . '/' . str_replace(['/', '.', '::'], '_', $template) . '_' . md5($template) . '.php';
     }
 
     /**
