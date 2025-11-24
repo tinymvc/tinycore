@@ -216,7 +216,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         $where = array_intersect_key($data, array_flip($uniqueBy));
         $model = self::query()->where($where)->first();
-        $data = array_merge($data, $values instanceof Arrayable ? $values->toArray() : $values);
+        $data = array_merge($data, !is_array($values) ? $values->toArray() : $values);
 
         if ($model) {
             $model->fill($data);
@@ -245,8 +245,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         $attributes = array_merge(
-            $attributes instanceof Arrayable ? $attributes->toArray() : $attributes,
-            $values instanceof Arrayable ? $values->toArray() : $values
+            !is_array($attributes) ? $attributes->toArray() : $attributes,
+            !is_array($values) ? $values->toArray() : $values
         );
 
         return self::create($attributes);
@@ -268,8 +268,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         $attributes = array_merge(
-            $attributes instanceof Arrayable ? $attributes->toArray() : $attributes,
-            $values instanceof Arrayable ? $values->toArray() : $values
+            !is_array($attributes) ? $attributes->toArray() : $attributes,
+            !is_array($values) ? $values->toArray() : $values
         );
 
         return self::load($attributes);
