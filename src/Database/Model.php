@@ -219,12 +219,14 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $data = array_merge($data, !is_array($values) ? $values->toArray() : $values);
 
         if ($model) {
-            $model->fill($data);
+            $model->preserveOriginalBeforeUpdating($data);
         } else {
             $model = self::load($data);
         }
 
-        $model->save();
+        if (!$model->save()) {
+            $model->restoreOriginal();
+        }
 
         return $model; // Return the saved model instance.
     }
