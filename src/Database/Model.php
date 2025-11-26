@@ -327,31 +327,35 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         // Apply events for before save and encode array into json string. 
         $data = $this->encodeToSaveData($this->getFillableData());
 
+        // Initialize default status variables.
+        $updatedStatus = false;
+        $createdId = 0;
+
         // Update this records if it has an id, else insert this records into database.
         if (!empty($this->primaryValue())) {
             $condition = [static::$primaryKey => $this->primaryValue()];
-            $status = $this->query()->update($data, $condition);
+            $updatedStatus = (bool) $this->query()->update($data, $condition);
 
             // If update fails and no record exists, insert a new record.
-            if (!$status && $forceCreate) {
+            if (!$updatedStatus && $forceCreate) {
                 try {
                     if ($this->query()->where($condition)->notExists()) {
-                        $status = $this->query()->insert($data);
+                        $createdId = $this->query()->insert($data);
                     }
                 } catch (\Exception $e) {
-                    $status = false; // Return false on exception.
+                    return false; // Return false on failure.
                 }
             }
         } else {
-            $status = $this->query()->insert($data);
+            $createdId = $this->query()->insert($data);
         }
 
         // Save model id if it is newly created.
-        if (is_int($status)) {
-            $this->attributes[static::$primaryKey] = $status;
+        if (empty($this->primaryValue()) && is_int($createdId) && $createdId > 0) {
+            $this->attributes[static::$primaryKey] = $createdId;
         }
 
-        return $status; // Return database operation status.
+        return $updatedStatus || $createdId; // Return database operation status.
     }
 
     /**
