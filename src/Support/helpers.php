@@ -347,7 +347,7 @@ if (!function_exists('str')) {
      * Get a new stringable object from the given string.
      *
      * @param  string|null  $string
-     * @return ($string is null ? object : Stringable)
+     * @return ($string is null ? object : \Spark\Support\Stringable)
      */
     function str($string = null)
     {
