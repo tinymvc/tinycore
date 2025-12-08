@@ -157,6 +157,20 @@ class Response implements ResponseContract
     }
 
     /**
+     * Redirects the user to a named route with optional parameters and HTTP status code.
+     *
+     * @param string $routeName The name of the route to redirect to.
+     * @param array $params Optional parameters to include in the route URL.
+     * @param int $httpCode Optional HTTP status code for the redirect (default is 0).
+     * @return $this Current response instance for method chaining.
+     */
+    public function routeRedirect(string $routeName, array $params = [], int $httpCode = 0): self
+    {
+        $url = route_url($routeName, $params);
+        return $this->redirect($url, $httpCode);
+    }
+
+    /**
      * Sets the HTTP status code for the response.
      *
      * @param int $statusCode The HTTP status code to set (e.g., 200, 404).

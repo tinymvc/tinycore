@@ -1000,7 +1000,7 @@ class BladeCompiler implements BladeCompilerContract
             }
 
             // Build the replacement
-            $replacement = sprintf('<?php %s ?>', sprintf($openTemplate, $expression));
+            $replacement = sprintf('<?php %s ?>', $this->sprintfRepeat($openTemplate, $expression));
 
             // Replace the directive with compiled PHP
             $directiveLength = $parenStart - $matchStart + strlen($expression) + 2; // +2 for opening and closing parentheses
@@ -1021,6 +1021,21 @@ class BladeCompiler implements BladeCompilerContract
         }
 
         return $template;
+    }
+
+    /**
+     * Helper to repeat expression in sprintf template
+     */
+    private function sprintfRepeat(string $template, string $expression): string
+    {
+        // Count number of %s in template
+        $count = substr_count($template, '%s');
+
+        // Create an array with the expression repeated
+        $args = array_fill(0, $count, $expression);
+
+        // Use sprintf to format the template
+        return sprintf($template, ...$args);
     }
 
     /**

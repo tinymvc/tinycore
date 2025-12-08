@@ -227,6 +227,15 @@ if (!function_exists('redirect')) {
      */
     function redirect(string $url, int $httpCode = 0): Response
     {
+        // If the URL is not a valid URL, try to generate it using route_url or home_url
+        if (filter_var($url, FILTER_VALIDATE_URL) === false) {
+            try {
+                $url = route_url($url);
+            } catch (Throwable $e) {
+                $url = home_url($url);
+            }
+        }
+
         return response()->redirect($url, $httpCode);
     }
 }
