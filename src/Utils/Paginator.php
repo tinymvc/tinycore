@@ -278,6 +278,18 @@ class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, ArrayAcce
     }
 
     /**
+     * Extracts a specific key from each item in the data array.
+     * 
+     * @param string $key The key to extract.
+     * 
+     * @return array
+     */
+    public function pluck(string $key): array
+    {
+        return array_map(fn($item) => is_array($item) ? ($item[$key] ?? null) : ($item->$key ?? null), $this->data);
+    }
+
+    /**
      * Sorts the data array using a callback function.
      * 
      * @param callable $callback The callback function.

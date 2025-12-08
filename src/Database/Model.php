@@ -514,6 +514,22 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /**
+     * Checks if the model exists in the database.
+     *
+     * @return bool True if the model exists, false otherwise.
+     */
+    public function exists(): bool
+    {
+        if (empty($this->primaryValue())) {
+            return false;
+        }
+
+        return $this->tracking['__exists'] ??= $this->query()
+            ->where([static::$primaryKey => $this->primaryValue()])
+            ->exists();
+    }
+
+    /**
      * Magic setter method to set the value of a model attribute.
      *
      * @param string $name The name of the attribute to set.
