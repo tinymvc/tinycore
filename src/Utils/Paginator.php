@@ -8,6 +8,7 @@ use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
 use Spark\Support\Traits\Macroable;
 use function array_slice;
+use function is_array;
 use function sprintf;
 
 /**
