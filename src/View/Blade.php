@@ -11,7 +11,9 @@ use Spark\View\Contracts\BladeCompilerContract;
 use Spark\View\Contracts\BladeContract;
 use Spark\View\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\View\Exceptions\ViewException;
+use function in_array;
 use function is_array;
+use function sprintf;
 
 /**
  * Class Blade
@@ -224,7 +226,7 @@ class Blade implements BladeContract
      * @param mixed $value
      * @return void
      */
-    public static function share($key, $value = null): void
+    public static function share(string|array $key, mixed $value = null): void
     {
         if (is_array($key)) {
             self::$shared = [...self::$shared, ...$key];
@@ -240,7 +242,7 @@ class Blade implements BladeContract
      * @param callable $composer
      * @return void
      */
-    public static function composer($views, callable $composer): void
+    public static function composer(string|array $views, callable $composer): void
     {
         $views = is_array($views) ? $views : [$views];
 
@@ -348,8 +350,16 @@ class Blade implements BladeContract
             $this->compiler->compile($componentPath, $compiledPath);
         }
 
+        // Extract slot content if provided
+        $slot = $context['slot'] ?? '';
+        unset($context['slot']);
+
         // Merge shared data with the context
-        $context = [...self::$shared, 'attributes' => new Attributes($context)];
+        $context = [
+            ...self::$shared,
+            'slot' => $slot,
+            'attributes' => new Attributes($context),
+        ];
 
         return $this->renderCompiledTemplate($compiledPath, $context);
     }
@@ -588,11 +598,9 @@ class Blade implements BladeContract
         $compiledClasses = [];
 
         foreach ($classes as $key => $value) {
+            // Simple class name like 'p-4'
             if (is_numeric($key)) {
-                // Simple class name like 'p-4'
-                if ($value) {
-                    $compiledClasses[] = $value;
-                }
+                $compiledClasses[] = $value;
             }
             // Conditional class like 'font-bold' => $isActive
             elseif ($value) {
@@ -615,11 +623,19 @@ class Blade implements BladeContract
         $compiledAttributes = [];
 
         foreach ($attributes as $key => $value) {
-            if (is_numeric($key)) {
-                // Simple attribute like 'data-id="123"'
-                if ($value) {
-                    $compiledAttributes[] = $value;
-                }
+            // Special handling for class & style attribute
+            if (in_array($key, ['class', 'style']) && is_array($value)) {
+                $compiledAttributes[] = sprintf(
+                    '%s="%s"',
+                    $key,
+                    $key === 'class'
+                    ? $this->compileClassArray($value)
+                    : $this->compileStyleArray($value)
+                );
+            }
+            // Simple attribute like 'data-id="123"'
+            elseif (is_numeric($key)) {
+                $compiledAttributes[] = $value;
             }
             // Conditional attribute like 'disabled' => $isDisabled
             elseif ($value) {
@@ -642,13 +658,11 @@ class Blade implements BladeContract
         $compiledStyles = [];
 
         foreach ($styles as $key => $value) {
+            // Simple style like 'background-color: red'
             if (is_numeric($key)) {
-                // Simple style like 'background-color: red'
-                if ($value) {
-                    $compiledStyles[] = $value;
-                }
+                $compiledStyles[] = $value;
             }
-            // Key-value pair style like 'color' => 'red' or conditional 'font-weight' => $isActive
+            // Key-value pair style like 'color' => 'red' or conditional 'font-weight:bold' => $isActive
             elseif ($value) {
                 $compiledStyles[] = str_contains($key, ':') ? $key : "$key: $value";
             }
