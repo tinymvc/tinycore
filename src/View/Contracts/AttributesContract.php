@@ -55,20 +55,20 @@ interface AttributesContract
     public function merge(array $attributeDefaults = [], bool $escape = true): AttributesContract;
 
     /**
-     * Generate a class attribute string.
-     *
+     * Merge class attribute strings.
+     * 
      * @param string|array $classList The class or classes to include.
-     * @return string The formatted class attribute string.
+     * @return AttributesContract A new instance with the formatted class attribute.
      */
-    public function class(string|array $classList): string;
+    public function class(string|array $classList): AttributesContract;
 
     /**
-     * Generate a style attribute string.
+     * Merge style attribute strings.
      *
      * @param string|array $styleList The style or styles to include.
-     * @return string The formatted style attribute string.
+     * @return AttributesContract A new instance with the formatted style attribute.
      */
-    public function style(string|array $styleList): string;
+    public function style(string|array $styleList): AttributesContract;
 
     /**
      * Get the given attributes and remove them from the list.

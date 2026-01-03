@@ -84,13 +84,13 @@ class Attributes implements AttributesContract, Arrayable, Htmlable, \Stringable
     /**
      * Determine if any of the keys exist.
      */
-    public function hasAny(string|array ...$keys): bool
+    public function hasAny(string|array $keys): bool
     {
+        $keys = is_array($keys) ? $keys : func_get_args();
+
         if (empty($keys)) {
             return false;
         }
-
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
 
         foreach ($keys as $key) {
             if ($this->has($key)) {
@@ -168,58 +168,42 @@ class Attributes implements AttributesContract, Arrayable, Htmlable, \Stringable
      */
     public function props(string|array $keys): array
     {
-        $props = $this->only($keys)->toArray();
+        $keys = is_array($keys) ? $keys : [$keys];
+        $props = [];
 
-        if (is_array($keys)) {
-            // Handle numeric keys as keys with null values
-            foreach ($keys as $key => $value) {
-                if (is_int($key)) {
-                    $key = $value;
-                    $value = null;
-                }
-                if (!array_key_exists($key, $props)) {
-                    $props[$key] = $value;
-                }
+        // Handle numeric keys as keys with null values (defaults)
+        foreach ($keys as $key => $value) {
+            if (is_int($key)) {
+                $key = $value;
+                $value = null;
             }
-        }
 
-        $this->except($keys); // Remove the props from the attributes
+            $props[$key] = $this->attributes[$key] ?? $value;
+
+            unset($this->attributes[$key]); // Remove the key from attributes
+        }
 
         return $props;
     }
 
     /**
-     * Get and merge the class attribute.
+     * Merge the class attributes.
      * 
      * @param string|array $classList
      */
-    public function class(string|array $classList): string
+    public function class(string|array $classList): static
     {
-        $existingClasses = $this->get('class', '');
-        $existingClasses = $this->normalizeClassValue($existingClasses);
-
-        $newClasses = $this->normalizeClassValue($classList);
-
-        $merged = trim("$existingClasses $newClasses");
-        $classes = array_filter(explode(' ', $merged));
-
-        return implode(' ', array_unique($classes));
+        return $this->merge(['class' => $classList]);
     }
 
     /**
-     * Get and merge the style attribute.
+     * Merge the style attributes.
      * 
      * @param string|array $styleList
      */
-    public function style(string|array $styleList): string
+    public function style(string|array $styleList): static
     {
-        $existingStyles = $this->get('style', '');
-        $existingStyles = $this->normalizeStyleValue($existingStyles);
-
-        $newStyles = $this->normalizeStyleValue($styleList);
-
-        $merged = trim("$existingStyles $newStyles");
-        return rtrim($merged, '; ') . ($merged ? ';' : '');
+        return $this->merge(['style' => $styleList]);
     }
 
     /**
@@ -334,8 +318,11 @@ class Attributes implements AttributesContract, Arrayable, Htmlable, \Stringable
             $value = e($value);
         }
 
-        $merged = trim($defaults . ' ' . $value);
-        return rtrim($merged, '; ') . ($merged ? ';' : '');
+        // Join with semicolon separator, handling empty values
+        $merged = trim("$defaults; $value", "; ");
+        $styles = array_filter(explode(';', $merged), fn($style) => trim($style) !== '');
+
+        return implode('; ', array_unique($styles));
     }
 
     /**
@@ -417,7 +404,7 @@ class Attributes implements AttributesContract, Arrayable, Htmlable, \Stringable
                 }
             }
             $styles = array_map(
-                fn($style) => rtrim(trim($style), ';'),
+                fn($style) => trim($style, '; '),
                 array_filter($styles)
             );
             return implode('; ', $styles);
