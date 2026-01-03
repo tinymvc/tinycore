@@ -32,20 +32,20 @@ class Uploader implements UploaderUtilContract
     /** @var array Supported file extensions.*/
     public array $extensions;
 
-    /** @var ?bool Whether to support multiple file uploads. */
-    public ?bool $multiple;
+    /** @var null|bool Whether to support multiple file uploads. */
+    public null|bool $multiple;
 
-    /** @var int|null Maximum file size (in KB). */
-    public ?int $maxSize;
+    /** @var null|int Maximum file size (in KB). */
+    public null|int $maxSize;
 
-    /** @var array|null Resize options for images. */
-    public ?array $resize;
+    /** @var null|array Resize options for images. */
+    public null|array $resize;
 
-    /** @var array|null Bulk resize options for images. */
-    public ?array $resizes;
+    /** @var null|array Bulk resize options for images. */
+    public null|array $resizes;
 
-    /** @var int|null Compression level for images. */
-    public ?int $compress;
+    /** @var null|int Compression level for images. */
+    public null|int $compress;
 
     /** @var ?UploaderUtilDriverInterface File upload driver. */
     private ?UploaderUtilDriverInterface $driver;
@@ -53,25 +53,25 @@ class Uploader implements UploaderUtilContract
     /**
      * Sets up the uploader configuration.
      *
-     * @param ?string $uploadTo Upload directory path.
-     * @param ?string $uploadDir Upload directory path.
+     * @param null|string $uploadTo Upload directory path.
+     * @param null|string $uploadDir Upload directory path.
      * @param array $extensions Supported file extensions.
-     * @param ?bool $multiple Whether to support multiple file uploads.
-     * @param int|null $maxSize Maximum file size (in KB).
-     * @param array|null $resize Resize options for images.
-     * @param array|null $resizes Bulk resize options for images.
-     * @param int|null $compress Compression level for images.
+     * @param null|bool $multiple Whether to support multiple file uploads.
+     * @param null|int $maxSize Maximum file size (in KB).
+     * @param null|array $resize Resize options for images.
+     * @param null|array $resizes Bulk resize options for images.
+     * @param null|int $compress Compression level for images.
      */
     public function setup(
-        ?string $uploadTo = null,
-        ?string $uploadDir = null,
-        array $extensions = [],
-        ?bool $multiple = null,
-        ?int $maxSize = 2048, // Default to 2MB
-        ?array $resize = null,
-        ?array $resizes = null,
-        ?int $compress = null,
-        ?UploaderUtilDriverInterface $driver = null
+        null|string $uploadTo = null,
+        null|string $uploadDir = null,
+        null|array $extensions = [],
+        null|bool $multiple = null,
+        null|int $maxSize = 2048, // Default to 2MB
+        null|array $resize = null,
+        null|array $resizes = null,
+        null|int $compress = null,
+        null|UploaderUtilDriverInterface $driver = null
     ): self {
         $this->extensions = $extensions;
         $this->multiple = $multiple;
@@ -84,7 +84,7 @@ class Uploader implements UploaderUtilContract
         $uploadDir ??= config('upload_dir');
 
         if ($uploadTo) {
-            $uploadDir = dir_path($uploadDir . '/' . $uploadTo);
+            $uploadDir = dir_path("$uploadDir/$uploadTo");
         }
 
         // Set the upload directory
@@ -102,7 +102,6 @@ class Uploader implements UploaderUtilContract
     {
         // Ensure the upload directory exists and is writable
         if (!fm()->ensureDirectoryWritable($uploadDir)) {
-            // Make the upload directory writable
             throw new UploaderUtilException(__('Upload directory is not writable.'));
         }
 
@@ -178,7 +177,7 @@ class Uploader implements UploaderUtilContract
     public function removeUploadDir(string|array $files): string|array
     {
         if (is_array($files)) {
-            return array_map(fn($file) => $this->removeUploadDir($file), $files);
+            return array_map($this->removeUploadDir(...), $files);
         }
 
         return str_replace([upload_dir(), '\\'], ['', '/'], $files);
@@ -249,7 +248,7 @@ class Uploader implements UploaderUtilContract
             }
             if (isset($this->resizes)) {
                 $resizedImgs = $image->bulkResize($this->resizes);
-                $destination = array_merge([$destination], $resizedImgs);
+                $destination = [$destination, ...$resizedImgs];
             }
 
             if ($this->driver) {

@@ -125,7 +125,7 @@ class Hash implements HashContract
      */
     public function setPasswordOptions(array $options): void
     {
-        $this->passwordOptions = array_merge($this->passwordOptions, $options);
+        $this->passwordOptions = [...$this->passwordOptions, ...$options];
     }
 
     /**
@@ -302,7 +302,7 @@ class Hash implements HashContract
         }
 
         // Create HMAC for authentication (prevents tampering)
-        $hmac = hash_hmac('sha256', $iv . $cipherText, $this->key, true);
+        $hmac = hash_hmac('sha256', "$iv$cipherText", $this->key, true);
 
         // Use JSON encoding for cleaner and safer storage of IV, ciphertext, and HMAC
         $encryptedData = json_encode([
@@ -348,7 +348,7 @@ class Hash implements HashContract
         }
 
         // Verify HMAC (for authenticated encryption)
-        $calculatedHmac = hash_hmac('sha256', $iv . $cipherText, $this->key, true);
+        $calculatedHmac = hash_hmac('sha256', "$iv$cipherText", $this->key, true);
 
         if (!hash_equals($hmac, $calculatedHmac)) {
             throw new DecryptionFailedException('HMAC verification failed. Data may have been tampered with.');
@@ -486,7 +486,7 @@ class Hash implements HashContract
      */
     public function bcrypt(string $password, array $options = []): string
     {
-        $options = array_merge(['cost' => 12], $options);
+        $options = ['cost' => 12, ...$options];
         return password_hash($password, PASSWORD_BCRYPT, $options);
     }
 
@@ -499,7 +499,7 @@ class Hash implements HashContract
      */
     public function argon2i(string $password, array $options = []): string
     {
-        $options = array_merge($this->passwordOptions, $options);
+        $options = [...$this->passwordOptions, ...$options];
         return password_hash($password, PASSWORD_ARGON2I, $options);
     }
 
@@ -512,7 +512,7 @@ class Hash implements HashContract
      */
     public function argon2id(string $password, array $options = []): string
     {
-        $options = array_merge($this->passwordOptions, $options);
+        $options = [...$this->passwordOptions, ...$options];
         return password_hash($password, PASSWORD_ARGON2ID, $options);
     }
 

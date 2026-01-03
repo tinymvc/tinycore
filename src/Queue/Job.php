@@ -215,11 +215,11 @@ class Job implements JobContract
     {
         try {
             // Execute the job's closure function.
-            Application::$app->resolve($this->callback, ['job' => $this]);
+            Application::$app->call($this->callback, ['job' => $this]);
         } catch (Throwable $e) {
             // Call the 'error' event listeners to execute any code that needs to be run when an error occurs during the job processing.
             if (isset($this->onFailed)) {
-                Application::$app->resolve($this->onFailed, ['error' => $e, 'job' => $this]);
+                Application::$app->call($this->onFailed, ['error' => $e, 'job' => $this]);
             }
 
             // Re-throw the exception as a FailedToResolveJobError

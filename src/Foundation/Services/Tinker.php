@@ -231,7 +231,7 @@ class Tinker
 
             // If buffer is not empty, this is a continuation
             if (!empty($this->buffer)) {
-                $this->buffer .= "\n" . $line;
+                $this->buffer .= "\n$line";
             } else {
                 $this->buffer = $line;
             }
@@ -499,16 +499,16 @@ class Tinker
         $spark = Application::$app->make(Commands::class);
 
         $commands = [
-            'help' => fn() => $this->showHelp(),
-            '?' => fn() => $this->showHelp(),
-            'clear' => fn() => $this->clear(),
-            'cls' => fn() => $this->clear(),
-            'history' => fn() => $this->showHistory(),
-            'vars' => fn() => $this->showVars(),
-            'models' => fn() => $this->listModels(),
-            'routes' => fn() => $this->listRoutes(),
-            'config' => fn() => $this->showConfig(),
-            'commands' => fn() => $spark->listCommands(),
+            'help' => $this->showHelp(...),
+            '?' => $this->showHelp(...),
+            'clear' => $this->clear(...),
+            'cls' => $this->clear(...),
+            'history' => $this->showHistory(...),
+            'vars' => $this->showVars(...),
+            'models' => $this->listModels(...),
+            'routes' => $this->listRoutes(...),
+            'config' => $this->showConfig(...),
+            'commands' => $spark->listCommands(...),
         ];
 
         if (isset($commands[$input])) {
@@ -524,7 +524,7 @@ class Tinker
             }
 
             // Run the Spark command
-            Application::$app->resolve(
+            Application::$app->call(
                 $spark->getCommand($sparkCmd[0])['callback'],
                 ['args' => Prompt::parseArguments($sparkCmd[1])]
             );
@@ -1180,6 +1180,13 @@ class Tinker
     private function getPrompt(): string
     {
         $prefix = $this->buffer ? '...' : '>>>';
+
+        // For readline, we need to wrap non-printing characters
+        if ($this->useReadline) {
+            return "\001" . $this->color($prefix, 'green') . "\002 ";
+        }
+
+        // For manual input (Windows/non-readline), use normal color codes
         return $this->color($prefix, 'green') . ' ';
     }
 

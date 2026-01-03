@@ -249,7 +249,7 @@ class Queue implements QueueContract
 
         $jobs = (array) json_decode($rawJobs, true);
 
-        $this->jobs = array_merge($this->jobs, $jobs);
+        $this->jobs = [...$this->jobs, ...$jobs];
     }
 
     /**
@@ -352,7 +352,7 @@ class Queue implements QueueContract
      */
     private function unserializeCallback(null|string $callback): null|string|array|callable
     {
-        if ($callback === null) {
+        if (empty($callback)) {
             return null;
         }
 

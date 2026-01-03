@@ -73,7 +73,7 @@ class DB extends Facade
      */
     public static function connection(): Database
     {
-        return app(self::getFacadeAccessor());
+        return app(Database::class);
     }
 
     /**

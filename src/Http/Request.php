@@ -132,7 +132,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->server = collect($this->parseServerParams());
         $this->files = collect($_FILES);
         $this->query = collect($_GET);
-        $this->post = collect(array_merge($_POST, $this->parsePhpInput()));
+        $this->post = collect([...$_POST, ...$this->parsePhpInput()]);
 
         // Initialize Sanitizer instances for input and validated data.
         $this->routeParams = [];

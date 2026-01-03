@@ -41,12 +41,11 @@ class Vite implements ViteUtilContract
     public function configure(string|array $config): self
     {
         if (is_string($config)) {
-            // Convert string entry to a configuration array.
-            $config = ['entry' => $config];
+            $config = ['entry' => $config]; // If a string is provided, treat it as the entry file name.
         }
 
         // Set default parameters into Vite configuration.
-        $this->config = array_merge([
+        $this->config = [
             'scheme' => 'http://',
             'host' => 'localhost',
             'port' => 5133,
@@ -56,7 +55,8 @@ class Vite implements ViteUtilContract
             'dist' => 'build',
             'dist_path' => 'public/',
             'manifest' => null,
-        ], $config);
+            ...$config
+        ];
 
         return $this;
     }

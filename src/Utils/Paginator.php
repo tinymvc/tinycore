@@ -2,7 +2,6 @@
 
 namespace Spark\Utils;
 
-use ArrayAccess;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
@@ -19,7 +18,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, ArrayAccess, \IteratorAggregate
+class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, \ArrayAccess, \IteratorAggregate
 {
     use Macroable;
 
@@ -161,14 +160,14 @@ class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, ArrayAcce
      * If lazy mode is disabled (default), the method returns the original data
      * array.
      * 
-     * @param bool $lazy Enables or disables lazy mode.
+     * @param bool $slice Whether to return a sliced subset of the data array.
      * 
      * @return array The data array or a subset of it.
      */
-    public function data(bool $lazy = false): array
+    public function data(bool $slice = false): array
     {
         // Returns sliced items, if lazy mode is enabled. 
-        if ($lazy) {
+        if ($slice) {
             return array_slice($this->data, $this->offset, $this->limit);
         }
 
@@ -340,83 +339,117 @@ class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, ArrayAcce
      */
     public function links(int $links = 1, array $classes = [], array $entity = []): string
     {
-        // Holds html anchors for pagination.
-        $output = [];
-
-        // Calculate start, end page number.
-        $start = max(1, $this->page() - $links);
-        $end = min($this->pages(), $this->page() + $links);
-
         //Add dynamic pagination buttons in unordered list...
-        $output[] = sprintf('<ul class="%s">', $classes['ul'] ?? 'pagination');
+        $output = [
+            sprintf('<ul class="%s">', $classes['ul'] ?? 'pagination')
+        ];
 
-        if ($this->page() > 1) {
-            $output[] = sprintf(
-                '<li class="%s"><a class="%s" href="%s">%s</a></li>',
-                $classes['li'] ?? 'page-item',
-                $classes['a'] ?? 'page-link',
-                $this->getAnchor($this->page() - 1),
-                $entity['prev'] ?? __('Previous')
-            );
-        }
-
-        if ($start > 1) {
-            $output[] = sprintf(
-                '<li class="%s"><a class="%s" href="%s">%s</a></li>',
-                $classes['li'] ?? 'page-item',
-                $classes['a'] ?? 'page-link',
-                $this->getAnchor(1),
-                1
-            );
-            $output[] = sprintf(
-                '<li class="%s disabled"><span class="%s">...</span></li>',
-                $classes['li'] ?? 'page-item',
-                $classes['a'] ?? 'page-link'
-            );
-        }
-
-        for ($i = $start; $i <= $end; $i++) {
-            $output[] = sprintf(
-                '<li class="%s %s"><a class="%s %s" href="%s">%s</a></li>',
-                $classes['li'] ?? 'page-item',
-                $this->page() === $i ? ($classes['li.current'] ?? 'active') : '',
-                $classes['a'] ?? 'page-link',
-                $this->page() === $i ? ($classes['a.current'] ?? '') : '',
-                $this->getAnchor($i),
-                $i
-            );
-        }
-
-        if ($end < $this->pages()) {
-            $output[] = sprintf(
-                '<li class="%s disabled"><span class="%s">...</span></li>',
-                $classes['li'] ?? 'page-item',
-                $classes['a'] ?? 'page-link'
-            );
-
-            $output[] = sprintf(
-                '<li class="%s"><a class="%s" href="%s">%s</a></li>',
-                $classes['li'] ?? 'page-item',
-                $classes['a'] ?? 'page-link',
-                $this->getAnchor($this->pages()),
-                $this->pages()
-            );
-        }
-
-        if ($this->page() < $this->pages()) {
-            $output[] = sprintf(
-                '<li class="%s"><a class="%s" href="%s">%s</a></li>',
-                $classes['li'] ?? 'page-item',
-                $classes['a'] ?? 'page-link',
-                $this->getAnchor($this->page() + 1),
-                $entity['next'] ?? __('Next')
-            );
+        foreach ($this->generateLinks($links) as $link) {
+            if ($link['type'] === 'page') {
+                $output[] = sprintf(
+                    '<li class="%s %s"><a class="%s %s" href="%s">%s</a></li>',
+                    $classes['li'] ?? 'page-item',
+                    ($link['active'] ?? false) ? ($classes['li.current'] ?? 'active') : '',
+                    $classes['a'] ?? 'page-link',
+                    ($link['active'] ?? false) ? ($classes['a.current'] ?? '') : '',
+                    $link['url'],
+                    $link['label']
+                );
+            } elseif ($link['type'] === 'ellipsis') {
+                $output[] = sprintf(
+                    '<li class="%s disabled"><span class="%s">%s</span></li>',
+                    $classes['li'] ?? 'page-item',
+                    $classes['a'] ?? 'page-link',
+                    $link['label']
+                );
+            } else {
+                $output[] = sprintf(
+                    '<li class="%s"><a class="%s" href="%s">%s</a></li>',
+                    $classes['li'] ?? 'page-item',
+                    $classes['a'] ?? 'page-link',
+                    $link['url'] ?? '#',
+                    $link['label'] ?? ''
+                );
+            }
         }
 
         $output[] = '</ul>';
 
         // Returns html output of pagination links.
         return implode('', $output);
+    }
+
+    /**
+     * Generates an array of pagination links.
+     * 
+     * @param int $links Number of links to show before and after the current page.
+     * 
+     * @return array Array of pagination links.
+     */
+    public function generateLinks(int $links = 1): array
+    {
+        $links = [];
+
+        // Calculate start, end page number.
+        $start = max(1, $this->page() - $links);
+        $end = min($this->pages(), $this->page() + $links);
+
+        if ($this->page() > 1) {
+            $links[] = [
+                'type' => 'previous',
+                'url' => $this->getAnchor($this->page() - 1),
+                'label' => __('Previous'),
+            ];
+        }
+
+        if ($start > 1) {
+            $links = [
+                ...$links,
+                [
+                    'type' => 'page',
+                    'url' => $this->getAnchor(1),
+                    'label' => 1,
+                ],
+                [
+                    'type' => 'ellipsis',
+                    'label' => '...',
+                ]
+            ];
+        }
+
+        for ($i = $start; $i <= $end; $i++) {
+            $links[] = [
+                'type' => 'page',
+                'url' => $this->getAnchor($i),
+                'label' => $i,
+                'active' => $this->page() === $i,
+            ];
+        }
+
+        if ($end < $this->pages()) {
+            $links = [
+                ...$links,
+                [
+                    'type' => 'ellipsis',
+                    'label' => '...',
+                ],
+                [
+                    'type' => 'page',
+                    'url' => $this->getAnchor($this->pages()),
+                    'label' => $this->pages(),
+                ],
+            ];
+        }
+
+        if ($this->page() < $this->pages()) {
+            $links[] = [
+                'type' => 'next',
+                'url' => $this->getAnchor($this->page() + 1),
+                'label' => __('Next'),
+            ];
+        }
+
+        return $links;
     }
 
     /**
@@ -435,6 +468,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, ArrayAcce
             'last_item' => $this->lastItem(),
             'total' => $this->total(),
             'keyword' => $this->keyword(),
+            'links' => $this->generateLinks(),
             'data' => $this->data(),
         ];
     }

@@ -37,8 +37,11 @@ class Mail extends PHPMailer implements MailUtilContract
     {
         $this->logFile = $config['log_file'] ?? storage_dir('logs/mail.log');
 
-        // Merger mail config with env config
-        $config = array_merge(config('mail', []), $config);
+        // Merge mail config with env config
+        $config = [
+            ...config('mail', []),
+            ...$config
+        ];
 
         // Set mailer configuration
         if (isset($config['mailer']['address'])) {
@@ -236,6 +239,23 @@ class Mail extends PHPMailer implements MailUtilContract
     public function bcc($address, $name = null): self
     {
         $this->addBCC($address, $name);
+        return $this;
+    }
+
+    /**
+     * Attach a file to the email.
+     *
+     * This method takes a file path and an optional name, and attaches the file to the email.
+     * The method returns the instance of the class for method chaining.
+     *
+     * @param string $path The file path of the attachment.
+     * @param string|null $name The name of the attachment.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function attachFile($path, $name = null): self
+    {
+        $this->addAttachment($path, $name);
         return $this;
     }
 

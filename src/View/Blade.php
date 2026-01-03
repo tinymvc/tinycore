@@ -98,7 +98,7 @@ class Blade implements BladeContract
         $path ??= views_dir();
         $cachePath ??= temp_dir('views');
 
-        if ($path === null) {
+        if (empty($path)) {
             throw new UndefinedViewDirectoryPathException('Views directory path is not set.');
         }
 
@@ -108,15 +108,16 @@ class Blade implements BladeContract
         $this->compiler = new BladeCompiler($this->cachePath);
 
         // Merge shared data with the application context
-        self::$shared = array_merge(['app' => Application::$app], self::$shared);
+        self::$shared = ['app' => Application::$app, ...self::$shared];
 
         // Add request, session, and errors to shared data if not in CLI
         if (!is_cli() && Application::$app->resolved(Request::class)) {
-            self::$shared = array_merge([
+            self::$shared = [
                 'request' => Application::$app->get(Request::class),
                 'session' => Application::$app->get(Session::class),
-                'errors' => Application::$app->get(abstract: Request::class)->getInputErrors(),
-            ], self::$shared);
+                'errors' => Application::$app->get(Request::class)->getInputErrors(),
+                ...self::$shared
+            ];
         }
     }
 
@@ -171,17 +172,39 @@ class Blade implements BladeContract
      * @param string $id The identifier for the path
      * @return self
      */
-    public function setUsePath(string $path, ?string $id = null): self
+    public function setUsePath(string $path, string $id = ''): self
     {
         $path = dir_path($path);
 
-        if ($id !== null) {
+        if (!empty($id)) {
             $this->usePath[$id] = $path;
         } else {
             $this->usePath[] = $path;
         }
 
         return $this;
+    }
+
+    /**
+     * Alias for setUsePath to maintain facade method signature
+     * 
+     * @param string $path The directory path to use
+     * @param string|null $id The identifier for the path
+     * @return self
+     */
+    public function usePath(string $path, string $id = ''): self
+    {
+        return $this->setUsePath($path, $id);
+    }
+
+    /**
+     * Get the paths used for template resolution
+     * 
+     * @return array
+     */
+    public function getUsePath(): array
+    {
+        return $this->usePath;
     }
 
     /**
@@ -204,7 +227,7 @@ class Blade implements BladeContract
     public static function share($key, $value = null): void
     {
         if (is_array($key)) {
-            self::$shared = array_merge(self::$shared, $key);
+            self::$shared = [...self::$shared, ...$key];
         } else {
             self::$shared[$key] = $value;
         }
@@ -258,7 +281,7 @@ class Blade implements BladeContract
         }
 
         // Merge shared data with the context
-        $context = array_merge(self::$shared, $context);
+        $context = [...self::$shared, ...$context];
 
         // Reset state for this render
         $this->extendsTemplate = null;
@@ -271,7 +294,7 @@ class Blade implements BladeContract
         // Handle extends - if this template extends another template
         if ($this->extendsTemplate) {
             // Merge current sections with parent context
-            $parentContext = array_merge($context, ['sections' => $this->sections]);
+            $parentContext = [...$context, 'sections' => $this->sections];
             return $this->render($this->extendsTemplate, $parentContext);
         }
 
@@ -296,7 +319,7 @@ class Blade implements BladeContract
         }
 
         // Merge shared data with the context and make sections available
-        $context = array_merge(self::$shared, $context);
+        $context = [...self::$shared, ...$context];
         $context['sections'] = $this->sections;
 
         return $this->renderCompiledTemplate($compiledPath, $context);
@@ -326,7 +349,7 @@ class Blade implements BladeContract
         }
 
         // Merge shared data with the context
-        $context = array_merge(self::$shared, $context);
+        $context = [...self::$shared, 'attributes' => new Attributes($context)];
 
         return $this->renderCompiledTemplate($compiledPath, $context);
     }
@@ -461,7 +484,7 @@ class Blade implements BladeContract
 
         // Make sections available globally for @yield to access
         if (isset($context['sections'])) {
-            $GLOBALS['sections'] = array_merge($this->sections, $context['sections']);
+            $GLOBALS['sections'] = [...$this->sections, ...$context['sections']];
         } else {
             $GLOBALS['sections'] = $this->sections;
         }

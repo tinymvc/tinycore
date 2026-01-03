@@ -60,7 +60,7 @@ class Auth implements AuthContract, ArrayAccess
         // Set the user model, defaulting to \App\Models\User if none is provided
         $this->model = $model ?? \App\Models\User::class;
 
-        $this->config = array_merge([
+        $this->config = [
             'session_key' => 'user_id',
             'cache_enabled' => false,
             'cache_name' => 'auth_cache',
@@ -74,7 +74,8 @@ class Auth implements AuthContract, ArrayAccess
             'jwt_expire' => '6 months',
             'use_remember_token' => false,
             'driver' => null,
-        ], $config);
+            ...$config
+        ];
 
         $this->check(); // Check and set the authentication ID from the session
     }
@@ -92,7 +93,7 @@ class Auth implements AuthContract, ArrayAccess
     public function configure(array $config): void
     {
         // Merge the provided configuration with the existing configuration
-        $this->config = array_merge($this->config, $config);
+        $this->config = [...$this->config, ...$config];
     }
 
     /**

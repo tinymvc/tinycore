@@ -259,7 +259,7 @@ class MakeStubCommandsHandler
                 'replacements' => [
                     '{{ namespace }}' => 'App\Http\Controllers::subfolder:namespace',
                     '{{ class }}' => '::name:ucfirst',
-                    '{{ controllerUse }}' => $hasSubFolder ? "\nuse App\Http\Controllers\Controller;\n" : "\n",
+                    '{{ controllerUse }}' => $hasSubFolder ? "\nuse App\Http\Controllers\Controller;" : "",
                 ],
             ]
         );

@@ -245,6 +245,46 @@ class Carbon implements Arrayable, \Stringable
     }
 
     /**
+     * Get the date and time as a string in 'D, M j, Y g:i A' format
+     * 
+     * @return string The formatted date and time string
+     */
+    public function toDayDateTimeString(): string
+    {
+        return $this->format('D, M j, Y g:i A');
+    }
+
+    /**
+     * Get the date as a string in 'D, M j, Y' format
+     * 
+     * @return string The formatted date string
+     */
+    public function toDayDateString(): string
+    {
+        return $this->format('D, M j, Y');
+    }
+
+    /**
+     * Get the time as a string in 'g:i A' format
+     * 
+     * @return string The formatted time string
+     */
+    public function toTimeAmPmString(): string
+    {
+        return $this->format('g:i A');
+    }
+
+    /**
+     * Get the date and time as a string in 'M j, Y, g:i A' format
+     * 
+     * @return string The formatted date and time string
+     */
+    public function toFormattedDateTimeString(): string
+    {
+        return $this->format('M j, Y, g:i A');
+    }
+
+    /**
      * Convert the DateTime instance to an array representation
      * 
      * @return array An associative array with date and time components

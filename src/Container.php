@@ -232,17 +232,6 @@ class Container implements ContainerContract
     }
 
     /**
-     * Resolve an instance from the container (alias for get).
-     *
-     * @param string $abstract The abstract name of the class or interface.
-     * @return mixed The resolved instance.
-     */
-    public function resolve(string $abstract): mixed
-    {
-        return $this->get($abstract);
-    }
-
-    /**
      * Calls a class method or a closure with the given parameters.
      *
      * This method supports three formats to call a class method or a closure.
@@ -566,7 +555,7 @@ class Container implements ContainerContract
             'bindings' => $this->bindings,
             'instances' => array_filter($this->instances, fn($instance) => $instance !== null),
             'aliases' => $this->aliases,
-            'providers' => array_map(fn($provider) => get_class($provider), $this->providers),
+            'providers' => array_map(get_class(...), $this->providers),
         ];
     }
 

@@ -917,6 +917,7 @@ class BladeCompiler implements BladeCompilerContract
         $outputDirectives = [
             'dump' => 'dump(%s);',
             'dd' => 'dd(%s);',
+            'props' => 'extract($attributes->props(%s));',
             'abort' => 'abort(%s);',
             'old' => 'echo e(old(%s));',
             'share' => '$this->share(%s);',

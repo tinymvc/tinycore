@@ -377,7 +377,7 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
         $existingParams = $this->getQueryParams();
 
         // Merge or replace parameters
-        $finalParams = $merge ? array_merge($existingParams, $params) : $params;
+        $finalParams = $merge ? [...$existingParams, ...$params] : $params;
 
         // Remove null values
         $finalParams = array_filter($finalParams, fn($value) => $value !== null);
@@ -599,7 +599,7 @@ class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringa
     public function withParameters(array $parameters): self
     {
         $new = clone $this;
-        $new->parameters = array_merge($this->parameters, $parameters);
+        $new->parameters = [...$this->parameters, ...$parameters];
 
         return $new;
     }

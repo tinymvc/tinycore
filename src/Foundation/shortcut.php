@@ -50,7 +50,7 @@ if (!function_exists('app')) {
      */
     function app(?string $abstract = null): mixed
     {
-        if ($abstract !== null) {
+        if (!empty($abstract)) {
             return Application::$app->make($abstract);
         }
 
@@ -85,7 +85,7 @@ if (!function_exists('call')) {
      */
     function call(array|string|callable $abstract, array $parameters = []): mixed
     {
-        return Application::$app->resolve($abstract, $parameters);
+        return Application::$app->call($abstract, $parameters);
     }
 }
 
@@ -379,6 +379,30 @@ if (!function_exists('view')) {
             get(Blade::class)
                 ->render($template, $context) // Render the template.
         );
+    }
+}
+
+if (!function_exists('blade')) {
+    /**
+     * Get the current Blade instance or render a template with the given context.
+     *
+     * If no arguments are provided, this function will return the current Blade instance.
+     * If a template name is provided, this function will render the template with the given context
+     * and return the rendered HTML as a string.
+     *
+     * @param string|null $template The path to the template file to render.
+     * @param array $context An associative array of variables to pass to the template.
+     * @return Blade|string The Blade instance or the rendered HTML as a string.
+     */
+    function blade(?string $template = null, array $context = []): string|Blade
+    {
+        $engine = get(Blade::class);
+
+        if ($template === null) {
+            return $engine;
+        }
+
+        return $engine->render($template, $context);
     }
 }
 
@@ -1322,21 +1346,21 @@ if (!function_exists('cookie')) {
         }
 
         // Merge with defaults
-        $defaults = [
+        $options = [
             'expires' => 0,
             'path' => '/',
             'domain' => '',
             'secure' => false,
             'httponly' => true,
-            'samesite' => 'Lax'
+            'samesite' => 'Lax',
+            ...$expiresOrOptions
         ];
-        $expiresOrOptions = array_merge($defaults, $expiresOrOptions);
 
         // Update $_COOKIE for immediate availability
         $_COOKIE[$name] = $value;
 
         // Set the cookie
-        return setcookie($name, $value, $expiresOrOptions);
+        return setcookie($name, $value, $options);
     }
 }
 
@@ -1392,7 +1416,10 @@ if (!function_exists('mailer')) {
 
         if (isset($template)) {
             // Merge the context with the other parameters
-            $context = array_merge((array) $context, compact('subject', 'to', 'from', 'reply'));
+            $context = [
+                ...(array) ($context ?? []),
+                ...compact('subject', 'to', 'from', 'reply')
+            ];
             // Set the email body content using the template
             $mailer->view($template, $context);
         }
@@ -1465,7 +1492,7 @@ if (!function_exists('abort')) {
             exit; // Exit the script
         }
 
-        // Get the view service
+        /** @var \Spark\View\Blade The Blade view instance */
         $view = get(Blade::class);
 
         // Set the view path to the errors folder

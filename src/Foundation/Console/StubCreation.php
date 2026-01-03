@@ -21,7 +21,6 @@ use function is_array;
  *
  * @package Spark\Foundation\Console
  */
-
 class StubCreation
 {
     /**

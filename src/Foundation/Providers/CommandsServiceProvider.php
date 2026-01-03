@@ -146,7 +146,7 @@ class CommandsServiceProvider
             ->description('Create a new view component file');
 
         // Add the tinker command
-        $commands->addCommand('tinker', fn() => (new Tinker())->run())
+        $commands->addCommand('tinker', (new Tinker())->run(...))
             ->description('Start an interactive shell session');
     }
 }

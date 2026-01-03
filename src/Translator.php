@@ -70,7 +70,7 @@ class Translator implements TranslatorContract
      */
     public function mergeTranslatedTexts(array $translatedTexts): void
     {
-        $this->translatedTexts = array_merge($this->translatedTexts, $translatedTexts);
+        $this->translatedTexts = [...$this->translatedTexts, ...$translatedTexts];
     }
 
     /**

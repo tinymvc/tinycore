@@ -170,7 +170,7 @@ class HttpPool
         }
 
         $multiHandle = curl_multi_init();
-        if ($multiHandle === false) {
+        if (!$multiHandle) {
             throw new PingUtilException('Failed to initialize curl_multi.');
         }
 

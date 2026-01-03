@@ -29,6 +29,14 @@ use Spark\Utils\Http as BaseHttp;
  * @method static BaseHttp proxy(string $proxy, string $proxyAuth = '')
  * @method static BaseHttp download(string $location, bool $force = false)
  * @method static BaseHttp postFields(array|string $fields, null|string $contentType = null)
+ * @method static BaseHttp withHeaders(array $headers)
+ * @method static BaseHttp withContentType(string $type)
+ * @method static BaseHttp withAccept(string $type)
+ * @method static BaseHttp withToken(string $token)
+ * @method static BaseHttp withBasicAuth(string $username, string $password)
+ * @method static BaseHttp withCookies(array $cookies)
+ * @method static BaseHttp withOptions(array $options)
+ * @method static BaseHttp withPostFields(array|string $fields, null|string $contentType = null)
  * @method static array pool(callable $callback)
  * 
  * @package Spark\Facades

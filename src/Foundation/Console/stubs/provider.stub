@@ -3,15 +3,16 @@
 namespace {{ namespace }};
 
 use Spark\Container;
+use Spark\Contracts\ServiceProvider;
 
-class {{ class }}
+class {{ class }} implements ServiceProvider
 {
-    public function register(Container $container)
+    public function register(Container $container): void
     {
         // i am registering services
     }
 
-    public function boot()
+    public function boot(): void
     {
         // i am bootstrapping services
     }

@@ -338,7 +338,7 @@ class Router implements RouterContract
         // If inside a pending group, add the route to the pending routes array
         if ($this->isInPendingGroup()) {
             $pendingRoutes = &$this->groupStack[array_key_last($this->groupStack)];
-            $pendingRoutes[] = array_merge($route, ['name' => $name]);
+            $pendingRoutes[] = [...$route, 'name' => $name];
             return $this;
         }
 

@@ -183,7 +183,7 @@ class EventDispatcher implements EventDispatcherContract
         foreach ($eventListeners as $listener) {
             try {
                 // Resolve and invoke the callback
-                $result = Application::$app->resolve($listener['callback'], $args);
+                $result = Application::$app->call($listener['callback'], $args);
 
                 // If listener returns false or shouldHalt is true, stop propagation
                 if ($result === false || $this->shouldHalt) {
@@ -246,7 +246,7 @@ class EventDispatcher implements EventDispatcherContract
                 return $listener(...$args);
             }
 
-            return Application::$app->resolve($listener, $args);
+            return Application::$app->call($listener, $args);
         };
 
         $this->addListener($eventName, $wrapper, $priority);
@@ -311,7 +311,7 @@ class EventDispatcher implements EventDispatcherContract
 
         foreach ($eventListeners as $listener) {
             try {
-                $result = Application::$app->resolve($listener['callback'], $args);
+                $result = Application::$app->call($listener['callback'], $args);
 
                 if ($result !== null) {
                     return $result;

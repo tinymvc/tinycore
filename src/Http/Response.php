@@ -337,11 +337,7 @@ class Response implements ResponseContract
 
         // If it's an array, recurse into each element
         if (is_array($data)) {
-            return array_map(
-                /** @param mixed $item */
-                fn($item): mixed => $this->toPureArray($item),
-                $data
-            );
+            return array_map($this->toPureArray(...), $data);
         }
 
         // Otherwise return as-is (string/int/etc)

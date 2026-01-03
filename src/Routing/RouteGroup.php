@@ -150,7 +150,7 @@ class RouteGroup implements RouteGroupContract
     private function mergeGroupAttributes(string $name, string|array $values): void
     {
         $this->group['attributes'][$name] = array_unique(
-            array_merge((array) ($this->group['attributes'][$name] ?? []), (array) $values)
+            [...(array) ($this->group['attributes'][$name] ?? []), ...(array) $values]
         );
     }
 
@@ -272,17 +272,17 @@ class RouteGroup implements RouteGroupContract
 
                 // Apply method
                 if (isset($attributes['method'])) {
-                    $method = array_unique(array_merge((array) $method, (array) $attributes['method']));
+                    $method = array_unique([...(array) $method, ...(array) $attributes['method']]);
                 }
 
                 // Apply middleware
                 if (isset($attributes['middleware'])) {
-                    $middleware = array_unique(array_merge((array) $middleware, (array) $attributes['middleware']));
+                    $middleware = array_unique([...(array) $middleware, ...(array) $attributes['middleware']]);
                 }
 
                 // Apply withoutMiddleware
                 if (isset($attributes['withoutMiddleware'])) {
-                    $withoutMiddleware = array_unique(array_merge((array) $withoutMiddleware, (array) $attributes['withoutMiddleware']));
+                    $withoutMiddleware = array_unique([...(array) $withoutMiddleware, ...(array) $attributes['withoutMiddleware']]);
                 }
 
                 // Apply name prefix if name is not empty

@@ -74,7 +74,7 @@ class Application implements ApplicationContract, \ArrayAccess
         Tracer::start(); // Initialize the tracer
 
         // Initialize the dependency injection container
-        $this->container = new Container;
+        $this->container = new Container();
 
         // Register core services for global use
         $this->container->singleton(Translator::class);
@@ -157,7 +157,7 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function mergeEnv(array $env): void
     {
-        $this->env = array_merge($this->env, $env);
+        $this->env = [...$this->env, ...$env];
     }
 
     /**
@@ -258,22 +258,6 @@ class Application implements ApplicationContract, \ArrayAccess
     public function make(string $abstract, array $parameters = []): mixed
     {
         return $this->container->make($abstract, $parameters);
-    }
-
-    /**
-     * Resolves a service or a value from the dependency injection container,
-     * by calling the given abstract as a function.
-     *
-     * This method takes an abstract name or class name and resolves it by
-     * calling it as a function. The resolved value is then returned.
-     *
-     * @param array|string|callable $abstract The abstract name or class name of the service or value to be resolved.
-     * @param array $parameters An array of parameters to be passed to the resolved service or value.
-     * @return mixed The resolved service or value.
-     */
-    public function resolve(array|string|callable $abstract, array $parameters = []): mixed
-    {
-        return $this->container->call($abstract, $parameters);
     }
 
     /**
