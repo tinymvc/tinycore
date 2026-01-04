@@ -532,9 +532,9 @@ class BladeCompiler implements BladeCompilerContract
                 $i++;
             }
 
-            // Parse attribute name
+            // Parse attribute name (including colons for x-on:event, x-bind:attr, etc.)
             $nameStart = $i;
-            while ($i < $length && (ctype_alnum($attributesString[$i]) || in_array($attributesString[$i], ['-', '_', '$']))) {
+            while ($i < $length && (ctype_alnum($attributesString[$i]) || in_array($attributesString[$i], ['-', '_', '$', ':', '.', '@']))) {
                 $i++;
             }
 
@@ -702,14 +702,14 @@ class BladeCompiler implements BladeCompilerContract
             $char = $attributesString[$position];
         }
 
-        // Check if it's a valid attribute name start
-        if (ctype_alpha($char) || $char === '_' || $char === '$') {
+        // Check if it's a valid attribute name start (including @ for Alpine.js shorthand)
+        if (ctype_alpha($char) || $char === '_' || $char === '$' || $char === '@') {
             // Look for attribute name pattern followed by = or space/end
             $nameEnd = $position;
             while (
                 $nameEnd < $length &&
                 (ctype_alnum($attributesString[$nameEnd]) ||
-                    in_array($attributesString[$nameEnd], ['-', '_', '$']))
+                    in_array($attributesString[$nameEnd], ['-', '_', '$', ':', '.', '@']))
             ) {
                 $nameEnd++;
             }
@@ -760,7 +760,7 @@ class BladeCompiler implements BladeCompilerContract
                     $pairs[] = "'{$escapedKey}' => '{$value}'";
                 }
             } elseif (is_string($value)) {
-                if ($isDynamic) {
+                if ($isDynamic && !str_starts_with($key, ':')) {
                     // Dynamic attribute - treat as PHP expression
                     $pairs[] = "'{$escapedKey}' => {$value}";
                 } else {
