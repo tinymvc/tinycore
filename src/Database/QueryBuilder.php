@@ -15,6 +15,7 @@ use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
 use function func_get_args;
+use function func_num_args;
 use function in_array;
 use function is_array;
 use function is_bool;
@@ -183,7 +184,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return string|null The alias or null if not set.
      */
-    public function getAlias(): ?string
+    public function getAlias(): null|string
     {
         if (isset($this->query['alias']) && !empty($this->query['alias'])) {
             return trim(str_ireplace('as ', '', $this->query['alias']));
@@ -281,13 +282,13 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Adds a parameter for a query.
      *
-     * @param string|array ...$parameters Additional parameter names.
+     * @param string|array $parameter Additional parameter names.
      * @return self Returns the query object.
      */
-    public function param(string|array ...$parameters): self
+    public function param(string|array $parameter): self
     {
-        $parameters = is_array($parameters[0]) ? $parameters[0] : $parameters;
-        $this->parameters = array_merge($this->parameters, $parameters);
+        $parameter = is_array($parameter) ? $parameter : func_get_args();
+        $this->parameters = [...$this->parameters, ...$parameter];
         return $this;
     }
 
@@ -320,12 +321,11 @@ class QueryBuilder implements QueryBuilderContract
      *     'replace' => bool,     // Replace existing records
      *     'conflict' => array,   // Conflict target columns (for ON CONFLICT)
      *     'update' => array,     // Columns to update on conflict
-     *     'returning' => mixed   // Columns to return (PostgreSQL)
      * ]
-     * @return int|array Returns last insert ID or array of returned data (PostgreSQL with returning)
+     * @return int Returns last insert ID.
      * @throws QueryBuilderException
      */
-    public function insert(array|Arrayable $data, array $config = []): int|array
+    public function insert(array|Arrayable $data, array $config = []): int
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -361,11 +361,6 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         $this->log($started, $startedMemory, $sql, $data);
-
-        // Handle PostgreSQL RETURNING clause
-        if ($this->grammar->isPostgreSQL() && isset($config['returning'])) {
-            return $statement->fetchAll(PDO::FETCH_ASSOC);
-        }
 
         return $this->database->getPdo()->lastInsertId();
     }
@@ -412,7 +407,7 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Add a where clause to the query.
      *
-     * @param null|string|array|Closure $column
+     * @param null|string|array|Arrayable|Closure $column
      *   The column name to query, or an array of column names.
      * @param string|null $operator
      *   The operator to use. If null, the operator will be determined
@@ -420,14 +415,14 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value
      *   The value to query. If null, the value will be determined
      *   based on the operator given.
-     * @param ?string $andOr
+     * @param null|string $andOr
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @param bool $not
      *   If true, the where clause will be negated.
      *
      * @return self
      */
-    public function where(null|string|array|Arrayable|Closure $column = null, ?string $operator = null, $value = null, ?string $andOr = null, bool $not = false): self
+    public function where(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null, null|string $andOr = null, bool $not = false): self
     {
         if ($column instanceof Arrayable) {
             $column = $column->toArray();
@@ -641,7 +636,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhere(null|string|array $column = null, ?string $operator = null, $value = null): self
+    public function orWhere(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null): self
     {
         return $this->where($column, $operator, $value, 'OR');
     }
@@ -660,7 +655,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notWhere(null|string|array $column = null, ?string $operator = null, $value = null): self
+    public function notWhere(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null): self
     {
         return $this->where($column, $operator, $value, 'AND', true);
     }
@@ -679,7 +674,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotWhere(null|string|array $column = null, ?string $operator = null, $value = null): self
+    public function orNotWhere(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null): self
     {
         return $this->where($column, $operator, $value, 'OR', true);
     }
@@ -687,31 +682,31 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Adds a WHERE condition that the given column is null.
      *
-     * @param string $where
+     * @param string $field
      *   The column name to query.
      * @param bool $not
      *   Whether to use IS NOT NULL instead of IS NULL.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNull($where, $not = false): self
+    public function whereNull(string $field, bool $not = false): self
     {
-        $where = $this->grammar->wrapColumn($where) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
+        $field = $this->grammar->wrapColumn($field) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
 
-        return $this->where($where);
+        return $this->where($field);
     }
 
     /**
      * Adds a WHERE condition that the given column is not null.
      *
-     * @param string $where
+     * @param string $field
      *   The column name to query.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNotNull($where): self
+    public function whereNotNull(string $field): self
     {
-        return $this->whereNull($where, true);
+        return $this->whereNull($field, true);
     }
 
     /**
@@ -754,7 +749,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereIn($column, array $values): self
+    public function orWhereIn(string $column, array $values): self
     {
         return $this->where([$column => $values], andOr: 'OR');
     }
@@ -769,7 +764,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereNotIn($column, array $values): self
+    public function orWhereNotIn(string $column, array $values): self
     {
         return $this->where([$column => $values], andOr: 'OR ', not: true);
     }
@@ -814,7 +809,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orIn($column, array $values): self
+    public function orIn(string $column, array $values): self
     {
         return $this->orWhereIn($column, $values);
     }
@@ -829,7 +824,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotIn($column, array $values): self
+    public function orNotIn(string $column, array $values): self
     {
         return $this->orWhereNotIn($column, $values);
     }
@@ -846,7 +841,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function findInSet($field, $key, $type = '', $andOr = 'AND'): self
+    public function findInSet(string $field, mixed $key, string $type = '', string $andOr = 'AND'): self
     {
         // Get the SQL column placeholder for binding.
         $columnPlaceholder = $this->getWhereSqlColumn($field);
@@ -877,7 +872,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notFindInSet($field, $key): self
+    public function notFindInSet(string $field, mixed $key): self
     {
         return $this->findInSet($field, $key, 'NOT ');
     }
@@ -892,7 +887,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orFindInSet($field, $key): self
+    public function orFindInSet(string $field, mixed $key): self
     {
         return $this->findInSet($field, $key, '', 'OR');
     }
@@ -907,7 +902,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotFindInSet($field, $key): self
+    public function orNotFindInSet(string $field, mixed $key): self
     {
         return $this->findInSet($field, $key, 'NOT ', 'OR');
     }
@@ -928,7 +923,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function findInJson($field, $key, $value, $type = '', $andOr = 'AND'): self
+    public function findInJson(string $field, string $key, mixed $value, string $type = '', string $andOr = 'AND'): self
     {
         // Get the SQL column placeholder for binding.
         $columnPlaceholder = $this->getWhereSqlColumn("{$field}_{$key}");
@@ -953,7 +948,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notFindInJson($field, $key, $value): self
+    public function notFindInJson(string $field, string $key, mixed $value): self
     {
         return $this->findInJson($field, $key, $value, 'NOT ');
     }
@@ -970,7 +965,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orFindInJson($field, $key, $value): self
+    public function orFindInJson(string $field, string $key, mixed $value): self
     {
         return $this->findInJson($field, $key, $value, '', 'OR');
     }
@@ -987,7 +982,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotFindInJson($field, $key, $value): self
+    public function orNotFindInJson(string $field, string $key, mixed $value): self
     {
         return $this->findInJson($field, $key, $value, 'NOT ', 'OR');
     }
@@ -1008,7 +1003,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereJsonContains($field, $key, $value, $type = '', $andOr = 'AND'): self
+    public function whereJsonContains(string $field, string $key, mixed $value, string $type = '', string $andOr = 'AND'): self
     {
         return $this->findInJson($field, $key, $value, $type, $andOr);
     }
@@ -1025,7 +1020,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereJsonNotContains($field, $key, $value): self
+    public function whereJsonNotContains(string $field, string $key, mixed $value): self
     {
         return $this->whereJsonContains($field, $key, $value, 'NOT ');
     }
@@ -1042,7 +1037,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereJsonContains($field, $key, $value): self
+    public function orWhereJsonContains(string $field, string $key, mixed $value): self
     {
         return $this->whereJsonContains($field, $key, $value, '', 'OR');
     }
@@ -1059,7 +1054,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereJsonNotContains($field, $key, $value): self
+    public function orWhereJsonNotContains(string $field, string $key, mixed $value): self
     {
         return $this->whereJsonContains($field, $key, $value, 'NOT ', 'OR');
     }
@@ -1080,7 +1075,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function between($field, $value1, $value2, $type = '', $andOr = 'AND'): self
+    public function between(string $field, mixed $value1, mixed $value2, string $type = '', string $andOr = 'AND'): self
     {
         $columnPlaceholder1 = $this->getWhereSqlColumn("{$field}1");
         $columnPlaceholder2 = $this->getWhereSqlColumn("{$field}2");
@@ -1106,7 +1101,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notBetween($field, $value1, $value2): self
+    public function notBetween(string $field, mixed $value1, mixed $value2): self
     {
         return $this->between($field, $value1, $value2, 'NOT ');
     }
@@ -1123,7 +1118,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orBetween($field, $value1, $value2): self
+    public function orBetween(string $field, mixed $value1, mixed $value2): self
     {
         return $this->between($field, $value1, $value2, '', 'OR');
     }
@@ -1140,7 +1135,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotBetween($field, $value1, $value2): self
+    public function orNotBetween(string $field, mixed $value1, mixed $value2): self
     {
         return $this->between($field, $value1, $value2, 'NOT ', 'OR');
     }
@@ -1159,7 +1154,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function like($field, $data, $type = '', $andOr = 'AND'): self
+    public function like(string $field, mixed $data, string $type = '', string $andOr = 'AND'): self
     {
         $columnPlaceholder = $this->getWhereSqlColumn($field);
         $where = $this->grammar->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
@@ -1180,7 +1175,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orLike($field, $data): self
+    public function orLike(string $field, mixed $data): self
     {
         return $this->like($field, $data, '', 'OR');
     }
@@ -1196,7 +1191,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notLike($field, $data): self
+    public function notLike(string $field, mixed $data): self
     {
         return $this->like($field, $data, 'NOT ', 'AND');
     }
@@ -1212,7 +1207,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotLike($field, $data): self
+    public function orNotLike(string $field, mixed $data): self
     {
         return $this->like($field, $data, 'NOT ', 'OR');
     }
@@ -1354,7 +1349,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value
      * @return self
      */
-    public function orWhereDate(string $column, string $operator, $value = null): self
+    public function orWhereDate(string $column, string $operator, mixed $value = null): self
     {
         return $this->whereDate($column, $operator, $value, 'OR');
     }
@@ -1394,7 +1389,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value
      * @return self
      */
-    public function orWhereYear(string $column, string $operator, $value = null): self
+    public function orWhereYear(string $column, string $operator, mixed $value = null): self
     {
         return $this->whereYear($column, $operator, $value, 'OR');
     }
@@ -1408,7 +1403,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param string $andOr
      * @return self
      */
-    public function whereMonth(string $column, string $operator, $value = null, string $andOr = 'AND'): self
+    public function whereMonth(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): self
     {
         if ($value === null) {
             $value = $operator;
@@ -1434,7 +1429,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param mixed $value
      * @return self
      */
-    public function orWhereMonth(string $column, string $operator, $value = null): self
+    public function orWhereMonth(string $column, string $operator, mixed $value = null): self
     {
         return $this->whereMonth($column, $operator, $value, 'OR');
     }
@@ -1468,10 +1463,10 @@ class QueryBuilder implements QueryBuilderContract
      * Updates records in the database based on specified data and conditions.
      *
      * @param array|Arrayable $data  Key-value pairs of columns and their respective values to update.
-     * @param mixed $where  Optional WHERE clause to specify which records to update.
+     * @param null|string|array|Arrayable|Closure $where  Optional WHERE clause to specify which records to update.
      * @return bool
      */
-    public function update(array|Arrayable $data, $where = null): int
+    public function update(array|Arrayable $data, null|string|array|Arrayable|Closure $where = null): int
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -1545,10 +1540,10 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Deletes records from the database based on specified conditions.
      *
-     * @param mixed $where  Optional WHERE clause to specify which records to delete.
+     * @param null|string|array|Arrayable|Closure $where  Optional WHERE clause to specify which records to delete.
      * @return int Returns the number of affected rows.
      */
-    public function delete($where = null): int
+    public function delete(null|string|array|Arrayable|Closure $where = null): int
     {
         // Apply related model condition if necessary
         if ($this->isUsingModel()) {
@@ -1649,10 +1644,10 @@ class QueryBuilder implements QueryBuilderContract
 
         // Bind parameters
         foreach ($bindings as $key => $value) {
-            if (is_string($key)) {
-                $statement->bindValue($key, $value, $this->getParameterType($value));
-            } else {
+            if (is_numeric($key)) {
                 $statement->bindValue($key + 1, $value, $this->getParameterType($value));
+            } else {
+                $statement->bindValue($key, $value, $this->getParameterType($value));
             }
         }
 
@@ -1674,10 +1669,13 @@ class QueryBuilder implements QueryBuilderContract
     public function select(array|string $fields = '*'): self
     {
         // Handle multiple arguments as an array
-        $fields = is_array($fields) ? $fields : ($fields === '*' ? ['*'] : func_get_args());
-
+        if (func_num_args() > 1) {
+            $fields = func_get_args();
+        }
         // Convert array of fields to a comma-separated string if necessary
-        $fields = implode(',', $fields);
+        if (is_array($fields)) {
+            $fields = implode(',', $fields);
+        }
 
         // Remove any leading "SELECT " from the fields string
         $fields = preg_replace('/^\s*select\s+/i', '', $fields);
@@ -1698,7 +1696,7 @@ class QueryBuilder implements QueryBuilderContract
     public function column(string $column): self
     {
         $this->query['select'] = $this->wrapAndEscapeColumns($column);
-        return $this->fetch(PDO::FETCH_COLUMN);
+        return $this->fetchColumn();
     }
 
     /**
@@ -1755,74 +1753,74 @@ class QueryBuilder implements QueryBuilderContract
      * with the new table.
      * 
      * @param string $table The name of the table to select from.
+     * @param string|null $alias Optional alias for the table.
      * @return self The current instance for method chaining.
      */
-    public function from(string $table, ?string $alias = null): self
+    public function from(string $table, string|null $alias = null): self
     {
         $this->table ??= $table;
         $this->query['from'] = $table;
 
-        if (!empty($alias)) {
-            $this->as($alias);
-        }
+        // Set alias if provided
+        !empty($alias) && $this->as($alias);
 
         return $this;
     }
 
     /**
-     * @param string      $field
-     * @param string|null $name
-     *
+     * Calculates the maximum value of a specified field.
+     * 
+     * @param string $field
      * @return float
      */
-    public function max($field, $name = null): float
+    public function max(string $field): float
     {
-        $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
+        $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')';
         $this->select($column);
 
-        return $this->fetch(PDO::FETCH_COLUMN)->first();
+        return $this->fetchColumn()->first();
     }
 
     /**
-     * @param string      $field
-     * @param string|null $name
-     *
+     * Calculates the minimum value of a specified field.
+     * 
+     * @param string $field
      * @return float
      */
-    public function min($field, $name = null): float
+    public function min(string $field): float
     {
-        $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
+        $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')';
         $this->select($column);
 
-        return $this->fetch(PDO::FETCH_COLUMN)->first();
+        return $this->fetchColumn()->first();
     }
 
     /**
-     * @param string      $field
-     * @param string|null $name
-     *
+     * Calculates the sum of a specified field.
+     * 
+     * @param string $field
      * @return float
      */
-    public function sum($field, $name = null): float
+    public function sum(string $field): float
     {
-        $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
+        $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')';
         $this->select($column);
 
-        return $this->fetch(PDO::FETCH_COLUMN)->first();
+        return $this->fetchColumn()->first();
     }
 
     /**
-     * @param string      $field
-     * @param string|null $name
-     *
+     * Calculates the average value of a specified field.
+     * 
+     * @param string $field
      * @return float
      */
-    public function avg($field, $name = null): float
+    public function avg(string $field): float
     {
-        $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')' . ($name !== null ? " AS $name" : '');
+        $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')';
         $this->select($column);
 
-        return $this->fetch(PDO::FETCH_COLUMN)->first();
+        return $this->fetchColumn()->first();
     }
 
     /**
@@ -1855,7 +1853,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
+    public function join(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null, string $type = ''): self
     {
         $on = $field1;
         $table = $this->prefix . $table;
@@ -1903,7 +1901,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function on(string $field1, ?string $operator = null, ?string $field2 = null, null|string|array $parameters = null, string $orOn = 'ON', ): self
+    public function on(string $field1, null|string $operator = null, null|string $field2 = null, null|string|array $parameters = null, string $orOn = 'ON', ): self
     {
         if ($operator !== null) {
             if (empty($field2)) {
@@ -1933,7 +1931,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function orOn(string $field1, ?string $operator = null, ?string $field2 = null, null|string|array $parameters = null): self
+    public function orOn(string $field1, null|string $operator = null, null|string $field2 = null, null|string|array $parameters = null): self
     {
         return $this->on($field1, $operator, $field2, $parameters, 'OR');
     }
@@ -1948,7 +1946,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function andOn(string $field1, ?string $operator = null, ?string $field2 = null, null|string|array $parameters = null): self
+    public function andOn(string $field1, null|string $operator = null, null|string $field2 = null, null|string|array $parameters = null): self
     {
         return $this->on($field1, $operator, $field2, $parameters, 'AND');
     }
@@ -1963,7 +1961,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function innerJoin(string $table, $field1 = null, $operator = null, $field2 = null)
+    public function innerJoin(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'INNER ');
     }
@@ -1978,7 +1976,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function leftJoin(string $table, $field1 = null, $operator = null, $field2 = null)
+    public function leftJoin(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'LEFT ');
     }
@@ -1993,7 +1991,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function rightJoin(string $table, $field1 = null, $operator = null, $field2 = null)
+    public function rightJoin(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'RIGHT ');
     }
@@ -2009,7 +2007,7 @@ class QueryBuilder implements QueryBuilderContract
      * @return self The current instance for method chaining.
      */
 
-    public function fullOuterJoin(string $table, $field1 = null, $operator = null, $field2 = null)
+    public function fullOuterJoin(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'FULL OUTER ');
     }
@@ -2024,7 +2022,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function leftOuterJoin(string $table, $field1 = null, $operator = null, $field2 = null)
+    public function leftOuterJoin(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'LEFT OUTER ');
     }
@@ -2039,7 +2037,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self The current instance for method chaining.
      */
-    public function rightOuterJoin(string $table, $field1 = null, $operator = null, $field2 = null)
+    public function rightOuterJoin(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null)
     {
         return $this->join($table, $field1, $operator, $field2, 'RIGHT OUTER ');
     }
@@ -2047,10 +2045,10 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets the ordering clause for the query.
      *
-     * @param ?string $sort Order by clause as a string (e.g., 'field ASC').
+     * @param null|string $sort Order by clause as a string (e.g., 'field ASC').
      * @return self
      */
-    public function order(?string $sort = null): self
+    public function order(null|string $sort = null): self
     {
         if ($sort !== null) {
             $this->query['order'] = $sort;
@@ -2091,10 +2089,10 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets ascending order for a specified field.
      *
-     * @param ?string $field Field to order by in ascending order, defaults to 'id'.
+     * @param null|string $field Field to order by in ascending order, defaults to 'id'.
      * @return self
      */
-    public function orderAsc(?string $field = null): self
+    public function orderAsc(null|string $field = null): self
     {
         $field ??= $this->withAlias('id');
 
@@ -2105,10 +2103,10 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets descending order for a specified field.
      *
-     * @param ?string $field Field to order by in descending order, defaults to 'id'.
+     * @param null|string $field Field to order by in descending order, defaults to 'id'.
      * @return self
      */
-    public function orderDesc(?string $field = null): self
+    public function orderDesc(null|string $field = null): self
     {
         $field ??= $this->withAlias('id');
 
@@ -2165,7 +2163,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param int|null $to Ending point for the query, if specified.
      * @return self
      */
-    public function limit(int $from, ?int $to = null): self
+    public function limit(int $from, null|int $to = null): self
     {
         if ($to === null) {
             $this->query['limit'] = $from;
@@ -2289,9 +2287,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function firstOrFail($where = null): mixed
     {
-        if (!empty($where)) {
-            $this->where($where);
-        }
+        $this->where($where);
 
         // Get the first result, or throw an exception if not found.
         $result = $this->first();
@@ -2310,7 +2306,6 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function last(): mixed
     {
-        // The last result as an object or false if none found.
         return $this->orderDesc()->first();
     }
 
@@ -2395,7 +2390,7 @@ class QueryBuilder implements QueryBuilderContract
         $paginator = new Paginator(limit: $limit, keyword: $keyword);
 
         // Count total records from existing command only for serverside database driver.
-        if ($this->database->isDriver('mysql')) {
+        if ($this->database->isMySQL()) {
             $this->query['select'] = "SQL_CALC_FOUND_ROWS {$this->query['select']}";
         }
 
@@ -2407,7 +2402,7 @@ class QueryBuilder implements QueryBuilderContract
             ->executeSelectQuery();
 
         // Get total record count, from sqlite database and update it to paginator class.
-        if ($this->database->isDriver('mysql')) {
+        if ($this->database->isMySQL()) {
             // Get number of records from exisitng query command.
             $total = $this->database->prepare('SELECT FOUND_ROWS()');
             $total->execute();
@@ -2507,7 +2502,7 @@ class QueryBuilder implements QueryBuilderContract
             return $this->where($attributes)->update($values);
         } else {
             // Insert new record
-            return $this->insert(array_merge($attributes, $values));
+            return $this->insert([...$attributes, ...$values]);
         }
     }
 
@@ -2522,7 +2517,7 @@ class QueryBuilder implements QueryBuilderContract
         $id = $this->insert($data);
 
         if ($id) {
-            return $this->where('id', $id)->first();
+            return ['id' => $id, ...$data]; // Return the newly created record with ID
         }
 
         return false;
@@ -2534,7 +2529,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param null|string $column
      * @return self
      */
-    public function distinct(?string $column = null): self
+    public function distinct(null|string $column = null): self
     {
         if ($column) {
             $this->query['select'] = "DISTINCT {$this->wrapAndEscapeColumns($column)}";
@@ -2560,13 +2555,14 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->where($where);
 
-        $sql = "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} + :increment " . $this->getWhereSql();
-        $result = $this->raw(
-            $sql,
-            array_merge(['increment' => $value], $this->getBindings())
-        );
+        $bindings = ['increment' => $value, ...$this->getBindings()];
+        $sql = "UPDATE " . $this->getTableName()
+            . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} + :increment "
+            . $this->getWhereSql();
 
-        $this->log($started, $startedMemory, $sql, []);
+        $result = $this->raw($sql, $bindings);
+
+        $this->log($started, $startedMemory, $sql, $bindings);
 
         return $result !== false;
     }
@@ -2586,13 +2582,14 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->where($where);
 
-        $sql = "UPDATE " . $this->getTableName() . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} - :decrement " . $this->getWhereSql();
-        $result = $this->raw(
-            $sql,
-            array_merge(['decrement' => $value], $this->getBindings())
-        );
+        $bindings = ['decrement' => $value, ...$this->getBindings()];
+        $sql = "UPDATE " . $this->getTableName()
+            . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} - :decrement "
+            . $this->getWhereSql();
 
-        $this->log($started, $startedMemory, $sql, []);
+        $result = $this->raw($sql, $bindings);
+
+        $this->log($started, $startedMemory, $sql, $bindings);
 
         return $result !== false;
     }
@@ -2618,7 +2615,7 @@ class QueryBuilder implements QueryBuilderContract
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
             . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
             . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
-            . (isset($this->query['limit']) || isset($this->query['offset']) ? ' LIMIT ' . (isset($this->query['offset'], $this->query['limit']) ? "{$this->query['offset']}, {$this->query['limit']}" : $this->query['limit']) : '')
+            . $this->buildLimitOffset()
             . ($this->query['unions'] ?? '');
     }
 
@@ -2660,7 +2657,7 @@ class QueryBuilder implements QueryBuilderContract
         $this->query['unions'] .= " {$unionType} ({$unionSql})";
 
         // Merge bindings
-        $this->bindings = array_merge($this->bindings, $query->getBindings());
+        $this->bindings = [...$this->bindings, ...$query->getBindings()];
 
         return $this;
     }
@@ -2910,10 +2907,7 @@ class QueryBuilder implements QueryBuilderContract
         // ON CONFLICT/DUPLICATE KEY UPDATE clause
         $conflict = $this->compileConflictClause($config);
 
-        // RETURNING clause (PostgreSQL)
-        $returning = $this->compileReturningClause($config);
-
-        return trim("$command $ignore INTO $table ($columns) VALUES $values $conflict $returning");
+        return trim("$command $ignore INTO $table ($columns) VALUES $values $conflict");
     }
 
     /**
@@ -3008,25 +3002,6 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         return 'ON DUPLICATE KEY UPDATE ' . implode(', ', $updates);
-    }
-
-    /**
-     * Compiles the RETURNING clause for PostgreSQL.
-     *
-     * @param array $config The configuration array.
-     * @return string The compiled RETURNING clause.
-     */
-    private function compileReturningClause(array $config): string
-    {
-        if (!$this->grammar->isPostgreSQL() || empty($config['returning'])) {
-            return '';
-        }
-
-        $returning = is_array($config['returning'])
-            ? $config['returning']
-            : [$config['returning']];
-
-        return 'RETURNING ' . $this->grammar->columnize($returning);
     }
 
     /**
@@ -3154,10 +3129,26 @@ class QueryBuilder implements QueryBuilderContract
     private function addBindings(string $sql, string|array $bindings = []): void
     {
         if (is_array($bindings) && !str_contains($sql, '?') && preg_match('/\:(\w+)/', $sql)) {
-            $this->bindings = array_merge($this->bindings, $bindings);
+            $this->bindings = [...$this->bindings, ...$bindings];
         } else {
             $this->param($bindings);
         }
+    }
+
+    /**
+     * Builds the LIMIT and OFFSET clause for the SQL query.
+     *
+     * @return string The LIMIT and OFFSET clause.
+     */
+    private function buildLimitOffset(): string
+    {
+        if (isset($this->query['offset']) && isset($this->query['limit'])) {
+            return ' LIMIT ' . $this->query['offset'] . ", " . $this->query['limit'];
+        } elseif (isset($this->query['limit'])) {
+            return ' LIMIT ' . $this->query['limit'];
+        }
+
+        return '';
     }
 
     /**

@@ -1,6 +1,7 @@
 <?php
 namespace Spark\Database\Contracts;
 
+use Closure;
 use Spark\Contracts\Support\Arrayable;
 
 /**
@@ -24,39 +25,39 @@ interface QueryBuilderContract
      *
      * @param array|Arrayable $data The data to insert.
      * @param array $config Optional configuration for the query.
-     * @return int|array Returns last insert ID or array of returned data (PostgreSQL with returning)
+     * @return int Returns last insert ID.
      */
-    public function insert(array|Arrayable $data, array $config = []): int|array;
+    public function insert(array|Arrayable $data, array $config = []): int;
 
     /**
      * Add a where clause to the query.
      *
-     * @param null|string|array $column The column name to query, or an array of column names.
-     * @param ?string $operator The operator to use. If null, the operator will be determined
+     * @param null|string|array|Arrayable|Closure $column The column name to query, or an array of column names.
+     * @param null|string $operator The operator to use. If null, the operator will be determined
      *   based on the value given.
      * @param mixed $value The value to query. If null, the value will be determined
      *   based on the operator given.
-     * @param ?string $type The type of the value given.
+     * @param null|string $type The type of the value given.
      * @return QueryBuilderContract Returns the query builder instance.
      */
-    public function where(null|string|array $column = null, ?string $operator = null, $value = null, ?string $type = null): self;
+    public function where(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null, null|string $type = null): self;
 
     /**
      * Update data in the database.
      *
      * @param array|Arrayable $data The data to update.
-     * @param mixed $where The condition to use for the update.
+     * @param null|string|array|Arrayable|Closure $where The condition to use for the update.
      * @return int The number of affected rows.
      */
-    public function update(array|Arrayable $data, $where = null): int;
+    public function update(array|Arrayable $data, null|string|array|Arrayable|Closure $where = null): int;
 
     /**
      * Delete data from the database.
      *
-     * @param mixed $where The condition to use for the delete.
+     * @param null|string|array|Arrayable|Closure $where The condition to use for the delete.
      * @return int The number of affected rows.
      */
-    public function delete($where = null): int;
+    public function delete(null|string|array|Arrayable|Closure $where = null): int;
 
     /**
      * Set the fields to select from the database.
@@ -77,7 +78,7 @@ interface QueryBuilderContract
      *
      * @return self Returns the query builder instance.
      */
-    public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self;
+    public function join(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null, string $type = ''): self;
 
     /**
      * Get the first row of the result set.
