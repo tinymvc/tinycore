@@ -3,6 +3,7 @@
 namespace Spark\Database\Casts;
 
 use Spark\Database\Contracts\CastsAttributes;
+use Spark\Facades\Hash;
 use Spark\Support\Collection;
 use Spark\Utils\Carbon;
 use function is_bool;
@@ -51,8 +52,7 @@ trait Castable
             'object' => $this->fromJson($value, true),
             'array', 'json' => $this->fromJson($value),
             'collection' => $this->asCollection($value),
-            'date' => $this->asDate($value),
-            'datetime', 'timestamp' => $this->asDateTime($value),
+            'date', 'datetime', 'timestamp' => $this->asDate($value),
             'encrypted' => $this->decrypt($value),
             default => $value,
         };
@@ -91,6 +91,7 @@ trait Castable
             'object', 'array', 'json', 'collection' => $this->asJson($value),
             'date', 'datetime', 'timestamp' => $this->asDateForStorage($value),
             'encrypted' => $this->encrypt($value),
+            'hashed' => $this->hash((string) $value),
             default => $value,
         };
     }
@@ -221,17 +222,6 @@ trait Castable
     }
 
     /**
-     * Cast a value to a datetime.
-     *
-     * @param mixed $value The value to cast
-     * @return \Spark\Utils\Carbon|null The datetime object
-     */
-    protected function asDateTime(mixed $value): ?Carbon
-    {
-        return $this->asDate($value);
-    }
-
-    /**
      * Cast a date value for storage.
      *
      * @param mixed $value The value to cast
@@ -321,7 +311,7 @@ trait Castable
         }
 
         // Encrypt the value using Application's encrypt helper
-        return encrypt($value);
+        return Hash::encrypt($value);
     }
 
     /**
@@ -338,12 +328,27 @@ trait Castable
 
         try {
             // Decrypt the value using Application's decrypt helper
-            return decrypt($value);
+            return Hash::decrypt($value);
         } catch (\Exception) {
             // Decryption failed, return null
         }
 
         return null;
+    }
+
+    /**
+     * Hash a value.
+     *
+     * @param string $value The value to hash
+     * @return string The hashed value
+     */
+    public function hash(string $value): string
+    {
+        if (Hash::isHashed($value)) {
+            return $value;
+        }
+
+        return Hash::hashPassword($value);
     }
 
     /**

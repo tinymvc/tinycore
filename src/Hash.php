@@ -241,6 +241,37 @@ class Hash implements HashContract
     }
 
     /**
+     * Determine if the given string is a hashed password.
+     *
+     * Checks if the string matches the format of supported password hashing algorithms:
+     * Bcrypt, Argon2i, or Argon2id.
+     *
+     * @param string $value The string to check.
+     * @return bool True if the string appears to be a hashed password, false otherwise.
+     */
+    public function isHashed(string $value): bool
+    {
+        // Check if the string is empty or too short to be a valid hash
+        if (empty($value) || strlen($value) < 60) {
+            return false;
+        }
+
+        // Get password hash information
+        $info = password_get_info($value);
+
+        // Check if a valid algorithm was detected
+        // If algo is 0 (unknown) or null, it's not a valid hash
+        if ($info['algo'] === null || $info['algo'] === 0) {
+            return false;
+        }
+
+        // Check if it's one of the supported algorithms
+        $supportedAlgorithms = [PASSWORD_BCRYPT, PASSWORD_ARGON2I, PASSWORD_ARGON2ID];
+
+        return in_array($info['algo'], $supportedAlgorithms, true);
+    }
+
+    /**
      * Get information about a hashed password.
      *
      * @param string $hashedPassword The hashed password to get information about.

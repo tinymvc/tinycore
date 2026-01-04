@@ -20,6 +20,7 @@ use Spark\Hash as BaseHash;
  * @method static bool equals(string $knownHash, string $userString)
  * @method static string hashPassword(string $password)
  * @method static bool validatePassword(string $password, string $hashedPassword)
+ * @method static bool isHashed(string $value)
  * @method static bool|string password(string $password, ?string $hash = null)
  * @method static bool verify(string $password, string $hashedPassword)
  * @method static bool needsRehash(string $hashedPassword)
