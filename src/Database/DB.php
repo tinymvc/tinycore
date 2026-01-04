@@ -7,6 +7,7 @@ use PDOStatement;
 use Spark\Database\Contracts\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
 use Spark\Support\Traits\Macroable;
+use function func_get_args;
 use function in_array;
 use function is_array;
 use function sprintf;
@@ -150,13 +151,13 @@ class DB implements DBContract
     /**
      * Checks if the current database driver matches the specified driver.
      *
-     * @param array|string ...$drivers The driver to check against the current driver.
+     * @param array|string $driver The driver to check against the current driver.
      * @return bool True if the current driver matches the specified driver, false otherwise.
      */
-    public function isDriver(array|string ...$drivers): bool
+    public function isDriver(array|string $driver): bool
     {
-        $drivers = is_array($drivers[0]) ? $drivers[0] : $drivers;
-        return in_array($this->getDriver(), $drivers);
+        $driver = is_array($driver) ? $driver : func_get_args();
+        return in_array($this->getDriver(), $driver);
     }
 
     /**

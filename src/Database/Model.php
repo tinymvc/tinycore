@@ -45,6 +45,8 @@ use function sprintf;
  * @method static QueryBuilder withAvg(string $relation, string $column, ?Closure $callback = null)
  * @method static QueryBuilder withMin(string $relation, string $column, ?Closure $callback = null)
  * @method static QueryBuilder withMax(string $relation, string $column, ?Closure $callback = null)
+ * @method static QueryBuilder when(mixed $value, callable $callback)
+ * @method static QueryBuilder unless(mixed $value, callable $callback)
  * @method static int|array insert(array|Arrayable $data, array $config = [])
  * @method static int|array bulkUpdate(array|Arrayable $data, array $config = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
@@ -55,6 +57,11 @@ use function sprintf;
  * @method static QueryBuilder notIn(string $column, array $values)
  * @method static QueryBuilder whereIn(string $column, array $values)
  * @method static QueryBuilder whereNotIn(string $column, array $values)
+ * @method static QueryBuilder whereContains(string $column, mixed $value)
+ * @method static QueryBuilder whereStartsWith(string $column, mixed $value)
+ * @method static QueryBuilder whereEndsWith(string $column, mixed $value)
+ * @method static QueryBuilder whereDate(string $column, string $operator, $value = null)
+ * @method static QueryBuilder whereYear(string $column, string $operator, $value = null)
  * @method static QueryBuilder findInSet($field, $key, $type = '', $andOr = 'AND')
  * @method static QueryBuilder notFindInSet($field, $key)
  * @method static QueryBuilder between($field, $value1, $value2, $type = '', $andOr = 'AND')
@@ -73,16 +80,21 @@ use function sprintf;
  * @method static QueryBuilder avg($field, $name = null)
  * @method static QueryBuilder as(string $alias)
  * @method static QueryBuilder join(string $table, $field1 = null, $operator = null, $field2 = null, $type = '')
- * @method static QueryBuilder order(?string $sort = null)
+ * @method static QueryBuilder order(string $sort)
  * @method static QueryBuilder orderBy(string $field, string $sort = 'ASC')
  * @method static QueryBuilder orderAsc(string $field = 'id')
  * @method static QueryBuilder orderDesc(string $field = 'id')
- * @method static QueryBuilder groupBy(string|array $fields)
+ * @method static QueryBuilder groupBy(string|array $field)
+ * @method static QueryBuilder groupByRaw(string $sql, array $bindings = [])
  * @method static QueryBuilder having(string $having)
  * @method static QueryBuilder take(int $limit)
  * @method static QueryBuilder limit(?int $offset = null, ?int $limit = null)
  * @method static QueryBuilder fetch(...$fetch)
  * @method static QueryBuilder latest()
+ * @method static QueryBuilder oldest()
+ * @method static QueryBuilder random()
+ * @method static QueryBuilder distinct(?string $column = null)
+ * @method static QueryBuilder union(QueryBuilder|Closure $query, bool $all = false)
  * @method static mixed first()
  * @method static mixed firstOrFail()
  * @method static mixed last()
@@ -90,6 +102,11 @@ use function sprintf;
  * @method static Model findOrFail($value)
  * @method static bool destroy($value)
  * @method static array all()
+ * @method static array raw(string $sql, array $bindings = [])
+ * @method static array pluck(string $column)
+ * @method static mixed value(string $column)
+ * @method static bool increment(string $column, int $value = 1, $where = null)
+ * @method static bool decrement(string $column, int $value = 1, $where = null)
  * @method static int count()
  * @method static \Spark\Utils\Paginator paginate(int $limit = 10, string $keyword = 'page')
  * @method static \Spark\Support\Collection filter(?callable $callback = null)
@@ -320,9 +337,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * Saves the model to the database, either updating or creating a new entry.
      *
      * @param bool $forceCreate If true, forces the creation of a new record even if the model has a primary key.
-     * @return int|bool The ID of the saved model or false on failure.
+     * @return bool True on success, false on failure.
      */
-    public function save(bool $forceCreate = false): int|bool
+    public function save(bool $forceCreate = false): bool
     {
         // Apply events for before save and encode array into json string. 
         $data = $this->encodeToSaveData($this->getFillableData());
@@ -595,7 +612,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             }
         }
 
-        $attributes = array_merge($attributes, $this->getRelations());
+        $attributes = [...$attributes, ...$this->getRelations()];
 
         // Apply visibility rules with temporary overrides
         $hidden = $this->getHidden();
@@ -657,7 +674,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $attributes = is_array($attributes[0]) ? $attributes[0] : $attributes;
         $visible = $this->tracking['__visible'] ?? [];
 
-        $this->tracking['__visible'] = array_merge($visible, $attributes);
+        $this->tracking['__visible'] = [...$visible, ...$attributes];
 
         return $this;
     }
@@ -673,7 +690,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $attributes = is_array($attributes[0]) ? $attributes[0] : $attributes;
         $hidden = $this->tracking['__hidden'] ?? [];
 
-        $this->tracking['__hidden'] = array_merge($hidden, $attributes);
+        $this->tracking['__hidden'] = [...$hidden, ...$attributes];
 
         return $this;
     }
@@ -794,7 +811,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return $this->getAttributeValue($name, $this->attributes[$name] ?? $default);
         }
 
-        $attributes = array_merge($this->attributes, $this->getRelations());
+        $attributes = [...$this->attributes, ...$this->getRelations()];
         return data_get(array_filter($attributes), $name, $default);
     }
 
@@ -927,26 +944,26 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     /**
      * Get a new instance of the model with only the specified attributes.
      *
-     * @param string|array ...$fields The attributes to include.
+     * @param string|array $field The attributes to include.
      * @return static
      */
-    public function only(string|array ...$fields): static
+    public function only(string|array $field): static
     {
-        $fields = is_array($fields[0]) ? $fields[0] : $fields;
-        $filtered = array_intersect_key($this->attributes, array_flip((array) $fields));
+        $field = is_array($field) ? $field : func_get_args();
+        $filtered = array_intersect_key($this->attributes, array_flip($field));
         return static::load($filtered);
     }
 
     /**
      * Get a new instance of the model with all attributes except the specified ones.
      *
-     * @param string|array ...$fields The attributes to exclude.
+     * @param string|array $field The attributes to exclude.
      * @return static
      */
-    public function except(string|array ...$fields): static
+    public function except(string|array $field): static
     {
-        $fields = is_array($fields[0]) ? $fields[0] : $fields;
-        $filtered = array_diff_key($this->attributes, array_flip((array) $fields));
+        $field = is_array($field) ? $field : func_get_args();
+        $filtered = array_diff_key($this->attributes, array_flip($field));
         return static::load($filtered);
     }
 

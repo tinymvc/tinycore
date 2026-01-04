@@ -14,6 +14,7 @@ use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
+use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_bool;
@@ -90,7 +91,7 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @var string $prefix
      */
-    private static string $prefix;
+    private string $prefix;
 
     /**
      * Holds the SQL parameters for the query.
@@ -152,8 +153,7 @@ class QueryBuilder implements QueryBuilderContract
     public function __construct(private DB $database)
     {
         $this->grammar = new Grammar($database->getDriver());
-
-        self::$prefix ??= ''; // Set default prefix if not already set
+        $this->prefix ??= ''; // Set default prefix if not already set
     }
 
     /**
@@ -262,7 +262,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function prefix(string $prefix): self
     {
-        self::$prefix = $prefix;
+        $this->prefix = $prefix;
         return $this;
     }
 
@@ -549,7 +549,7 @@ class QueryBuilder implements QueryBuilderContract
     public function bind(string|array $args, bool $named = true): self
     {
         if ($named && is_array($args)) {
-            $this->bindings = array_merge($this->bindings, $args);
+            $this->bindings = [...$this->bindings, ...$args];
         } else {
             $this->param($args);
         }
@@ -1495,7 +1495,7 @@ class QueryBuilder implements QueryBuilderContract
         $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
-        $table = self::$prefix . $this->table;
+        $table = $this->prefix . $this->table;
 
         // Prepare the SQL update statement
         $sql = sprintf(
@@ -1567,7 +1567,7 @@ class QueryBuilder implements QueryBuilderContract
         $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
-        $table = self::$prefix . $this->table;
+        $table = $this->prefix . $this->table;
 
         // Prepare the SQL delete statement
         $sql = "DELETE FROM {$table} {$this->getWhereSql()}";
@@ -1609,7 +1609,7 @@ class QueryBuilder implements QueryBuilderContract
         $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
-        $table = self::$prefix . $this->table;
+        $table = $this->prefix . $this->table;
         $sql = "TRUNCATE TABLE {$table}";
 
         // Prepare the SQL truncate statement
@@ -1671,18 +1671,13 @@ class QueryBuilder implements QueryBuilderContract
      * @param array|string $fields A string or an array of column names to select.
      * @return self The current instance for method chaining.
      */
-    public function select(array|string $fields = '*', ...$args): self
+    public function select(array|string $fields = '*'): self
     {
-        // Merge additional arguments into the fields array if provided.
-        // This allows for additional fields to be specified after the initial $fields parameter.
-        if (is_string($fields) && !empty($args)) {
-            $fields = array_merge((array) $fields, $args);
-        }
+        // Handle multiple arguments as an array
+        $fields = is_array($fields) ? $fields : func_get_args();
 
         // Convert array of fields to a comma-separated string if necessary
-        if (is_array($fields)) {
-            $fields = implode(',', $fields);
-        }
+        $fields = implode(',', $fields);
 
         // Remove any leading "SELECT " from the fields string
         $fields = preg_replace('/^\s*select\s+/i', '', $fields);
@@ -1863,10 +1858,10 @@ class QueryBuilder implements QueryBuilderContract
     public function join(string $table, $field1 = null, $operator = null, $field2 = null, $type = ''): self
     {
         $on = $field1;
-        $table = self::$prefix . $table;
+        $table = $this->prefix . $table;
 
         if ($operator !== null) {
-            if ($field2 === null) {
+            if (empty($field2)) {
                 $field2 = $operator;
                 $operator = '=';
             }
@@ -1911,7 +1906,7 @@ class QueryBuilder implements QueryBuilderContract
     public function on(string $field1, ?string $operator = null, ?string $field2 = null, null|string|array $parameters = null, string $orOn = 'ON', ): self
     {
         if ($operator !== null) {
-            if ($field2 === null) {
+            if (empty($field2)) {
                 $field2 = $operator;
                 $operator = '=';
             }
@@ -2073,7 +2068,23 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function orderBy(string $field, string $sort = 'ASC'): self
     {
-        $this->query['order'] = "$field $sort";
+        $this->query['order'] = $this->grammar->wrapColumn($field) . " $sort";
+        return $this;
+    }
+
+    /**
+     * Sets a raw ordering clause for the query.
+     *
+     * @param string $sql The raw SQL for the ORDER BY clause.
+     * @param array $bindings Optional bindings for the raw SQL.
+     * @return self
+     */
+    public function orderByRaw(string $sql, array $bindings = []): self
+    {
+        $this->query['order'] = $sql;
+
+        $this->addBindings($sql, $bindings);
+
         return $this;
     }
 
@@ -2108,12 +2119,30 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets the GROUP BY clause for the query.
      *
-     * @param string|array $fields Group by clause as a string or array.
+     * @param string|array $field Group by clause as a string or array.
      * @return self
      */
-    public function groupBy(string|array $fields): self
+    public function groupBy(string|array $field): self
     {
-        $this->query['group'] = $this->grammar->columnize((array) $fields);
+        $field = is_array($field) ? $field : func_get_args();
+
+        $this->query['group'] = $this->grammar->columnize($field);
+        return $this;
+    }
+
+    /**
+     * Sets a raw GROUP BY clause for the query.
+     *
+     * @param string $sql The raw SQL for the GROUP BY clause.
+     * @param array $bindings Optional bindings for the raw SQL.
+     * @return self
+     */
+    public function groupByRaw(string $sql, array $bindings = []): self
+    {
+        $this->query['group'] = $sql;
+
+        $this->addBindings($sql, $bindings);
+
         return $this;
     }
 
@@ -2292,8 +2321,28 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function latest(): self
     {
-        // Array of the latest results.
         return $this->orderDesc($this->withAlias('created_at'));
+    }
+
+    /**
+     * Sets the query to order results by the oldest created_at timestamp.
+     *
+     * @return self
+     */
+    public function oldest(): self
+    {
+        return $this->orderAsc($this->withAlias('created_at'));
+    }
+
+    /**
+     * Sets the query to return results in random order.
+     *
+     * @return self
+     */
+    public function random(): self
+    {
+        $this->query['order'] = $this->database->isMySQL() ? 'RAND()' : 'RANDOM()';
+        return $this;
     }
 
     /**
@@ -2428,7 +2477,9 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function exists(): bool
     {
-        return $this->count() > 0;
+        return $this->selectRaw('EXISTS(SELECT 1)')
+            ->fetchColumn()
+            ->first() == 1;
     }
 
     /**
@@ -2438,7 +2489,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function notExists(): bool
     {
-        return $this->count() === 0;
+        return !$this->exists();
     }
 
     /**
@@ -2678,7 +2729,7 @@ class QueryBuilder implements QueryBuilderContract
     private function getTableName(): string
     {
         // Returns the table name with prefix if exists.
-        return $this->grammar->wrapTable(self::$prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
+        return $this->grammar->wrapTable($this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
     }
 
     /**
@@ -2840,7 +2891,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function compileInsert(array $data, array $config): string
     {
-        $table = self::$prefix . $this->table;
+        $table = $this->prefix . $this->table;
 
         // Base command (INSERT/REPLACE)
         $command = $this->getInsertCommand($config);
