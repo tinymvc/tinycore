@@ -552,7 +552,6 @@ class Router implements RouterContract
      * Replaces '/' with '\/' and '*' with '(.*)'. Also replaces optional dynamic
      * parameters (/{param?}/) with optional groups (?:/([a-zA-Z0-9_-]+))? and
      * required dynamic parameters (/{param}/) with required groups ([a-zA-Z0-9_-]+).
-     * The {id} parameter is specifically matched as numeric only for security.
      *
      * @param string $routePath The route path to escape.
      *
@@ -561,8 +560,8 @@ class Router implements RouterContract
     private function escapeRoutePath(string $routePath): string
     {
         $pattern = preg_replace(
-            ['/\/\{[a-zA-Z0-9_]+\?\}/', '/\{id\}/', '/\{[a-zA-Z0-9_]+\}/'],
-            ['(?:/([a-zA-Z0-9_-]+))?', '([0-9]+)', '([a-zA-Z0-9_-]+)'],
+            ['/\/\{[a-zA-Z0-9_]+\?\}/', '/\{[a-zA-Z0-9_]+\}/'],
+            ['(?:/([a-zA-Z0-9_-]+))?', '([a-zA-Z0-9_-]+)'],
             $routePath
         );
 
