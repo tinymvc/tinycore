@@ -388,11 +388,11 @@ class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, \ArrayAcc
      */
     public function generateLinks(int $links = 1): array
     {
-        $links = [];
-
         // Calculate start, end page number.
         $start = max(1, $this->page() - $links);
         $end = min($this->pages(), $this->page() + $links);
+
+        $links = [];
 
         if ($this->page() > 1) {
             $links[] = [

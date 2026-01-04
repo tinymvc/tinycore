@@ -1674,7 +1674,7 @@ class QueryBuilder implements QueryBuilderContract
     public function select(array|string $fields = '*'): self
     {
         // Handle multiple arguments as an array
-        $fields = is_array($fields) ? $fields : func_get_args();
+        $fields = is_array($fields) ? $fields : ($fields === '*' ? ['*'] : func_get_args());
 
         // Convert array of fields to a comma-separated string if necessary
         $fields = implode(',', $fields);
