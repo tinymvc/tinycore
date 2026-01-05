@@ -17,7 +17,6 @@ use function in_array;
 use function is_array;
 use function is_bool;
 use function is_int;
-use function is_string;
 use function sprintf;
 
 /**
@@ -161,7 +160,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function __construct()
     {
-        $this->primaryValue() && $this->decodeSavedData();
+        $this->primaryValue() && $this->applyCastingToData();
     }
 
     /**
@@ -343,7 +342,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function save(bool $forceCreate = false): bool
     {
         // Apply events for before save and encode array into json string. 
-        $data = $this->encodeToSaveData($this->getFillableData());
+        $data = $this->prepareDataForStorage($this->getFillableData());
 
         // Initialize default status variables.
         $updatedStatus = false;
@@ -373,7 +372,13 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $this->attributes[static::$primaryKey] = $createdId;
         }
 
-        return $updatedStatus || $createdId; // Return database operation status.
+        // Determine if the save operation was successful.
+        $saved = $updatedStatus || $createdId;
+
+        // If saved successfully, apply casting to the data.
+        $saved && $this->applyCastingToData(preserveOriginal: false);
+
+        return $saved;
     }
 
     /**
@@ -398,7 +403,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function loadAttributes(array $data): static
     {
         $this->attributes = $data;
-        $this->decodeSavedData();
+        $this->applyCastingToData();
 
         return $this;
     }
@@ -448,7 +453,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array $data The data to prepare.
      * @return array The prepared data for database insertion or update.
      */
-    private function encodeToSaveData(array $data): array
+    private function prepareDataForStorage(array $data): array
     {
         // Apply mutators, casts, and encode data for saving
         foreach ($data as $key => $value) {
@@ -463,18 +468,6 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             // Handle Carbon time Object into string
             elseif ($value instanceof \Spark\Utils\Carbon) {
                 $data[$key] = $value->toDateTimeString();
-            }
-            // Handle Arrayable objects into json string
-            elseif ($value instanceof Arrayable) {
-                $data[$key] = json_encode($value->toArray());
-            }
-            // Handle Arrayable and Jsonable objects
-            elseif ($value instanceof Jsonable) {
-                $data[$key] = $value->toJson();
-            }
-            // Default behavior: Parse model property into string if they are in array
-            elseif (is_array($value)) {
-                $data[$key] = json_encode($value);
             }
             // Handle Scalar values
             elseif ($value === null || is_int($value) || is_bool($value)) {
@@ -495,26 +488,20 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * 
      * @return void
      */
-    private function decodeSavedData(): void
+    private function applyCastingToData(bool $preserveOriginal = true): void
     {
-        // Keep track of original attributes for change detection.
-        if ($this->hasAnyCast()) {
-            $this->tracking['__original_attributes'] = $this->attributes;
-        }
-
         // Go Through all the properties of this model.
         foreach ($this->attributes as $key => $value) {
-            // Check if there's a cast for this attribute
             if ($this->hasCast($key)) {
-                $this->attributes[$key] = $this->castAttribute($key, $value);
-            }
-            // Fallback: if the property is json format then decode json string to associative array
-            elseif (
-                is_string($value) && (strpos($value, '[') === 0 || strpos($value, '{') === 0)
-            ) {
-                $decodedValue = json_decode($value, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $this->attributes[$key] = $decodedValue;
+                $casted = $this->castAttribute($key, $value);
+                if ($casted !== $value) {
+                    // Preserve original value if required.
+                    if ($preserveOriginal) {
+                        $this->tracking['__original_attributes'][$key] = $value;
+                    }
+
+                    // Set the casted value back to the attribute.
+                    $this->attributes[$key] = $casted;
                 }
             }
         }
@@ -554,7 +541,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param mixed $value The value to set.
      * @return void
      */
-    public function __set($name, $value)
+    public function __set(string $name, mixed $value): void
     {
         $this->offsetSet($name, $value);
     }
@@ -565,7 +552,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param string $name The name of the attribute to retrieve.
      * @return mixed|null The value of the attribute if set, or null if not set.
      */
-    public function __get($name)
+    public function __get(string $name): mixed
     {
         return $this->offsetGet($name);
     }
@@ -576,7 +563,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param string $name The name of the attribute to check.
      * @return bool True if the attribute is set, false otherwise.
      */
-    public function __isset($name)
+    public function __isset(string $name): bool
     {
         return $this->offsetExists($name);
     }
@@ -587,7 +574,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param string $name The name of the attribute to remove.
      * @return void
      */
-    public function __unset($name)
+    public function __unset(string $name): void
     {
         $this->offsetUnset($name);
     }
@@ -597,7 +584,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      *
      * @return array An array of model properties and their values.
      */
-    public function toArray()
+    public function toArray(): array
     {
         $attributes = [];
 
@@ -1075,6 +1062,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 ->first();
 
             if ($fresh) {
+                $this->clearOriginal();
                 $this->loadAttributes($fresh);
                 $this->reloadRelations();
             }
@@ -1090,7 +1078,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array $arguments The method arguments.
      * @return mixed The result of the query method call.
      */
-    public function __call(string $name, array $arguments)
+    public function __call(string $name, array $arguments): mixed
     {
         if (static::hasMacro($name)) {
             return $this->macroCall($name, $arguments);
@@ -1106,7 +1094,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array $arguments The method arguments.
      * @return mixed The result of the query method call.
      */
-    public static function __callStatic(string $name, array $arguments)
+    public static function __callStatic(string $name, array $arguments): mixed
     {
         if (static::hasMacro($name)) {
             return static::staticMacroCall($name, $arguments);

@@ -2,10 +2,13 @@
 
 namespace Spark\Database\Casts;
 
+use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Jsonable;
 use Spark\Database\Contracts\CastsAttributes;
 use Spark\Facades\Hash;
 use Spark\Support\Collection;
 use Spark\Utils\Carbon;
+use function is_array;
 use function is_bool;
 use function is_string;
 
@@ -293,6 +296,21 @@ trait Castable
 
         if (is_string($value)) {
             return $value;
+        }
+
+        // Handle Arrayable objects into json string
+        if ($value instanceof Arrayable) {
+            return json_encode($value->toArray());
+        }
+
+        // Handle Arrayable and Jsonable objects
+        if ($value instanceof Jsonable) {
+            return $value->toJson();
+        }
+
+        // Default behavior: Parse model property into string if they are in array
+        if (is_array($value)) {
+            return json_encode($value);
         }
 
         return json_encode($value, JSON_UNESCAPED_UNICODE);
