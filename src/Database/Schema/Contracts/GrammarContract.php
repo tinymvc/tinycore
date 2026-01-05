@@ -15,36 +15,6 @@ use Spark\Database\Schema\ForeignKeyConstraint;
 interface GrammarContract
 {
     /**
-     * Wrap a value with database-specific characters.
-     *
-     * This method is used to wrap a value so that it can be used as a literal in an SQL query.
-     *
-     * @param string $value The value to be wrapped.
-     * @return string The wrapped value.
-     */
-    public function wrap(string $value): string;
-
-    /**
-     * Wrap a table name.
-     *
-     * This method is used to wrap a table name so that it can be used in an SQL query.
-     *
-     * @param string $table The name of the table.
-     * @return string The wrapped table name.
-     */
-    public function wrapTable(string $table): string;
-
-    /**
-     * Wrap a column name.
-     *
-     * This method is used to wrap a column name so that it can be used in an SQL query.
-     *
-     * @param string $column The name of the column.
-     * @return string The wrapped column name.
-     */
-    public function wrapColumn(string $column): string;
-
-    /**
      * Compile an index.
      *
      * This method is used to generate the SQL code to create an index on a table.

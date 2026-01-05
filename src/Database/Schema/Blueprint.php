@@ -496,7 +496,7 @@ class Blueprint implements BlueprintContract
 
         // Add primary keys
         foreach ($this->primaryKeys as $primaryKey) {
-            $elements[] = 'PRIMARY KEY (' . $grammar->columnize($primaryKey) . ')';
+            $elements[] = 'PRIMARY KEY (' . $grammar->getWrapper()->columnize($primaryKey) . ')';
         }
 
         // Add foreign keys
@@ -514,7 +514,7 @@ class Blueprint implements BlueprintContract
         }
 
         $statements = [
-            "CREATE TABLE " . $grammar->wrapTable($this->table) . " (\n" . implode(",\n", $elements) . "\n)$collation;"
+            "CREATE TABLE " . $grammar->getWrapper()->wrapTable($this->table) . " (\n" . implode(",\n", $elements) . "\n)$collation;"
         ];
 
         // Add secondary indexes

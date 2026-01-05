@@ -43,15 +43,16 @@ if (!function_exists('app')) {
      * This function returns the application instance, which is the top-level class
      * responsible for managing the application's lifecycle.
      *
-     * @param string $abstract [optional] The abstract name or class name of the service or value to retrieve.
+     * @param null|string $abstract [optional] The abstract name or class name of the service or value to retrieve.
      *                          If not provided, the application instance is returned.
+     * @param array $parameters [optional] An array of parameters to pass when resolving the service or value.
      *
      * @return mixed|Application The application instance or the resolved instance of the specified class or interface.
      */
-    function app(?string $abstract = null): mixed
+    function app(null|string $abstract = null, array $parameters = []): mixed
     {
         if (!empty($abstract)) {
-            return Application::$app->make($abstract);
+            return Application::$app->make($abstract, $parameters);
         }
 
         return Application::$app;
@@ -229,10 +230,16 @@ if (!function_exists('redirect')) {
     {
         // If the URL is not a valid URL, try to generate it using route_url or home_url
         if (filter_var($url, FILTER_VALIDATE_URL) === false) {
-            try {
-                $url = route_url($url);
-            } catch (Throwable $e) {
+            // If the URL starts with a '/', use home_url
+            if (str_starts_with($url, '/')) {
                 $url = home_url($url);
+            } else {
+                // Try to generate the URL using route_url, if it fails, use home_url
+                try {
+                    $url = route_url($url);
+                } catch (Throwable $e) {
+                    $url = home_url($url);
+                }
             }
         }
 
@@ -1720,14 +1727,14 @@ if (!function_exists('uploader')) {
      * @return \Spark\Utils\Uploader The Uploader instance.
      */
     function uploader(
-        ?string $uploadTo = null,
-        ?string $uploadDir = null,
+        null|string $uploadTo = null,
+        null|string $uploadDir = null,
         array $extensions = [],
-        ?int $maxSize = 2048, // Default to 2MB
-        ?array $resize = null,
-        ?array $resizes = null,
-        ?int $compress = null,
-        ?UploaderUtilDriverInterface $driver = null
+        null|int $maxSize = 2048, // Default to 2MB
+        null|array $resize = null,
+        null|array $resizes = null,
+        null|int $compress = null,
+        null|UploaderUtilDriverInterface $driver = null
     ): Uploader {
         $uploader = new Uploader;
 

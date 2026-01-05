@@ -4,6 +4,7 @@ namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\ColumnContract;
 use Spark\Support\Traits\Macroable;
+use function is_array;
 
 /**
  * Class representing a database column.
@@ -185,7 +186,7 @@ class Column implements ColumnContract
         $type = $grammar->mapColumnType($this->type, $this->parameters);
 
         $sql = [
-            $grammar->wrapColumn($this->name),
+            $grammar->getWrapper()->wrapColumn($this->name),
             $type
         ];
 

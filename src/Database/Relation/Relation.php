@@ -2,14 +2,10 @@
 
 namespace Spark\Database\Relation;
 
-use ArrayAccess;
-use ArrayIterator;
-use IteratorAggregate;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Database\Model;
 use Spark\Support\Collection;
-use Traversable;
 
 /**
  * Class Relation
@@ -22,7 +18,7 @@ use Traversable;
  * 
  * @package Spark\Database\Relation
  */
-abstract class Relation implements ArrayAccess, Arrayable, Jsonable, IteratorAggregate
+abstract class Relation implements Arrayable, Jsonable, \ArrayAccess, \IteratorAggregate
 {
     /**
      * The name of the caller method that initiated the relation call.
@@ -30,7 +26,7 @@ abstract class Relation implements ArrayAccess, Arrayable, Jsonable, IteratorAgg
      *
      * @var string|null
      */
-    protected ?string $caller = null;
+    protected null|string $caller = null;
 
     /**
      * Create a new Relation instance.
@@ -40,7 +36,7 @@ abstract class Relation implements ArrayAccess, Arrayable, Jsonable, IteratorAgg
      * 
      * @param Model|null $model The model instance that this relationship belongs to.
      */
-    public function __construct(protected ?Model $model = null)
+    public function __construct(protected null|Model $model = null)
     {
         $this->caller = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4)[3]['function'] ?? null;
     }
@@ -68,7 +64,7 @@ abstract class Relation implements ArrayAccess, Arrayable, Jsonable, IteratorAgg
      * 
      * @return Model|null
      */
-    protected function getParentModel(): ?Model
+    protected function getParentModel(): null|Model
     {
         return $this->model;
     }
@@ -108,7 +104,7 @@ abstract class Relation implements ArrayAccess, Arrayable, Jsonable, IteratorAgg
     /**
      * Set the value at the specified offset in the related models.
      * 
-     * @param mixed $offset The offset to set the value at.
+     * @param string $offset The offset to set the value at.
      * @param mixed $value The value to set at the specified offset.
      */
     public function offsetSet(mixed $offset, mixed $value): void
@@ -137,9 +133,9 @@ abstract class Relation implements ArrayAccess, Arrayable, Jsonable, IteratorAgg
      *
      * @return \ArrayIterator<TKey, TValue>
      */
-    public function getIterator(): Traversable
+    public function getIterator(): \Traversable
     {
-        return new ArrayIterator($this->toArray());
+        return new \ArrayIterator($this->toArray());
     }
 
     /**

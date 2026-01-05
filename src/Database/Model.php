@@ -160,7 +160,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function __construct()
     {
-        $this->primaryValue() && $this->applyCastingToData();
+        $this->primaryValue() && $this->castStoredData();
     }
 
     /**
@@ -342,7 +342,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function save(bool $forceCreate = false): bool
     {
         // Apply events for before save and encode array into json string. 
-        $data = $this->prepareDataForStorage($this->getFillableData());
+        $data = $this->castDataForStorage($this->getFillableData());
 
         // Initialize default status variables.
         $updatedStatus = false;
@@ -376,7 +376,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $saved = $updatedStatus || $createdId;
 
         // If saved successfully, apply casting to the data.
-        $saved && $this->applyCastingToData(preserveOriginal: false);
+        $saved && $this->castStoredData(preserveOriginal: false);
 
         return $saved;
     }
@@ -403,7 +403,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function loadAttributes(array $data): static
     {
         $this->attributes = $data;
-        $this->applyCastingToData();
+        $this->castStoredData();
 
         return $this;
     }
@@ -453,7 +453,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array $data The data to prepare.
      * @return array The prepared data for database insertion or update.
      */
-    private function prepareDataForStorage(array $data): array
+    private function castDataForStorage(array $data): array
     {
         // Apply mutators, casts, and encode data for saving
         foreach ($data as $key => $value) {
@@ -488,8 +488,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * 
      * @return void
      */
-    private function applyCastingToData(bool $preserveOriginal = true): void
+    private function castStoredData(bool $preserveOriginal = true): void
     {
+        if (!$this->hasAnyCast()) {
+            return; // No casts defined, nothing to do.
+        }
+
         // Go Through all the properties of this model.
         foreach ($this->attributes as $key => $value) {
             if ($this->hasCast($key)) {
@@ -689,7 +693,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param int $options Options for json_encode.
      * @return string A JSON representation of the model.
      */
-    public function toJson($options = 0)
+    public function toJson($options = 0): string
     {
         return json_encode($this->toArray(), $options);
     }

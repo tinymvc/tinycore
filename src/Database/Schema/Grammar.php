@@ -3,6 +3,7 @@
 namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\GrammarContract;
+use Spark\Database\Schema\Contracts\WrapperContract;
 use Spark\Database\Schema\Exceptions\SqliteAlterFailedException;
 use Spark\Database\Schema\Exceptions\InvalidForeignKeyException;
 use Spark\Database\Schema\Exceptions\UnsupportedDatabaseDriverException;
@@ -25,9 +26,9 @@ class Grammar implements GrammarContract
     use Macroable;
 
     /**
-     * @var array $wrapper Character wrappers for SQL identifiers.
+     * @var WrapperContract $wrapper The wrapper instance for SQL identifiers.
      */
-    private array $wrapper;
+    private WrapperContract $wrapper;
 
     /**
      * Constructor.
@@ -43,7 +44,7 @@ class Grammar implements GrammarContract
             );
         }
 
-        $this->wrapper = $this->getWrapper();
+        $this->wrapper = new Wrapper($driver);
     }
 
     /**
@@ -106,67 +107,13 @@ class Grammar implements GrammarContract
     }
 
     /**
-     * Wrap a value with database-specific characters.
+     * Retrieves the wrapper instance.
      *
-     * @param string $value The value to wrap.
-     * @return string The wrapped value.
+     * @return WrapperContract The wrapper instance.
      */
-    public function wrap(string $value): string
+    public function getWrapper(): WrapperContract
     {
-        $maxLength = match ($this->driver) {
-            'mysql' => 64,
-            'pgsql' => 63,
-            default => null
-        };
-
-        $value = $maxLength ? substr($value, 0, $maxLength) : $value;
-
-        if (in_array($value, ['*'])) {
-            return $value; // No wrapping needed for wildcard
-        }
-
-        return $this->wrapper[0] . $value . $this->wrapper[1];
-    }
-
-    /**
-     * Wrap a table name.
-     *
-     * @param string $table The table name.
-     * @return string The wrapped table name.
-     */
-    public function wrapTable(string $table): string
-    {
-        if (str_contains($table, '.')) {
-            return implode('.', array_map([$this, 'wrap'], explode('.', $table)));
-        }
-
-        return $this->wrap($table);
-    }
-
-    /**
-     * Wrap a column name.
-     *
-     * @param string $column The column name.
-     * @return string The wrapped column name.
-     */
-    public function wrapColumn(string $column): string
-    {
-        if (str_contains($column, '.')) {
-            return implode('.', array_map([$this, 'wrap'], explode('.', $column)));
-        }
-
-        return $this->wrap($column);
-    }
-
-    /**
-     * Convert an array of column names to a string.
-     *
-     * @param array $columns The column names.
-     * @return string The column names as a comma-separated string.
-     */
-    public function columnize(array $columns): string
-    {
-        return implode(', ', array_map([$this, 'wrapColumn'], $columns));
+        return $this->wrapper;
     }
 
     /**
@@ -209,11 +156,11 @@ class Grammar implements GrammarContract
             'float' => ['mysql' => "FLOAT({$parameters['precision']})", 'sqlite' => 'REAL', 'pgsql' => 'REAL'],
             'char' => ['mysql' => "CHAR({$parameters['length']})", 'sqlite' => 'TEXT', 'pgsql' => "CHAR({$parameters['length']})"],
             'enum' => [
-                'mysql' => 'ENUM(' . $this->quoteEnumValues($parameters['allowed']) . ')',
-                'sqlite' => 'TEXT CHECK(' . $this->wrapColumn($parameters['name']) .
-                    ' IN (' . $this->quoteEnumValues($parameters['allowed']) . '))',
-                'pgsql' => 'TEXT CHECK(' . $this->wrapColumn($parameters['name']) .
-                    ' IN (' . $this->quoteEnumValues($parameters['allowed']) . '))',
+                'mysql' => 'ENUM(' . $this->wrapper->quoteEnumValues($parameters['allowed']) . ')',
+                'sqlite' => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
+                    ' IN (' . $this->wrapper->quoteEnumValues($parameters['allowed']) . '))',
+                'pgsql' => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
+                    ' IN (' . $this->wrapper->quoteEnumValues($parameters['allowed']) . '))',
             ],
             'longText' => ['mysql' => 'LONGTEXT', 'sqlite' => 'TEXT', 'pgsql' => 'TEXT'],
             'json' => ['mysql' => 'JSON', 'sqlite' => 'TEXT', 'pgsql' => 'JSON'],
@@ -261,7 +208,7 @@ class Grammar implements GrammarContract
                     is_bool($value) => "DEFAULT " . ($value ? 1 : 0),
                     default => "DEFAULT $value"
                 },
-            'after' => $this->isMySQL() ? "AFTER " . $this->wrapColumn($value) : '',
+            'after' => $this->isMySQL() ? "AFTER " . $this->wrapper->wrapColumn($value) : '',
             'charset' => $this->isMySQL() ? "CHARACTER SET $value" : '',
             'collation' => $this->isMySQL() ? "COLLATE $value" : '',
             'comment' => $this->isMySQL() ? "COMMENT '$value'" : '',
@@ -291,12 +238,12 @@ class Grammar implements GrammarContract
         // MySQL/PostgreSQL: Use named constraints
         if (!$this->isMySQL()) {
             $constraintName = "fk_{$fk->onTable}_" . implode('_', $fk->columns);
-            $sql .= 'CONSTRAINT ' . $this->wrap($constraintName) . ' ';
+            $sql .= 'CONSTRAINT ' . $this->wrapper->wrap($constraintName) . ' ';
         }
 
-        $sql .= 'FOREIGN KEY (' . $this->columnize($fk->columns) . ') ';
-        $sql .= 'REFERENCES ' . $this->wrapTable($fk->onTable);
-        $sql .= ' (' . $this->columnize($fk->references) . ')';
+        $sql .= 'FOREIGN KEY (' . $this->wrapper->columnize($fk->columns) . ') ';
+        $sql .= 'REFERENCES ' . $this->wrapper->wrapTable($fk->onTable);
+        $sql .= ' (' . $this->wrapper->columnize($fk->references) . ')';
 
         // SQLite only supports RESTRICT, NO ACTION, SET NULL, CASCADE
         $allowedActions = ['RESTRICT', 'NO ACTION', 'SET NULL', 'CASCADE'];
@@ -328,16 +275,16 @@ class Grammar implements GrammarContract
     public function compileIndex(string $table, array $index): string
     {
         $type = strtoupper($index['type']);
-        $columns = $this->columnize($index['columns']);
+        $columns = $this->wrapper->columnize($index['columns']);
         $indexName = $this->generateIndexName($table, $index);
         $typePrefix = $type === 'UNIQUE' ? 'UNIQUE ' : '';
 
         // Database-specific syntax adjustments
         return match ($this->driver) {
-            'pgsql' => "CREATE {$typePrefix}INDEX {$this->wrap($indexName)} ON "
-            . $this->wrapTable($table) . " USING btree ({$columns});",
-            default => "CREATE {$typePrefix}INDEX {$this->wrap($indexName)} ON "
-            . $this->wrapTable($table) . " ({$columns});"
+            'pgsql' => "CREATE {$typePrefix}INDEX {$this->wrapper->wrap($indexName)} ON "
+            . $this->wrapper->wrapTable($table) . " USING btree ({$columns});",
+            default => "CREATE {$typePrefix}INDEX {$this->wrapper->wrap($indexName)} ON "
+            . $this->wrapper->wrapTable($table) . " ({$columns});"
         };
     }
 
@@ -350,7 +297,7 @@ class Grammar implements GrammarContract
      */
     public function compileAddColumn(string $table, Column $column): string
     {
-        return sprintf("ALTER TABLE %s ADD COLUMN %s", $this->wrapTable($table), $column->toSql());
+        return sprintf("ALTER TABLE %s ADD COLUMN %s", $this->wrapper->wrapTable($table), $column->toSql());
     }
 
     /**
@@ -386,8 +333,8 @@ class Grammar implements GrammarContract
             throw new SqliteAlterFailedException('SQLite does not support dropping columns');
         }
 
-        return "ALTER TABLE {$this->wrapTable($table)} " .
-            implode(', ', array_map(fn($col) => "DROP COLUMN {$this->wrapColumn($col)}", $columns));
+        return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
+            implode(', ', array_map(fn($col) => "DROP COLUMN {$this->wrapper->wrapColumn($col)}", $columns));
     }
 
     /**
@@ -401,8 +348,8 @@ class Grammar implements GrammarContract
     {
         $indexName = $this->generateIndexName($table, ['type' => $index['type'], 'columns' => $index['columns']]);
 
-        return "ALTER TABLE {$this->wrapTable($table)} " .
-            "DROP INDEX {$this->wrap($indexName)}";
+        return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
+            "DROP INDEX {$this->wrapper->wrap($indexName)}";
     }
 
     /**
@@ -421,8 +368,8 @@ class Grammar implements GrammarContract
 
         $constraintName = "fk_{$fk['table']}_" . implode('_', $fk['columns']);
 
-        return "ALTER TABLE {$this->wrapTable($table)} " .
-            "DROP CONSTRAINT {$this->wrap($constraintName)}";
+        return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
+            "DROP CONSTRAINT {$this->wrapper->wrap($constraintName)}";
     }
 
     /**
@@ -448,8 +395,8 @@ class Grammar implements GrammarContract
             throw new SqliteAlterFailedException('SQLite requires special handling for column renames');
         }
 
-        return "ALTER TABLE {$this->wrapTable($table)} " .
-            "RENAME COLUMN {$this->wrapColumn($from)} TO {$this->wrapColumn($to)}";
+        return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
+            "RENAME COLUMN {$this->wrapper->wrapColumn($from)} TO {$this->wrapper->wrapColumn($to)}";
     }
 
     /**
@@ -478,27 +425,5 @@ class Grammar implements GrammarContract
             'pgsql' => 63,
             default => 255
         });
-    }
-
-    /**
-     * Quote enum values for SQL statements.
-     *
-     * @param array $values The values to quote.
-     * @return string The quoted values as a comma-separated string.
-     */
-    private function quoteEnumValues(array $values): string
-    {
-        $escaped = array_map(fn($v) => "'" . addslashes($v) . "'", $values);
-        return implode(',', $escaped);
-    }
-
-    /**
-     * Get character wrappers for the current database driver.
-     *
-     * @return array The character wrappers.
-     */
-    private function getWrapper(): array
-    {
-        return ['mysql' => ['`', '`'], 'sqlite' => ['"', '"'], 'pgsql' => ['"', '"']][$this->driver];
     }
 }

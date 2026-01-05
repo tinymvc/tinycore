@@ -8,7 +8,8 @@ use Spark\Database\Contracts\QueryBuilderContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
-use Spark\Database\Schema\Grammar;
+use Spark\Database\Schema\Contracts\WrapperContract;
+use Spark\Database\Schema\Wrapper;
 use Spark\Database\Traits\ManageRelation;
 use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
@@ -137,11 +138,11 @@ class QueryBuilder implements QueryBuilderContract
     private string $table;
 
     /**
-     * Holds the database schema grammar for the query.
-     *
-     * @var \Spark\Database\Schema\Grammar
+     * Holds the query wrapper instance.
+     * 
+     * @var \Spark\Database\Schema\WrapperContract $wrapper The query wrapper.
      */
-    private Grammar $grammar;
+    private WrapperContract $wrapper;
 
     /**
      * Constructor for the query class.
@@ -153,7 +154,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function __construct(private DB $database)
     {
-        $this->grammar = new Grammar($database->getDriver());
+        $this->wrapper = new Wrapper($database->getDriver());
         $this->prefix ??= ''; // Set default prefix if not already set
     }
 
@@ -241,18 +242,18 @@ class QueryBuilder implements QueryBuilderContract
     public function setDB(DB $database): self
     {
         $this->database = $database;
-        $this->grammar = new Grammar($database->getDriver());
+        $this->wrapper = new Wrapper($database->getDriver());
         return $this;
     }
 
     /**
-     * Retrieves the database schema grammar instance associated with this query.
+     * Returns the query wrapper.
      *
-     * @return Grammar The database schema grammar instance associated with this query.
+     * @return WrapperContract The query wrapper.
      */
-    public function getGrammar(): Grammar
+    public function getWrapper(): WrapperContract
     {
-        return $this->grammar;
+        return $this->wrapper;
     }
 
     /**
@@ -451,7 +452,7 @@ class QueryBuilder implements QueryBuilderContract
             $command = sprintf(
                 "%s %s %s :%s",
                 $andOr,
-                $this->grammar->wrapColumn($column),
+                $this->wrapper->wrapColumn($column),
                 $operator,
                 $columnPlaceholder
             );
@@ -476,7 +477,7 @@ class QueryBuilder implements QueryBuilderContract
                                 $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
                                 $this->bindings[$columnPlaceholder] = $value; // Bind the value to the placeholder.
             
-                                return $this->grammar->wrapColumn($attr) . (is_array($value) ?
+                                return $this->wrapper->wrapColumn($attr) . (is_array($value) ?
                                     // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
                                     sprintf(
                                         ($not ? ' NOT' : '') . " IN (%s)",
@@ -691,7 +692,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function whereNull(string $field, bool $not = false): self
     {
-        $field = $this->grammar->wrapColumn($field) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
+        $field = $this->wrapper->wrapColumn($field) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
 
         return $this->where($field);
     }
@@ -848,10 +849,10 @@ class QueryBuilder implements QueryBuilderContract
 
         // Construct the FIND_IN_SET condition
         if ($this->database->isDriver('sqlite')) {
-            $where = $this->grammar->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
+            $where = $this->wrapper->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
             $key = "%$key%"; // SQLite uses LIKE for partial matches.
         } else {
-            $where = "{$type}FIND_IN_SET (:$columnPlaceholder, {$this->grammar->wrapColumn($field)})";
+            $where = "{$type}FIND_IN_SET (:$columnPlaceholder, {$this->wrapper->wrapColumn($field)})";
         }
 
         // Bind the key to the placeholder
@@ -929,7 +930,7 @@ class QueryBuilder implements QueryBuilderContract
         $columnPlaceholder = $this->getWhereSqlColumn("{$field}_{$key}");
 
         // Construct the JSON condition
-        $where = "JSON_EXTRACT({$this->grammar->wrapColumn($field)}, '$.{$key}') {$type}LIKE :$columnPlaceholder";
+        $where = "JSON_EXTRACT({$this->wrapper->wrapColumn($field)}, '$.{$key}') {$type}LIKE :$columnPlaceholder";
 
         $this->bindings[$columnPlaceholder] = "%$value%";
 
@@ -1080,7 +1081,7 @@ class QueryBuilder implements QueryBuilderContract
         $columnPlaceholder1 = $this->getWhereSqlColumn("{$field}1");
         $columnPlaceholder2 = $this->getWhereSqlColumn("{$field}2");
 
-        $where = '(' . $this->grammar->wrapColumn($field) . ' ' . $type . 'BETWEEN '
+        $where = '(' . $this->wrapper->wrapColumn($field) . ' ' . $type . 'BETWEEN '
             . (":$columnPlaceholder1 AND :$columnPlaceholder2") . ')';
 
         $this->bindings[$columnPlaceholder1] = $value1;
@@ -1157,7 +1158,7 @@ class QueryBuilder implements QueryBuilderContract
     public function like(string $field, mixed $data, string $type = '', string $andOr = 'AND'): self
     {
         $columnPlaceholder = $this->getWhereSqlColumn($field);
-        $where = $this->grammar->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
+        $where = $this->wrapper->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
 
         $this->bindings[$columnPlaceholder] = $data;
 
@@ -1332,10 +1333,10 @@ class QueryBuilder implements QueryBuilderContract
 
         $placeholder = $this->getWhereSqlColumn($column);
 
-        if ($this->grammar->isMySQL()) {
-            return $this->whereRaw("DATE({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
-        } elseif ($this->grammar->isSQLite()) {
-            return $this->whereRaw("date({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        if ($this->database->isMySQL()) {
+            return $this->whereRaw("DATE({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        } elseif ($this->database->isSQLite()) {
+            return $this->whereRaw("date({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
         }
 
         return $this->where($column, $operator, $value, $andOr);
@@ -1372,10 +1373,10 @@ class QueryBuilder implements QueryBuilderContract
 
         $placeholder = $this->getWhereSqlColumn($column);
 
-        if ($this->grammar->isMySQL()) {
-            return $this->whereRaw("YEAR({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
-        } elseif ($this->grammar->isSQLite()) {
-            return $this->whereRaw("strftime('%Y', {$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        if ($this->database->isMySQL()) {
+            return $this->whereRaw("YEAR({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        } elseif ($this->database->isSQLite()) {
+            return $this->whereRaw("strftime('%Y', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
         }
 
         return $this->where($column, $operator, $value, $andOr);
@@ -1412,10 +1413,10 @@ class QueryBuilder implements QueryBuilderContract
 
         $placeholder = $this->getWhereSqlColumn($column);
 
-        if ($this->grammar->isMySQL()) {
-            return $this->whereRaw("MONTH({$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
-        } elseif ($this->grammar->isSQLite()) {
-            return $this->whereRaw("strftime('%m', {$this->grammar->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        if ($this->database->isMySQL()) {
+            return $this->whereRaw("MONTH({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+        } elseif ($this->database->isSQLite()) {
+            return $this->whereRaw("strftime('%m', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
         }
 
         return $this->where($column, $operator, $value, $andOr);
@@ -1494,11 +1495,11 @@ class QueryBuilder implements QueryBuilderContract
 
         // Prepare the SQL update statement
         $sql = sprintf(
-            "UPDATE {$table} SET %s %s",
+            "UPDATE $table SET %s %s",
             implode(
                 ', ',
                 array_map(
-                    fn($attr) => $this->grammar->wrapColumn($attr) . " = :$attr",
+                    fn($attr) => $this->wrapper->wrapColumn($attr) . " = :$attr",
                     array_keys($data)
                 )
             ),
@@ -1565,7 +1566,7 @@ class QueryBuilder implements QueryBuilderContract
         $table = $this->prefix . $this->table;
 
         // Prepare the SQL delete statement
-        $sql = "DELETE FROM {$table} {$this->getWhereSql()}";
+        $sql = "DELETE FROM $table {$this->getWhereSql()}";
         $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
@@ -1605,7 +1606,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Prepare the table name
         $table = $this->prefix . $this->table;
-        $sql = "TRUNCATE TABLE {$table}";
+        $sql = "TRUNCATE TABLE $table";
 
         // Prepare the SQL truncate statement
         $statement = $this->database->prepare($sql);
@@ -1644,7 +1645,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Bind parameters
         foreach ($bindings as $key => $value) {
-            if (is_numeric($key)) {
+            if (is_int($key)) {
                 $statement->bindValue($key + 1, $value, $this->getParameterType($value));
             } else {
                 $statement->bindValue($key, $value, $this->getParameterType($value));
@@ -1775,7 +1776,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function max(string $field): float
     {
-        $column = 'MAX(' . $this->grammar->wrapColumn($field) . ')';
+        $column = 'MAX(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
 
         return $this->fetchColumn()->first();
@@ -1789,7 +1790,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function min(string $field): float
     {
-        $column = 'MIN(' . $this->grammar->wrapColumn($field) . ')';
+        $column = 'MIN(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
 
         return $this->fetchColumn()->first();
@@ -1803,7 +1804,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function sum(string $field): float
     {
-        $column = 'SUM(' . $this->grammar->wrapColumn($field) . ')';
+        $column = 'SUM(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
 
         return $this->fetchColumn()->first();
@@ -1817,7 +1818,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function avg(string $field): float
     {
-        $column = 'AVG(' . $this->grammar->wrapColumn($field) . ')';
+        $column = 'AVG(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
 
         return $this->fetchColumn()->first();
@@ -1835,10 +1836,10 @@ class QueryBuilder implements QueryBuilderContract
     public function as(string $alias): self
     {
         if (stripos($alias, 'AS ') === false) {
-            $alias = "AS " . $this->grammar->wrapColumn($alias);
+            $alias = "AS " . $this->wrapper->wrapColumn($alias);
         }
 
-        $this->query['alias'] = " {$alias} ";
+        $this->query['alias'] = " $alias ";
         return $this;
     }
 
@@ -1909,7 +1910,7 @@ class QueryBuilder implements QueryBuilderContract
                 $operator = '=';
             }
 
-            $this->query['joins'] .= " " . $orOn . " " . $this->grammar->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
+            $this->query['joins'] .= " " . $orOn . " " . $this->wrapper->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
         } else {
             $this->query['joins'] .= " " . $orOn . " " . $this->wrapJoinOn($field1);
         }
@@ -2066,7 +2067,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function orderBy(string $field, string $sort = 'ASC'): self
     {
-        $this->query['order'] = $this->grammar->wrapColumn($field) . " $sort";
+        $this->query['order'] = $this->wrapper->wrapColumn($field) . " $sort";
         return $this;
     }
 
@@ -2124,7 +2125,7 @@ class QueryBuilder implements QueryBuilderContract
     {
         $field = is_array($field) ? $field : func_get_args();
 
-        $this->query['group'] = $this->grammar->columnize($field);
+        $this->query['group'] = $this->wrapper->columnize($field);
         return $this;
     }
 
@@ -2159,11 +2160,11 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets a limit and optional offset for the query.
      *
-     * @param int $from Starting point for the query.
+     * @param string|int $from Starting point for the query.
      * @param int|null $to Ending point for the query, if specified.
      * @return self
      */
-    public function limit(int $from, null|int $to = null): self
+    public function limit(string|int $from, null|int $to = null): self
     {
         if ($to === null) {
             $this->query['limit'] = $from;
@@ -2443,7 +2444,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $table = $this->getTableName(); // Get the table name with prefix if exists.
 
-        $sql = "SELECT COUNT(1) FROM {$table}"
+        $sql = "SELECT COUNT(1) FROM $table"
             . $this->query['alias']
             . $this->query['joins']
             . $this->getWhereSql()
@@ -2557,7 +2558,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $bindings = ['increment' => $value, ...$this->getBindings()];
         $sql = "UPDATE " . $this->getTableName()
-            . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} + :increment "
+            . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} + :increment "
             . $this->getWhereSql();
 
         $result = $this->raw($sql, $bindings);
@@ -2584,7 +2585,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $bindings = ['decrement' => $value, ...$this->getBindings()];
         $sql = "UPDATE " . $this->getTableName()
-            . " SET {$this->grammar->wrapColumn($column)} = {$this->grammar->wrapColumn($column)} - :decrement "
+            . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} - :decrement "
             . $this->getWhereSql();
 
         $result = $this->raw($sql, $bindings);
@@ -2607,7 +2608,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $table = $this->getTableName();
 
-        return "SELECT {$this->query['select']} FROM {$table}"
+        return "SELECT {$this->query['select']} FROM $table"
             . $this->query['alias']
             . $this->query['sql']
             . $this->query['joins']
@@ -2726,7 +2727,7 @@ class QueryBuilder implements QueryBuilderContract
     private function getTableName(): string
     {
         // Returns the table name with prefix if exists.
-        return $this->grammar->wrapTable($this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
+        return $this->wrapper->wrapTable($this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
     }
 
     /**
@@ -2897,7 +2898,7 @@ class QueryBuilder implements QueryBuilderContract
         $ignore = $this->getIgnoreModifier($config);
 
         // Columns
-        $columns = $this->grammar->columnize(
+        $columns = $this->wrapper->columnize(
             array_keys($data[0]) // Get keys from first record
         );
 
@@ -2919,7 +2920,7 @@ class QueryBuilder implements QueryBuilderContract
     private function getInsertCommand(array $config): string
     {
         if (isset($config['replace']) && $config['replace'] === true) {
-            return $this->grammar->isMySQL() ? 'REPLACE' : 'INSERT';
+            return $this->database->isMySQL() ? 'REPLACE' : 'INSERT';
         }
         return 'INSERT';
     }
@@ -2936,11 +2937,11 @@ class QueryBuilder implements QueryBuilderContract
             return '';
         }
 
-        if ($this->grammar->isSQLite()) {
+        if ($this->database->isSQLite()) {
             return 'OR IGNORE';
         }
 
-        if ($this->grammar->isMySQL()) {
+        if ($this->database->isMySQL()) {
             return 'IGNORE';
         }
 
@@ -2973,14 +2974,14 @@ class QueryBuilder implements QueryBuilderContract
     {
         if (empty($config['update'])) {
             // For PostgreSQL with ignore but no update, use DO NOTHING
-            if ($this->grammar->isPostgreSQL() && isset($config['ignore']) && $config['ignore'] === true) {
-                $conflictColumns = $this->grammar->columnize($config['conflict'] ?? ['id']);
+            if ($this->database->isPostgreSQL() && isset($config['ignore']) && $config['ignore'] === true) {
+                $conflictColumns = $this->wrapper->columnize($config['conflict'] ?? ['id']);
                 return "ON CONFLICT ($conflictColumns) DO NOTHING";
             }
             return '';
         }
 
-        $conflictColumns = $this->grammar->columnize($config['conflict'] ?? ['id']);
+        $conflictColumns = $this->wrapper->columnize($config['conflict'] ?? ['id']);
         $updates = [];
 
         foreach ($config['update'] as $key => $value) {
@@ -2988,16 +2989,16 @@ class QueryBuilder implements QueryBuilderContract
                 $key = $value; // If key is an integer, use the value as the key
             }
 
-            if ($this->grammar->isPostgreSQL()) {
-                $updates[] = $this->grammar->wrapColumn($key) . ' = EXCLUDED.' . $this->grammar->wrapColumn($value);
-            } elseif ($this->grammar->isMySQL()) {
-                $updates[] = $this->grammar->wrapColumn($key) . ' = VALUES(' . $this->grammar->wrapColumn($value) . ')';
-            } elseif ($this->grammar->isSQLite()) {
-                $updates[] = $this->grammar->wrapColumn($key) . ' = excluded.' . $this->grammar->wrapColumn($value);
+            if ($this->database->isPostgreSQL()) {
+                $updates[] = $this->wrapper->wrapColumn($key) . ' = EXCLUDED.' . $this->wrapper->wrapColumn($value);
+            } elseif ($this->database->isMySQL()) {
+                $updates[] = $this->wrapper->wrapColumn($key) . ' = VALUES(' . $this->wrapper->wrapColumn($value) . ')';
+            } elseif ($this->database->isSQLite()) {
+                $updates[] = $this->wrapper->wrapColumn($key) . ' = excluded.' . $this->wrapper->wrapColumn($value);
             }
         }
 
-        if ($this->grammar->isPostgreSQL() || $this->grammar->isSQLite()) {
+        if ($this->database->isPostgreSQL() || $this->database->isSQLite()) {
             return "ON CONFLICT ($conflictColumns) DO UPDATE SET " . implode(', ', $updates);
         }
 
@@ -3090,7 +3091,7 @@ class QueryBuilder implements QueryBuilderContract
             return $value;
         }
 
-        return $this->grammar->wrapColumn($value);
+        return $this->wrapper->wrapColumn($value);
     }
 
     /**

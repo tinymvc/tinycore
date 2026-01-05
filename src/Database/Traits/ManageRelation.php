@@ -683,8 +683,8 @@ trait ManageRelation
                 $query = $relatedModel->query()
                     ->select($aggregateExpression)
                     ->whereRaw(
-                        $this->grammar->wrapTable($relatedTable) . "." . $this->grammar->wrapColumn($relationConfig['foreignKey']) . " = " .
-                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['localKey'])
+                        $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey']) . " = " .
+                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
                     );
                 break;
 
@@ -692,8 +692,8 @@ trait ManageRelation
                 $query = $relatedModel->query()
                     ->select($aggregateExpression)
                     ->whereRaw(
-                        $this->grammar->wrapTable($relatedTable) . "." . $this->grammar->wrapColumn($relationConfig['ownerKey']) . " = " .
-                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['foreignKey'])
+                        $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['ownerKey']) . " = " .
+                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey'])
                     );
                 break;
 
@@ -707,8 +707,8 @@ trait ManageRelation
                         "{$relatedTable}.{$relationConfig['relatedKey']}"
                     )
                     ->whereRaw(
-                        $this->grammar->wrapTable($relationConfig['table']) . "." . $this->grammar->wrapColumn($relationConfig['relatedPivotKey']) . " = " .
-                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['parentKey'])
+                        $this->wrapper->wrapTable($relationConfig['table']) . "." . $this->wrapper->wrapColumn($relationConfig['relatedPivotKey']) . " = " .
+                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['parentKey'])
                     );
                 break;
 
@@ -726,8 +726,8 @@ trait ManageRelation
                         $relatedTable . ".{$relationConfig['secondKey']}"
                     )
                     ->whereRaw(
-                        $this->grammar->wrapTable($throughTable) . "." . $this->grammar->wrapColumn($relationConfig['firstKey']) . " = " .
-                        $this->getTableName() . "." . $this->grammar->wrapColumn($relationConfig['localKey'])
+                        $this->wrapper->wrapTable($throughTable) . "." . $this->wrapper->wrapColumn($relationConfig['firstKey']) . " = " .
+                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
                     );
                 break;
 
@@ -765,7 +765,7 @@ trait ManageRelation
             $column = "$relatedTable.$column";
         }
 
-        $wrappedColumn = $column === '*' ? '*' : $this->grammar->wrapColumn($column);
+        $wrappedColumn = $column === '*' ? '*' : $this->wrapper->wrapColumn($column);
 
         return "{$function}({$wrappedColumn})";
     }
