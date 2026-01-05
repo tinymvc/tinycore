@@ -30,11 +30,11 @@ class BelongsTo extends Relation
      */
     public function __construct(
         protected string $related,
-        protected ?string $foreignKey = null,
-        protected ?string $ownerKey = null,
+        protected null|string $foreignKey = null,
+        protected null|string $ownerKey = null,
         protected bool $lazy = true,
-        protected ?Closure $callback = null,
-        ?Model $model = null
+        protected null|Closure $callback = null,
+        null|Model $model = null
     ) {
         parent::__construct($model);
     }

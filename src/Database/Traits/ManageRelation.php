@@ -7,6 +7,7 @@ use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use Spark\Support\Str;
+use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -34,12 +35,12 @@ trait ManageRelation
      * - with('posts.comments.author')
      * - with(['posts' => fn($q) => $q->latest(), 'posts.comments'])
      * 
-     * @param array|string ...$relations
+     * @param array|string $relations
      * @return QueryBuilder
      */
-    public function with(array|string ...$relations): QueryBuilder
+    public function with(array|string $relations): QueryBuilder
     {
-        $relations = is_array($relations[0]) ? $relations[0] : $relations;
+        $relations = is_array($relations) ? $relations : func_get_args();
         $model = $this->getRelatedModel();
 
         // Parse and organize nested relationships
@@ -554,7 +555,7 @@ trait ManageRelation
      */
     public function useModel(Model $model): QueryBuilder
     {
-        $this->query['use_model'] = $model;
+        $this->query['model'] = $model;
         return $this;
     }
 
@@ -604,7 +605,7 @@ trait ManageRelation
      */
     private function isUsingModel(): bool
     {
-        return isset($this->query['use_model']) && $this->query['use_model'] instanceof Model;
+        return isset($this->query['model']) && $this->query['model'] instanceof Model;
     }
 
     /**
@@ -614,7 +615,7 @@ trait ManageRelation
      */
     private function getModelBeingUsed(): ?Model
     {
-        return $this->isUsingModel() ? $this->query['use_model'] : null;
+        return $this->isUsingModel() ? $this->query['model'] : null;
     }
 
     /**
@@ -653,8 +654,8 @@ trait ManageRelation
 
         $sql = "({$subquery['sql']}) {$operator} {$count}";
 
-        $this->bindings = array_merge($this->bindings, $subquery['bindings']);
-        $this->parameters = array_merge($this->parameters, $subquery['parameters']);
+        $this->bindings = [...$this->bindings, ...$subquery['bindings']];
+        $this->parameters = [...$this->parameters, ...$subquery['parameters']];
 
         return $this->whereRaw($sql, [], $boolean);
     }
@@ -807,8 +808,8 @@ trait ManageRelation
         $currentSelect = $this->query['select'] ?: '*';
         $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) as {$alias}";
 
-        $this->bindings = array_merge($this->bindings, $subquery['bindings']);
-        $this->parameters = array_merge($this->parameters, $subquery['parameters']);
+        $this->bindings = [...$this->bindings, ...$subquery['bindings']];
+        $this->parameters = [...$this->parameters, ...$subquery['parameters']];
     }
 
     /**

@@ -17,6 +17,7 @@ use function in_array;
 use function is_array;
 use function is_bool;
 use function is_int;
+use function is_string;
 use function sprintf;
 
 /**
@@ -666,12 +667,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     /**
      * Make the given, typically hidden, attributes visible.
      *
-     * @param string|array ...$attributes
+     * @param string|array $attributes
      * @return $this
      */
-    public function makeVisible(string|array ...$attributes): static
+    public function makeVisible(string|array $attributes): static
     {
-        $attributes = is_array($attributes[0]) ? $attributes[0] : $attributes;
+        $attributes = is_array($attributes) ? $attributes : func_get_args();
         $visible = $this->tracking['__visible'] ?? [];
 
         $this->tracking['__visible'] = [...$visible, ...$attributes];
@@ -682,12 +683,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     /**
      * Make the given, typically visible, attributes hidden.
      *
-     * @param string|array ...$attributes
+     * @param string|array $attributes
      * @return $this
      */
-    public function makeHidden(string|array ...$attributes): static
+    public function makeHidden(string|array $attributes): static
     {
-        $attributes = is_array($attributes[0]) ? $attributes[0] : $attributes;
+        $attributes = is_array($attributes) ? $attributes : func_get_args();
         $hidden = $this->tracking['__hidden'] ?? [];
 
         $this->tracking['__hidden'] = [...$hidden, ...$attributes];
@@ -818,13 +819,13 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     /**
      * Check if the model has a specific attribute.
      *
-     * @param array|string ...$names The name of the attribute to check.
+     * @param array|string $column The name of the attribute to check.
      * @return bool True if the attribute exists, false otherwise.
      */
-    public function isset(array|string ...$names): bool
+    public function isset(array|string $column): bool
     {
-        $names = is_array($names[0]) ? $names[0] : $names;
-        foreach ($names as $name) {
+        $column = is_array($column) ? $column : func_get_args();
+        foreach ($column as $name) {
             if ($this->get($name) === null) {
                 return false;
             }
@@ -1089,7 +1090,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array $arguments The method arguments.
      * @return mixed The result of the query method call.
      */
-    public function __call($name, $arguments)
+    public function __call(string $name, array $arguments)
     {
         if (static::hasMacro($name)) {
             return $this->macroCall($name, $arguments);
@@ -1105,7 +1106,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array $arguments The method arguments.
      * @return mixed The result of the query method call.
      */
-    public static function __callStatic($name, $arguments)
+    public static function __callStatic(string $name, array $arguments)
     {
         if (static::hasMacro($name)) {
             return static::staticMacroCall($name, $arguments);

@@ -507,10 +507,10 @@ class Application implements ApplicationContract, \ArrayAccess
     /**
      * Magic method to check if a variable is set in the application.
      *
-     * @param string $name The name of the variable to check.
+     * @param mixed $name The name of the variable to check.
      * @return bool True if the variable is set, false otherwise.
      */
-    public function __isset($name): bool
+    public function __isset(mixed $name): bool
     {
         return isset($this->vars[$name]);
     }
@@ -518,10 +518,10 @@ class Application implements ApplicationContract, \ArrayAccess
     /**
      * Magic method to get a variable from the application.
      *
-     * @param string $name The name of the variable to get.
+     * @param mixed $name The name of the variable to get.
      * @return mixed The value of the variable, or null if not set.
      */
-    public function __get($name): mixed
+    public function __get(mixed $name): mixed
     {
         return $this->vars[$name] ?? null;
     }
@@ -529,11 +529,11 @@ class Application implements ApplicationContract, \ArrayAccess
     /**
      * Magic method to set a variable in the application.
      *
-     * @param string $name The name of the variable to set.
+     * @param mixed $name The name of the variable to set.
      * @param mixed $value The value to set the variable to.
      * @return void
      */
-    public function __set($name, $value): void
+    public function __set(mixed $name, mixed $value): void
     {
         $this->vars[$name] = $value;
     }
@@ -541,10 +541,10 @@ class Application implements ApplicationContract, \ArrayAccess
     /**
      * Magic method to unset a variable in the application.
      *
-     * @param string $name The name of the variable to unset.
+     * @param mixed $name The name of the variable to unset.
      * @return void
      */
-    public function __unset($name): void
+    public function __unset(mixed $name): void
     {
         unset($this->vars[$name]);
     }
@@ -555,7 +555,7 @@ class Application implements ApplicationContract, \ArrayAccess
      * @param mixed $offset The name of the variable to check.
      * @return bool True if the variable exists, false otherwise.
      */
-    public function offsetExists($offset): bool
+    public function offsetExists(mixed $offset): bool
     {
         return isset($this->vars[$offset]);
     }
@@ -566,7 +566,7 @@ class Application implements ApplicationContract, \ArrayAccess
      * @param mixed $offset The name of the variable to get.
      * @return mixed The value of the variable, or null if not set.
      */
-    public function offsetGet($offset): mixed
+    public function offsetGet(mixed $offset): mixed
     {
         return $this->vars[$offset] ?? null;
     }
@@ -578,7 +578,7 @@ class Application implements ApplicationContract, \ArrayAccess
      * @param mixed $value The value to set the variable to.
      * @return void
      */
-    public function offsetSet($offset, $value): void
+    public function offsetSet(mixed $offset, mixed $value): void
     {
         if ($offset === null) {
             $this->vars[] = $value;
@@ -593,7 +593,7 @@ class Application implements ApplicationContract, \ArrayAccess
      * @param mixed $offset The name of the variable to unset.
      * @return void
      */
-    public function offsetUnset($offset): void
+    public function offsetUnset(mixed $offset): void
     {
         unset($this->vars[$offset]);
     }

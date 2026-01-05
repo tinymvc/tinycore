@@ -4,6 +4,7 @@ namespace Spark\Routing;
 
 use Spark\Foundation\Application;
 use Spark\Routing\Contracts\RouteResourceContract;
+use function func_get_args;
 use function is_array;
 
 /**
@@ -101,24 +102,24 @@ class RouteResource implements RouteResourceContract
     /**
      * Specify actions to include in the resource routes.
      *
-     * @param string|array ...$includes Actions to include (e.g., ['index', 'show']).
+     * @param string|array $includes Actions to include (e.g., ['index', 'show']).
      * @return self Returns the current instance for method chaining.
      */
-    public function only(string|array ...$includes): self
+    public function only(string|array $includes): self
     {
-        $this->only = is_array($includes[0]) ? $includes[0] : $includes;
+        $this->only = is_array($includes) ? $includes : func_get_args();
         return $this;
     }
 
     /**
      * Specify actions to exclude from the resource routes.
      *
-     * @param string|array ...$excludes Actions to exclude (e.g., ['destroy']).
+     * @param string|array $excludes Actions to exclude (e.g., ['destroy']).
      * @return self Returns the current instance for method chaining.
      */
-    public function except(string|array ...$excludes): self
+    public function except(string|array $excludes): self
     {
-        $this->except = is_array($excludes[0]) ? $excludes[0] : $excludes;
+        $this->except = is_array($excludes) ? $excludes : func_get_args();
         return $this;
     }
 

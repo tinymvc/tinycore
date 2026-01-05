@@ -34,11 +34,12 @@ trait CreateDeleteForHasRelation
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before creating related models.");
         }
 
+        // Merge the foreign key into the attributes
+        $attributes[$this->foreignKey] = $foreignKeyValue;
+
         // Create the related model with the foreign key set
         $relatedClass = $this->related;
-        $relatedModel = $relatedClass::create(array_merge($attributes, [
-            $this->foreignKey => $foreignKeyValue
-        ]));
+        $relatedModel = $relatedClass::create($attributes);
 
         return $relatedModel;
     }
@@ -99,12 +100,10 @@ trait CreateDeleteForHasRelation
         }
 
         // Merge the foreign key into the attributes
-        $attributes = array_merge($attributes, [
-            $this->foreignKey => $foreignKeyValue
-        ]);
+        $attributes[$this->foreignKey] = $foreignKeyValue;
 
         $relatedClass = $this->related;
-        return $relatedClass::updateOrCreate(array_merge($attributes, $values), false, array_keys($attributes));
+        return $relatedClass::updateOrCreate([...$attributes, ...$values], false, array_keys($attributes));
     }
 
     /**
@@ -129,9 +128,7 @@ trait CreateDeleteForHasRelation
         }
 
         // Merge the foreign key into the attributes
-        $attributes = array_merge($attributes, [
-            $this->foreignKey => $foreignKeyValue
-        ]);
+        $attributes[$this->foreignKey] = $foreignKeyValue;
 
         $relatedClass = $this->related;
         return $relatedClass::firstOrCreate($attributes, $values);

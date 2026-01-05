@@ -5,6 +5,7 @@ namespace Spark\Utils;
 use Spark\Contracts\Utils\CacheUtilContract;
 use Spark\Exceptions\Utils\FailedToSaveCacheFileException;
 use Spark\Support\Traits\Macroable;
+use function func_get_args;
 use function is_array;
 
 /**
@@ -290,12 +291,12 @@ class Cache implements CacheUtilContract, \ArrayAccess
     /**
      * Erases specified cache entries.
      *
-     * @param string|array ...$keys Cache key(s) to erase.
+     * @param string|array $keys Cache key(s) to erase.
      * @return self
      */
-    public function erase(string|array ...$keys): self
+    public function erase(string|array $keys): self
     {
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        $keys = is_array($keys) ? $keys : func_get_args();
         $this->reload();
 
         // Remove the specified keys from cache data.
@@ -314,9 +315,9 @@ class Cache implements CacheUtilContract, \ArrayAccess
      * @param string|array $keys Cache key(s) to delete.
      * @return self
      */
-    public function delete(string|array ...$keys): self
+    public function delete(string|array $keys): self
     {
-        return $this->erase(...$keys);
+        return $this->erase(...func_get_args());
     }
 
     /**
@@ -325,9 +326,9 @@ class Cache implements CacheUtilContract, \ArrayAccess
      * @param string|array $keys Cache key(s) to forget.
      * @return self
      */
-    public function forget(string|array ...$keys): self
+    public function forget(string|array $keys): self
     {
-        return $this->erase(...$keys);
+        return $this->erase(...func_get_args());
     }
 
     /**
@@ -336,9 +337,9 @@ class Cache implements CacheUtilContract, \ArrayAccess
      * @param string|array $keys Cache key(s) to remove.
      * @return self
      */
-    public function remove(string|array ...$keys): self
+    public function remove(string|array $keys): self
     {
-        return $this->erase(...$keys);
+        return $this->erase(...func_get_args());
     }
 
     /**

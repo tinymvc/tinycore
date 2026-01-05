@@ -9,6 +9,7 @@ use Spark\Support\Collection;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 use function array_slice;
+use function func_get_args;
 use function is_array;
 use function is_int;
 use function is_string;
@@ -557,12 +558,12 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     /**
      * Checks if any of the specified keys exist in the sanitizer data array.
      *
-     * @param array|string ...$keys Keys to check.
+     * @param array|string $keys Keys to check.
      * @return bool True if any key exists, false otherwise.
      */
-    public function hasAny(array|string ...$keys): bool
+    public function hasAny(array|string $keys): bool
     {
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        $keys = is_array($keys) ? $keys : func_get_args();
         foreach ($keys as $key) {
             if ($this->has($key)) {
                 return true;
@@ -574,12 +575,12 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     /**
      * Checks if all of the specified keys exist in the sanitizer data array.
      *
-     * @param array|string ...$keys Keys to check.
+     * @param array|string $keys Keys to check.
      * @return bool True if all keys exist, false otherwise.
      */
-    public function hasAll(array|string ...$keys): bool
+    public function hasAll(array|string $keys): bool
     {
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        $keys = is_array($keys) ? $keys : func_get_args();
         foreach ($keys as $key) {
             if (!$this->has($key)) {
                 return false;
@@ -775,24 +776,24 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     /**
      * Filters the sanitizer data array to include only specified keys.
      *
-     * @param array|string ...$keys Keys to include in the filtered data.
+     * @param array|string $keys Keys to include in the filtered data.
      * @return self Returns a new instance with filtered data.
      */
-    public function only(array|string ...$keys): self
+    public function only(array|string $keys): self
     {
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        $keys = is_array($keys) ? $keys : func_get_args();
         return new self($this->data->only($keys));
     }
 
     /**
      * Filters the sanitizer data array to exclude specified keys.
      *
-     * @param array|string ...$keys Keys to exclude from the filtered data.
+     * @param array|string $keys Keys to exclude from the filtered data.
      * @return self Returns a new instance with filtered data.
      */
-    public function except(array|string ...$keys): self
+    public function except(array|string $keys): self
     {
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        $keys = is_array($keys) ? $keys : func_get_args();
         return new self($this->data->except($keys));
     }
 

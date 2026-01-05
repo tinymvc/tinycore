@@ -16,6 +16,7 @@ use Spark\Database\Relation\HasOneThrough;
 use Spark\Database\Relation\Relation;
 use Spark\Support\Str;
 use function array_key_exists;
+use function func_get_args;
 use function is_array;
 use function is_string;
 
@@ -62,12 +63,12 @@ trait HasRelation
     /**
      * Unset a loaded relationship.
      * 
-     * @param string|array ...$relations
+     * @param string|array $relations
      * @return $this
      */
-    public function unsetRelation(string|array ...$relations): self
+    public function unsetRelation(string|array $relations): self
     {
-        $relations = is_array($relations[0]) ? $relations[0] : $relations;
+        $relations = is_array($relations) ? $relations : func_get_args();
         foreach ($relations as $relation) {
             unset($this->relations[$relation]);
         }
@@ -127,10 +128,10 @@ trait HasRelation
      */
     protected function hasOne(
         string $related,
-        ?string $foreignKey = null,
-        ?string $localKey = null,
+        string|null $foreignKey = null,
+        string|null $localKey = null,
         bool $lazy = true,
-        ?Closure $callback = null
+        null|Closure $callback = null
     ): HasOne {
         $foreignKey ??= $this->getForeignKey();
         $localKey ??= static::$primaryKey ?? 'id';
@@ -161,10 +162,10 @@ trait HasRelation
      */
     protected function hasMany(
         string $related,
-        ?string $foreignKey = null,
-        ?string $localKey = null,
+        string|null $foreignKey = null,
+        string|null $localKey = null,
         bool $lazy = true,
-        ?Closure $callback = null
+        null|Closure $callback = null
     ): HasMany {
         $foreignKey ??= $this->getForeignKey();
         $localKey ??= static::$primaryKey ?? 'id';
@@ -195,10 +196,10 @@ trait HasRelation
      */
     protected function belongsTo(
         string $related,
-        ?string $foreignKey = null,
-        ?string $ownerKey = null,
+        string|null $foreignKey = null,
+        string|null $ownerKey = null,
         bool $lazy = true,
-        ?Closure $callback = null
+        null|Closure $callback = null
     ): BelongsTo {
         $relatedModel = new $related;
         $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($related));
@@ -235,14 +236,14 @@ trait HasRelation
      */
     protected function belongsToMany(
         string $related,
-        ?string $table = null,
-        ?string $foreignPivotKey = null,
-        ?string $relatedPivotKey = null,
-        ?string $parentKey = null,
-        ?string $relatedKey = null,
+        string|null $table = null,
+        string|null $foreignPivotKey = null,
+        string|null $relatedPivotKey = null,
+        string|null $parentKey = null,
+        string|null $relatedKey = null,
         bool $lazy = true,
         array $append = [],
-        ?Closure $callback = null,
+        null|Closure $callback = null,
     ): BelongsToMany {
         $relatedModel = new $related;
         $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($related));
@@ -287,13 +288,13 @@ trait HasRelation
     protected function hasManyThrough(
         string $related,
         string $through,
-        ?string $firstKey = null,
-        ?string $secondKey = null,
-        ?string $localKey = null,
-        ?string $secondLocalKey = null,
+        string|null $firstKey = null,
+        string|null $secondKey = null,
+        string|null $localKey = null,
+        string|null $secondLocalKey = null,
         bool $lazy = true,
         array $append = [],
-        ?Closure $callback = null
+        null|Closure $callback = null
     ): HasManyThrough {
         $throughModel = new $through;
         $throughTable = $throughModel::$table ?? Str::snake(class_basename($through));
@@ -338,13 +339,13 @@ trait HasRelation
     protected function hasOneThrough(
         string $related,
         string $through,
-        ?string $firstKey = null,
-        ?string $secondKey = null,
-        ?string $localKey = null,
-        ?string $secondLocalKey = null,
+        string|null $firstKey = null,
+        string|null $secondKey = null,
+        string|null $localKey = null,
+        string|null $secondLocalKey = null,
         bool $lazy = true,
         array $append = [],
-        ?Closure $callback = null
+        null|Closure $callback = null
     ): HasOneThrough {
         $throughModel = new $through;
         $throughTable = $throughModel::$table ?? Str::snake(class_basename($through));
@@ -445,12 +446,12 @@ trait HasRelation
      * This method allows you to attach one or more relationships to the model.
      * It accepts a string or an array of relationship names and loads them.
      * 
-     * @param array|string ...$relations
+     * @param array|string $relations
      * @return void
      */
-    public function attachRelation(array|string ...$relations): void
+    public function attachRelation(array|string $relations): void
     {
-        $relations = is_array($relations[0]) ? $relations[0] : $relations;
+        $relations = is_array($relations) ? $relations : func_get_args();
         foreach ($relations as $relation) {
             $this->getRelationshipAttribute($relation);
         }
@@ -471,12 +472,12 @@ trait HasRelation
     /**
      * Remove a relationship from memory.
      * 
-     * @param array|string ...$relations
+     * @param array|string $relations
      * @return void
      */
-    public function forgetRelation(array|string ...$relations): void
+    public function forgetRelation(array|string $relations): void
     {
-        $relations = is_array($relations[0]) ? $relations[0] : $relations;
+        $relations = is_array($relations) ? $relations : func_get_args();
         foreach ($relations as $relation) {
             unset($this->relations[$relation]);
         }
@@ -494,7 +495,8 @@ trait HasRelation
             $relation = $this->$name();
 
             if ($relation && $relation instanceof Relation) {
-                return array_merge($relation->getConfig(), [
+                return [
+                    ...$relation->getConfig(),
                     'type' => match (true) {
                         $relation instanceof HasOne => 'hasOne',
                         $relation instanceof HasMany => 'hasMany',
@@ -504,7 +506,7 @@ trait HasRelation
                         $relation instanceof HasOneThrough => 'hasOneThrough',
                         default => throw new InvalidOrmException("Invalid relationship instance: " . get_class($relation))
                     }
-                ]);
+                ];
             }
         }
 
@@ -521,7 +523,7 @@ trait HasRelation
      * @param array $nested Additional nested relationships to load
      * @return array
      */
-    public function loadRelation(array $models, array $config, string $name, ?Closure $constraints = null, array $nested = []): array
+    public function loadRelation(array $models, array $config, string $name, null|Closure $constraints = null, array $nested = []): array
     {
         // Store nested relationships in config for later use
         if (!empty($nested)) {
@@ -551,7 +553,7 @@ trait HasRelation
      * @param string|null $idColumn The morph id column name
      * @return array
      */
-    public function loadMorphRelation(array $models, string $relation, array $morphMap, ?string $typeColumn = null, ?string $idColumn = null): array
+    public function loadMorphRelation(array $models, string $relation, array $morphMap, string|null $typeColumn = null, string|null $idColumn = null): array
     {
         if (empty($models)) {
             return $models;
@@ -641,7 +643,7 @@ trait HasRelation
      * @param Closure|null $constraints
      * @return array
      */
-    private function loadHasOne(array $models, array $config, string $name, ?Closure $constraints = null): array
+    private function loadHasOne(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
         $localValues = collect($models)->pluck($config['localKey'])->unique()->filter()->all();
@@ -678,7 +680,7 @@ trait HasRelation
      * @param Closure|null $constraints
      * @return array
      */
-    private function loadHasMany(array $models, array $config, string $name, ?Closure $constraints = null): array
+    private function loadHasMany(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
         $localValues = collect($models)->pluck($config['localKey'])->unique()->filter()->all();
@@ -715,7 +717,7 @@ trait HasRelation
      * @param Closure|null $constraints
      * @return array
      */
-    private function loadBelongsTo(array $models, array $config, string $name, ?Closure $constraints = null): array
+    private function loadBelongsTo(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
         $foreignValues = collect($models)->pluck($config['foreignKey'])->unique()->filter()->all();
@@ -752,7 +754,7 @@ trait HasRelation
      * @param Closure|null $constraints
      * @return array
      */
-    private function loadBelongsToMany(array $models, array $config, string $name, ?Closure $constraints = null): array
+    private function loadBelongsToMany(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
         $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($config['related']));
@@ -799,7 +801,7 @@ trait HasRelation
      * @param Closure|null $constraints
      * @return array
      */
-    private function loadHasThrough(array $models, array $config, string $name, ?Closure $constraints = null): array
+    private function loadHasThrough(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
         $throughModel = new $config['through'];
@@ -1012,7 +1014,7 @@ trait HasRelation
      * @throws InvalidOrmException
      * @throws UndefinedOrmException
      */
-    private function applyConstraints(QueryBuilder &$query, array $config, ?Closure $constraints = null): void
+    private function applyConstraints(QueryBuilder &$query, array $config, null|Closure $constraints = null): void
     {
         if (isset($config['callback']) && is_callable($config['callback'])) {
             $config['callback']($query);
@@ -1082,7 +1084,7 @@ trait HasRelation
      * @param string $type The morph type
      * @return string|null The resolved class name
      */
-    private function resolveMorphClass(string $type): ?string
+    private function resolveMorphClass(string $type): string|null
     {
         // If already a valid class name, return it
         if (class_exists($type)) {

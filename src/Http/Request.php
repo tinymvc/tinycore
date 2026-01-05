@@ -10,6 +10,7 @@ use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function count;
+use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -412,13 +413,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Checks if the current request method matches any of the specified methods.
      * 
-     * @param string|array ...$methods The method or array of methods to check against.
+     * @param string|array $methods The method or array of methods to check against.
      * @return bool True if the current request method is in the specified methods, false otherwise.
      */
-    public function isMethod(string|array ...$methods): bool
+    public function isMethod(string|array $methods): bool
     {
         // Flatten the methods array if a single array argument is provided
-        $methods = is_array($methods[0]) ? $methods[0] : $methods;
+        $methods = is_array($methods) ? $methods : func_get_args();
 
         // Convert the methods to an array of uppercase strings
         $methods = array_map('strtoupper', $methods);
@@ -622,9 +623,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param array|string $keys An array of keys to include in the result.
      * @return array The filtered request data.
      */
-    public function only(array|string ...$keys): array
+    public function only(array|string $keys): array
     {
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        $keys = is_array($keys) ? $keys : func_get_args();
         return $this->all($keys);
     }
 
@@ -634,9 +635,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param array|string $keys An array of keys to exclude from the result.
      * @return array The filtered request data.
      */
-    public function except(array|string ...$keys): array
+    public function except(array|string $keys): array
     {
-        $keys = is_array($keys[0]) ? $keys[0] : $keys;
+        $keys = is_array($keys) ? $keys : func_get_args();
         return array_diff_key($this->all(), array_flip($keys));
     }
 

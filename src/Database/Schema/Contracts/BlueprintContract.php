@@ -196,21 +196,20 @@ interface BlueprintContract
     /**
      * Add a 'unique' index to the blueprint.
      *
-     * @param string|array ...$columns The columns to be indexed.
+     * @param string|array $columns The columns to be indexed.
      *
      * @return void
      */
-    public function unique(string|array ...$columns): void;
+    public function unique(string|array $columns): void;
 
     /**
      * Add an 'index' to the blueprint.
      *
-     * @param string|array ...$columns The columns to be indexed.
+     * @param string|array $columns The columns to be indexed.
      *
      * @return void
      */
-    public function index(string|array ...$columns): void;
-
+    public function index(string|array $columns): void;
     /**
      * Compile the blueprint into a SQL statement.
      *

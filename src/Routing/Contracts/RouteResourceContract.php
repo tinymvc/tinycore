@@ -55,16 +55,16 @@ interface RouteResourceContract
     /**
      * Specify which resource methods to include.
      *
-     * @param string|array ...$includes The resource methods to include.
+     * @param string|array $includes The resource methods to include.
      * @return self Returns the current instance for method chaining.
      */
-    public function only(string|array ...$includes): self;
+    public function only(string|array $includes): self;
 
     /**
      * Specify which resource methods to exclude.
      *
-     * @param string|array ...$excludes The resource methods to exclude.
+     * @param string|array $excludes The resource methods to exclude.
      * @return self Returns the current instance for method chaining.
      */
-    public function except(string|array ...$excludes): self;
+    public function except(string|array $excludes): self;
 }

@@ -33,11 +33,11 @@ class HasOne extends Relation
      */
     public function __construct(
         protected string $related,
-        protected ?string $foreignKey = null,
-        protected ?string $localKey = null,
+        protected null|string $foreignKey = null,
+        protected null|string $localKey = null,
         protected bool $lazy = true,
-        protected ?Closure $callback = null,
-        ?Model $model = null
+        protected null|Closure $callback = null,
+        null|Model $model = null
     ) {
         parent::__construct($model);
     }

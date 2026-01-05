@@ -135,7 +135,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function cascadeOnDelete()
+    public function cascadeOnDelete(): self
     {
         return $this->onDelete('cascade');
     }
@@ -145,7 +145,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function cascadeOnUpdate()
+    public function cascadeOnUpdate(): self
     {
         return $this->onUpdate('cascade');
     }
@@ -155,7 +155,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function setNullOnDelete()
+    public function setNullOnDelete(): self
     {
         return $this->onDelete('set null');
     }
@@ -165,7 +165,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function setNullOnUpdate()
+    public function setNullOnUpdate(): self
     {
         return $this->onUpdate('set null');
     }
@@ -175,7 +175,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function setDefaultOnDelete()
+    public function setDefaultOnDelete(): self
     {
         return $this->onDelete('set default');
     }
@@ -185,7 +185,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function setDefaultOnUpdate()
+    public function setDefaultOnUpdate(): self
     {
         return $this->onUpdate('set default');
     }
@@ -195,7 +195,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function noActionOnDelete()
+    public function noActionOnDelete(): self
     {
         return $this->onDelete('no action');
     }
@@ -205,7 +205,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function noActionOnUpdate()
+    public function noActionOnUpdate(): self
     {
         return $this->onUpdate('no action');
     }
@@ -215,7 +215,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function restrictOnDelete()
+    public function restrictOnDelete(): self
     {
         return $this->onDelete('restrict');
     }
@@ -225,7 +225,7 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
      *
      * @return $this
      */
-    public function restrictOnUpdate()
+    public function restrictOnUpdate(): self
     {
         return $this->onUpdate('restrict');
     }

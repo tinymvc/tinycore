@@ -8,6 +8,7 @@ use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
 use Spark\Support\Traits\Macroable;
 use Closure;
+use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -68,21 +69,21 @@ class Middleware implements MiddlewareContract
      */
     public function registerMany(array $middlewares): self
     {
-        $this->middlewares = array_merge($this->middlewares, $middlewares);
+        $this->middlewares = [...$this->middlewares, ...$middlewares];
         return $this;
     }
 
     /**
      * Add middlewares to the execution stack
      * 
-     * @param array|string ...$middlewares The middleware aliases to queue for execution.
+     * @param array|string $middleware The middleware aliases to queue for execution.
      * @return self
      */
-    public function queue(array|string ...$middlewares): self
+    public function queue(array|string $middleware): self
     {
-        $middlewares = is_array($middlewares[0]) ? $middlewares[0] : $middlewares;
+        $middleware = is_array($middleware) ? $middleware : func_get_args();
 
-        foreach ($middlewares as $key) {
+        foreach ($middleware as $key) {
             if (!in_array($key, $this->stack)) {
                 $this->stack[] = $key;
             }

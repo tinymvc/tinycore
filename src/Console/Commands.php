@@ -4,6 +4,7 @@ namespace Spark\Console;
 
 use Spark\Console\Contracts\CommandsContract;
 use Spark\Support\Traits\Macroable;
+use function func_get_args;
 use function is_array;
 use function strlen;
 
@@ -89,17 +90,17 @@ class Commands implements CommandsContract
      *
      * This method allows you to remove a command by its name.
      *
-     * @param array|string ...$commands
+     * @param array|string $command
      *   The name of the command to remove.
      *
      * @return $this
      *   The Commands instance.
      */
-    public function removeCommand(array|string ...$commands): self
+    public function removeCommand(array|string $command): self
     {
-        $commands = is_array($commands[0]) ? $commands[0] : $commands;
+        $command = is_array($command) ? $command : func_get_args();
 
-        foreach ($commands as $name) {
+        foreach ($command as $name) {
             unset($this->commands[$name]);
         }
 
@@ -112,17 +113,17 @@ class Commands implements CommandsContract
      * This method allows you to disable a command by its name, preventing it
      * from being executed.
      *
-     * @param array|string ...$commands
+     * @param array|string $command
      *   The name(s) of the command(s) to disable.
      *
      * @return $this
      *   The Commands instance.
      */
-    public static function disable(array|string ...$commands): void
+    public static function disable(array|string $command): void
     {
-        $commands = is_array($commands[0]) ? $commands[0] : $commands;
+        $command = is_array($command) ? $command : func_get_args();
 
-        foreach ($commands as $name) {
+        foreach ($command as $name) {
             self::$disabledCommands[$name] = true;
         }
     }

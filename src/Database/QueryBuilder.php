@@ -2679,7 +2679,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param array $args The arguments passed to the method.
      * @return mixed
      */
-    public function __call($method, $args)
+    public function __call(string $method, array $args)
     {
         if (static::hasMacro($method)) {
             return $this->macroCall($method, $args);

@@ -5,6 +5,7 @@ namespace Spark\Database\Schema;
 use Spark\Database\Schema\Contracts\BlueprintContract;
 use Spark\Database\Schema\Exceptions\InvalidBlueprintArgumentException;
 use Spark\Support\Traits\Macroable;
+use function func_get_args;
 use function is_array;
 use function sprintf;
 
@@ -433,12 +434,12 @@ class Blueprint implements BlueprintContract
     /**
      * Add a unique index to the blueprint.
      *
-     * @param string|array ...$columns The column(s) to set as unique index.
+     * @param string|array $columns The column(s) to set as unique index.
      * @return void
      */
-    public function unique(string|array ...$columns): void
+    public function unique(string|array $columns): void
     {
-        $columns = is_array($columns[0]) ? $columns[0] : $columns;
+        $columns = is_array($columns) ? $columns : func_get_args();
         $this->indexes[] = ['type' => 'unique', 'columns' => $columns];
     }
 
@@ -448,9 +449,9 @@ class Blueprint implements BlueprintContract
      * @param string|array $columns The column(s) to set as index.
      * @return void
      */
-    public function index(string|array ...$columns): void
+    public function index(string|array $columns): void
     {
-        $columns = is_array($columns[0]) ? $columns[0] : $columns;
+        $columns = is_array($columns) ? $columns : func_get_args();
         $this->indexes[] = ['type' => 'index', 'columns' => $columns];
     }
 
@@ -527,12 +528,12 @@ class Blueprint implements BlueprintContract
     /**
      * Drop a column from the blueprint.
      *
-     * @param string|array ...$columns The column(s) to drop.
+     * @param string|array $columns The column(s) to drop.
      * @return self
      */
-    public function dropColumn(string|array ...$columns): self
+    public function dropColumn(string|array $columns): self
     {
-        $columns = is_array($columns[0]) ? $columns[0] : $columns;
+        $columns = is_array($columns) ? $columns : func_get_args();
         $this->drops[] = ['type' => 'column', 'names' => $columns];
         return $this;
     }

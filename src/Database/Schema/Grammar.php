@@ -7,6 +7,7 @@ use Spark\Database\Schema\Exceptions\SqliteAlterFailedException;
 use Spark\Database\Schema\Exceptions\InvalidForeignKeyException;
 use Spark\Database\Schema\Exceptions\UnsupportedDatabaseDriverException;
 use Spark\Support\Traits\Macroable;
+use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_bool;
@@ -89,12 +90,12 @@ class Grammar implements GrammarContract
     /**
      * Checks if the database driver is one of the given drivers.
      *
-     * @param string|array ...$drivers The driver(s) to check.
+     * @param string|array $drivers The driver(s) to check.
      * @return bool True if the current driver matches one of the given drivers, false otherwise.
      */
-    public function isDriver(string|array ...$drivers): bool
+    public function isDriver(string|array $drivers): bool
     {
-        $drivers = is_array($drivers[0]) ? $drivers[0] : $drivers;
+        $drivers = is_array($drivers) ? $drivers : func_get_args();
         foreach ($drivers as $d) {
             if ($d === $this->driver) {
                 return true;

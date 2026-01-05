@@ -32,7 +32,7 @@ abstract class Facade
      * @return mixed
      * @throws \BadMethodCallException
      */
-    public static function __callStatic($method, $args)
+    public static function __callStatic(string $method, array $args)
     {
         $instance = Application::$app->make(static::getFacadeAccessor());
 

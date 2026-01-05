@@ -26,10 +26,10 @@ interface MiddlewareContract
     /**
      * Adds middleware keys to the execution stack.
      * 
-     * @param array|string $middlewares The middleware aliases to queue for execution.
+     * @param array|string $middleware The middleware aliases to queue for execution.
      * @return self
      */
-    public function queue(array|string ...$middlewares): self;
+    public function queue(array|string $middleware): self;
 
     /**
      * Executes the middleware stack and returns the first response

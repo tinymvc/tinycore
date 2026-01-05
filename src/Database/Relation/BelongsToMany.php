@@ -35,15 +35,15 @@ class BelongsToMany extends Relation
      */
     public function __construct(
         protected string $related,
-        protected ?string $table = null,
-        protected ?string $foreignPivotKey = null,
-        protected ?string $relatedPivotKey = null,
-        protected ?string $parentKey = null,
-        protected ?string $relatedKey = null,
+        protected null|string $table = null,
+        protected null|string $foreignPivotKey = null,
+        protected null|string $relatedPivotKey = null,
+        protected null|string $parentKey = null,
+        protected null|string $relatedKey = null,
         protected bool $lazy = true,
         protected array $append = [],
-        protected ?Closure $callback = null,
-        ?Model $model = null,
+        protected null|Closure $callback = null,
+        null|Model $model = null,
     ) {
         parent::__construct($model);
     }
@@ -84,7 +84,7 @@ class BelongsToMany extends Relation
      * @param array $attributes Additional pivot table attributes.
      * @return void
      */
-    public function attach($id, array $attributes = []): void
+    public function attach($ids, array $attributes = []): void
     {
         $parent = $this->getParentModel();
 
@@ -98,16 +98,14 @@ class BelongsToMany extends Relation
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before attaching related models.");
         }
 
-        $ids = is_array($id) ? $id : [$id];
         $records = [];
 
-        foreach ($ids as $relatedId) {
-            $pivotData = array_merge($attributes, [
+        foreach ((array) $ids as $relatedId) {
+            $records[] = [
+                ...$attributes,
                 $this->foreignPivotKey => $parentKeyValue,
-                $this->relatedPivotKey => $relatedId,
-            ]);
-
-            $records[] = $pivotData;
+                $this->relatedPivotKey => $relatedId
+            ];
         }
 
         if (!empty($records)) {
@@ -143,8 +141,7 @@ class BelongsToMany extends Relation
             ->where($this->foreignPivotKey, $parentKeyValue);
 
         if ($ids !== null) {
-            $ids = is_array($ids) ? $ids : [$ids];
-            $query->whereIn($this->relatedPivotKey, $ids);
+            $query->whereIn($this->relatedPivotKey, (array) $ids);
         }
 
         return $query->delete();
