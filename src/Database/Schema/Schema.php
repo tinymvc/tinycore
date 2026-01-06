@@ -84,7 +84,7 @@ class Schema implements SchemaContract
      */
     public static function drop(string $table)
     {
-        $sql = "DROP TABLE " . self::getGrammar()->wrapTable($table);
+        $sql = "DROP TABLE " . self::getGrammar()->getWrapper()->wrapTable($table);
         self::execute($sql);
     }
 
@@ -95,7 +95,7 @@ class Schema implements SchemaContract
      */
     public static function dropIfExists(string $table): void
     {
-        $sql = "DROP TABLE IF EXISTS " . self::getGrammar()->wrapTable($table);
+        $sql = "DROP TABLE IF EXISTS " . self::getGrammar()->getWrapper()->wrapTable($table);
         self::execute($sql);
     }
 

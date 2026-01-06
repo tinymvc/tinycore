@@ -236,14 +236,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $data = array_merge($data, !is_array($values) ? $values->toArray() : $values);
 
         if ($model) {
-            $model->preserveOriginalBeforeUpdating($data);
+            $model->fill($data);
         } else {
             $model = self::load($data);
         }
 
-        if (!$model->save()) {
-            $model->restoreOriginal();
-        }
+        $model->save(); // Save the model.
 
         return $model; // Return the saved model instance.
     }
@@ -321,6 +319,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $data = $data->toArray();
         }
 
+        $this->tracking['__original_attributes'] ??= $this->attributes; // Preserve original attributes.
+
         // Fill the model with the given data.
         foreach ($data as $key => $value) {
             if ($ignoreEmpty && empty($value)) {
@@ -329,6 +329,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
             $this->attributes[$key] = $value;
         }
+
+        $this->castStoredData(); // Apply casting to the data.
 
         return $this;
     }
@@ -375,10 +377,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         // Determine if the save operation was successful.
         $saved = $updatedStatus || $createdId;
 
-        // If saved successfully, apply casting to the data.
-        $saved && $this->castStoredData(preserveOriginal: false);
+        $saved === false && $this->clearOriginal(); // Revert to original attributes on update failure.
 
-        return $saved;
+        return $saved; // Return the save status.
     }
 
     /**
@@ -488,7 +489,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * 
      * @return void
      */
-    private function castStoredData(bool $preserveOriginal = true): void
+    private function castStoredData(): void
     {
         if (!$this->hasAnyCast()) {
             return; // No casts defined, nothing to do.
@@ -497,16 +498,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         // Go Through all the properties of this model.
         foreach ($this->attributes as $key => $value) {
             if ($this->hasCast($key)) {
-                $casted = $this->castAttribute($key, $value);
-                if ($casted !== $value) {
-                    // Preserve original value if required.
-                    if ($preserveOriginal) {
-                        $this->tracking['__original_attributes'][$key] = $value;
-                    }
-
-                    // Set the casted value back to the attribute.
-                    $this->attributes[$key] = $casted;
-                }
+                $this->attributes[$key] = $this->castAttribute($key, $value);
             }
         }
     }
@@ -536,6 +528,17 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         return $this->tracking['__exists'] ??= $this->query()
             ->where([static::$primaryKey => $this->primaryValue()])
             ->exists();
+    }
+
+    /**
+     * Checks if the model was newly created (i.e., it has a primary key but no original primary key).
+     *
+     * @return bool True if the model was newly created, false otherwise.
+     */
+    public function isNewlyCreated(): bool
+    {
+        return $this->exists() &&
+            ($this->tracking['__original_attributes'][static::$primaryKey] ?? null) === null;
     }
 
     /**
@@ -902,20 +905,6 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         return $this->hasChanges();
-    }
-
-    /**
-     * Preserve the current attributes as original before updating.
-     * 
-     * This method should be called before making updates to the model.
-     * 
-     * @param array $attributes The new data to fill the model with.
-     * @return void
-     */
-    public function preserveOriginalBeforeUpdating(array $attributes): void
-    {
-        $this->tracking['__original_attributes'] = $this->attributes;
-        $this->fill($attributes); // Fill the model with the new data.
     }
 
     /**

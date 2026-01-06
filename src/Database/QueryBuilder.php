@@ -373,7 +373,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param array $config
      * @return int
      */
-    public function bulkUpdate(array|Arrayable $data, array $config = []): int|array
+    public function bulkUpdate(array|Arrayable $data, array $config = []): int
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -1475,7 +1475,7 @@ class QueryBuilder implements QueryBuilderContract
 
         // Apply related model condition if necessary
         if ($this->isUsingModel()) {
-            $this->getModelBeingUsed()->preserveOriginalBeforeUpdating($data);
+            $this->getModelBeingUsed()->fill($data);
             $this->applyModelPrimaryCondition();
         }
 

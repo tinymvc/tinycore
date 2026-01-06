@@ -3,7 +3,7 @@
 namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\WrapperContract;
-use function in_array;
+use function strlen;
 
 class Wrapper implements WrapperContract
 {
@@ -40,11 +40,7 @@ class Wrapper implements WrapperContract
      */
     public function wrapTable(string $table): string
     {
-        if (str_contains($table, '.')) {
-            return implode('.', array_map([$this, 'wrap'], explode('.', $table)));
-        }
-
-        return $this->wrap($table);
+        return $this->wrapColumn($table); // Reuse wrapColumn for table names as well
     }
 
     /**
@@ -81,16 +77,25 @@ class Wrapper implements WrapperContract
      */
     public function wrap(string $value): string
     {
-        $maxLength = match ($this->driver) {
-            'mysql' => 64,
-            'pgsql' => 63,
-            default => null
-        };
+        $value = trim($value); // Trim whitespace
 
-        $value = $maxLength ? substr($value, 0, $maxLength) : $value;
+        // Check for wildcard
+        if ($value === '*') {
+            return $value;
+        }
 
-        if (in_array($value, ['*'])) {
-            return $value; // No wrapping needed for wildcard
+        // Validate identifier length (PostgreSQL limit is 63, MySQL is 64)
+        if (strlen($value) > 63) {
+            throw new \InvalidArgumentException(
+                "Identifier '{$value}' exceeds maximum length of 63 characters"
+            );
+        }
+
+        // Prevent SQL injection attempts in identifier names
+        if (preg_match('/[^\w_]/', $value)) {
+            throw new \InvalidArgumentException(
+                "Invalid characters in identifier: '{$value}'"
+            );
         }
 
         return $this->wrapper[0] . $value . $this->wrapper[1];
