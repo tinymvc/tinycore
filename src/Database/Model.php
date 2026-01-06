@@ -898,7 +898,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param string|null $field The specific field to check for changes. If null, checks the entire model.
      * @return bool True if the model or the specified field has changes, false otherwise.
      */
-    public function isDirty(?string $field = null): bool
+    public function isDirty(null|string $field = null): bool
     {
         if ($field !== null) {
             return in_array($field, array_keys($this->getChanges()));
