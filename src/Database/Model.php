@@ -327,7 +327,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 continue;
             }
 
-            if ($this->attributes[$key] === $value) {
+            if (isset($this->attributes[$key]) && $this->attributes[$key] === $value) {
                 continue;
             }
 
