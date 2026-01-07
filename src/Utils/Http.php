@@ -401,8 +401,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function post(string $url, array|string $data = []): HttpResponse
     {
-        $this->setData($data)
-            ->setMethod('POST');
+        $this->setMethod('POST');
+        $this->setData($data);
 
         return $this->send($url);
     }
@@ -416,8 +416,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function put(string $url, array|string $data = []): HttpResponse
     {
-        $this->setData($data)
-            ->setMethod('PUT');
+        $this->setMethod('PUT');
+        $this->setData($data);
 
         return $this->send($url);
     }
@@ -431,8 +431,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function patch(string $url, array|string $data = []): HttpResponse
     {
-        $this->setData($data)
-            ->setMethod('PATCH');
+        $this->setMethod('PATCH');
+        $this->setData($data);
 
         return $this->send($url);
     }
@@ -446,8 +446,8 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function delete(string $url, array|string $data = []): HttpResponse
     {
-        $this->setData($data)
-            ->setMethod('DELETE');
+        $this->setMethod('DELETE');
+        $this->setData($data);
 
         return $this->send($url);
     }
