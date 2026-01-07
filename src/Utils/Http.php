@@ -354,6 +354,19 @@ class Http extends HttpRequest implements HttpUtilContract
     }
 
     /**
+     * Sets the timeout for the request in seconds.
+     * 
+     * @deprecated Use withTimeout() instead for consistency
+     * @param int $seconds Timeout in seconds.
+     * @return self
+     */
+    public function timeout(int $seconds): self
+    {
+        $this->withTimeout($seconds);
+        return $this;
+    }
+
+    /**
      * Sets fields for a POST request.
      *
      * @param array|string $fields The fields to include in the POST body. Can be an array or string.
@@ -388,7 +401,7 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function post(string $url, array|string $data = []): HttpResponse
     {
-        $this->postFields($data)
+        $this->setData($data)
             ->setMethod('POST');
 
         return $this->send($url);
@@ -403,7 +416,7 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function put(string $url, array|string $data = []): HttpResponse
     {
-        $this->postFields($data)
+        $this->setData($data)
             ->setMethod('PUT');
 
         return $this->send($url);
@@ -418,7 +431,7 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function patch(string $url, array|string $data = []): HttpResponse
     {
-        $this->postFields($data)
+        $this->setData($data)
             ->setMethod('PATCH');
 
         return $this->send($url);
@@ -433,7 +446,7 @@ class Http extends HttpRequest implements HttpUtilContract
      */
     public function delete(string $url, array|string $data = []): HttpResponse
     {
-        $this->postFields($data)
+        $this->setData($data)
             ->setMethod('DELETE');
 
         return $this->send($url);

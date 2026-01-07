@@ -17,6 +17,7 @@ use Spark\Utils\Http as BaseHttp;
  * @method static HttpResponse patch(string $url, array $data = [])
  * @method static HttpResponse delete(string $url, array $data = [])
  * @method static HttpResponse send(string $url, array $params = [])
+ * @method static BaseHttp timeout(int $seconds)
  * @method static BaseHttp option(int $key, mixed $value)
  * @method static BaseHttp options(array $options)
  * @method static BaseHttp useragent(string $useragent)
