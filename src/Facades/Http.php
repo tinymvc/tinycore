@@ -29,6 +29,7 @@ use Spark\Utils\Http as BaseHttp;
  * @method static BaseHttp proxy(string $proxy, string $proxyAuth = '')
  * @method static BaseHttp download(string $location, bool $force = false)
  * @method static BaseHttp postFields(array|string $fields, null|string $contentType = null)
+ * @method static BaseHttp attach(string $name, mixed $contents, ?string $filename = null, array $headers = [])
  * @method static BaseHttp withHeaders(array $headers)
  * @method static BaseHttp withContentType(string $type)
  * @method static BaseHttp withAccept(string $type)

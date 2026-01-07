@@ -4,7 +4,10 @@ namespace Spark\Helpers;
 
 use Spark\Exceptions\Utils\PingUtilException;
 use Spark\Support\Traits\Macroable;
+use function in_array;
 use function is_array;
+use function is_resource;
+use function is_string;
 
 /**
  * Class PendingRequest
@@ -23,6 +26,12 @@ class HttpRequest
 
     /** @var array cURL options */
     protected array $options = [];
+
+    /** @var array File attachments for multipart requests */
+    protected array $attachments = [];
+
+    /** @var bool Whether this is a multipart request */
+    protected bool $isMultipart = false;
 
     /**
      * Constructor.
@@ -313,6 +322,87 @@ class HttpRequest
     }
 
     /**
+     * Attach a file to the request.
+     *
+     * @param string $name The form field name
+     * @param string|resource $contents The file contents or file path
+     * @param string|null $filename The filename to use (optional)
+     * @param array $headers Additional headers for this file part (optional)
+     * @return self
+     */
+    public function attach(string $name, mixed $contents, ?string $filename = null, array $headers = []): self
+    {
+        $this->isMultipart = true;
+
+        // If contents is a file path, create a CURLFile
+        if (is_string($contents) && is_file($contents)) {
+            $mimeType = $headers['Content-Type'] ?? mime_content_type($contents) ?: 'application/octet-stream';
+            $filename ??= basename($contents);
+            $this->attachments[$name] = new \CURLFile($contents, $mimeType, $filename);
+        }
+        // If contents is a resource (file handle)
+        elseif (is_resource($contents)) {
+            $tempFile = tempnam(sys_get_temp_dir(), 'upload_');
+            file_put_contents($tempFile, stream_get_contents($contents));
+            $mimeType = $headers['Content-Type'] ?? 'application/octet-stream';
+            $filename ??= basename($tempFile);
+            $this->attachments[$name] = new \CURLFile($tempFile, $mimeType, $filename);
+        }
+        // If contents is raw string data
+        else {
+            // For raw content, we need to write to a temp file
+            $tempFile = tempnam(sys_get_temp_dir(), 'upload_');
+            file_put_contents($tempFile, $contents);
+            $mimeType = $headers['Content-Type'] ?? 'application/octet-stream';
+            $filename ??= 'file';
+            $this->attachments[$name] = new \CURLFile($tempFile, $mimeType, $filename);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Indicate the request is a multipart form request.
+     *
+     * @return self
+     */
+    public function asMultipart(): self
+    {
+        $this->isMultipart = true;
+        return $this;
+    }
+
+    /**
+     * Check if the request has attachments.
+     *
+     * @return bool
+     */
+    public function hasAttachments(): bool
+    {
+        return !empty($this->attachments);
+    }
+
+    /**
+     * Get the attachments.
+     *
+     * @return array
+     */
+    public function getAttachments(): array
+    {
+        return $this->attachments;
+    }
+
+    /**
+     * Check if this is a multipart request.
+     *
+     * @return bool
+     */
+    public function isMultipart(): bool
+    {
+        return $this->isMultipart;
+    }
+
+    /**
      * Set the HTTP method.
      * 
      * @param string $method
@@ -452,8 +542,21 @@ class HttpRequest
         ];
 
         // Handle POST/PUT/PATCH/DELETE data
-        if (!empty($this->data) && in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
-            $this->withPostFields($this->data);
+        if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
+            // If we have attachments, prepare multipart form data
+            if ($this->isMultipart || !empty($this->attachments)) {
+                $postFields = $this->attachments;
+
+                // Merge in regular data fields if present
+                if (!empty($this->data) && is_array($this->data)) {
+                    $postFields = [...$this->flattenArray($this->data), ...$postFields];
+                }
+
+                // cURL will automatically set Content-Type: multipart/form-data
+                $this->setOption(CURLOPT_POSTFIELDS, $postFields);
+            } elseif (!empty($this->data)) {
+                $this->withPostFields($this->data);
+            }
         }
 
         // Set headers
@@ -495,5 +598,29 @@ class HttpRequest
             length: curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
             headers: (array) curl_getinfo($curl, CURLINFO_HEADER_OUT) ?: [],
         );
+    }
+
+    /**
+     * Flatten a multi-dimensional array for multipart form data.
+     *
+     * @param array $array The array to flatten
+     * @param string $prefix The prefix for nested keys
+     * @return array
+     */
+    protected function flattenArray(array $array, string $prefix = ''): array
+    {
+        $result = [];
+
+        foreach ($array as $key => $value) {
+            $newKey = $prefix === '' ? $key : "{$prefix}[{$key}]";
+
+            if (is_array($value)) {
+                $result = [...$result, ...$this->flattenArray($value, $newKey)];
+            } else {
+                $result[$newKey] = $value;
+            }
+        }
+
+        return $result;
     }
 }
