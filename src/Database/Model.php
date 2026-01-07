@@ -160,7 +160,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function __construct()
     {
-        $this->primaryValue() && $this->castStoredData();
+        $this->hasPrimaryValue() && $this->castStoredData();
     }
 
     /**
@@ -319,7 +319,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $data = $data->toArray();
         }
 
-        $this->tracking['__original_attributes'] ??= $this->attributes; // Preserve original attributes.
+        $hasPrimary = $this->hasPrimaryValue(); // Check if the model has a primary key value.
 
         // Fill the model with the given data.
         foreach ($data as $key => $value) {
@@ -327,7 +327,19 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 continue;
             }
 
-            $this->attributes[$key] = $value;
+            if ($this->attributes[$key] === $value) {
+                continue;
+            }
+
+            // Track original attributes for change detection.
+            if (
+                $hasPrimary &&
+                !array_key_exists($key, $this->tracking['__original_attributes'] ?? [])
+            ) {
+                $this->tracking['__original_attributes'][$key] = ($this->attributes[$key] ?? null);
+            }
+
+            $this->attributes[$key] = $value; // Set the attribute value.
         }
 
         $this->castStoredData(); // Apply casting to the data.
@@ -351,7 +363,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $createdId = 0;
 
         // Update this records if it has an id, else insert this records into database.
-        if (!empty($this->primaryValue())) {
+        if ($this->hasPrimaryValue()) {
             $condition = [static::$primaryKey => $this->primaryValue()];
             $updatedStatus = (bool) $this->query()->update($data, $condition);
 
@@ -370,16 +382,14 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         // Save model id if it is newly created.
-        if (empty($this->primaryValue()) && is_int($createdId) && $createdId > 0) {
+        if (!$this->hasPrimaryValue() && is_int($createdId) && $createdId > 0) {
             $this->attributes[static::$primaryKey] = $createdId;
         }
 
-        // Determine if the save operation was successful.
-        $saved = $updatedStatus || $createdId;
+        $updatedStatus && $this->trackUpdated();
+        $createdId && $this->trackCreated();
 
-        $saved === false && $this->clearOriginal(); // Revert to original attributes on update failure.
-
-        return $saved; // Return the save status.
+        return $updatedStatus || $createdId; // Return true on success.
     }
 
     /**
@@ -515,13 +525,23 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /**
+     * Checks if the model has an original primary key value.
+     *
+     * @return bool True if the model has an original primary key, false otherwise.
+     */
+    public function hasPrimaryValue(): bool
+    {
+        return !empty($this->primaryValue());
+    }
+
+    /**
      * Checks if the model exists in the database.
      *
      * @return bool True if the model exists, false otherwise.
      */
     public function exists(): bool
     {
-        if (empty($this->primaryValue())) {
+        if (!$this->hasPrimaryValue()) {
             return false;
         }
 
@@ -535,10 +555,39 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      *
      * @return bool True if the model was newly created, false otherwise.
      */
-    public function isNewlyCreated(): bool
+    public function wasNewlyCreated(): bool
     {
-        return $this->exists() &&
-            ($this->tracking['__original_attributes'][static::$primaryKey] ?? null) === null;
+        return $this->exists() && !$this->hasOriginal() && ($this->tracking['__was_created'] ?? false);
+    }
+
+    /**
+     * Checks if the model was updated (i.e., it has an original primary key and changes were made).
+     *
+     * @return bool True if the model was updated, false otherwise.
+     */
+    public function wasUpdated(): bool
+    {
+        return $this->exists() && $this->hasOriginal() && ($this->tracking['__was_updated'] ?? false);
+    }
+
+    /**
+     * Checks if the model was created (i.e., it has a primary key and was marked as created).
+     *
+     * @return bool True if the model was created, false otherwise.
+     */
+    public function wasCreated(): bool
+    {
+        return $this->exists() && ($this->tracking['__was_created'] ?? false);
+    }
+
+    /**
+     * Checks if the model was either newly created or updated.
+     *
+     * @return bool True if the model was changed, false otherwise.
+     */
+    public function wasChanged(): bool
+    {
+        return $this->wasNewlyCreated() || $this->wasCreated() || $this->wasUpdated();
     }
 
     /**
@@ -850,16 +899,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return []; // No original data to compare with.
         }
 
-        $original = $this->tracking['__original_attributes'];
-        $changes = [];
-
-        foreach ($this->attributes as $key => $value) {
-            if (!array_key_exists($key, $original) || $original[$key] !== $value) {
-                $changes[$key] = $value;
-            }
-        }
-
-        return $changes;
+        return $this->tracking['__original_attributes'];
     }
 
     /**
@@ -917,9 +957,39 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function restoreOriginal(): void
     {
         if ($this->hasOriginal()) {
-            $this->attributes = $this->tracking['__original_attributes'];
+            $this->attributes = [...$this->attributes, ...$this->tracking['__original_attributes']];
             $this->clearOriginal();
         }
+    }
+
+    /**
+     * Mark the model as updated.
+     * 
+     * @return void
+     */
+    public function trackUpdated(): void
+    {
+        $this->tracking['__was_updated'] = true;
+    }
+
+    /**
+     * Mark the model as created.
+     * 
+     * @return void
+     */
+    public function trackCreated(): void
+    {
+        $this->tracking['__was_created'] = true;
+    }
+
+    /**
+     * Clear all tracking information for the model.
+     * 
+     * @return void
+     */
+    public function clearTracks(): void
+    {
+        $this->tracking = [];
     }
 
     /**
@@ -1048,14 +1118,14 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function refresh(): static
     {
-        if ($this->primaryValue()) {
+        if ($this->hasPrimaryValue()) {
             $fresh = static::query()
                 ->where([static::$primaryKey => $this->primaryValue()])
                 ->fetchAssoc()
                 ->first();
 
             if ($fresh) {
-                $this->clearOriginal();
+                $this->clearTracks();
                 $this->loadAttributes($fresh);
                 $this->reloadRelations();
             }

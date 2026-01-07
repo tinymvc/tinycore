@@ -1531,8 +1531,12 @@ class QueryBuilder implements QueryBuilderContract
         // Returns the number of affected rows.
         $count = $statement->rowCount();
 
-        if ($count === 0 && $this->isUsingModel()) {
-            $this->getModelBeingUsed()->restoreOriginal();
+        if ($this->isUsingModel()) {
+            if ($count) {
+                $this->getModelBeingUsed()->trackUpdated();
+            } else {
+                $this->getModelBeingUsed()->restoreOriginal();
+            }
         }
 
         return $count; // Number of affected rows
