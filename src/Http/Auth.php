@@ -72,6 +72,7 @@ class Auth implements AuthContract, ArrayAccess
             'cookie_expire' => '6 months',
             'jwt_enabled' => false,
             'jwt_expire' => '6 months',
+            'basic_auth' => false,
             'use_remember_token' => false,
             'driver' => null,
             ...$config
@@ -578,6 +579,36 @@ class Auth implements AuthContract, ArrayAccess
     }
 
     /**
+     * Checks if the user is authenticated via Basic Authentication.
+     *
+     * This method checks for Basic Authentication credentials in the Authorization header of the request.
+     * If valid credentials are found, it verifies them against the user model and returns the user ID.
+     *
+     * @return ?int The user ID if authenticated via Basic Auth, or null if not authenticated.
+     */
+    protected function checkBasicAuth(): ?int
+    {
+        $authHeader = request()->header('authorization');
+
+        if ($authHeader && preg_match('/Basic\s(\S+)/', $authHeader, $matches)) {
+            $encodedCredentials = $matches[1];
+            $decodedCredentials = base64_decode($encodedCredentials);
+            [$username, $password] = explode(':', $decodedCredentials, 2);
+
+            $user = $this->model::select('id, password')
+                ->where('username', $username)
+                ->fetchAssoc()
+                ->first();
+
+            if ($user && passcode($password, $user['password'])) {
+                return $user['id']; // Return user ID if authentication is successful
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Checks and sets the authentication ID from the session.
      *
      * This method checks if the session contains the configured session key
@@ -603,6 +634,14 @@ class Auth implements AuthContract, ArrayAccess
             if ($id && $id > 0) {
                 $this->id = intval($id);
                 return; // If JWT auth is successful, set the ID and return
+            }
+        }
+
+        if (!$this->session->has($this->config['session_key']) && $this->config['basic_auth']) {
+            $id = $this->checkBasicAuth(); // Check basic authentication if enabled
+            if ($id && $id > 0) {
+                $this->id = intval($id);
+                return; // If basic auth is successful, set the ID and return
             }
         }
 

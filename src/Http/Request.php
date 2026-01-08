@@ -976,7 +976,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function expectsJson(): bool
     {
         return $this->accept('application/json') &&
-            ($this->isAjax() || strpos($this->getPath(), '/api/') === 0);
+            ($this->isAjax() || strpos($this->getPath(), '/api/') === 0 || strpos($this->getPath(), '/webhook/') === 0);
     }
 
     /**
