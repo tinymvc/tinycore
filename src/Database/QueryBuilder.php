@@ -1591,7 +1591,13 @@ class QueryBuilder implements QueryBuilderContract
         $this->resetWhere();
 
         // Returns the number of affected rows.
-        return $statement->rowCount();
+        $deleted = $statement->rowCount();
+
+        if ($deleted && $this->isModelWithPrimaryBeingUsed()) {
+            $this->getModelBeingUsed()->trackDeleted();
+        }
+
+        return $deleted;
     }
 
     /**

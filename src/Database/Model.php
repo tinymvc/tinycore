@@ -399,7 +399,11 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function remove(): bool
     {
-        return $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
+        $deleted = $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
+        if ($deleted) {
+            $this->trackDeleted();
+        }
+        return $deleted;
     }
 
     /**
@@ -588,6 +592,16 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function wasChanged(): bool
     {
         return $this->wasNewlyCreated() || $this->wasCreated() || $this->wasUpdated();
+    }
+
+    /**
+     * Checks if the model was deleted.
+     *
+     * @return bool True if the model was deleted, false otherwise.
+     */
+    public function wasDeleted(): bool
+    {
+        return $this->tracking['__was_deleted'] ?? false;
     }
 
     /**
@@ -970,6 +984,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function trackUpdated(): void
     {
         $this->tracking['__was_updated'] = true;
+        $this->triggerEvent('updated'); // Trigger the 'updated' event.
     }
 
     /**
@@ -980,6 +995,33 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function trackCreated(): void
     {
         $this->tracking['__was_created'] = true;
+        $this->triggerEvent('created'); // Trigger the 'created' event.
+    }
+
+    /**
+     * Mark the model as deleted.
+     * 
+     * @return void
+     */
+    public function trackDeleted(): void
+    {
+        $this->tracking['__was_deleted'] = true;
+        $this->triggerEvent('deleted'); // Trigger the 'deleted' event.
+    }
+
+    /**
+     * Trigger a model event if the events method exists.
+     *
+     * @param string $event The name of the event to trigger.
+     * @return void
+     */
+    public function triggerEvent(string $event): void
+    {
+        if (!method_exists($this, 'events')) {
+            return;
+        }
+
+        $this->events()->$event(); // Call the event method dynamically.
     }
 
     /**

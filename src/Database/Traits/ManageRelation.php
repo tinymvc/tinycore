@@ -102,7 +102,7 @@ trait ManageRelation
      * @param string|int $value The Unique Identifier of the model to retrieve.
      * @return false|Model The found model instance or false if not found.
      */
-    public function find($value): false|Model
+    public function find(string|int $value): false|Model
     {
         $model = $this->getRelatedModel();
 
@@ -118,7 +118,7 @@ trait ManageRelation
      * @return Model The found model instance.
      * @throws \Spark\Exceptions\NotFoundException If the model is not found.
      */
-    public function findOrFail($value): Model
+    public function findOrFail(string|int $value): Model
     {
         $model = $this->getRelatedModel();
 
@@ -133,10 +133,16 @@ trait ManageRelation
      * @param string|int $value The unique identifier of the model to delete.
      * @return bool True if deletion was successful, false otherwise.
      */
-    public function destroy($value): bool
+    public function destroy(string|int $value): bool
     {
         $model = $this->getRelatedModel();
-        return $this->delete([$model::$primaryKey => $value]);
+        $deleted = $this->delete([$model::$primaryKey => $value]);
+
+        if ($deleted) {
+            $model->trackDeleted();
+        }
+
+        return $deleted;
     }
 
     /**
@@ -635,6 +641,17 @@ trait ManageRelation
         if (!empty($primaryValue)) {
             $this->where([$model::$primaryKey => $primaryValue]);
         }
+    }
+
+    /**
+     * Check if the model being used has a primary key value set.
+     *
+     * @return bool
+     */
+    private function isModelWithPrimaryBeingUsed(): bool
+    {
+        $model = $this->getModelBeingUsed();
+        return $model !== null && !empty($model->primaryValue());
     }
 
     /**
