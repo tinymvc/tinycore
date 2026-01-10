@@ -69,9 +69,7 @@ trait CreateDeleteForHasRelation
         $relatedClass = $this->related;
 
         foreach ($records as $attributes) {
-            $models[] = $relatedClass::create(array_merge($attributes, [
-                $this->foreignKey => $foreignKeyValue
-            ]));
+            $models[] = $relatedClass::create([...$attributes, $this->foreignKey => $foreignKeyValue]);
         }
 
         return $models;

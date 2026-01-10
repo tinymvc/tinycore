@@ -183,15 +183,14 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * Loads an array of data into a new model instance.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
-     * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @return static A model instance populated with the given data.
      */
-    public static function load(array|Arrayable $data, bool $ignoreEmpty = false): static
+    public static function load(array|Arrayable $data): static
     {
         // Create & Hold a new model.
         $model = new static();
 
-        $model->fill($data, $ignoreEmpty); // Fill the model with the given data.
+        $model->fill($data); // Fill the model with the given data.
 
         // Return the new model object.
         return $model;
@@ -201,12 +200,11 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * Creates a new model instance from the given data and saves it to the database.
      * 
      * @param array|Arrayable $data Key-value pairs of model properties.
-     * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @return static The saved model instance.
      */
-    public static function create(array|Arrayable $data, bool $ignoreEmpty = false): static
+    public static function create(array|Arrayable $data): static
     {
-        $model = self::load($data, $ignoreEmpty);
+        $model = self::load($data);
         $model->save(forceCreate: true);
 
         return $model; // Return the saved model instance.
@@ -216,14 +214,13 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * Creates a new model instance from the given data and saves it to the database.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
-     * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @param array $uniqueBy Array of fields to uniquely identify the model.
      * @param array|Arrayable $values Additional values to set if creating a new model.
      * @return static The saved model instance.
      */
-    public static function createOrUpdate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = [], array|Arrayable $values = []): static
+    public static function createOrUpdate(array|Arrayable $data, array $uniqueBy = [], array|Arrayable $values = []): static
     {
-        $model = self::load($data, $ignoreEmpty);
+        $model = self::load($data);
 
         $data = $model->getFillableData();
 
@@ -293,27 +290,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /**
-     * Updates an existing model or creates a new one if it doesn't exist.
-     *
-     * @param array|Arrayable $data Key-value pairs of model properties.
-     * @param bool $ignoreEmpty If true, empty values will be ignored.
-     * @param array $uniqueBy Array of fields to uniquely identify the model.
-     * @param array|Arrayable $values Additional values to set if creating a new model.
-     * @return static The updated or created model instance.
-     */
-    public static function updateOrCreate(array|Arrayable $data, bool $ignoreEmpty = false, array $uniqueBy = [], array|Arrayable $values = []): static
-    {
-        return self::createOrUpdate($data, $ignoreEmpty, $uniqueBy, $values);
-    }
-
-    /**
      * Fills the model with the given data.
      *
      * @param array|Arrayable $data Key-value pairs of model properties.
-     * @param bool $ignoreEmpty If true, empty values will be ignored.
      * @return static The current model instance.
      */
-    public function fill(array|Arrayable $data, bool $ignoreEmpty = false): static
+    public function fill(array|Arrayable $data): static
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -323,10 +305,6 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         // Fill the model with the given data.
         foreach ($data as $key => $value) {
-            if ($ignoreEmpty && empty($value)) {
-                continue;
-            }
-
             if (isset($this->attributes[$key]) && $this->attributes[$key] === $value) {
                 continue;
             }
