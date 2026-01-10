@@ -185,7 +185,7 @@ class Queue implements QueueContract
 
             // If the job is scheduled for the past, execute it.
             if ($job->getScheduledTime() <= $now) {
-                $this->removeJob($id); // Remove the job from the queue.
+                !$job->isRepeated() && $this->removeJob($id); // Remove the job from the queue.
 
                 if (is_cli()) {
                     Prompt::message("Running job <bold>#$id</bold>", 'info');
