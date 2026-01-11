@@ -180,23 +180,6 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /**
-     * Loads an array of data into a new model instance.
-     *
-     * @param array|Arrayable $data Key-value pairs of model properties.
-     * @return static A model instance populated with the given data.
-     */
-    public static function load(array|Arrayable $data): static
-    {
-        // Create & Hold a new model.
-        $model = new static();
-
-        $model->fill($data); // Fill the model with the given data.
-
-        // Return the new model object.
-        return $model;
-    }
-
-    /**
      * Creates a new model instance from the given data and saves it to the database.
      * 
      * @param array|Arrayable $data Key-value pairs of model properties.
@@ -204,7 +187,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public static function create(array|Arrayable $data): static
     {
-        $model = self::load($data);
+        $model = new static();
+        $model->fill($data);
         $model->save(forceCreate: true);
 
         return $model; // Return the saved model instance.
@@ -220,7 +204,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public static function createOrUpdate(array|Arrayable $data, array $uniqueBy = [], array|Arrayable $values = []): static
     {
-        $model = self::load($data);
+        $model = new static();
+        $model->fill($data);
 
         $data = $model->getFillableData();
 
@@ -235,7 +220,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         if ($model) {
             $model->fill($data);
         } else {
-            $model = self::load($data);
+            $model = new static();
+            $model->fill($data);
         }
 
         $model->save(); // Save the model.
@@ -286,7 +272,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             !is_array($values) ? $values->toArray() : $values
         );
 
-        return self::load($attributes);
+        $model = new static();
+        $model->fill($attributes);
+
+        return $model;
     }
 
     /**
@@ -382,23 +371,6 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $this->trackDeleted();
         }
         return $deleted;
-    }
-
-    /**
-     * Loads the model attributes from the given data array.
-     * 
-     * This is helpful when you want to populate a model instance with 
-     * directly inserting database's data.
-     *
-     * @param array $data Key-value pairs of model properties.
-     * @return static The current model instance.
-     */
-    public function loadAttributes(array $data): static
-    {
-        $this->attributes = $data;
-        $this->castStoredData();
-
-        return $this;
     }
 
     /**
@@ -1022,7 +994,11 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     {
         $field = is_array($field) ? $field : func_get_args();
         $filtered = array_intersect_key($this->attributes, array_flip($field));
-        return static::load($filtered);
+
+        $model = new static();
+        $model->fill($filtered);
+
+        return $model;
     }
 
     /**
@@ -1035,7 +1011,11 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     {
         $field = is_array($field) ? $field : func_get_args();
         $filtered = array_diff_key($this->attributes, array_flip($field));
-        return static::load($filtered);
+
+        $model = new static();
+        $model->fill($filtered);
+
+        return $model;
     }
 
     /**
@@ -1145,8 +1125,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 ->first();
 
             if ($fresh) {
+                $this->attributes = $fresh; // Update attributes with fresh data.
+                $this->castStoredData();
                 $this->clearTracks();
-                $this->loadAttributes($fresh);
                 $this->reloadRelations();
             }
         }

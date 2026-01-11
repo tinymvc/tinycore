@@ -109,7 +109,7 @@ trait HasRelation
     {
         $relations = array_keys($this->relations);
         $this->clearRelations();
-        $this->attachRelation($relations);
+        $this->load($relations);
     }
 
     /**
@@ -441,15 +441,15 @@ trait HasRelation
     }
 
     /**
-     * Attach relationships to the model.
+     * Load relationships for the model.
      * 
-     * This method allows you to attach one or more relationships to the model.
+     * This method allows you to eager loading one or more relationships for the model.
      * It accepts a string or an array of relationship names and loads them.
      * 
      * @param array|string $relations
      * @return void
      */
-    public function attachRelation(array|string $relations): void
+    public function load(array|string $relations): void
     {
         $relations = is_array($relations) ? $relations : func_get_args();
         foreach ($relations as $relation) {

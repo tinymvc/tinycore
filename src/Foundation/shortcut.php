@@ -1595,9 +1595,32 @@ if (!function_exists('passcode')) {
      * @return bool|string Returns true if the password matches the hash, false if it does not match,
      *                     or a new hash string if no hash is provided.
      */
-    function passcode(string $password, ?string $hash = null): bool|string
+    function passcode(string $password, null|string $hash = null): bool|string
     {
         return hashing()->password($password, $hash);
+    }
+}
+
+if (!function_exists('bcrypt')) {
+    /**
+     * Hashes or verifies a password using the bcrypt algorithm.
+     *
+     * This function hashes a given password using the bcrypt algorithm or verifies it against an existing bcrypt hash.
+     * If a hash is provided, it checks if the password matches the hash and returns a boolean result.
+     * If no hash is provided, it generates and returns a new bcrypt hash for the password.
+     *
+     * @param string $password The password to be hashed or verified.
+     * @param string|null $hash An optional existing bcrypt hash to verify against.
+     * @return bool|string Returns true if the password matches the hash, false if it does not match,
+     *                     or a new bcrypt hash string if no hash is provided.
+     */
+    function bcrypt(string $password, null|string $hash = null): bool|string
+    {
+        if ($hash !== null) {
+            return hashing()->validatePassword($password, $hash);
+        }
+
+        return hashing()->bcrypt($password);
     }
 }
 

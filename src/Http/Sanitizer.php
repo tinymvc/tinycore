@@ -13,6 +13,7 @@ use function func_get_args;
 use function is_array;
 use function is_int;
 use function is_string;
+use function in_array;
 use function strval;
 
 /**
@@ -731,6 +732,29 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
             // If so, split it into an array of types
             if (is_string($type) && str_contains($type, '|')) {
                 $type = explode('|', $type);
+                $type = array_filter($type, fn($t) => in_array($t, [
+                    'email',
+                    'text',
+                    'html',
+                    'number',
+                    'float',
+                    'boolean',
+                    'url',
+                    'ip',
+                    'alpha',
+                    'alpha_num',
+                    'alpha_dash',
+                    'digits',
+                    'phone',
+                    'slug',
+                    'string',
+                    'date',
+                    'json',
+                    'array',
+                    'file',
+                    'password',
+                    'safe'
+                ]));
             }
 
             // If the type is an array, use the first element as the type
