@@ -804,6 +804,51 @@ class Validator implements ValidatorContract
     }
 
     /**
+     * Checks if there are any validation errors.
+     *
+     * @return bool True if there are validation errors, false otherwise.
+     */
+    public function hasErrors(): bool
+    {
+        return !empty($this->errors);
+    }
+
+    /**
+     * Checks if validation has passed.
+     *
+     * @return bool True if there are no validation errors, false otherwise.
+     */
+    public function passes(): bool
+    {
+        return empty($this->errors);
+    }
+
+    /**
+     * Checks if validation has failed.
+     *
+     * @return bool True if there are validation errors, false otherwise.
+     */
+    public function fails(): bool
+    {
+        return !empty($this->errors);
+    }
+
+    /**
+     * Returns validation errors for a specific field or all fields.
+     *
+     * @param string|null $field The field name to get errors for, or null for all fields.
+     * @return array Array of error messages for the specified field or all fields.
+     */
+    public function errors(null|string $field = null): array
+    {
+        if ($field !== null) {
+            return $this->errors[$field] ?? [];
+        }
+
+        return $this->errors;
+    }
+
+    /**
      * Returns the validated data.
      * 
      * Returns the sanitized data after validation has been performed.

@@ -92,13 +92,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public Collection $server;
 
     /**
-     * Sanitizer instance for all input data.
-     * 
-     * @var Sanitizer
-     */
-    public Sanitizer $input;
-
-    /**
      * The error object.
      *
      * This property contains the error messages
@@ -106,14 +99,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * @var InputErrors
      */
-    public InputErrors $errors;
+    private InputErrors $errors;
 
     /**
      * Sanitizer instance for validated input data.
      * 
      * @var Sanitizer
      */
-    public Sanitizer $validated;
+    private Sanitizer $validated;
 
     /**
      * request constructor.
@@ -134,11 +127,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->files = collect($_FILES);
         $this->query = collect($_GET);
         $this->post = collect([...$_POST, ...$this->parsePhpInput()]);
-
-        // Initialize Sanitizer instances for input and validated data.
-        $this->routeParams = [];
-        $this->validated = new Sanitizer();
-        $this->input = new Sanitizer($this->all());
+        $this->routeParams = []; // Initialize empty route parameters.
     }
 
     /**
@@ -503,11 +492,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Retrieves a query parameter value.
      * 
-     * @param ?string $key The parameter key.
+     * @param null|string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return \Spark\Http\Sanitizer|mixed The parameter value or default.
+     * @return ($key is null ? \Spark\Http\Sanitizer : mixed) The parameter value or default.
      */
-    public function query(?string $key = null, $default = null): mixed
+    public function query(null|string $key = null, $default = null): mixed
     {
         if ($key !== null) {
             return $this->query->get($key, $default);
@@ -529,11 +518,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Retrieves a POST parameter value.
      * 
-     * @param ?string $key The parameter key.
+     * @param null|string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return \Spark\Http\Sanitizer|mixed The parameter value or default.
+     * @return ($key is null ? \Spark\Http\Sanitizer : mixed) The parameter value or default.
      */
-    public function post(?string $key = null, $default = null): mixed
+    public function post(null|string $key = null, $default = null): mixed
     {
         if ($key !== null) {
             return $this->post->get($key, $default);
@@ -984,21 +973,23 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param null|string|array $filter Optional filter to apply to the input data.
      * @param mixed $default Default value to return if the filter is a string and the key does not exist.
-     * @return \Spark\Http\Sanitizer|mixed An instance of Sanitizer with the request data.
+     * @return ($filter is null ? \Spark\Http\Sanitizer : mixed) The Sanitizer instance or filtered input value.
      */
     public function input(null|string|array $filter = null, $default = null): mixed
     {
+        $input = new Sanitizer($this->query->merge($this->post)->merge($this->files));
+
         // Return filtered input based on the provided filter.
         if ($filter !== null && is_array($filter)) {
-            return $this->input->only($filter);
+            return $input->only($filter);
         }
 
         // Return a single input value if filter is a string.
         if ($filter !== null && is_string($filter)) {
-            return $this->input->get($filter, $default);
+            return $input->get($filter, $default);
         }
 
-        return $this->input; // Return the Sanitizer instance.
+        return $input; // Return the Sanitizer instance.
     }
 
     /**
@@ -1007,11 +998,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param string $key The key to retrieve the sanitized value for.
      * @param array $allowedTags An array of allowed HTML tags for sanitization.
      * 
-     * @return ?string The sanitized value associated with the given key, or null if the key does not exist.
+     * @return null|string The sanitized value associated with the given key, or null if the key does not exist.
      */
-    public function safe(string $key, array $allowedTags = []): ?string
+    public function safe(string $key, array $allowedTags = []): null|string
     {
-        return $this->input->safe($key, $allowedTags);
+        return $this->input()->safe($key, $allowedTags);
     }
 
     /**
@@ -1289,7 +1280,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function validated(): Sanitizer
     {
-        if ($this->validated->isEmpty()) {
+        if (!isset($this->validated) || $this->validated->isEmpty()) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
         }
 
@@ -1297,31 +1288,19 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Get the error object.
-     *
-     * The method returns the error object from the session flash data.
-     * The error object contains the error messages and attributes from the previous request.
-     *
-     * @return \Spark\Helpers\InputErrors
-     *   The error object.
-     */
-    public function getInputErrors(): InputErrors
-    {
-        return $this->errors ??= new InputErrors(
-            messages: $this->session()->getFlash('errors', []),
-            attributes: $this->session()->getFlash('input', []),
-        );
-    }
-
-    /**
      * Get the errors from the current request.
      *
      * @param null|array|string $field The field name to retrieve the error messages for.
      *                                  If null, all error object will be returned.
-     * @return object|bool An object containing the error messages from the current request.
+     * @return ($field is null ? InputErrors : bool) An object containing the error messages from the current request.
      */
-    public function errors(null|array|string $field = null): mixed
+    public function errors(null|array|string $field = null): bool|InputErrors
     {
+        $this->errors ??= new InputErrors(
+            messages: $this->session()->getFlash('errors', []),
+            attributes: $this->session()->getFlash('input', []),
+        );
+
         if ($field !== null) {
             foreach ((array) $field as $name) {
                 if ($this->errors->has($name)) {
@@ -1338,10 +1317,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * Get the value of a field from the previous request using the old input.
      *
      * @param string $field The name of the field to retrieve.
-     * @param ?string $default The default value to return if the field is not found.
+     * @param null|string $default The default value to return if the field is not found.
      * @return string|null The value of the field from the previous request, or the default value if not found.
      */
-    public function old(string $field, ?string $default = null): ?string
+    public function old(string $field, null|string $default = null): null|string
     {
         return $this->errors->getOld($field, $default);
     }
@@ -1351,11 +1330,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * This method retrieves the session instance from the application container.
      *
-     * @param ?string $key The session key to retrieve (optional).
+     * @param null|string $key The session key to retrieve (optional).
      * @param mixed $default The default value to return if the key does not exist (optional).
-     * @return \Spark\Http\Session|mixed The session instance or the value associated with the given key.
+     * @return ($key is null ? \Spark\Http\Session : mixed) The session instance or the value associated with the given key.
      */
-    public function session(?string $key = null, $default = null): mixed
+    public function session(null|string $key = null, $default = null): mixed
     {
         /** @var \Spark\Http\Session $session */
         $session = app(Session::class);
@@ -1387,12 +1366,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * If no key is provided, it returns the entire user object. If no user is authenticated,
      * it returns null or the specified default value.
      *
-     * @param ?string $key The specific attribute of the user to retrieve (optional).
+     * @param null|string $key The specific attribute of the user to retrieve (optional).
      * @param mixed $default The default value to return if no user is authenticated or the key does not exist (optional).
      *
-     * @return \App\Models\User|mixed The authenticated user object, a specific attribute value, or the default value.
+     * @return ($key is null ? \App\Models\User : mixed) The authenticated user object, a specific attribute value, or the default value.
      */
-    public function user(?string $key = null, $default = null): mixed
+    public function user(null|string $key = null, $default = null): mixed
     {
         return $this->auth()->user($key, $default);
     }

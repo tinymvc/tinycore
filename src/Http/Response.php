@@ -330,6 +330,14 @@ class Response implements ResponseContract
      */
     private function toPureArray(mixed $data): mixed
     {
+        // If it's a Stringable or specific object, cast to string
+        if (
+            $data instanceof \Spark\Url ||
+            $data instanceof \Spark\Utils\Carbon
+        ) {
+            return (string) $data;
+        }
+
         // If it's an object that knows how to cast itself to array, do it and recurse
         if ($data instanceof Arrayable) {
             $data = $data->toArray();

@@ -117,7 +117,7 @@ class Blade implements BladeContract
             self::$shared = [
                 'request' => Application::$app->get(Request::class),
                 'session' => Application::$app->get(Session::class),
-                'errors' => Application::$app->get(Request::class)->getInputErrors(),
+                'errors' => Application::$app->get(Request::class)->errors(),
                 ...self::$shared
             ];
         }

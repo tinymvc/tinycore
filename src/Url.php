@@ -2,12 +2,10 @@
 
 namespace Spark;
 
-use ArrayAccess;
 use JsonSerializable;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Traits\Macroable;
-use Stringable;
 use function array_key_exists;
 use function array_slice;
 use function count;
@@ -22,7 +20,7 @@ use function is_array;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Url implements Arrayable, ArrayAccess, Jsonable, JsonSerializable, Stringable
+class Url implements Arrayable, Jsonable, JsonSerializable, \ArrayAccess, \Stringable
 {
     use Macroable;
 

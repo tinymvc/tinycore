@@ -473,9 +473,6 @@ class Router implements RouterContract
 
                 is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
 
-                // Prepare the request before invoking the route's callback
-                $this->prepareRequestBeforeCallback($container, $request);
-
                 // Handle view rendering or instantiate a class for callback if specified
                 if (isset($route['template'])) {
                     $route['callback'] = fn() => view($route['template']);
@@ -628,24 +625,5 @@ class Router implements RouterContract
         }
 
         return new Response($response); // Otherwise, convert the response to a string
-    }
-
-    /**
-     * Prepare the request before invoking the route's callback.
-     *
-     * This method initializes input errors or other necessary request data
-     * before the route's callback is executed.
-     *
-     * @param Container $container The dependency injection container.
-     * @param Request $request The HTTP request instance.
-     * 
-     * @return void
-     */
-    private function prepareRequestBeforeCallback(Container $container, Request $request): void
-    {
-        // Initialize Input Errors on Request Class if session is resolved 
-        if ($container->resolved(\Spark\Http\Session::class)) {
-            $request->getInputErrors();
-        }
     }
 }

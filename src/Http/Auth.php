@@ -166,9 +166,9 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @param string|null $key The key to retrieve from the user model, or null to return the entire model.
      * @param mixed $default The default value to return if the key does not exist.
-     * @return \App\Models\User|mixed The user model or false if not logged in, or the value of the specified key.
+     * @return ($key is null ? \App\Models\User : mixed) The user model or false if not logged in, or the value of the specified key.
      */
-    public function user(?string $key = null, $default = null): mixed
+    public function user(null|string $key = null, $default = null): mixed
     {
         if ($key !== null && !$this->isGuest()) {
             return $this->getUser()->get($key, $default);

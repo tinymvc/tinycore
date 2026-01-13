@@ -47,7 +47,7 @@ if (!function_exists('app')) {
      *                          If not provided, the application instance is returned.
      * @param array $parameters [optional] An array of parameters to pass when resolving the service or value.
      *
-     * @return mixed|Application The application instance or the resolved instance of the specified class or interface.
+     * @return ($abstract is null ? Application : mixed) The application instance or the resolved instance of the specified class or interface.
      */
     function app(null|string $abstract = null, array $parameters = []): mixed
     {
@@ -156,20 +156,26 @@ if (!function_exists('request')) {
     /**
      * Get the current request instance.
      *
-     * @param string|string[] $key The key to retrieve from the request data.
+     * @param null|string|array $key The key to retrieve from the request data.
      * @param mixed $default The default value to return if the key does not exist.
      *
-     * @return \Spark\Http\Request|mixed The current request instance or the value of the specified key from the request data.
+     * @return ($key is null ? \Spark\Http\Request : mixed) The current request instance or the value of the specified key from the request data.
      */
-    function request($key = null, $default = null): mixed
+    function request(null|string|array $key = null, $default = null): mixed
     {
-        if ($key !== null) {
-            return Application::$app->make(Request::class)
-                ->input($key, $default);
+        /** @var \Spark\Http\Request $request */
+        $request = Application::$app->get(Request::class);
+
+        if ($key !== null && is_string($key)) {
+            return $request->input($key, $default);
+        }
+
+        if ($key !== null && is_array($key)) {
+            return $request->all($key);
         }
 
         // Return the current request instance.
-        return Application::$app->make(Request::class);
+        return $request;
     }
 }
 
@@ -370,11 +376,11 @@ if (!function_exists('view')) {
      * If a template name is provided, this function will render the template with the given context
      * and return an instance of the Response class with the rendered HTML.
      *
-     * @param string|null $template The path to the template file to render.
+     * @param null|string $template The path to the template file to render.
      * @param array $context An associative array of variables to pass to the template.
-     * @return Blade|Response The View instance or the Response instance with the rendered HTML.
+     * @return ($template is null ? Blade : Response) The View instance or the Response instance with the rendered HTML.
      */
-    function view(?string $template = null, array $context = []): Blade|Response
+    function view(null|string $template = null, array $context = []): Blade|Response
     {
         // Return the current View instance.
         if ($template === null) {
@@ -397,11 +403,11 @@ if (!function_exists('blade')) {
      * If a template name is provided, this function will render the template with the given context
      * and return the rendered HTML as a string.
      *
-     * @param string|null $template The path to the template file to render.
+     * @param null|string $template The path to the template file to render.
      * @param array $context An associative array of variables to pass to the template.
-     * @return Blade|string The Blade instance or the rendered HTML as a string.
+     * @return ($template is null ? Blade : string) The Blade instance or the rendered HTML as a string.
      */
-    function blade(?string $template = null, array $context = []): string|Blade
+    function blade(null|string $template = null, array $context = []): string|Blade
     {
         $engine = get(Blade::class);
 
@@ -958,12 +964,12 @@ if (!function_exists('user')) {
      * If the key does not exist in the user's data, the default value will be returned
      * instead.
      *
-     * @param string $key The key to retrieve from the user's data.
+     * @param null|string $key The key to retrieve from the user's data.
      * @param mixed $default The default value to return if the key does not exist.
      *
-     * @return \App\Models\User|mixed The user object, or the value of the provided key from the user's data.
+     * @return ($key is null ? \App\Models\User : mixed) The user object, or the value of the provided key from the user's data.
      */
-    function user(?string $key = null, $default = null): mixed
+    function user(null|string $key = null, $default = null): mixed
     {
         return auth()->user($key, $default);
     }
@@ -1016,6 +1022,26 @@ if (!function_exists('can')) {
     {
         return get(Gate::class)
             ->allows($ability, ...$arguments);
+    }
+}
+
+if (!function_exists('canAny')) {
+    /**
+     * Determine if the current user has any of the given abilities.
+     *
+     * This function takes an iterable or string representing the abilities to check,
+     * and any additional arguments that may be required for the abilities' closures.
+     * It returns a boolean indicating whether any of the abilities are allowed.
+     *
+     * @param iterable|string $abilities The abilities to check.
+     * @param mixed  ...$arguments Additional arguments to pass to the abilities' closures.
+     *
+     * @return bool Whether any of the abilities are allowed.
+     */
+    function canAny(iterable|string $abilities, mixed ...$arguments): bool
+    {
+        return get(Gate::class)
+            ->any($abilities, ...$arguments);
     }
 }
 
@@ -1289,21 +1315,16 @@ if (!function_exists('validator')) {
      *
      * @param string|array $rules An array of validation rules to apply.
      * @param array|null $data An optional array of data to validate.
-     * @return Sanitizer Returns a sanitizer object if validation passes.
-     * @throws Exception Throws an exception if validation fails, with the first error message or a default message.
+     * @return Validator Returns a validator object.
      */
-    function validator(string|array $rules, ?array $data = null): Sanitizer
+    function validator(string|array $rules, null|array $data = null): Validator
     {
         $data ??= request()->all();
 
         $validator = new Validator();
-        $result = $validator->validate($rules, $data);
+        $validator->validate($rules, $data);
 
-        if (!$result) {
-            throw new ValidationFailedException($validator->getFirstError() ?? 'Input validation failed');
-        }
-
-        return $result; // Return the sanitized input data
+        return $validator; // Return the sanitized input data
     }
 }
 
@@ -1377,9 +1398,9 @@ if (!function_exists('errors')) {
      *
      * @param null|array|string $field The field name to retrieve the error messages for.
      *                                  If null, all error object will be returned.
-     * @return object|bool An object containing the error messages from the current request.
+     * @return ($field is null ? \Spark\Helpers\InputErrors : bool) An object containing the error messages from the current request.
      */
-    function errors(null|array|string $field = null): mixed
+    function errors(null|array|string $field = null): \Spark\Helpers\InputErrors|bool
     {
         return request()->errors($field);
     }
@@ -1390,10 +1411,10 @@ if (!function_exists('old')) {
      * Retrieve the old value of a given field from the previous request.
      *
      * @param string $field The field name to retrieve the old value for.
-     * @param ?string $default The default value to return if the field does not exist.
-     * @return string|null The old value of the field from the previous request, or the default value if not found.
+     * @param null|string $default The default value to return if the field does not exist.
+     * @return null|string The old value of the field from the previous request, or the default value if not found.
      */
-    function old(string $field, ?string $default = null): ?string
+    function old(string $field, null|string $default = null): null|string
     {
         return request()->old($field, $default);
     }
