@@ -8,7 +8,6 @@ use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
-use Spark\Exceptions\Http\ValidationFailedException;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Helpers\HttpResponse;
@@ -278,7 +277,7 @@ if (!function_exists('session')) {
      *
      * @param array|string|null $param An associative array for setting session data, a string key for retrieving a value, or null to return the session instance.
      * @param mixed $default The default value to return if the key does not exist.
-     * @return Session|mixed The session instance, the value of the specified key, or the default value if the key does not exist.
+     * @return ($param is null ? Session : mixed) The session instance, the value of the specified key, or the default value if the key does not exist.
      */
     function session($param = null, $default = null): mixed
     {
@@ -1698,7 +1697,7 @@ if (!function_exists('http')) {
      * @param array $params Optional. The query parameters for the request.
      * @param array $headers Optional. The headers for the request.
      * @param array $options Optional. Additional options for the HTTP request.
-     * @return Http|HttpResponse The HTTP instance or the response from the request.
+     * @return ($url is null ? Http : HttpResponse) The HTTP instance or the response from the request.
      */
     function http(string $method = 'GET', null|string $url = null, array $params = [], array $headers = [], array $options = []): Http|HttpResponse
     {

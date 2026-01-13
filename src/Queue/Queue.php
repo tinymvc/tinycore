@@ -43,25 +43,48 @@ class Queue implements QueueContract
      *
      * @param string|null $storageFile The path to the queue file. Defaults to
      *                                  storage_dir('temp/queue.json').
-     * @param string|null $logFile The path to the log file. Defaults to
-     *                                 storage_dir('queue.log').
+     * @param bool|string $log Whether to enable logging. If true, logs to
+     *                         storage_dir('queue.log'). If a string is provided,
+     *                        logs to that file. If false, logging is disabled.
      */
-    public function __construct(private ?string $storageFile = null, private ?string $logFile = null)
+    public function __construct(private null|string $storageFile = null, private bool|string $log = true)
     {
-        $this->storageFile ??= storage_dir('queue.json');
-        $this->logFile ??= storage_dir('logs/queue.log');
-
-        // Ensure that the queue and log files exist and are writable.
-        $this->makeSureQueueFileIsValid($this->storageFile);
-        $this->makeSureQueueFileIsValid($this->logFile);
+        // Ensure the storage file is valid.
+        $this->makeSureQueueFileIsValid($this->storageFile ??= storage_dir('queue.json'));
 
         // Set the serializable closure secret key.
         if (class_exists(SerializableClosure::class)) {
             SerializableClosure::setSecretKey(config('app_key'));
         }
 
+        $this->logging($log); // Set up logging.
+
         // Load the existing jobs from the queue file.
         $this->loadJobs();
+    }
+
+    /**
+     * Sets up logging for the queue.
+     *
+     * @param bool|string $log Whether to enable logging. If true, logs to
+     *                         storage_dir('queue.log'). If a string is provided,
+     *                         logs to that file. If false, logging is disabled.
+     *
+     * @return $this The current instance of the queue.
+     */
+    public function logging(bool|string $log = true): self
+    {
+        // Set up logging based on the provided parameter.
+        if ($log === true) {
+            $this->log = storage_dir('queue.log');
+        } else {
+            $this->log = $log;
+        }
+
+        // Ensure the log file is valid if logging is enabled.
+        $this->log && $this->makeSureQueueFileIsValid($this->log);
+
+        return $this;
     }
 
     /**
@@ -413,11 +436,15 @@ class Queue implements QueueContract
      */
     private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs, int $failedJobs): void
     {
+        if (empty($this->log)) {
+            return; // If logging is disabled, do nothing.
+        }
+
         $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
 
         // Check if log file exists and its size and rotate if it exceeds the max size.
-        if (is_file($this->logFile) && filesize($this->logFile) >= $maxFileSize) {
-            rename($this->logFile, $this->logFile . '.' . date('Y-m-d_H-i-s'));
+        if (is_file($this->log) && filesize($this->log) >= $maxFileSize) {
+            rename($this->log, $this->log . '.' . date('Y-m-d_H-i-s'));
         }
 
         $logEntry = sprintf(
@@ -429,7 +456,7 @@ class Queue implements QueueContract
             $memoryUsed / 1024 / 1024
         );
 
-        file_put_contents($this->logFile, $logEntry, FILE_APPEND | LOCK_EX);
+        file_put_contents($this->log, $logEntry, FILE_APPEND | LOCK_EX);
     }
 
     /**

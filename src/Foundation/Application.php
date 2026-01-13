@@ -392,7 +392,7 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function on(string $event, callable $listener): self
     {
-        $this->eventDispatcher()->addListener($event, $listener);
+        $this->events()->addListener($event, $listener);
         return $this;
     }
 
@@ -408,7 +408,7 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function off(string $event, callable $listener): self
     {
-        $this->eventDispatcher()->removeListener($event, $listener);
+        $this->events()->removeListener($event, $listener);
         return $this;
     }
 
@@ -420,7 +420,7 @@ class Application implements ApplicationContract, \ArrayAccess
      *
      * @return EventDispatcher The event dispatcher instance.
      */
-    public function eventDispatcher(): EventDispatcher
+    public function events(): EventDispatcher
     {
         return $this->container->get(EventDispatcher::class);
     }
@@ -435,9 +435,9 @@ class Application implements ApplicationContract, \ArrayAccess
      * @param mixed ...$args Additional arguments to be passed to the event listeners.
      * @return void
      */
-    public function dispatchEvent(string $event, mixed ...$args): void
+    public function dispatch(string $event, mixed ...$args): void
     {
-        $this->eventDispatcher()->dispatch($event, ...$args);
+        $this->events()->dispatch($event, ...$args);
     }
 
     /**

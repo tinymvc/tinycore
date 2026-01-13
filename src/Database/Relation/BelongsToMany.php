@@ -173,7 +173,7 @@ class BelongsToMany extends Relation
         // Normalize the input
         if (!is_array($ids)) {
             $ids = [$ids => []];
-        } elseif (array_keys($ids) === range(0, count($ids) - 1)) {
+        } elseif (array_is_list($ids)) {
             // If it's a sequential array, convert to associative with empty attributes
             $ids = array_fill_keys($ids, []);
         }

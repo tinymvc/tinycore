@@ -69,10 +69,11 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
             return false;
         }
 
-        $config = array_merge([
+        $config = [
             'cache_name' => 'throttle_incoming_requests',
             'cache_dir' => null,
-        ], $this->config);
+            ...$this->config
+        ];
 
         $cache = new Cache($config['cache_name'] . $suffix, $config['cache_dir']);
         $key = md5("$path$ip");
