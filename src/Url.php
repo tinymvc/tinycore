@@ -2,9 +2,7 @@
 
 namespace Spark;
 
-use JsonSerializable;
 use Spark\Contracts\Support\Arrayable;
-use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function array_slice;
@@ -20,7 +18,7 @@ use function is_array;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Url implements Arrayable, Jsonable, JsonSerializable, \ArrayAccess, \Stringable
+class Url implements Arrayable, \ArrayAccess, \Stringable
 {
     use Macroable;
 
@@ -623,34 +621,6 @@ class Url implements Arrayable, Jsonable, JsonSerializable, \ArrayAccess, \Strin
             'fragment' => $this->getFragment(),
             'parameters' => $this->getParameters(),
         ];
-    }
-
-    /**
-     * Convert route data to JSON
-     * 
-     * This method converts the URL object to a JSON string,
-     * including all components and parameters.
-     * 
-     * @param int $options JSON encoding options
-     * @return string The JSON representation of the URL
-     */
-    public function toJson($options = 0): string
-    {
-        return json_encode($this->toArray(), $options);
-    }
-
-    /**
-     * JsonSerializable implementation
-     * 
-     * This method allows the URL object to be serialized to JSON.
-     * It returns an array representation of the URL,
-     * which includes all relevant components and parameters.
-     * 
-     * @return array The array representation of the URL
-     */
-    public function jsonSerialize(): array
-    {
-        return $this->toArray();
     }
 
     /**
