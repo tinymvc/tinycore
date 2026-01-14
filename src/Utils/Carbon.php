@@ -6,6 +6,7 @@ use DateTime;
 use DateTimeZone;
 use InvalidArgumentException;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Htmlable;
 use function is_string;
 use function sprintf;
 
@@ -18,7 +19,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Carbon implements Arrayable, \Stringable
+class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
 {
     /** @var DateTime */
     private DateTime $dateTime;
@@ -1002,6 +1003,30 @@ class Carbon implements Arrayable, \Stringable
      * @return string The formatted date and time string
      */
     public function __toString(): string
+    {
+        return $this->toDateTimeString();
+    }
+
+    /**
+     * Convert the DateTime instance to HTML-safe string
+     * 
+     * This method returns the DateTime instance as an HTML-escaped string in 'Y-m-d H:i:s' format.
+     * 
+     * @return string The HTML-escaped formatted date and time string
+     */
+    public function toHtml(): string
+    {
+        return htmlspecialchars($this->toDateTimeString(), ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Specify data which should be serialized to JSON
+     * 
+     * This method returns the DateTime instance as a string in 'Y-m-d H:i:s' format for JSON serialization.
+     * 
+     * @return string The formatted date and time string
+     */
+    public function jsonSerialize(): string
     {
         return $this->toDateTimeString();
     }

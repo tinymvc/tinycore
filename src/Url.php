@@ -3,6 +3,7 @@
 namespace Spark;
 
 use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Htmlable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function array_slice;
@@ -18,7 +19,7 @@ use function is_array;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Url implements Arrayable, \ArrayAccess, \Stringable
+class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stringable
 {
     use Macroable;
 
@@ -200,6 +201,31 @@ class Url implements Arrayable, \ArrayAccess, \Stringable
      * @return string The full absolute URL as a string
      */
     public function __toString(): string
+    {
+        return $this->getUrl();
+    }
+
+    /**
+     * Convert URL to HTML-safe string
+     * 
+     * This method returns the URL as an HTML-escaped string,
+     * suitable for safe output in HTML contexts.
+     * 
+     * @return string The HTML-escaped URL string
+     */
+    public function toHtml(): string
+    {
+        return htmlspecialchars($this->getUrl(), ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Convert URL to JSON-serializable format
+     * 
+     * This method returns the URL as a string for JSON serialization.
+     * 
+     * @return string The full absolute URL as a string
+     */
+    public function jsonSerialize(): string
     {
         return $this->getUrl();
     }

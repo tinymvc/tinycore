@@ -3,6 +3,7 @@
 namespace Spark\Utils;
 
 use Spark\Contracts\Support\Arrayable;
+use Spark\Contracts\Support\Htmlable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
 use Spark\Support\Traits\Macroable;
@@ -18,7 +19,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, \ArrayAccess, \IteratorAggregate
+class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringable, Jsonable, \ArrayAccess, \IteratorAggregate
 {
     use Macroable;
 
@@ -483,6 +484,26 @@ class Paginator implements PaginatorUtilContract, Arrayable, Jsonable, \ArrayAcc
     public function toJson($options = 0): string
     {
         return json_encode($this->toArray(), $options);
+    }
+
+    /**
+     * Converts the paginator instance to an HTML string.
+     * 
+     * @return string
+     */
+    public function toHtml(): string
+    {
+        return $this->links();
+    }
+
+    /**
+     * Converts the paginator instance to a string.
+     * 
+     * @return string
+     */
+    public function __toString(): string
+    {
+        return $this->links();
     }
 
     /**
