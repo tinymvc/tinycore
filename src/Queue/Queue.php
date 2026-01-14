@@ -76,7 +76,7 @@ class Queue implements QueueContract
     {
         // Set up logging based on the provided parameter.
         if ($log === true) {
-            $this->log = storage_dir('queue.log');
+            $this->log = storage_dir('logs/queue.log');
         } else {
             $this->log = $log;
         }
