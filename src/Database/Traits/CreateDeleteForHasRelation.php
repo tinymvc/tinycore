@@ -101,7 +101,7 @@ trait CreateDeleteForHasRelation
         $attributes[$this->foreignKey] = $foreignKeyValue;
 
         $relatedClass = $this->related;
-        return $relatedClass::createOrUpdate([...$attributes, ...$values], false, array_keys($attributes));
+        return $relatedClass::createOrUpdate([...$attributes, ...$values], array_keys($attributes));
     }
 
     /**

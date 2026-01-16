@@ -19,7 +19,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringable, Jsonable, \ArrayAccess, \IteratorAggregate
+class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringable, Jsonable, \JsonSerializable, \ArrayAccess, \IteratorAggregate
 {
     use Macroable;
 
@@ -484,6 +484,16 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
     public function toJson($options = 0): string
     {
         return json_encode($this->toArray(), $options);
+    }
+
+    /**
+     * Specify data which should be serialized to JSON.
+     * 
+     * @return array
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 
     /**

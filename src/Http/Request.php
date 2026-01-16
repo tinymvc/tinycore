@@ -1322,7 +1322,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function old(string $field, null|string $default = null): null|string
     {
-        return $this->errors->getOld($field, $default);
+        return $this->errors()->getOld($field, $default);
     }
 
     /**
