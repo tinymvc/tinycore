@@ -434,6 +434,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             elseif ($value instanceof \Spark\Utils\Carbon) {
                 $data[$key] = $value->toDateTimeString();
             }
+            // Handle URL Object into string
+            elseif ($value instanceof \Spark\Url) {
+                $data[$key] = $value->getUrl();
+            }
             // Handle Scalar values
             elseif ($value === null || is_int($value) || is_bool($value)) {
                 $data[$key] = $value;

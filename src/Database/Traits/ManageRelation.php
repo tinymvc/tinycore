@@ -47,9 +47,16 @@ trait ManageRelation
         $parsed = $this->parseWithRelations($relations);
 
         foreach ($parsed as $name => $data) {
-            $relationConfig = $model->getRelationshipConfig($name);
-            if ($relationConfig) {
-                $this->addMapper(fn($result) => $model->loadRelation($result, $relationConfig, $name, $data['constraints'], $data['nested']));
+            $config = $model->getRelationshipConfig($name);
+            if ($config) {
+                $this->addMapper(fn($models) => $model->loadRelation(
+                    models: $models,
+                    config: $config,
+                    name: $name,
+                    constraints: $data['constraints'],
+                    nested: $data['nested'],
+                    columns: $data['columns']
+                ));
             }
         }
 
@@ -636,10 +643,8 @@ trait ManageRelation
             return;
         }
 
-        $primaryValue = $model->primaryValue();
-
-        if (!empty($primaryValue)) {
-            $this->where([$model::$primaryKey => $primaryValue]);
+        if ($model->hasPrimaryValue()) {
+            $this->where([$model::$primaryKey => $model->primaryValue()]);
         }
     }
 
@@ -651,7 +656,7 @@ trait ManageRelation
     private function isModelWithPrimaryBeingUsed(): bool
     {
         $model = $this->getModelBeingUsed();
-        return $model !== null && !empty($model->primaryValue());
+        return $model !== null && $model->hasPrimaryValue();
     }
 
     /**
@@ -896,8 +901,16 @@ trait ManageRelation
                     $parsed[$parentRelation]['nested'][] = $nestedRelation;
                 }
             } else {
+                // Check for columns specified with colon notation
+                $columns = null;
+                if (str_contains($name, ':')) {
+                    $parts = explode(':', $name, 2);
+                    $columns = explode(',', $parts[1]);
+                    $name = $parts[0]; // Update name to exclude columns
+                }
+
                 if (!isset($parsed[$name])) {
-                    $parsed[$name] = ['constraints' => null, 'nested' => []];
+                    $parsed[$name] = ['constraints' => null, 'nested' => [], 'columns' => $columns];
                 }
 
                 // Set constraints if provided (don't override if already set)

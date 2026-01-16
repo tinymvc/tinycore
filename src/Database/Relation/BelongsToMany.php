@@ -201,9 +201,9 @@ class BelongsToMany extends Relation
 
         // Attach new models
         $attach = array_diff($syncIds, $currentIds);
-        foreach ($attach as $id) {
-            $this->attach($id, $ids[$id]);
-            $changes['attached'][] = $id;
+        if (!empty($attach)) {
+            $this->attach($attach);
+            $changes['attached'] = $attach;
         }
 
         return $changes;
@@ -255,10 +255,8 @@ class BelongsToMany extends Relation
         // Attach currently detached
         $attach = array_diff($ids, $currentIds);
         if (!empty($attach)) {
-            foreach ($attach as $id) {
-                $this->attach($id, $attributes);
-                $changes['attached'][] = $id;
-            }
+            $this->attach($attach, $attributes);
+            $changes['attached'] = $attach;
         }
 
         return $changes;

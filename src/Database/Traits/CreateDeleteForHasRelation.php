@@ -82,7 +82,7 @@ trait CreateDeleteForHasRelation
      * @param array $values Additional values to set on the model.
      * @return Model The created or updated model instance.
      */
-    public function updateOrCreate(array $attributes = [], array $values = []): Model
+    public function createOrUpdate(array $attributes = [], array $values = []): Model
     {
         $parent = $this->getParentModel();
 
@@ -101,7 +101,7 @@ trait CreateDeleteForHasRelation
         $attributes[$this->foreignKey] = $foreignKeyValue;
 
         $relatedClass = $this->related;
-        return $relatedClass::updateOrCreate([...$attributes, ...$values], false, array_keys($attributes));
+        return $relatedClass::createOrUpdate([...$attributes, ...$values], false, array_keys($attributes));
     }
 
     /**

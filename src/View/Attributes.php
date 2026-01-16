@@ -168,7 +168,7 @@ class Attributes implements AttributesContract, Arrayable, Htmlable, \Stringable
      */
     public function props(string|array $keys): array
     {
-        $keys = is_array($keys) ? $keys : [$keys];
+        $keys = is_array($keys) ? $keys : func_get_args();
         $props = [];
 
         // Handle numeric keys as keys with null values (defaults)

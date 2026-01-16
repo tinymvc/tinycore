@@ -520,14 +520,20 @@ trait HasRelation
      * @param array $config
      * @param string $name
      * @param Closure|null $constraints
-     * @param array $nested Additional nested relationships to load
+     * @param null|array $nested Additional nested relationships to load
+     * @param null|array|string $columns Specific columns to select
      * @return array
      */
-    public function loadRelation(array $models, array $config, string $name, null|Closure $constraints = null, array $nested = []): array
+    public function loadRelation(array $models, array $config, string $name, null|Closure $constraints = null, null|array $nested = null, null|array|string $columns = null): array
     {
         // Store nested relationships in config for later use
-        if (!empty($nested)) {
+        if ($nested && !empty($nested)) {
             $config['nested'] = $nested;
+        }
+
+        // Store specific columns in config for later use
+        if ($columns && !empty($columns)) {
+            $config['columns'] = $columns;
         }
 
         return match ($config['type']) {
@@ -653,6 +659,7 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
+            ->select($config['columns'] ?? '*')
             ->whereIn($config['foreignKey'], $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -690,6 +697,7 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
+            ->select($config['columns'] ?? '*')
             ->whereIn($config['foreignKey'], $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -727,6 +735,7 @@ trait HasRelation
         }
 
         $query = $relatedModel->query()
+            ->select($config['columns'] ?? '*')
             ->whereIn($config['ownerKey'], $foreignValues);
 
         $this->applyConstraints($query, $config, $constraints);
