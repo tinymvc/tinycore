@@ -24,7 +24,7 @@ class Events implements EventsContract
      * @param Closure|null $updated The closure to be executed when a model is updated.
      * @param Closure|null $deleted The closure to be executed when a model is deleted.
      */
-    public function __construct(private null|Closure $created, private null|Closure $updated, private null|Closure $deleted)
+    public function __construct(private null|Closure $created = null, private null|Closure $updated = null, private null|Closure $deleted = null)
     {
     }
 
@@ -35,7 +35,7 @@ class Events implements EventsContract
      * @param Closure|null $updated The closure to be executed when a model is updated.
      * @param Closure|null $deleted The closure to be executed when a model is deleted.
      */
-    public static function make(null|Closure $created, null|Closure $updated, null|Closure $deleted): static
+    public static function make(null|Closure $created = null, null|Closure $updated = null, null|Closure $deleted = null): static
     {
         return new static($created, $updated, $deleted);
     }
