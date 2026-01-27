@@ -535,6 +535,24 @@ if (!function_exists('asset_url')) {
     }
 }
 
+if (!function_exists('asset')) {
+    /**
+     * Generate a URL object from a given path relative to the asset directory.
+     *
+     * The path can be relative or absolute. If it is relative, it will be
+     * resolved relative to the asset directory. If it is absolute,
+     * it will be returned verbatim.
+     *
+     * @param string $path The path to generate a URL for.
+     *
+     * @return Url The generated URL as a Url object.
+     */
+    function asset(string $path = ''): Url
+    {
+        return new Url(asset_url($path));
+    }
+}
+
 if (!function_exists('media_url')) {
     /**
      * Generate a URL from a given path relative to the media directory.
@@ -551,6 +569,24 @@ if (!function_exists('media_url')) {
     {
         $path = config('media_url') . ltrim($path, '/');
         return strpos($path, '/', 0) === 0 ? home_url($path) : $path;
+    }
+}
+
+if (!function_exists('media')) {
+    /**
+     * Generate a URL object from a given path relative to the media directory.
+     *
+     * The path can be relative or absolute. If it is relative, it will be
+     * resolved relative to the media directory. If it is absolute,
+     * it will be returned verbatim.
+     *
+     * @param string $path The path to generate a URL for.
+     *
+     * @return Url The generated URL as a Url object.
+     */
+    function media(string $path = ''): Url
+    {
+        return new Url(media_url($path));
     }
 }
 
@@ -599,10 +635,7 @@ if (!function_exists('route')) {
      */
     function route(string $name, null|string|array|Arrayable $context = null): Url
     {
-        // Parse the route path and get the route details.
-        $parsedPath = router()->route($name, $context);
-
-        return new Url(home_url($parsedPath)); // Return a new Url instance with the route details.
+        return new Url(route_url($name, $context)); // Return a new Url instance with the route details.
     }
 }
 
@@ -1218,7 +1251,7 @@ if (!function_exists('cache')) {
         global $caches;
 
         if (!isset($caches[$name])) {
-            $caches[$name] = get(Cache::class)->setName($name);
+            $caches[$name] = new Cache($name);
         }
 
         return $caches[$name];
@@ -1260,7 +1293,7 @@ if (!function_exists('__')) {
      */
     function __(string $text, $arg = null, array $args = [], array $args2 = []): string
     {
-        return Application::$app->make(Translator::class)
+        return Application::$app->get(Translator::class)
             ->translate($text, $arg, $args, $args2);
     }
 }
