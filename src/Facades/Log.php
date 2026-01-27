@@ -134,6 +134,6 @@ class Log implements LoggerInterface
 
         $level = strtoupper($level);
 
-        Tracer::$instance->log("local.$level:$message$context");
+        Tracer::$instance->log("local.$level: $message$context");
     }
 }
