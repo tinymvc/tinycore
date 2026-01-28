@@ -210,12 +210,12 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
         /** @var Router $router */
         $router = $this->get(Router::class);
 
-        $web && require $web;
-
         $api && $router->group(
             ['prefix' => 'api', 'middleware' => ['cors'], 'withoutMiddleware' => ['csrf']],
             fn() => require $api
         );
+
+        $web && require $web;
 
         $commands && require $commands;
 
@@ -383,8 +383,7 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
 
             $this->get(Router::class)
                 ->dispatch(
-                    $this,
-                    $this->get(Request::class),
+                    $this->get(Request::class)
                 )
                 ->send();
 

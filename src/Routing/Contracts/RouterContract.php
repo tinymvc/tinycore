@@ -128,10 +128,9 @@ interface RouterContract
      * rendering or resolves the callback for the matched route, returning the callback's response.
      * If no route matches, a 404 'Not Found' response is returned.
      * 
-     * @param Application $app The application instance.
      * @param Request $request The HTTP request instance.
      * 
      * @return Response The HTTP response object.
      */
-    public function dispatch(Application $app, Request $request): Response;
+    public function dispatch(Request $request): Response;
 }

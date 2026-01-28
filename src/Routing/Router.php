@@ -447,22 +447,23 @@ class Router implements RouterContract
      * rendering or resolves the callback for the matched route, returning the callback's response.
      * If no route matches, a 404 'Not Found' response is returned.
      *
-     * @param Application $app The application instance.
      * @param Request $request The HTTP request instance.
      *
      * @return Response The HTTP response object.
      * 
      * @throws \Spark\Routing\Exceptions\RouteNotFoundException If no matching route is found.
      */
-    public function dispatch(Application $app, Request $request): Response
+    public function dispatch(Request $request): Response
     {
         // Iterate through all routes to find a match
         foreach ($this->routes as $route) {
             if ($this->matchRoute($route['method'], $route['path'], $request)) {
                 is_debug_mode() && event('app:routeMatched', $route);
 
+                /** @var \Spark\Http\Middleware $middleware */
+                $middleware = Application::$app->make(Middleware::class);
+
                 // Add route-specific middleware to the middleware stack
-                $middleware = $app->make(Middleware::class);
                 $middleware->queue($route['middleware']);
 
                 // Execute middleware stack - check for early returns (auth failures, redirects, etc.)
@@ -478,7 +479,7 @@ class Router implements RouterContract
                     $route['callback'] = fn() => view($route['template']);
                 }
 
-                $response = $app->call($route['callback'], $request->getRouteParams());
+                $response = Application::$app->call($route['callback'], $request->getRouteParams());
 
                 is_debug_mode() && event('app:routeDispatched');
 
@@ -491,7 +492,7 @@ class Router implements RouterContract
         if ($this->fallback !== null) {
             is_debug_mode() && event('app:routeFallback');
 
-            $response = $app->call($this->fallback, $request->getRouteParams());
+            $response = Application::$app->call($this->fallback, $request->getRouteParams());
 
             is_debug_mode() && event('app:routeDispatched');
 
