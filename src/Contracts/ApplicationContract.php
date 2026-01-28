@@ -85,10 +85,16 @@ interface ApplicationContract
      * manager from the dependency injection container, allowing custom
      * middleware logic to be executed.
      *
-     * @param callable $callback The callback to be applied to the middleware manager.
+     * @param null|array $register An array of middleware to register.
+     * @param null|string|array $queue A middleware or array of middleware to queue.
+     * @param null|callable $then The callback to be applied to the middleware manager
      * @return self
      */
-    public function withMiddleware(callable $callback): self;
+    public function withMiddleware(
+        null|array $register = null,
+        null|string|array $queue = null,
+        null|callable $then = null,
+    ): self;
 
     /**
      * Applies a callback to the application's event system.

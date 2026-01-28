@@ -94,12 +94,19 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      *
      * @param string $path The path to the root directory of the application.
      * @param array $env An optional array of environment variables.
+     * @param array $providers An optional array of service provider classes to register.
      *
      * @return self A new instance of the application.
      */
-    public static function create(string $path, array $env = []): self
+    public static function create(string $path, array $env = [], array $providers = []): self
     {
-        return new self($path, $env);
+        $app = new self($path, $env);
+
+        foreach ($providers as $provider) {
+            $app->addServiceProvider(new $provider);
+        }
+
+        return $app;
     }
 
     /**
@@ -240,12 +247,25 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * manager from the dependency injection container, allowing custom
      * middleware logic to be executed.
      *
-     * @param callable $callback The callback to be applied to the middleware manager.
+     * @param null|array $register An array of middleware to register.
+     * @param null|string|array $queue A middleware or array of middleware to queue.
+     * @param null|callable $then The callback to be applied to the middleware manager
      * @return self
      */
-    public function withMiddleware(callable $callback): self
-    {
-        $callback($this->get(Middleware::class));
+    public function withMiddleware(
+        null|array $register = null,
+        null|string|array $queue = null,
+        null|callable $then = null,
+    ): self {
+        /** @var Middleware $middleware */
+        $middleware = $this->get(Middleware::class);
+
+        $register && $middleware->registerMany($register);
+
+        $queue && $middleware->queue($queue);
+
+        $then && $then($middleware);
+
         return $this;
     }
 
