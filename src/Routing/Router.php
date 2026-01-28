@@ -1,8 +1,8 @@
 <?php
 namespace Spark\Routing;
 
-use Spark\Container;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Foundation\Application;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -447,15 +447,14 @@ class Router implements RouterContract
      * rendering or resolves the callback for the matched route, returning the callback's response.
      * If no route matches, a 404 'Not Found' response is returned.
      *
-     * @param Container $container The dependency injection container.
-     * @param Middleware $middleware The middleware stack to be processed.
+     * @param Application $app The application instance.
      * @param Request $request The HTTP request instance.
      *
      * @return Response The HTTP response object.
      * 
      * @throws \Spark\Routing\Exceptions\RouteNotFoundException If no matching route is found.
      */
-    public function dispatch(Container $container, Middleware $middleware, Request $request): Response
+    public function dispatch(Application $app, Request $request): Response
     {
         // Iterate through all routes to find a match
         foreach ($this->routes as $route) {
@@ -463,6 +462,7 @@ class Router implements RouterContract
                 is_debug_mode() && event('app:routeMatched', $route);
 
                 // Add route-specific middleware to the middleware stack
+                $middleware = $app->make(Middleware::class);
                 $middleware->queue($route['middleware']);
 
                 // Execute middleware stack - check for early returns (auth failures, redirects, etc.)
@@ -478,7 +478,7 @@ class Router implements RouterContract
                     $route['callback'] = fn() => view($route['template']);
                 }
 
-                $response = $container->call($route['callback'], $request->getRouteParams());
+                $response = $app->call($route['callback'], $request->getRouteParams());
 
                 is_debug_mode() && event('app:routeDispatched');
 
@@ -491,7 +491,7 @@ class Router implements RouterContract
         if ($this->fallback !== null) {
             is_debug_mode() && event('app:routeFallback');
 
-            $response = $container->call($this->fallback, $request->getRouteParams());
+            $response = $app->call($this->fallback, $request->getRouteParams());
 
             is_debug_mode() && event('app:routeDispatched');
 

@@ -2,8 +2,6 @@
 
 namespace Spark\Contracts;
 
-use Spark\Container;
-
 /**
  * Interface ServiceProvider
  *
@@ -11,13 +9,12 @@ use Spark\Container;
  * 
  * @package Spark\Contracts
  */
-interface ServiceProvider
+interface ServiceProviderContract
 {
     /**
      * Register services into the container.
      *
-     * @param Container $container
      * @return void
      */
-    public function register(Container $container): void;
+    public function register(): void;
 }

@@ -10,7 +10,7 @@
             "Spark\\": "src/"
         },
         "files": [
-            "./src/Foundation/shortcut.php",
+            "./src/Foundation/helpers.php",
             "./src/Support/functions.php",
             "./src/Support/helpers.php"
         ]

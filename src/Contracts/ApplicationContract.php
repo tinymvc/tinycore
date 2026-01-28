@@ -2,8 +2,6 @@
 
 namespace Spark\Contracts;
 
-use Spark\Contracts\ContainerContract;
-
 /**
  * Interface defining the contract for the Application class.
  *
@@ -25,17 +23,6 @@ interface ApplicationContract
      * @return self A new instance of the application.
      */
     public static function create(string $path, array $env = []): self;
-
-    /**
-     * Returns the container instance.
-     *
-     * This method returns the container instance.
-     * The container is a dependency injection container that resolves
-     * services and dependencies.
-     *
-     * @return ContainerContract The container instance.
-     */
-    public function getContainer(): ContainerContract;
 
     /**
      * Returns the root path of the application.
@@ -61,16 +48,15 @@ interface ApplicationContract
     public function getEnv(string $key, $default = null): mixed;
 
     /**
-     * Applies a callback to the application's container.
-     *
-     * This method takes a callback function which receives the container
-     * from the dependency injection container, allowing custom container
-     * logic to be executed.
-     *
-     * @param callable $callback The callback to be applied to the container.
+     * Applies a callback to the application instance.
+     * 
+     * This method takes a callback function which receives the application
+     * instance, allowing custom application logic to be executed.
+     * 
+     * @param callable $callback The callback to be applied to the application.
      * @return self
      */
-    public function withContainer(callable $callback): self;
+    public function withApp(callable $callback): self;
 
     /**
      * Applies a callback to the application's router.
@@ -95,6 +81,29 @@ interface ApplicationContract
      * @return self
      */
     public function withMiddleware(callable $callback): self;
+
+    /**
+     * Applies a callback to the application's event system.
+     *
+     * This method takes a callback function which receives the event
+     * manager from the dependency injection container, allowing custom
+     * event logic to be executed.
+     *
+     * @param callable $callback The callback to be applied to the event manager.
+     * @return self
+     */
+    public function withEvents(callable $callback): self;
+
+    /**
+     * Specifies exceptions that should not be reported.
+     *
+     * This method takes an array of exception class names that should
+     * be excluded from reporting.
+     *
+     * @param array $exceptions An array of exception class names.
+     * @return self
+     */
+    public function withExceptions(array $exceptions): self;
 
     /**
      * Runs the application.

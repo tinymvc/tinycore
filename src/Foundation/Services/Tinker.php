@@ -158,7 +158,6 @@ class Tinker
         // Import framework services
         $this->context['app'] = Application::$app;
         $this->context['db'] = Application::$app->make(DB::class);
-        $this->context['container'] = Application::$app->getContainer();
         $this->context['translator'] = Application::$app->make(Translator::class);
         $this->context['hash'] = Application::$app->make(Hash::class);
         $this->context['http'] = Application::$app->make(Http::class);

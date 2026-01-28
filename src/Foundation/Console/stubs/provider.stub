@@ -2,12 +2,11 @@
 
 namespace {{ namespace }};
 
-use Spark\Container;
-use Spark\Contracts\ServiceProvider;
+use Spark\Foundation\Providers\ServiceProvider;
 
-class {{ class }} implements ServiceProvider
+class {{ class }} extends ServiceProvider
 {
-    public function register(Container $container): void
+    public function register(): void
     {
         // i am registering services
     }

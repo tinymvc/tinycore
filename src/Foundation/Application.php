@@ -4,9 +4,7 @@ namespace Spark\Foundation;
 
 use Spark\Console\Commands;
 use Spark\Console\Console;
-use Spark\Container;
 use Spark\Contracts\ApplicationContract;
-use Spark\Contracts\ContainerContract;
 use Spark\Database\DB;
 use Spark\EventDispatcher;
 use Spark\Exceptions\Http\AuthorizationException;
@@ -40,15 +38,12 @@ use function get_class;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Application implements ApplicationContract, \ArrayAccess
+class Application extends \Spark\Container implements ApplicationContract, \ArrayAccess
 {
     use Macroable;
 
     /** @var Application Singleton instance of the application. */
     public static Application $app;
-
-    /** @var ContainerContract Dependency injection container. */
-    private ContainerContract $container;
 
     /** @var array Array to store exception handlers. */
     private array $exceptions = [];
@@ -73,27 +68,24 @@ class Application implements ApplicationContract, \ArrayAccess
 
         Tracer::start(); // Initialize the tracer
 
-        // Initialize the dependency injection container
-        $this->container = new Container();
-
         // Register core services for global use
-        $this->container->singleton(Translator::class);
-        $this->container->singleton(DB::class);
-        $this->container->singleton(Hash::class);
-        $this->container->singleton(Blade::class);
-        $this->container->singleton(Queue::class);
-        $this->container->singleton(Router::class);
+        $this->singleton(Translator::class);
+        $this->singleton(DB::class);
+        $this->singleton(Hash::class);
+        $this->singleton(Blade::class);
+        $this->singleton(Queue::class);
+        $this->singleton(Router::class);
+        $this->singleton(Middleware::class);
+        $this->singleton(EventDispatcher::class);
 
         // Bind core services to the container for Http Client
-        if (!is_cli()) {
-            $this->container->singleton(Session::class);
-            $this->container->singleton(Request::class);
-            $this->container->singleton(Response::class);
-            $this->container->singleton(Middleware::class);
-            $this->container->singleton(EventDispatcher::class);
-            $this->container->singleton(Gate::class);
-            $this->container->singleton(Vite::class);
-            $this->container->singleton(Auth::class);
+        if (is_web()) {
+            $this->singleton(Session::class);
+            $this->singleton(Request::class);
+            $this->singleton(Response::class);
+            $this->singleton(Gate::class);
+            $this->singleton(Auth::class);
+            $this->singleton(Vite::class);
         }
     }
 
@@ -174,130 +166,6 @@ class Application implements ApplicationContract, \ArrayAccess
     }
 
     /**
-     * Retrieves the application's dependency injection container.
-     *
-     * This container manages the application's services and dependencies,
-     * providing a way to register and resolve them.
-     *
-     * @return ContainerContract The dependency injection container instance.
-     */
-    public function getContainer(): ContainerContract
-    {
-        return $this->container;
-    }
-
-    /**
-     * Registers a singleton service provider with the application's dependency injection container.
-     *
-     * Singleton services are registered with the container and returned on each request.
-     *
-     * @param string $abstract The abstract name or class name of the service to be resolved.
-     * @param mixed $concrete The concrete value of the service to be resolved.
-     * @return self
-     */
-    public function singleton(string $abstract, $concrete = null): self
-    {
-        $this->container->singleton($abstract, $concrete);
-        return $this;
-    }
-
-    /**
-     * Registers a service provider with the application's dependency injection container.
-     *
-     * Bindings are registered with the container and returned on each request.
-     *
-     * @param string $abstract The abstract name or class name of the service to be resolved.
-     * @param mixed $concrete The concrete value of the service to be resolved.
-     * @return self
-     */
-    public function bind(string $abstract, $concrete = null): self
-    {
-        $this->container->bind($abstract, $concrete);
-        return $this;
-    }
-
-    /**
-     * Registers a contextual binding in the application's dependency injection container.
-     *
-     * Contextual bindings allow you to specify different implementations
-     * of a service based on the context in which it is requested.
-     *
-     * @param string|array $concrete The concrete class or classes that require the binding.
-     * @param string $needs The abstract name or class name of the service to be resolved.
-     * @param callable|string $give The concrete value or factory function to provide the service.
-     * @return self
-     */
-    public function when(string|array $concrete, string $needs, callable|string $give): self
-    {
-        $this->container->when($concrete, $needs, $give);
-        return $this;
-    }
-
-    /**
-     * Resolves a service or a value from the dependency injection container.
-     *
-     * @param string $abstract The abstract name or class name of the service or value to be resolved.
-     * @return mixed The resolved service or value.
-     */
-    public function get(string $abstract): mixed
-    {
-        return $this->container->get($abstract);
-    }
-
-    /**
-     * Alias for the `get` method to resolve a service or value from the container.
-     *
-     * This method serves as an alias for the `get` method, providing a more
-     * intuitive way to resolve services or values from the dependency injection
-     * container.
-     *
-     * @param string $abstract The abstract name or class name of the service or value to be resolved.
-     * @param array $parameters An array of parameters to be passed to the resolved service or value.
-     * @return mixed The resolved service or value.
-     */
-    public function make(string $abstract, array $parameters = []): mixed
-    {
-        return $this->container->make($abstract, $parameters);
-    }
-
-    /**
-     * Checks if a given abstract has been resolved in the container.
-     *
-     * @param string $abstract The abstract name or class name of the service or value to be checked.
-     * @return bool True if the abstract has been resolved, false otherwise.
-     */
-    public function resolved(string $abstract): bool
-    {
-        return $this->container->resolved($abstract);
-    }
-
-    /**
-     * Calls a service or a value from the dependency injection container.
-     *
-     * This method takes an abstract name or class name and resolves it by
-     * calling it as a function. The resolved value is then returned.
-     *
-     * @param array|string|callable $abstract The abstract name or class name of the service or value to be resolved.
-     * @param array $parameters An array of parameters to be passed to the resolved service or value.
-     * @return mixed The resolved service or value.
-     */
-    public function call(array|string|callable $abstract, array $parameters = []): mixed
-    {
-        return $this->container->call($abstract, $parameters);
-    }
-
-    /**
-     * Checks if a given abstract has a binding in the container.
-     *
-     * @param string $abstract The abstract name or class name of the service or value to be checked.
-     * @return bool True if the abstract has a binding, false otherwise.
-     */
-    public function has(string $abstract): bool
-    {
-        return $this->container->has($abstract);
-    }
-
-    /**
      * Applies a callback to the application's container.
      *
      * This method takes a callback function, which receives the container,
@@ -307,9 +175,9 @@ class Application implements ApplicationContract, \ArrayAccess
      * @param callable $callback The callback to be applied to the container.
      * @return self
      */
-    public function withContainer(callable $callback): self
+    public function withApp(callable $callback): self
     {
-        $callback($this->container);
+        $callback($this);
         return $this;
     }
 
@@ -325,7 +193,7 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function withRouter(callable $callback): self
     {
-        $callback($this->container->get(Router::class));
+        $callback($this->get(Router::class));
         return $this;
     }
 
@@ -341,7 +209,7 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function withCommands(callable $callback): self
     {
-        $callback($this->container->get(Commands::class));
+        $callback($this->get(Commands::class));
         return $this;
     }
 
@@ -357,7 +225,23 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function withMiddleware(callable $callback): self
     {
-        $callback($this->container->get(Middleware::class));
+        $callback($this->get(Middleware::class));
+        return $this;
+    }
+
+    /**
+     * Applies a callback to the application's event dispatcher.
+     *
+     * This method takes a callback function, which receives the event
+     * dispatcher from the dependency injection container, allowing custom
+     * event logic to be executed.
+     *
+     * @param callable $callback The callback to be applied to the event dispatcher.
+     * @return self
+     */
+    public function withEvents(callable $callback): self
+    {
+        $callback($this->get(EventDispatcher::class));
         return $this;
     }
 
@@ -422,7 +306,7 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function events(): EventDispatcher
     {
-        return $this->container->get(EventDispatcher::class);
+        return $this->get(EventDispatcher::class);
     }
 
     /**
@@ -453,16 +337,15 @@ class Application implements ApplicationContract, \ArrayAccess
     {
         $this->isDebugMode() && event('app:booting');
         try {
-            $this->container->bootServiceProviders();
+            $this->bootServiceProviders();
 
             $this->isDebugMode() && event('app:booted');
 
-            $this->container
-                ->get(Router::class)
+            $this->get(Router::class)
                 ->dispatch(
-                    $this->container,
-                    $this->container->get(Middleware::class),
-                    $this->container->get(Request::class),
+                    $this,
+                    $this->get(Middleware::class),
+                    $this->get(Request::class),
                 )
                 ->send();
 
@@ -498,7 +381,7 @@ class Application implements ApplicationContract, \ArrayAccess
      */
     public function handleCommand(): void
     {
-        $this->container->bootServiceProviders();
+        $this->bootServiceProviders();
 
         $console = $this->get(Console::class);
         $console->run();

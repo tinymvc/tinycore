@@ -2,8 +2,7 @@
 
 namespace Spark\Routing\Contracts;
 
-use Spark\Container;
-use Spark\Http\Middleware;
+use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Routing\Route;
@@ -129,11 +128,10 @@ interface RouterContract
      * rendering or resolves the callback for the matched route, returning the callback's response.
      * If no route matches, a 404 'Not Found' response is returned.
      * 
-     * @param Container $container The dependency injection container.
-     * @param Middleware $middleware The middleware stack to be processed.
+     * @param Application $app The application instance.
      * @param Request $request The HTTP request instance.
      * 
      * @return Response The HTTP response object.
      */
-    public function dispatch(Container $container, Middleware $middleware, Request $request): Response;
+    public function dispatch(Application $app, Request $request): Response;
 }

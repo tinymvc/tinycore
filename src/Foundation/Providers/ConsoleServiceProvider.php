@@ -4,7 +4,6 @@ namespace Spark\Foundation\Providers;
 
 use Spark\Console\Commands;
 use Spark\Console\Console;
-use Spark\Container;
 use Spark\Database\Migration;
 use Spark\Foundation\Console\PrimaryCommandsHandler;
 use Spark\Foundation\Console\MakeStubCommandsHandler;
@@ -17,27 +16,25 @@ use Spark\Foundation\Services\Tinker;
  * creating a new migration, running migrations, and creating a new database
  * seed file.
  * 
+ * @package Spark\Foundation\Providers
  */
-class CommandsServiceProvider
+class ConsoleServiceProvider extends ServiceProvider
 {
     /**
      * Registers services for CLI commands. 
      *
-     * @param Container $container
-     *   The application container.
-     *
      * @return void
      */
-    public function register(Container $container): void
+    public function register(): void
     {
         // Register the console singleton
-        $container->singleton(Console::class);
+        $this->app->singleton(Console::class);
 
         // Register the commands singleton
-        $container->singleton(Commands::class);
+        $this->app->singleton(Commands::class);
 
         // Register the migration singleton
-        $container->singleton(Migration::class);
+        $this->app->singleton(Migration::class);
     }
 
     /**
@@ -47,15 +44,12 @@ class CommandsServiceProvider
      * registered. It is used to perform any necessary setup or bootstrapping
      * of the application.
      *
-     * @param Container $container
-     *   The application container.
-     *
      * @return void
      */
-    public function boot(Container $container): void
+    public function boot(): void
     {
         // Get the commands instance
-        $commands = $container->get(Commands::class);
+        $commands = $this->app->get(Commands::class);
 
         // Add the serve command
         $commands->addCommand('serve', [PrimaryCommandsHandler::class, 'startDevelopmentServer'])

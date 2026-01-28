@@ -58,18 +58,6 @@ if (!function_exists('app')) {
     }
 }
 
-if (!function_exists('container')) {
-    /**
-     * Retrieve the application's dependency injection container.
-     *
-     * @return Container The dependency injection container instance.
-     */
-    function container(): Container
-    {
-        return Application::$app->getContainer();
-    }
-}
-
 if (!function_exists('call')) {
     /**
      * Call a method or function with the given parameters.
@@ -1968,6 +1956,21 @@ if (!function_exists('is_cli')) {
     function is_cli(): bool
     {
         return php_sapi_name() === 'cli';
+    }
+}
+
+if (!function_exists('is_web')) {
+    /**
+     * Determine if the current execution environment is web (not CLI).
+     *
+     * This function checks if the PHP script is being executed in a web server
+     * environment by negating the result of the is_cli() function.
+     *
+     * @return bool True if the script is running in a web environment, false otherwise.
+     */
+    function is_web(): bool
+    {
+        return !is_cli();
     }
 }
 
