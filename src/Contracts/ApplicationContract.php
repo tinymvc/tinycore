@@ -65,10 +65,18 @@ interface ApplicationContract
      * from the dependency injection container, allowing custom router
      * logic to be executed.
      *
-     * @param callable $callback The callback to be applied to the router.
+     * @param null|string $web The path to the web routes file.
+     * @param null|string $api The path to the API routes file.
+     * @param null|string $commands The path to the commands routes file.
+     * @param null|callable $then The callback to be applied to the router.
      * @return self
      */
-    public function withRouter(callable $callback): self;
+    public function withRouting(
+        null|string $web = null,
+        null|string $api = null,
+        null|string $commands = null,
+        null|callable $then = null
+    ): self;
 
     /**
      * Applies a middleware to the application.

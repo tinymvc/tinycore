@@ -188,12 +188,32 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * from the dependency injection container, allowing custom router
      * logic to be executed.
      *
-     * @param callable $callback The callback to be applied to the router.
+     * @param null|string $web The path to the web routes file.
+     * @param null|string $api The path to the API routes file.
+     * @param null|string $commands The path to the commands routes file.
+     * @param null|callable $then The callback to be applied to the router.
      * @return self
      */
-    public function withRouter(callable $callback): self
-    {
-        $callback($this->get(Router::class));
+    public function withRouting(
+        null|string $web = null,
+        null|string $api = null,
+        null|string $commands = null,
+        null|callable $then = null
+    ): self {
+        /** @var Router $router */
+        $router = $this->get(Router::class);
+
+        $web && require $web;
+
+        $api && $router->group(
+            ['prefix' => 'api', 'middleware' => ['cors'], 'withoutMiddleware' => ['csrf']],
+            fn() => require $api
+        );
+
+        $commands && require $commands;
+
+        $then && $then($router);
+
         return $this;
     }
 
@@ -344,7 +364,6 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
             $this->get(Router::class)
                 ->dispatch(
                     $this,
-                    $this->get(Middleware::class),
                     $this->get(Request::class),
                 )
                 ->send();
