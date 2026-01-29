@@ -857,7 +857,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function mergeRouteParams(array $params): void
     {
-        $this->routeParams = array_merge($this->routeParams, $params);
+        $this->routeParams = [...$this->routeParams, ...$params];
     }
 
     /**

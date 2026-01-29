@@ -8,6 +8,7 @@ use Spark\Support\Traits\Macroable;
 use Stringable;
 use function is_array;
 use function is_string;
+use function strlen;
 
 /**
  * Class Response
@@ -122,6 +123,68 @@ class Response implements ResponseContract
         $this->setStatusCode(204);
         $this->setContent('');
         return $this;
+    }
+
+    /**
+     * Sends a file as a response to the client for download.
+     *
+     * @param string $filePath The path to the file to be sent.
+     * @param array $headers Optional headers to include in the response.
+     * @return void
+     */
+    public function file(string $filePath, array $headers = []): void
+    {
+        if (!file_exists($filePath) || !is_readable($filePath)) {
+            $this->setStatusCode(404);
+            $this->setContent('File not found.');
+            $this->send();
+            return;
+        }
+
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $filePath);
+        finfo_close($finfo);
+
+        header('Content-Description: File Transfer');
+        header("Content-Type: $mimeType");
+        header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
+        header('Content-Length: ' . (string) filesize($filePath));
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+
+        foreach ($headers as $key => $value) {
+            header("$key: $value");
+        }
+
+        readfile($filePath);
+        exit;
+    }
+
+    /**
+     * Sends raw content as a downloadable file to the client.
+     *
+     * @param string $content The content to be sent as a file.
+     * @param string $filename The name of the file to be downloaded.
+     * @param array $headers Optional headers to include in the response.
+     * @return void
+     */
+    public function download(string $content, string $filename, array $headers = []): void
+    {
+        header('Content-Description: File Transfer');
+        header('Content-Type: application/octet-stream');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . (string) strlen($content));
+
+        foreach ($headers as $key => $value) {
+            header("$key: $value");
+        }
+
+        echo $content;
+        exit;
     }
 
     /**
