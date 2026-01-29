@@ -2,9 +2,7 @@
 
 namespace Spark\Queue;
 
-use Closure;
-use DateTime;
-use Laravel\SerializableClosure\SerializableClosure;
+use PDO;
 use RuntimeException;
 use Spark\Console\Prompt;
 use Spark\Queue\Contracts\QueueContract;
@@ -12,6 +10,9 @@ use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
 use Spark\Support\Traits\Macroable;
+use Spark\Utils\Carbon;
+use function get_class;
+use function is_array;
 use function sprintf;
 
 /**
@@ -29,38 +30,94 @@ class Queue implements QueueContract
     use Macroable;
 
     /**
-     * @var array<int, array> The array of jobs to be run.
+     * The log file path or false if logging is disabled.
+     *
+     * @var bool|string
      */
-    private array $jobs = [];
+    private bool|string $log;
 
     /**
-     * @var bool Whether the jobs have been changed since the last save.
+     * The PDO instance for database operations.
+     *
+     * @var PDO
      */
-    private bool $isChanged = false;
+    private PDO $pdo;
 
     /**
      * Constructs a new instance of the queue.
      *
-     * @param string|null $storageFile The path to the queue file. Defaults to
-     *                                  storage_dir('temp/queue.json').
      * @param bool|string $log Whether to enable logging. If true, logs to
      *                         storage_dir('queue.log'). If a string is provided,
      *                        logs to that file. If false, logging is disabled.
      */
-    public function __construct(private null|string $storageFile = null, private bool|string $log = true)
+    public function __construct(bool|string $log = true)
     {
-        // Ensure the storage file is valid.
-        $this->makeSureQueueFileIsValid($this->storageFile ??= storage_dir('queue.json'));
-
-        // Set the serializable closure secret key.
-        if (class_exists(SerializableClosure::class)) {
-            SerializableClosure::setSecretKey(config('app_key'));
+        try {
+            $this->pdo = new PDO('sqlite:' . storage_dir('queue.db')); // Initialize SQLite database.
+            $this->pdo->exec("PRAGMA foreign_keys = ON");
+        } catch (\PDOException $e) {
+            throw new RuntimeException('Failed to connect to the SQLite database: ' . $e->getMessage());
         }
 
         $this->logging($log); // Set up logging.
+    }
 
-        // Load the existing jobs from the queue file.
-        $this->loadJobs();
+    public function install(): void
+    {
+        Prompt::message('Installing the queue database...', 'info');
+
+        try {
+            $this->pdo->exec(
+                "CREATE TABLE IF NOT EXISTS jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    payload TEXT NOT NULL,
+                    queue TEXT DEFAULT NULL,
+                    scheduled_time DATETIME NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    repeat TEXT DEFAULT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER DEFAULT 0
+                )"
+            );
+
+            // Indexes for jobs table
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_status_scheduled ON jobs(status, scheduled_time)"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_queue_status ON jobs(queue, status) WHERE queue IS NOT NULL"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)"
+            );
+
+            $this->pdo->exec(
+                "CREATE TABLE IF NOT EXISTS failed_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER NOT NULL,
+                    failed_at DATETIME NOT NULL,
+                    exception TEXT NOT NULL,
+                    attempts INTEGER DEFAULT 0,
+                    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+                )"
+            );
+
+            // Index for failed_jobs table
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_failed_jobs_job_id ON failed_jobs(job_id)"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_failed_jobs_failed_at ON failed_jobs(failed_at)"
+            );
+        } catch (\PDOException $e) {
+            Prompt::message('Failed to create the queue database tables: ' . $e->getMessage(), 'danger');
+            return; // Exit the method on failure.
+        }
+
+        Prompt::message('Queue database installed successfully.', 'success');
     }
 
     /**
@@ -81,8 +138,18 @@ class Queue implements QueueContract
             $this->log = $log;
         }
 
-        // Ensure the log file is valid if logging is enabled.
-        $this->log && $this->makeSureQueueFileIsValid($this->log);
+        // If the queue file does not exist, try to create it.
+        if ($this->log) {
+            if (!is_file($this->log) && !touch($this->log)) {
+                throw new InvalidStorageFileException('Failed to create the queue log file.');
+            }
+            // If the queue file is not writable, try to make it so.
+            elseif (!is_writable($this->log) && !chmod($this->log, 0666)) {
+                throw new InvalidStorageFileException(
+                    sprintf('The queue log file (%s) is not writable.', $this->log)
+                );
+            }
+        }
 
         return $this;
     }
@@ -91,16 +158,32 @@ class Queue implements QueueContract
      * Adds a job to the queue.
      *
      * @param Job $job The job to be added.
+     * @param string $queue The name of the queue to add the job to.
      */
-    public function addJob(Job $job, ?string $id = null): void
+    public function push(Job $job, string $queue = 'default'): void
     {
-        // Add the job to the array of jobs.
-        if ($id) {
-            $this->jobs[$id] = $this->serializeJob($job);
-        } else {
-            $this->jobs[] = $this->serializeJob($job);
+        $job = $this->serializeJob($job);
+
+        try {
+            $this->pdo->prepare(
+                "INSERT INTO jobs (payload, queue, scheduled_time, created_at, repeat, status, attempts) 
+                VALUES (:payload, :queue, :scheduled_time, :created_at, :repeat, :status, :attempts)"
+            )
+                ->execute([
+                    ':payload' => json_encode([
+                        'callback' => $job['callback'],
+                        'parameters' => $job['parameters'],
+                    ]),
+                    ':queue' => $queue,
+                    ':scheduled_time' => $job['scheduledTime'],
+                    ':created_at' => now(),
+                    ':repeat' => $job['repeat'],
+                    ':status' => 'pending',
+                    ':attempts' => 0,
+                ]);
+        } catch (\PDOException $e) {
+            throw new FailedToSaveJobsException('Failed to add job to the queue: ' . $e->getMessage());
         }
-        $this->isChanged = true; // Set the changed flag to true.
     }
 
     /**
@@ -112,8 +195,7 @@ class Queue implements QueueContract
      */
     public function clearAllJobs(): void
     {
-        $this->jobs = [];
-        $this->isChanged = true;
+        $this->pdo->exec("DELETE FROM jobs");
     }
 
     /**
@@ -126,32 +208,7 @@ class Queue implements QueueContract
      */
     public function clearRepeatedJobs(): void
     {
-        $this->jobs = array_filter($this->jobs, fn($job) => !$job['repeat']);
-        $this->isChanged = true;
-    }
-
-    /**
-     * Gets a job from the queue by its ID.
-     *
-     * This method will return the job with the given ID from the queue. If the
-     * job does not exist, it will return null.
-     *
-     * @param string $id The ID of the job to be retrieved.
-     *
-     * @return Job|null The job with the given ID or null if it does not exist.
-     */
-    public function getJob(string $id): ?Job
-    {
-        // Get the job from the queue by its ID.
-        $job = $this->jobs[$id] ?? null;
-
-        // If there is no job, return null.
-        if (!$job) {
-            return null;
-        }
-
-        // Unserialize the job and return it.
-        return $this->unserializeJob($job);
+        $this->pdo->exec("DELETE FROM jobs WHERE repeat IS NOT NULL");
     }
 
     /**
@@ -160,14 +217,66 @@ class Queue implements QueueContract
      * This method will remove the job with the given ID from the queue and mark
      * the queue as changed.
      *
-     * @param int|string $id The ID of the job to be removed.
+     * @param int $id The ID of the job to be removed.
      *
      * @return void
      */
-    public function removeJob(int|string $id): void
+    public function removeJobById(int $id): bool
     {
-        unset($this->jobs[$id]);
-        $this->isChanged = true;
+        $statement = $this->pdo->prepare("DELETE FROM jobs WHERE id = :id");
+        $statement->execute([':id' => $id]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
+     * Removes all jobs from a specific queue.
+     *
+     * This method will remove all jobs associated with the given queue name
+     * from the queue and mark the queue as changed.
+     *
+     * @param string $name The name of the queue to be removed.
+     *
+     * @return bool True if any jobs were removed, false otherwise.
+     */
+    public function removeQueue(string $name): bool
+    {
+        $statement = $this->pdo->prepare("DELETE FROM jobs WHERE queue = :queue");
+        $statement->execute([':queue' => $name]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    /**
+     * Returns the current job from the queue.
+     *
+     * This method retrieves the next job from the specified queue(s) that is
+     * pending and scheduled to run at or before the current time.
+     *
+     * @param array|string $queue The name(s) of the queue(s) to retrieve the job from.
+     *
+     * @return false|Job The next job in the queue, or false if no job is available.
+     */
+    public function getCurrentJob(array|string $queue = 'default'): false|Job
+    {
+        $queue = !is_array($queue) ? "'$queue'" :
+            "'" . implode("','", $queue) . "'";
+
+        $statement = $this->pdo->prepare(
+            "SELECT * FROM jobs WHERE queue IN($queue) AND status = 'pending' 
+                AND (scheduled_time IS NULL OR scheduled_time <= :now) 
+                ORDER BY scheduled_time ASC LIMIT 1"
+        );
+
+        $statement->execute([':now' => now()]);
+
+        $job = $statement->fetch(PDO::FETCH_ASSOC);
+        if ($job) {
+            return $this->unserializeJob($job);
+        }
+
+        return false;
+
     }
 
     /**
@@ -178,101 +287,307 @@ class Queue implements QueueContract
      * rescheduled for the next time. If the job is not repeated, it will be
      * removed from the queue.
      * 
-     * @param null|int $maxJobs The maximum number of jobs to run in this execution.
+     * @param bool $once Whether to run only once (process one batch) or continuously.
+     * @param int $timeout Maximum execution time in seconds before stopping.
+     * @param int $sleep Sleep time in seconds between queue checks when no jobs are available.
+     * @param int $delay Delay time in seconds before retrying failed jobs.
+     * @param int $tries Maximum number of attempts for a job before marking it as permanently failed.
+     * @param array|string $queue The queue(s) to run jobs from.
+     * 
      * @return void
      */
-    public function run(?int $maxJobs = null): void
-    {
-        if (empty($this->getJobs())) {
-            return;
-        }
-
-        $maxJobs ??= 500; // Default maximum number of jobs to run.
-
-        $now = new DateTime();
-
-        $ranJobs = 0; // Counter for the number of jobs run.
-        $failedJobs = 0; // Counter for the number of failed jobs.
-
-        // Measure the start time and memory usage.
+    public function run(
+        bool $once = false,
+        int $timeout = 60,
+        int $sleep = 3,
+        int $delay = 5,
+        int $tries = 3,
+        array|string $queue = 'default'
+    ): void {
+        $ranJobs = 0;
+        $failedJobs = 0;
         $startedAt = microtime(true);
         $startedMemory = memory_get_usage(true);
 
-        foreach ($this->getJobs() as $id => $serializedJob) {
-            // If the maximum number of jobs to run has been reached, break the loop.
-            if ($ranJobs >= $maxJobs) {
+        if (is_cli()) {
+            $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
+            Prompt::message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
+        }
+
+        do {
+            // Check if timeout has been reached
+            if ((microtime(true) - $startedAt) >= $timeout) {
+                if (is_cli()) {
+                    Prompt::message('Queue worker timeout reached. Shutting down...', 'warning');
+                }
                 break;
             }
 
-            $job = $this->unserializeJob($serializedJob);
+            // Get the next job from the queue
+            $job = $this->getCurrentJob($queue);
 
-            // If the job is scheduled for the past, execute it.
-            if ($job->getScheduledTime() <= $now) {
-                !$job->isRepeated() && $this->removeJob($id); // Remove the job from the queue.
+            if (!$job) {
+                $once === false && sleep($sleep); // No jobs available, sleep for a bit if not running once
+                continue;
+            }
+
+            $jobId = $job->getMetadata()['id'];
+            $attempts = $job->getMetadata()['attempts'];
+
+            if (is_cli()) {
+                Prompt::message(
+                    sprintf(
+                        "Processing job <bold>#%d</bold> (%s) - Attempt %d/%d",
+                        $jobId,
+                        $job->getDisplayName(),
+                        $attempts + 1,
+                        $tries
+                    ),
+                    'info'
+                );
+            }
+
+            try {
+                // Mark job as processing
+                $this->updateJobStatus($jobId, 'processing', $attempts + 1);
+
+                // Execute the job
+                $job->handle();
+
+                // Job succeeded
+                if ($job->isRepeated()) {
+                    // Reschedule repeated job
+                    $nextRun = now()->modify('+' . $job->getRepeat());
+                    $this->rescheduleJob($jobId, $nextRun);
+
+                    if (is_cli()) {
+                        Prompt::message(
+                            sprintf(
+                                "Job <bold>#%d</bold> completed and rescheduled for %s",
+                                $jobId,
+                                $nextRun->toDateTimeString()
+                            ),
+                            'success'
+                        );
+                    }
+                } else {
+                    // Remove one-time job
+                    $this->removeJobById($jobId);
+
+                    if (is_cli()) {
+                        Prompt::message("Job <bold>#$jobId</bold> completed successfully", 'success');
+                    }
+                }
+
+                $ranJobs++;
+
+            } catch (\Throwable $e) {
+                // Job failed
+                $newAttempts = $attempts + 1;
 
                 if (is_cli()) {
-                    Prompt::message("Running job <bold>#$id</bold>", 'info');
+                    Prompt::message(
+                        sprintf("Job <bold>#%d</bold> failed: %s", $jobId, $e->getMessage()),
+                        'error'
+                    );
                 }
 
-                try {
-                    $job->handle(); // Execute the job.
+                if ($newAttempts >= $tries) {
+                    // Max attempts reached, mark as permanently failed
+                    $this->markJobAsFailed($jobId, $e, $newAttempts);
+                    $failedJobs++;
 
-                    // If the job is repeated, reschedule it for the next time.
-                    if ($job->isRepeated()) {
-                        $job->schedule(new DateTime($job->getRepeat()));
-                        $this->addJob($job, $id);
-                    }
-
-                    $ranJobs++; // Increment the counter for the number of jobs run.
-                } catch (\Throwable $e) {
                     if (is_cli()) {
-                        Prompt::message("Job <bold>#$id</bold> failed: " . $e->getMessage(), 'error');
+                        Prompt::message(
+                            sprintf(
+                                "Job <bold>#%d</bold> failed permanently after %d attempts",
+                                $jobId,
+                                $newAttempts
+                            ),
+                            'danger'
+                        );
                     }
+                } else {
+                    // Retry the job after delay
+                    $retryTime = now()->addSeconds($delay);
+                    $this->retryJob($jobId, $retryTime, $newAttempts);
 
-                    $failedJobs++; // Increment the counter for the number of failed jobs.
+                    if (is_cli()) {
+                        Prompt::message(
+                            sprintf(
+                                "Job <bold>#%d</bold> will be retried at %s",
+                                $jobId,
+                                $retryTime->toDateTimeString()
+                            ),
+                            'warning'
+                        );
+                    }
                 }
+
+                $failedJobs++;
             }
-        }
+
+            // Check if we should stop after processing one job
+            if ($once) {
+                break;
+            }
+
+        } while (true);
 
         $timeUsed = microtime(true) - $startedAt;
         $memoryUsed = memory_get_usage(true) - $startedMemory;
 
-        // If any jobs were run, display the time and memory used.
-        $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
+        // Log the queue run summary
+        if ($ranJobs > 0 || $failedJobs > 0) {
+            $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
+        }
 
-        $this->save(); // Save the queue after running jobs.
+        if (is_cli()) {
+            Prompt::message(
+                sprintf("Queue worker finished. Ran %d job(s), %d failed", $ranJobs, $failedJobs),
+                'info'
+            );
+        }
+    }
+
+    /**
+     * Updates the status of a job in the database.
+     *
+     * @param int $jobId The ID of the job to update.
+     * @param string $status The new status of the job.
+     * @param int $attempts The number of attempts made to run the job.
+     *
+     * @return void
+     */
+    private function updateJobStatus(int $jobId, string $status, int $attempts): void
+    {
+        $statement = $this->pdo->prepare(
+            "UPDATE jobs SET status = :status, attempts = :attempts WHERE id = :id"
+        );
+
+        $statement->execute([
+            ':status' => $status,
+            ':attempts' => $attempts,
+            ':id' => $jobId,
+        ]);
+    }
+
+    /**
+     * Reschedules a repeated job for its next execution.
+     *
+     * @param int $jobId The ID of the job to reschedule.
+     * @param Carbon $nextRun The time for the next execution.
+     *
+     * @return void
+     */
+    private function rescheduleJob(int $jobId, Carbon $nextRun): void
+    {
+        $statement = $this->pdo->prepare(
+            "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = 0 WHERE id = :id"
+        );
+
+        $statement->execute([
+            ':scheduled_time' => $nextRun->toDateTimeString(),
+            ':id' => $jobId,
+        ]);
+    }
+
+    /**
+     * Marks a job as permanently failed and logs it to the failed_jobs table.
+     *
+     * @param int $jobId The ID of the job that failed.
+     * @param \Throwable $exception The exception that caused the failure.
+     * @param int $attempts The number of attempts made to run the job.
+     *
+     * @return void
+     */
+    private function markJobAsFailed(int $jobId, \Throwable $exception, int $attempts): void
+    {
+        try {
+            $this->pdo->beginTransaction();
+
+            // Update job status
+            $statement = $this->pdo->prepare(
+                "UPDATE jobs SET status = 'failed', attempts = :attempts WHERE id = :id"
+            );
+
+            $statement->execute([
+                ':attempts' => $attempts,
+                ':id' => $jobId,
+            ]);
+
+            // Log to failed_jobs table
+            $statement = $this->pdo->prepare(
+                "INSERT INTO failed_jobs (job_id, failed_at, exception, attempts) 
+                VALUES (:job_id, :failed_at, :exception, :attempts)"
+            );
+
+            $statement->execute([
+                ':job_id' => $jobId,
+                ':failed_at' => now(),
+                ':exception' => sprintf(
+                    "%s: %s\n\nStack trace:\n%s",
+                    get_class($exception),
+                    $exception->getMessage(),
+                    $exception->getTraceAsString()
+                ),
+                ':attempts' => $attempts,
+            ]);
+
+            $this->pdo->commit();
+
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            throw new RuntimeException('Failed to mark job as failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Retries a failed job by rescheduling it for a later time.
+     *
+     * @param int $jobId The ID of the job to retry.
+     * @param Carbon $retryTime The time to retry the job.
+     * @param int $attempts The number of attempts made so far.
+     *
+     * @return void
+     */
+    private function retryJob(int $jobId, Carbon $retryTime, int $attempts): void
+    {
+        $statement = $this->pdo->prepare(
+            "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = :attempts WHERE id = :id"
+        );
+
+        $statement->execute([
+            ':scheduled_time' => $retryTime->toDateTimeString(),
+            ':attempts' => $attempts,
+            ':id' => $jobId,
+        ]);
     }
 
     /**
      * Returns the jobs in the queue.
      *
-     * @return array<int, array> The array of jobs in the queue.
+     * @return array<int, Job> The array of jobs in the queue.
      */
-    public function getJobs(): array
+    public function getJobs(int $from = 0, int $to = 500): array
     {
-        return $this->jobs ??= [];
-    }
+        try {
+            $statement = $this->pdo->prepare(
+                "SELECT * FROM jobs LIMIT :from, :to"
+            );
 
-    /**
-     * Loads the jobs from the queue file.
-     *
-     * This method will read the data from the queue file and create an array of
-     * Job objects. The data from the file is decoded from JSON and the callback
-     * is evaluated back into a callable.
-     *
-     * @return void
-     */
-    private function loadJobs(): void
-    {
-        $rawJobs = @file_get_contents($this->storageFile);
-
-        if ($rawJobs === false) {
-            throw new FailedToLoadJobsException('Failed to load jobs.');
+            $statement->execute([':from' => $from, ':to' => $to]);
+            $jobs = [];
+            while ($row = $statement->fetch(PDO::FETCH_ASSOC)) {
+                $jobs[] = $this->unserializeJob($row);
+            }
+        } catch (\PDOException $e) {
+            throw new FailedToLoadJobsException(
+                'Failed to load jobs from the queue: ' . $e->getMessage()
+            );
         }
 
-        $jobs = (array) json_decode($rawJobs, true);
-
-        $this->jobs = [...$this->jobs, ...$jobs];
+        return $jobs;
     }
 
     /**
@@ -291,11 +606,11 @@ class Queue implements QueueContract
     private function serializeJob(Job $job): array
     {
         return [
-            'callback' => $this->serializeCallback($job->getCallback()), // Serialize the callback and save it.
-            'scheduledTime' => $job->getScheduledTime()->format('c'), // Save the scheduled time as string.
+            'callback' => $job->getCallback(), // Serialize the callback and save it.
+            'parameters' => $job->getParameters(), // Save the parameters as it is.
+            'scheduledTime' => $job->getScheduledTime()->toDateTimeString(), // Save the scheduled time as string.
             'repeat' => $job->getRepeat(), // Save the repeat as it is.
-            'priority' => $job->getPriority(), // Save the priority as it is.
-            'errorCallback' => $this->serializeCallback($job->getErrorCallback()),
+            'metadata' => $job->getMetadata(), // Save the metadata as it is.
         ];
     }
 
@@ -314,110 +629,20 @@ class Queue implements QueueContract
      */
     private function unserializeJob(array $job): Job
     {
+        $payload = json_decode($job['payload'], true);
+
         return new Job(
-            callback: $this->unserializeCallback($job['callback']), // Unserialize the callback and set it.
-            scheduledTime: new DateTime($job['scheduledTime']), // Set the scheduled time using the ISO 8601 string.
-            repeat: $job['repeat'], // Set the repeat as it is.
-            priority: $job['priority'], // Set the priority as it is.
-            onFailed: $this->unserializeCallback($job['errorCallback']), // Set the error callback as it is.
+            callback: $payload['callback'],
+            parameters: $payload['parameters'],
+            scheduledTime: new Carbon($job['scheduled_time']),
+            repeat: $job['repeat'],
+            metadata: [
+                'id' => $job['id'],
+                'attempts' => $job['attempts'],
+                'created_at' => $job['created_at'],
+                'status' => $job['status'],
+            ],
         );
-    }
-
-    /**
-     * Serializes a callback to a string.
-     *
-     * If the callback is an anonymous function, it is serialized using a
-     * SerializableClosure. Otherwise, it is serialized using var_export.
-     *
-     * @param string|array|callable $callback
-     *   The callback to be serialized.
-     *
-     * @return null|string
-     *   The serialized string representation of the callback.
-     */
-    private function serializeCallback(null|string|array|callable $callback): null|string
-    {
-        if ($callback === null) {
-            return null;
-        }
-
-        if ($callback instanceof Closure) {
-            // If the callback is a Closure, check if the SerializableClosure package is installed.
-            // If not, throw an exception.
-            if (!class_exists(SerializableClosure::class)) {
-                throw new RuntimeException(
-                    'SerializableClosure package not found, please ' .
-                    'run: composer require laravel/serializable-closure to install it.'
-                );
-            }
-
-            // If the callback is an anonymous function, serialize it using a SerializableClosure.
-            $callback = serialize(new SerializableClosure($callback));
-        } else {
-            // Otherwise, serialize it using var_export.
-            $callback = var_export($callback, true);
-        }
-
-        return $callback;
-    }
-
-    /**
-     * Unserializes a callback from a string.
-     *
-     * If the callback is a string representation of a SerializableClosure, it is
-     * unserialized using unserialize. Otherwise, it is unserialized using eval.
-     *
-     * @param string $callback
-     *   The string representation of the callback to be unserialized.
-     *
-     * @return string|array|callable
-     *   The unserialized callback.
-     */
-    private function unserializeCallback(null|string $callback): null|string|array|callable
-    {
-        if (empty($callback)) {
-            return null;
-        }
-
-        if (str_contains($callback, 'SerializableClosure')) {
-            // If the callback is serialized, unserialize it using unserialize.
-            $callback = unserialize($callback)->getClosure();
-        } else {
-            // Otherwise, unserialize it using eval.
-            $callback = eval ("return $callback;");
-        }
-
-        return $callback;
-    }
-
-    /**
-     * Saves the jobs to the queue file.
-     *
-     * This method will take the current array of jobs in the queue and save them
-     * to the queue file. The jobs are converted to an array of data that can be
-     * saved to JSON. The Callback is converted to a string by var_exporting it.
-     * The scheduled time and repeat are saved as is.
-     *
-     * @return void
-     */
-    public function save(): void
-    {
-        if (!$this->isChanged) {
-            return; // If there are no changes, do nothing.
-        }
-
-        // Convert the jobs to an array of data that can be saved to JSON.
-        $jobs = collect($this->getJobs())
-            ->sortByDesc('priority');
-
-        // Save the jobs to the queue file.
-        $isSaved = @file_put_contents($this->storageFile, $jobs->toJson(), LOCK_EX);
-
-        if ($isSaved === false) {
-            throw new FailedToSaveJobsException('Failed to save jobs.');
-        }
-
-        $this->isChanged = false; // Set the changed flag to false.
     }
 
     /**
@@ -457,49 +682,5 @@ class Queue implements QueueContract
         );
 
         file_put_contents($this->log, $logEntry, FILE_APPEND | LOCK_EX);
-    }
-
-    /**
-     * Ensures that the queue file exists and is writable.
-     *
-     * This method checks if the queue file exists. If it does not exist, it
-     * attempts to create it. If it exists but is not writable, it attempts to
-     * change its permissions to make it writable. If any of these operations
-     * fail, an InvalidStorageFileException is thrown.
-     *
-     * @param string $queueFile The path to the queue file.
-     *
-     * @throws InvalidStorageFileException If the queue file cannot be created
-     *                                     or made writable.
-     *
-     * @return void
-     */
-    private function makeSureQueueFileIsValid(string $queueFile): void
-    {
-        // If the queue file does not exist, try to create it.
-        if (!is_file($queueFile) && !touch($queueFile)) {
-            throw new InvalidStorageFileException('Failed to create the queue file.');
-        }
-        // If the queue file is not writable, try to make it so.
-        elseif (!is_writable($queueFile) && !chmod($queueFile, 0666)) {
-            throw new InvalidStorageFileException(
-                sprintf('The queue file (%s) is not writable.', $queueFile)
-            );
-        }
-    }
-
-    /**
-     * Destructs the object and saves the jobs to the queue file.
-     *
-     * If the jobs have been changed since the last save, this method will save
-     * the jobs to the queue file. The jobs are converted to an array of data
-     * that can be saved to JSON. The closure is converted to a string by
-     * var_exporting it. The scheduled time and repeat are saved as they are.
-     *
-     * @return void
-     */
-    public function __destruct()
-    {
-        $this->isChanged && $this->save();
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Spark\Queue\Contracts;
 
-use DateTime;
+use Spark\Utils\Carbon;
 
 /**
  * Interface for jobs in the queue.
@@ -27,47 +27,19 @@ interface JobContract
     public function repeat(string $repeat): self;
 
     /**
-     * Sets the priority for the job.
-     *
-     * The priority is used to determine when the job should be executed. A
-     * higher priority means that the job will be executed before jobs with a
-     * lower priority.
-     *
-     * @param int $priority
-     *     The priority of the job.
-     *
-     * @return self
-     *     The job instance.
-     */
-    public function priority(int $priority): self;
-
-    /**
      * Sets the schedule for the job.
      *
      * The schedule can be set to a string that represents the date and time
      * when the job should be executed. If set to null, the job will be executed
      * immediately.
      *
-     * @param string|DateTime $scheduledTime
+     * @param string|Carbon $scheduledTime
      *     The schedule for the job.
      *
      * @return self
      *     The job instance.
      */
-    public function schedule(string|DateTime $scheduledTime): self;
-
-    /**
-     * Sets the catch option for the job.
-     *
-     * The catch option is a closure that will be executed when the job fails.
-     *
-     * @param string|array|callable $callback
-     *     The catch callback.
-     *
-     * @return self
-     *     The job instance.
-     */
-    public function catch(string|array|callable $callback): self;
+    public function schedule(string|Carbon $scheduledTime): self;
 
     /**
      * Handles the job.
@@ -81,20 +53,24 @@ interface JobContract
     /**
      * Gets the scheduled time of the job.
      *
-     * If the job has no schedule, a new DateTime instance with the current
+     * If the job has no schedule, a new Carbon instance with the current
      * time will be returned.
      *
-     * @return DateTime
+     * @return Carbon
      *     The scheduled time of the job.
      */
-    public function getScheduledTime(): DateTime;
+    public function getScheduledTime(): Carbon;
 
     /**
      * Dispatches the job.
      *
      * This method will handle the job and dispatch it to the queue.
+     * 
+     * @param null|string $name
+     *  An optional identifier for the job. If provided, it will be used
+     *  to identify the job in the queue.
      *
      * @return void
      */
-    public function dispatch(): void;
+    public function dispatch(null|string $name = null): void;
 }

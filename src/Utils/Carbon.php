@@ -1106,4 +1106,19 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     {
         return clone $this;
     }
+
+    /**
+     * Modify the DateTime instance using a string modifier
+     * 
+     * This method applies a modification to the DateTime instance based on the provided string modifier.
+     * 
+     * @param string $modifier The modification string (e.g., '+1 day', '-2 hours')
+     * @return self A new DateTime instance with the modification applied
+     */
+    public function modify(string $modifier): self
+    {
+        $new = clone $this;
+        $new->dateTime->modify($modifier);
+        return $new;
+    }
 }

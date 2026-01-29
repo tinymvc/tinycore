@@ -2,12 +2,14 @@
 
 namespace Spark\Queue;
 
-use DateTime;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Foundation\Application;
 use Spark\Queue\Exceptions\FailedToResolveJobError;
 use Spark\Support\Traits\Macroable;
-use Throwable;
+use Spark\Utils\Carbon;
+use function get_class;
+use function is_array;
+use function is_object;
 use function is_string;
 
 /**
@@ -28,36 +30,32 @@ class Job implements JobContract
      *
      * Creates a new Job instance.
      *
-     * @param string|array|Closure|callable $callback
+     * @param string|array $callback
      *   The Callback to run when the job is processed.
      *
-     * @param string|DateTime|null $scheduledTime
+     * @param string|Carbon|null $scheduledTime
      *   The time at which the job should be processed. If a string is
-     *   given, it is converted to a DateTime object. If no time is
+     *   given, it is converted to a Carbon object. If no time is
      *   given, the current time is used.
      *
      * @param string|null $repeat
      *   The repeat interval to use when requeueing the job. If no
      *   repeat is given, the job is not requeued after it is processed.
-     *
-     * @param int $priority
-     *   The priority to use for the job. Lower numbers are processed
-     *   first.
      */
     public function __construct(
-        private $callback,
-        private null|string|DateTime $scheduledTime = null,
+        private string|array $callback,
+        private array $parameters = [],
+        private null|string|Carbon $scheduledTime = null,
         private null|string $repeat = null,
-        private int $priority = 0,
-        private $onFailed = null,
+        private array $metadata = [],
     ) {
-        // If the scheduled time is a string, convert it to a DateTime object.
+        // If the scheduled time is a string, convert it to a Carbon object.
         if (is_string($scheduledTime)) {
-            $this->scheduledTime = new DateTime($scheduledTime);
+            $this->scheduledTime = new Carbon($scheduledTime);
         }
 
         // If the scheduled time is not provided, set it to the current time.
-        $this->scheduledTime ??= new DateTime();
+        $this->scheduledTime ??= new Carbon();
     }
 
     /**
@@ -138,67 +136,29 @@ class Job implements JobContract
     }
 
     /**
-     * Sets the priority for the job.
-     *
-     * This method sets the priority level for the job. Lower numbers are
-     * processed first. If no priority is given, the default priority
-     * of 0 is used.
-     *
-     * @param int $priority
-     *   The priority level for the job.
-     *
-     * @return self
-     *   Returns the current Job instance for method chaining.
-     */
-    public function priority(int $priority): self
-    {
-        $this->priority = $priority;
-
-        return $this;
-    }
-
-    /**
      * Schedules the job for a specific time.
      *
      * This method sets the time at which the job should be processed.
      * If a string representation of the time is provided, it will be
-     * converted to a DateTime object.
+     * converted to a Carbon object.
      *
-     * @param string|DateTime $scheduledTime
+     * @param string|Carbon $scheduledTime
      *   The time at which the job should be scheduled. This can be a
-     *   DateTime object or a string that can be parsed into a DateTime.
+     *   Carbon object or a string that can be parsed into a Carbon.
      *
      * @return self
      *   Returns the current Job instance for method chaining.
      */
-    public function schedule(string|DateTime $scheduledTime): self
+    public function schedule(string|Carbon $scheduledTime): self
     {
-        // Convert the string to a DateTime object if necessary.
+        // Convert the string to a Carbon object if necessary.
         if (is_string($scheduledTime)) {
-            $scheduledTime = new DateTime($scheduledTime);
+            $scheduledTime = new Carbon($scheduledTime);
         }
 
         // Set the scheduled time for the job.
         $this->scheduledTime = $scheduledTime;
 
-        return $this;
-    }
-
-    /**
-     * Sets the failure callback for the job.
-     *
-     * This method sets the callback function that will be executed
-     * if the job fails during processing.
-     *
-     * @param string|array|callable $callback
-     *   The callback function to execute on job failure.
-     *
-     * @return self
-     *   Returns the current Job instance for method chaining.
-     */
-    public function catch(string|array|callable $callback): self
-    {
-        $this->onFailed = $callback;
         return $this;
     }
 
@@ -214,16 +174,22 @@ class Job implements JobContract
     public function handle(): void
     {
         try {
-            // Execute the job's closure function.
-            Application::$app->call($this->callback, ['job' => $this]);
-        } catch (Throwable $e) {
-            // Call the 'error' event listeners to execute any code that needs to be run when an error occurs during the job processing.
-            if (isset($this->onFailed)) {
-                Application::$app->call($this->onFailed, ['error' => $e, 'job' => $this]);
+            Application::$app->call($this->callback, $this->parameters);
+        } catch (\Throwable $e) {
+            if (
+                is_array($this->callback) &&
+                method_exists($this->callback[0], 'failed')
+            ) {
+                Application::$app->call(
+                    [$this->callback[0], 'failed'],
+                    ['error' => $e]
+                );
             }
 
-            // Re-throw the exception as a FailedToResolveJobError
-            throw new FailedToResolveJobError("Failed to resolve job callback: " . $e->getMessage(), 0, $e);
+            throw new FailedToResolveJobError(
+                'Failed to execute the job: ' . $e->getMessage(),
+                previous: $e
+            );
         }
     }
 
@@ -244,23 +210,12 @@ class Job implements JobContract
     /**
      * Returns the callback function associated with the job.
      *
-     * @return string|array|callable
+     * @return string|array
      *   The callback function associated with the job.
      */
-    public function getCallback(): string|array|callable
+    public function getCallback(): string|array
     {
         return $this->callback;
-    }
-
-    /**
-     * Returns the error callback function associated with the job.
-     *
-     * @return null|string|array|callable
-     *   The error callback function associated with the job.
-     */
-    public function getErrorCallback(): null|string|array|callable
-    {
-        return $this->onFailed;
     }
 
     /**
@@ -270,10 +225,10 @@ class Job implements JobContract
      * This is to indicate to the queue that the job should be executed at the specified time
      * interval.
      *
-     * @return ?string
+     * @return null|string
      *   The repeat string as a CRON expression.
      */
-    public function getRepeat(): ?string
+    public function getRepeat(): null|string
     {
         return $this->repeat;
     }
@@ -281,28 +236,36 @@ class Job implements JobContract
     /**
      * Returns the scheduled time when the job should be executed.
      *
-     * This method returns the DateTime object that was set when the job was created.
+     * This method returns the Carbon object that was set when the job was created.
      *
-     * @return DateTime
+     * @return Carbon
      *   The scheduled time when the job should be executed.
      */
-    public function getScheduledTime(): DateTime
+    public function getScheduledTime(): Carbon
     {
         return $this->scheduledTime;
     }
 
     /**
-     * Returns the priority of the job.
+     * Returns the parameters associated with the job.
      *
-     * The priority of the job is used to determine the order in which
-     * jobs are executed. Jobs with a lower priority are executed first.
-     *
-     * @return int
-     *   The priority of the job.
+     * @return array
+     *   The parameters associated with the job.
      */
-    public function getPriority(): int
+    public function getParameters(): array
     {
-        return $this->priority;
+        return $this->parameters;
+    }
+
+    /**
+     * Returns the metadata associated with the job.
+     *
+     * @return array
+     *   The metadata associated with the job.
+     */
+    public function getMetadata(): array
+    {
+        return $this->metadata;
     }
 
     /**
@@ -311,16 +274,41 @@ class Job implements JobContract
      * This method will add the job to the queue. It is typically used
      * when the job is created and should be executed at a later time.
      *
-     * @param ?string $id
+     * @param null|string $name
      *   An optional identifier for the job. If provided, it will be used
      *   to identify the job in the queue.
      * @return void
      */
-    public function dispatch(?string $id = null): void
+    public function dispatch(null|string $name = null): void
     {
         /** @var \Spark\Queue\Queue $queue */
-        $queue = Application::$app->make(Queue::class);
-        $queue->addJob($this, $id);
+        $queue = Application::$app->get(Queue::class);
+        $queue->push($this, $name);
+    }
+
+    /**
+     * Get a display name for the job.
+     *
+     * This method returns a human-readable name for the job,
+     * which can be useful for logging or debugging purposes.
+     *
+     * @return string The display name of the job.
+     */
+    public function getDisplayName(): string
+    {
+        if (is_string($this->callback)) {
+            return $this->callback;
+        }
+
+        if (is_array($this->callback)) {
+            if (is_object($this->callback[0])) {
+                return get_class($this->callback[0]);
+            }
+
+            return $this->callback[0];
+        }
+
+        return $this->metadata['queue'] ?? 'unknown';
     }
 
     /**
