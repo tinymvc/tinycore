@@ -414,6 +414,7 @@ trait HasRelation
      * 
      * @param string $name
      * @return mixed
+     * @throws OrmDisabledLazyLoadingException If lazy loading is disabled for this relation
      */
     public function getRelationshipAttribute(string $name)
     {
@@ -426,8 +427,18 @@ trait HasRelation
         if (method_exists($this, $name)) {
             $relation = $this->$name();
 
-            // If it's a Relation instance, execute and cache the results
+            // If it's a Relation instance, check lazy loading and execute
             if ($relation instanceof Relation) {
+                $config = $relation->getConfig();
+
+                // Check if lazy loading is disabled
+                if (isset($config['lazy']) && $config['lazy'] === false) {
+                    throw new OrmDisabledLazyLoadingException(
+                        "Lazy loading is disabled for relationship '{$name}' in " . static::class
+                    );
+                }
+
+                // Execute the relation query and cache results
                 $results = $this->executeRelation($relation, $name);
                 $this->setRelation($name, $results);
                 return $results;
@@ -437,6 +448,7 @@ trait HasRelation
         }
 
         // Fallback to old eager loading logic for compatibility
+        // This handles cases where getRelationshipConfig might be overridden
         try {
             $relationConfig = $this->getRelationshipConfig($name);
         } catch (UndefinedOrmException $e) {
@@ -461,9 +473,13 @@ trait HasRelation
     /**
      * Execute a Relation instance and return appropriate results.
      * 
-     * @param Relation $relation
-     * @param string $name
-     * @return mixed
+     * This method executes the relationship query and returns results in the appropriate format:
+     * - HasOne, BelongsTo, HasOneThrough: Returns single Model instance or null
+     * - HasMany, BelongsToMany, HasManyThrough: Returns Collection
+     * 
+     * @param Relation $relation The relation instance to execute
+     * @param string $name The relationship name (for debugging)
+     * @return mixed Single Model, Collection, or null
      */
     protected function executeRelation(Relation $relation, string $name)
     {

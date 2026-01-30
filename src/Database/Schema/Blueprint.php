@@ -105,6 +105,17 @@ class Blueprint implements BlueprintContract
     }
 
     /**
+     * Add a 'tinyInteger' column to the blueprint.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function tinyInteger(string $name): Column
+    {
+        return $this->addColumn('tinyInteger', $name);
+    }
+
+    /**
      * Add a 'text' column to the blueprint.
      *
      * @param string $name The name of the column.
@@ -157,6 +168,18 @@ class Blueprint implements BlueprintContract
     public function foreignId(string $name): ForeignKeyConstraint
     {
         $this->integer($name)->required();
+        return $this->foreign($name);
+    }
+
+    /**
+     * Add a nullable 'foreignId' column to the blueprint.
+     *
+     * @param string $name The name of the column.
+     * @return ForeignKeyConstraint
+     */
+    public function nullableForeignId(string $name): ForeignKeyConstraint
+    {
+        $this->integer($name)->nullable();
         return $this->foreign($name);
     }
 

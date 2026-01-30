@@ -134,6 +134,7 @@ class Grammar implements GrammarContract
                 'pgsql' => "VARCHAR({$parameters['length']})"
             ],
             'integer' => ['mysql' => 'INT', 'sqlite' => 'INTEGER', 'pgsql' => 'INTEGER'],
+            'tinyInteger' => ['mysql' => 'TINYINT', 'sqlite' => 'INTEGER', 'pgsql' => 'SMALLINT'],
             'text' => ['mysql' => 'TEXT', 'sqlite' => 'TEXT COLLATE NOCASE', 'pgsql' => 'TEXT'],
             'timestamp' => ['mysql' => 'TIMESTAMP', 'sqlite' => 'DATETIME', 'pgsql' => 'TIMESTAMP'],
             'boolean' => ['mysql' => 'TINYINT(1)', 'sqlite' => 'INTEGER', 'pgsql' => 'BOOLEAN'],
