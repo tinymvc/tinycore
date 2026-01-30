@@ -179,12 +179,30 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * allowing custom logic to be executed on the application's dependency
      * injection container.
      *
-     * @param callable $callback The callback to be applied to the container.
+     * @param null|array $env An array of environment variables to set.
+     * @param null|array $providers An array of service providers to register.
+     * @param null|array $middlewares An array of middlewares to apply.
+     * @param null|callable $then The callback to be applied to the container.
      * @return self
      */
-    public function withApp(callable $callback): self
-    {
-        $callback($this);
+    public function withApp(
+        null|array $env = null,
+        null|array $providers = null,
+        null|array $middlewares = null,
+        null|callable $then = null
+    ): self {
+
+        $env && $this->mergeEnv($env);
+
+        $middlewares && $this->withMiddleware(register: $middlewares);
+
+        $providers && array_map(
+            fn($provider) => $this->addServiceProvider(new $provider),
+            $providers
+        );
+
+        $then && $then($this);
+
         return $this;
     }
 
@@ -231,12 +249,18 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * manager from the dependency injection container, allowing custom
      * command logic to be executed.
      *
-     * @param callable $callback The callback to be applied to the command manager.
+     * @param null|string $load The path to the commands file to load.
+     * @param null|callable $then The callback to be applied to the command manager.
      * @return self
      */
-    public function withCommands(callable $callback): self
-    {
-        $callback($this->get(Commands::class));
+    public function withCommands(
+        null|string $load = null,
+        null|callable $then = null,
+    ): self {
+        $load && require $load;
+
+        $then && $then($this->get(Commands::class));
+
         return $this;
     }
 
@@ -280,12 +304,21 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * dispatcher from the dependency injection container, allowing custom
      * event logic to be executed.
      *
-     * @param callable $callback The callback to be applied to the event dispatcher.
+     * @param null|array $listeners An array of event listeners to register.
+     * @param null|callable $then The callback to be applied to the event dispatcher
      * @return self
      */
-    public function withEvents(callable $callback): self
-    {
-        $callback($this->get(EventDispatcher::class));
+    public function withEvents(
+        null|array $listeners = null,
+        null|callable $then = null
+    ): self {
+        /** @var EventDispatcher $event */
+        $event = $this->get(EventDispatcher::class);
+
+        $listeners && array_map($event->addListener(...), array_keys($listeners), $listeners);
+
+        $then && $then($event);
+
         return $this;
     }
 
