@@ -11,6 +11,7 @@ use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Carbon;
+use function count;
 use function get_class;
 use function is_array;
 use function sprintf;
@@ -62,6 +63,11 @@ class Queue implements QueueContract
         $this->logging($log); // Set up logging.
     }
 
+    /**
+     * Installs the queue database by creating necessary tables and indexes.
+     *
+     * @return void
+     */
     public function install(): void
     {
         Prompt::message('Installing the queue database...', 'info');
@@ -212,6 +218,19 @@ class Queue implements QueueContract
     }
 
     /**
+     * Clears all failed jobs from the queue.
+     *
+     * This method will filter out jobs that have failed from the
+     * queue and mark the queue as changed.
+     *
+     * @return void
+     */
+    public function clearFailedJobs(): void
+    {
+        $this->pdo->exec("DELETE FROM jobs WHERE status = 'failed'");
+    }
+
+    /**
      * Removes a job from the queue by its ID.
      *
      * This method will remove the job with the given ID from the queue and mark
@@ -219,7 +238,7 @@ class Queue implements QueueContract
      *
      * @param int $id The ID of the job to be removed.
      *
-     * @return void
+     * @return bool True if the job was removed, false otherwise.
      */
     public function removeJobById(int $id): bool
     {
@@ -298,7 +317,7 @@ class Queue implements QueueContract
      */
     public function run(
         bool $once = false,
-        int $timeout = 60,
+        int $timeout = 3600, // 1 hour
         int $sleep = 3,
         int $delay = 5,
         int $tries = 3,
@@ -309,17 +328,13 @@ class Queue implements QueueContract
         $startedAt = microtime(true);
         $startedMemory = memory_get_usage(true);
 
-        if (is_cli()) {
-            $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
-            Prompt::message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
-        }
+        $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
+        Prompt::message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
 
         do {
             // Check if timeout has been reached
             if ((microtime(true) - $startedAt) >= $timeout) {
-                if (is_cli()) {
-                    Prompt::message('Queue worker timeout reached. Shutting down...', 'warning');
-                }
+                Prompt::message('Queue worker timeout reached. Shutting down...', 'warning');
                 break;
             }
 
@@ -334,18 +349,16 @@ class Queue implements QueueContract
             $jobId = $job->getMetadata()['id'];
             $attempts = $job->getMetadata()['attempts'];
 
-            if (is_cli()) {
-                Prompt::message(
-                    sprintf(
-                        "Processing job <bold>#%d</bold> (%s) - Attempt %d/%d",
-                        $jobId,
-                        $job->getDisplayName(),
-                        $attempts + 1,
-                        $tries
-                    ),
-                    'info'
-                );
-            }
+            Prompt::message(
+                sprintf(
+                    "Processing job <bold>#%d</bold> (%s) - Attempt %d/%d",
+                    $jobId,
+                    $job->getDisplayName(),
+                    $attempts + 1,
+                    $tries
+                ),
+                'info'
+            );
 
             try {
                 // Mark job as processing
@@ -360,23 +373,19 @@ class Queue implements QueueContract
                     $nextRun = now()->modify('+' . $job->getRepeat());
                     $this->rescheduleJob($jobId, $nextRun);
 
-                    if (is_cli()) {
-                        Prompt::message(
-                            sprintf(
-                                "Job <bold>#%d</bold> completed and rescheduled for %s",
-                                $jobId,
-                                $nextRun->toDateTimeString()
-                            ),
-                            'success'
-                        );
-                    }
+                    Prompt::message(
+                        sprintf(
+                            "Job <bold>#%d</bold> completed and rescheduled for %s",
+                            $jobId,
+                            $nextRun->toDateTimeString()
+                        ),
+                        'success'
+                    );
                 } else {
                     // Remove one-time job
                     $this->removeJobById($jobId);
 
-                    if (is_cli()) {
-                        Prompt::message("Job <bold>#$jobId</bold> completed successfully", 'success');
-                    }
+                    Prompt::message("Job <bold>#$jobId</bold> completed successfully", 'success');
                 }
 
                 $ranJobs++;
@@ -385,43 +394,37 @@ class Queue implements QueueContract
                 // Job failed
                 $newAttempts = $attempts + 1;
 
-                if (is_cli()) {
-                    Prompt::message(
-                        sprintf("Job <bold>#%d</bold> failed: %s", $jobId, $e->getMessage()),
-                        'error'
-                    );
-                }
+                Prompt::message(
+                    sprintf("Job <bold>#%d</bold> failed: %s", $jobId, $e->getMessage()),
+                    'error'
+                );
 
                 if ($newAttempts >= $tries) {
                     // Max attempts reached, mark as permanently failed
                     $this->markJobAsFailed($jobId, $e, $newAttempts);
                     $failedJobs++;
 
-                    if (is_cli()) {
-                        Prompt::message(
-                            sprintf(
-                                "Job <bold>#%d</bold> failed permanently after %d attempts",
-                                $jobId,
-                                $newAttempts
-                            ),
-                            'danger'
-                        );
-                    }
+                    Prompt::message(
+                        sprintf(
+                            "Job <bold>#%d</bold> failed permanently after %d attempts",
+                            $jobId,
+                            $newAttempts
+                        ),
+                        'danger'
+                    );
                 } else {
                     // Retry the job after delay
                     $retryTime = now()->addSeconds($delay);
                     $this->retryJob($jobId, $retryTime, $newAttempts);
 
-                    if (is_cli()) {
-                        Prompt::message(
-                            sprintf(
-                                "Job <bold>#%d</bold> will be retried at %s",
-                                $jobId,
-                                $retryTime->toDateTimeString()
-                            ),
-                            'warning'
-                        );
-                    }
+                    Prompt::message(
+                        sprintf(
+                            "Job <bold>#%d</bold> will be retried at %s",
+                            $jobId,
+                            $retryTime->toDateTimeString()
+                        ),
+                        'warning'
+                    );
                 }
 
                 $failedJobs++;
@@ -442,12 +445,10 @@ class Queue implements QueueContract
             $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
         }
 
-        if (is_cli()) {
-            Prompt::message(
-                sprintf("Queue worker finished. Ran %d job(s), %d failed", $ranJobs, $failedJobs),
-                'info'
-            );
-        }
+        Prompt::message(
+            sprintf("Queue worker finished. Ran %d job(s), %d failed", $ranJobs, $failedJobs),
+            'info'
+        );
     }
 
     /**
@@ -566,14 +567,44 @@ class Queue implements QueueContract
 
     /**
      * Returns the jobs in the queue.
+     * 
+     * This method retrieves jobs from the queue based on the specified
+     * queue names and statuses, with pagination support.
+     * 
+     * @param array|string|null $queue The name(s) of the queue(s) to filter jobs by.
+     * @param array|string|null $status The status(es) of the jobs to filter by.
+     * @param int $from The starting index for pagination.
+     * @param int $to The ending index for pagination.
      *
      * @return array<int, Job> The array of jobs in the queue.
      */
-    public function getJobs(int $from = 0, int $to = 500): array
-    {
+    public function getJobs(
+        array|string|null $queue = null,
+        array|string|null $status = null,
+        int $from = 0,
+        int $to = 500,
+    ): array {
         try {
+            $where = '';
+            if (!empty($queue)) {
+                $queue = !is_array($queue) ? "'$queue'" :
+                    "'" . implode("','", $queue) . "'";
+                $where .= !empty($where) ? " AND " : "";
+                $where .= "queue IN($queue)";
+            }
+
+            if (!empty($status)) {
+                $status = !is_array($status) ? "'$status'" :
+                    "'" . implode("','", $status) . "'";
+                $where = "status IN($status)";
+            }
+
+            if (!empty($where)) {
+                $where = "WHERE $where"; // Add WHERE clause if needed.
+            }
+
             $statement = $this->pdo->prepare(
-                "SELECT * FROM jobs LIMIT :from, :to"
+                "SELECT * FROM jobs $where LIMIT :from, :to"
             );
 
             $statement->execute([':from' => $from, ':to' => $to]);
@@ -588,6 +619,82 @@ class Queue implements QueueContract
         }
 
         return $jobs;
+    }
+
+    /**
+     * Returns the failed jobs in the queue.
+     * 
+     * This method retrieves failed jobs from the queue with pagination support.
+     * 
+     * @param int $from The starting index for pagination.
+     * @param int $to The ending index for pagination.
+     *
+     * @return array<int, Job> The array of failed jobs in the queue.
+     */
+    public function getFailedJobs(int $from = 0, int $to = 500): array
+    {
+        try {
+            $statement = $this->pdo->prepare(
+                "SELECT fj.*, j.payload, j.queue, j.scheduled_time, j.created_at, j.repeat, j.status 
+                FROM failed_jobs fj 
+                JOIN jobs j ON fj.job_id = j.id 
+                ORDER BY fj.failed_at DESC 
+                LIMIT :from, :to"
+            );
+
+            $statement->execute([':from' => $from, ':to' => $to]);
+            $jobs = [];
+            while ($row = $statement->fetch(PDO::FETCH_ASSOC)) {
+                $jobs[] = $this->unserializeJob($row);
+            }
+        } catch (\PDOException $e) {
+            throw new FailedToLoadJobsException(
+                'Failed to load failed jobs from the queue: ' . $e->getMessage()
+            );
+        }
+
+        return $jobs;
+    }
+
+    /**
+     * Retries all failed jobs in the queue.
+     *
+     * This method will move all jobs from the failed_jobs table back to the
+     * jobs table with a status of 'pending' and reset their attempt counts.
+     *
+     * @return void
+     */
+    public function retryFailedJobs(): void
+    {
+        try {
+            $this->pdo->beginTransaction();
+
+            // Get all failed job IDs
+            $statement = $this->pdo->prepare("SELECT job_id FROM failed_jobs");
+            $statement->execute();
+            $failedJobIds = $statement->fetchAll(PDO::FETCH_COLUMN);
+
+            if (empty($failedJobIds)) {
+                $this->pdo->commit();
+                return; // No failed jobs to retry.
+            }
+
+            // Update jobs to pending status
+            $inClause = implode(',', array_fill(0, count($failedJobIds), '?'));
+            $updateStatement = $this->pdo->prepare(
+                "UPDATE jobs SET status = 'pending', attempts = 0 WHERE id IN ($inClause)"
+            );
+            $updateStatement->execute($failedJobIds);
+
+            // Clear failed_jobs table
+            $this->pdo->exec("DELETE FROM failed_jobs");
+
+            $this->pdo->commit();
+
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            throw new RuntimeException('Failed to retry failed jobs: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -637,10 +744,13 @@ class Queue implements QueueContract
             scheduledTime: new Carbon($job['scheduled_time']),
             repeat: $job['repeat'],
             metadata: [
-                'id' => $job['id'],
-                'attempts' => $job['attempts'],
-                'created_at' => $job['created_at'],
-                'status' => $job['status'],
+                'id' => $job['id'] ?? null,
+                'queue' => $job['queue'] ?? 'default',
+                'attempts' => $job['attempts'] ?? 0,
+                'created_at' => $job['created_at'] ?? null,
+                'status' => $job['status'] ?? 'pending',
+                'failed_at' => $job['failed_at'] ?? null,
+                'exception' => $job['exception'] ?? null,
             ],
         );
     }

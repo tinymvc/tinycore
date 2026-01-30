@@ -66,11 +66,8 @@ interface JobContract
      *
      * This method will handle the job and dispatch it to the queue.
      * 
-     * @param null|string $name
-     *  An optional identifier for the job. If provided, it will be used
-     *  to identify the job in the queue.
-     *
+     * @param string $name The name of the queue to which the job should be dispatched.
      * @return void
      */
-    public function dispatch(null|string $name = null): void;
+    public function dispatch(string $name = 'default'): void;
 }

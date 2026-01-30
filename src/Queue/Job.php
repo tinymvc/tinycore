@@ -88,6 +88,21 @@ class Job implements JobContract
     }
 
     /**
+     * Sets the job to repeat every given number of minutes.
+     *
+     * @param int $minutes
+     *   The number of minutes between each repetition.
+     *
+     * @return self
+     *   Returns the current Job instance for method chaining.
+     */
+    public function repeatEveryMinutes(int $minutes = 1): self
+    {
+        $this->repeat = "$minutes minutes";
+        return $this;
+    }
+
+    /**
      * Sets the job to repeat every hour.
      *
      * @return self
@@ -274,16 +289,14 @@ class Job implements JobContract
      * This method will add the job to the queue. It is typically used
      * when the job is created and should be executed at a later time.
      *
-     * @param null|string $name
-     *   An optional identifier for the job. If provided, it will be used
-     *   to identify the job in the queue.
+     * @param string $queue The name of the queue to which the job should be dispatched.
      * @return void
      */
-    public function dispatch(null|string $name = null): void
+    public function dispatch(string $queue = 'default'): void
     {
-        /** @var \Spark\Queue\Queue $queue */
-        $queue = Application::$app->get(Queue::class);
-        $queue->push($this, $name);
+        /** @var \Spark\Queue\Queue $queueInstance The queue instance */
+        $queueInstance = Application::$app->get(Queue::class);
+        $queueInstance->push($this, $queue);
     }
 
     /**
