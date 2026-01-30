@@ -1175,21 +1175,19 @@ if (!function_exists('job')) {
      * This function creates a new Job instance with the given callback and optional arguments.
      * The callback is the function that will be executed when the job is processed.
      *
-     * @param string|array|callable $callback The callback function to be executed when the job is processed.
-     * @param null|string|DateTime $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
+     * @param string|array $callback The callback function to be executed when the job is processed.
+     * @param array $parameters The parameters to be passed to the callback function. Default is an empty array.
+     * @param null|string|Carbon $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
      * @param null|string $repeat The repeat interval for the job. Default is null (no repeat).
-     * @param int $priority The priority of the job. Default is 0 (normal priority).
-     * @param null|string|array|callable $onFailed The callback to be executed if the job fails. Default is null (no callback).
      * @return Job The new Job instance.
      */
     function job(
-        string|array|callable $callback,
-        null|string|DateTime $scheduledTime = null,
+        string|array $callback,
+        array $parameters = [],
+        null|string|Carbon $scheduledTime = null,
         null|string $repeat = null,
-        int $priority = 0,
-        null|string|array|callable $onFailed = null,
     ): Job {
-        return new Job($callback, $scheduledTime, $repeat, $priority, $onFailed);
+        return new Job($callback, $parameters, $scheduledTime, $repeat);
     }
 }
 
@@ -1201,25 +1199,25 @@ if (!function_exists('dispatch')) {
      * and any additional arguments. The job is then dispatched to the queue
      * for processing.
      * 
-     * @param string|array|callable $callback The callback function to be executed when the job is processed.
-     * @param null|string|DateTime $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
+     * @param string|array $callback The callback function to be executed when the job is processed.
+     * @param array $parameters The parameters to be passed to the callback function. Default is an empty array.
+     * @param null|string|Carbon $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
      * @param null|string $repeat The repeat interval for the job. Default is null (no repeat).
-     * @param int $priority The priority of the job. Default is 0 (normal priority).
-     * @param null|string|array|callable $onFailed The callback to be executed if the job fails. Default is null (no callback).
+     * @param string $queue The name of the queue to dispatch the job to. Default is 'default'.
      * @return void
      */
     function dispatch(
-        string|array|callable $callback,
-        null|string|DateTime $scheduledTime = null,
+        string|array $callback,
+        array $parameters = [],
+        null|string|Carbon $scheduledTime = null,
         null|string $repeat = null,
-        int $priority = 0,
-        null|string|array|callable $onFailed = null,
+        string $queue = 'default',
     ): void {
         // Create a new job instance.
-        $job = job($callback, $scheduledTime, $repeat, $priority, $onFailed);
+        $job = job($callback, $parameters, $scheduledTime, $repeat);
 
         // Dispatch the job to the queue.
-        $job->dispatch();
+        $job->dispatch($queue);
     }
 }
 

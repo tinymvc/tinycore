@@ -32,6 +32,9 @@ class Job implements JobContract
      *
      * @param string|array $callback
      *   The Callback to run when the job is processed.
+     * 
+     * @param array $parameters
+     *  The parameters to pass to the callback when the job is processed.
      *
      * @param string|Carbon|null $scheduledTime
      *   The time at which the job should be processed. If a string is
@@ -56,6 +59,41 @@ class Job implements JobContract
 
         // If the scheduled time is not provided, set it to the current time.
         $this->scheduledTime ??= new Carbon();
+    }
+
+    /**
+     * Factory method to create a new Job instance.
+     *
+     * @param string|array $callback
+     *   The Callback to run when the job is processed.
+     * 
+     * @param array $parameters
+     *  The parameters to pass to the callback when the job is processed.
+     *
+     * @param string|Carbon|null $scheduledTime
+     *   The time at which the job should be processed. If a string is
+     *   given, it is converted to a Carbon object. If no time is
+     *   given, the current time is used.
+     *
+     * @param string|null $repeat
+     *   The repeat interval to use when requeueing the job. If no
+     *   repeat is given, the job is not requeued after it is processed.
+     *
+     * @return self
+     *   Returns a new Job instance.
+     */
+    public static function make(
+        string|array $callback,
+        array $parameters = [],
+        null|string|Carbon $scheduledTime = null,
+        null|string $repeat = null,
+    ): self {
+        return new self(
+            callback: $callback,
+            parameters: $parameters,
+            scheduledTime: $scheduledTime,
+            repeat: $repeat,
+        );
     }
 
     /**
@@ -195,10 +233,8 @@ class Job implements JobContract
                 is_array($this->callback) &&
                 method_exists($this->callback[0], 'failed')
             ) {
-                Application::$app->call(
-                    [$this->callback[0], 'failed'],
-                    ['error' => $e]
-                );
+                $class = new $this->callback[0];
+                $class->failed($e); // Call the failed method with the exception.
             }
 
             throw new FailedToResolveJobError(

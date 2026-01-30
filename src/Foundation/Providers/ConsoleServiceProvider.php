@@ -63,9 +63,13 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('route:list', [PrimaryCommandsHandler::class, 'routeList'])
             ->description('Show route list');
 
-        // Add the queue:run command
-        $commands->addCommand('queue:run', [PrimaryCommandsHandler::class, 'runQueueJobs'])
-            ->description('Run the queue jobs');
+        // Add the queue:install command
+        $commands->addCommand('queue:install', [PrimaryCommandsHandler::class, 'installQueue'])
+            ->description('Install the queue system');
+
+        // Add the queue:work command
+        $commands->addCommand('queue:work', [PrimaryCommandsHandler::class, 'runQueueJobs'])
+            ->description('Run the queue jobs workers');
 
         // Add the queue:clear command
         $commands->addCommand('queue:clear', [PrimaryCommandsHandler::class, 'clearQueueJobs'])
@@ -74,6 +78,18 @@ class ConsoleServiceProvider extends ServiceProvider
         // Add the queue:list command
         $commands->addCommand('queue:list', [PrimaryCommandsHandler::class, 'listQueueJobs'])
             ->description('Display all queue jobs');
+
+        // Add the queue:failed command
+        $commands->addCommand('queue:failed', [PrimaryCommandsHandler::class, 'listFailedQueueJobs'])
+            ->description('Display all failed queue jobs');
+
+        // Add the queue:clearFailed command
+        $commands->addCommand('queue:clearFailed', [PrimaryCommandsHandler::class, 'clearFailedQueueJobs'])
+            ->description('Clear all failed queue jobs');
+
+        // Add the queue:retryFailed command
+        $commands->addCommand('queue:retryFailed', [PrimaryCommandsHandler::class, 'retryFailedQueueJobs'])
+            ->description('Retry all failed queue jobs');
 
         // Add the migrate command
         $commands->addCommand('migrate', [Migration::class, 'up'])

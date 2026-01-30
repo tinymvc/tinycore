@@ -55,7 +55,11 @@ class Queue implements QueueContract
     {
         try {
             $this->pdo = new PDO('sqlite:' . storage_dir('queue.db')); // Initialize SQLite database.
-            $this->pdo->exec("PRAGMA foreign_keys = ON");
+            $this->pdo->exec("PRAGMA foreign_keys = ON"); // Enable foreign key constraints.
+            $this->pdo->exec("PRAGMA journal_mode = WAL"); // Write-Ahead Logging
+            $this->pdo->exec("PRAGMA synchronous = NORMAL"); // Faster writes
+            $this->pdo->exec("PRAGMA cache_size = 10000"); // 10MB cache
+            $this->pdo->exec("PRAGMA temp_store = MEMORY"); // Temp tables in RAM
         } catch (\PDOException $e) {
             throw new RuntimeException('Failed to connect to the SQLite database: ' . $e->getMessage());
         }
@@ -82,7 +86,8 @@ class Queue implements QueueContract
                     created_at DATETIME NOT NULL,
                     repeat TEXT DEFAULT NULL,
                     status TEXT NOT NULL,
-                    attempts INTEGER DEFAULT 0
+                    attempts INTEGER DEFAULT 0,
+                    reserved_at DATETIME DEFAULT NULL
                 )"
             );
 
@@ -97,6 +102,10 @@ class Queue implements QueueContract
 
             $this->pdo->exec(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_reserved_at ON jobs(reserved_at) WHERE reserved_at IS NOT NULL"
             );
 
             $this->pdo->exec(
@@ -267,35 +276,62 @@ class Queue implements QueueContract
     }
 
     /**
-     * Returns the current job from the queue.
+     * Returns the next job from the queue.
      *
      * This method retrieves the next job from the specified queue(s) that is
      * pending and scheduled to run at or before the current time.
+     * Uses a transaction to prevent race conditions between multiple workers.
      *
      * @param array|string $queue The name(s) of the queue(s) to retrieve the job from.
      *
      * @return false|Job The next job in the queue, or false if no job is available.
      */
-    public function getCurrentJob(array|string $queue = 'default'): false|Job
+    private function getNextJob(array|string $queue = 'default'): false|Job
     {
-        $queue = !is_array($queue) ? "'$queue'" :
-            "'" . implode("','", $queue) . "'";
+        try {
+            $this->pdo->beginTransaction();
 
-        $statement = $this->pdo->prepare(
-            "SELECT * FROM jobs WHERE queue IN($queue) AND status = 'pending' 
-                AND (scheduled_time IS NULL OR scheduled_time <= :now) 
-                ORDER BY scheduled_time ASC LIMIT 1"
-        );
+            $queue = !is_array($queue) ? "'$queue'" :
+                "'" . implode("','", $queue) . "'";
 
-        $statement->execute([':now' => now()]);
+            // Select job and immediately mark it as reserved to prevent race conditions
+            $statement = $this->pdo->prepare(
+                "SELECT * FROM jobs WHERE queue IN($queue) AND status = 'pending' 
+                    AND (scheduled_time IS NULL OR scheduled_time <= :now) 
+                    ORDER BY scheduled_time ASC LIMIT 1"
+            );
 
-        $job = $statement->fetch(PDO::FETCH_ASSOC);
-        if ($job) {
-            return $this->unserializeJob($job);
+            $statement->execute([':now' => now()]);
+            $job = $statement->fetch(PDO::FETCH_ASSOC);
+
+            if ($job) {
+                // Mark job as reserved immediately to prevent other workers from picking it up
+                $updateStmt = $this->pdo->prepare(
+                    "UPDATE jobs SET status = 'reserved', reserved_at = :reserved_at WHERE id = :id AND status = 'pending'"
+                );
+
+                $updateStmt->execute([
+                    ':reserved_at' => now(),
+                    ':id' => $job['id']
+                ]);
+
+                // If no rows were updated, another worker got this job
+                if ($updateStmt->rowCount() === 0) {
+                    $this->pdo->commit();
+                    return false;
+                }
+
+                $this->pdo->commit();
+                return $this->unserializeJob($job);
+            }
+
+            $this->pdo->commit();
+            return false;
+
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            throw new RuntimeException('Failed to get next job: ' . $e->getMessage());
         }
-
-        return false;
-
     }
 
     /**
@@ -315,7 +351,7 @@ class Queue implements QueueContract
      * 
      * @return void
      */
-    public function run(
+    public function work(
         bool $once = false,
         int $timeout = 3600, // 1 hour
         int $sleep = 3,
@@ -331,6 +367,9 @@ class Queue implements QueueContract
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
         Prompt::message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
 
+        // Recover stale jobs (jobs stuck in 'processing' status for too long)
+        $this->recoverStaleJobs();
+
         do {
             // Check if timeout has been reached
             if ((microtime(true) - $startedAt) >= $timeout) {
@@ -339,7 +378,7 @@ class Queue implements QueueContract
             }
 
             // Get the next job from the queue
-            $job = $this->getCurrentJob($queue);
+            $job = $this->getNextJob($queue);
 
             if (!$job) {
                 $once === false && sleep($sleep); // No jobs available, sleep for a bit if not running once
@@ -377,7 +416,7 @@ class Queue implements QueueContract
                         sprintf(
                             "Job <bold>#%d</bold> completed and rescheduled for %s",
                             $jobId,
-                            $nextRun->toDateTimeString()
+                            $nextRun
                         ),
                         'success'
                     );
@@ -421,7 +460,7 @@ class Queue implements QueueContract
                         sprintf(
                             "Job <bold>#%d</bold> will be retried at %s",
                             $jobId,
-                            $retryTime->toDateTimeString()
+                            $retryTime
                         ),
                         'warning'
                     );
@@ -463,12 +502,13 @@ class Queue implements QueueContract
     private function updateJobStatus(int $jobId, string $status, int $attempts): void
     {
         $statement = $this->pdo->prepare(
-            "UPDATE jobs SET status = :status, attempts = :attempts WHERE id = :id"
+            "UPDATE jobs SET status = :status, attempts = :attempts, reserved_at = :reserved_at WHERE id = :id"
         );
 
         $statement->execute([
             ':status' => $status,
             ':attempts' => $attempts,
+            ':reserved_at' => $status === 'processing' ? now() : null,
             ':id' => $jobId,
         ]);
     }
@@ -484,11 +524,11 @@ class Queue implements QueueContract
     private function rescheduleJob(int $jobId, Carbon $nextRun): void
     {
         $statement = $this->pdo->prepare(
-            "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = 0 WHERE id = :id"
+            "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = 0, reserved_at = NULL WHERE id = :id"
         );
 
         $statement->execute([
-            ':scheduled_time' => $nextRun->toDateTimeString(),
+            ':scheduled_time' => $nextRun,
             ':id' => $jobId,
         ]);
     }
@@ -555,14 +595,54 @@ class Queue implements QueueContract
     private function retryJob(int $jobId, Carbon $retryTime, int $attempts): void
     {
         $statement = $this->pdo->prepare(
-            "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = :attempts WHERE id = :id"
+            "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = :attempts, reserved_at = NULL WHERE id = :id"
         );
 
         $statement->execute([
-            ':scheduled_time' => $retryTime->toDateTimeString(),
+            ':scheduled_time' => $retryTime,
             ':attempts' => $attempts,
             ':id' => $jobId,
         ]);
+    }
+
+    /**
+     * Recovers stale jobs that are stuck in 'processing' or 'reserved' status.
+     *
+     * This method finds jobs that have been reserved or processing for too long
+     * (likely due to worker crashes) and resets them to pending status.
+     *
+     * @param int $timeout The number of seconds after which a job is considered stale (default: 3600 = 1 hour).
+     *
+     * @return int The number of stale jobs recovered.
+     */
+    public function recoverStaleJobs(int $timeout = 3600): int
+    {
+        try {
+            $staleTime = now()->subSeconds($timeout);
+
+            $statement = $this->pdo->prepare(
+                "UPDATE jobs SET status = 'pending', reserved_at = NULL 
+                WHERE status IN ('processing', 'reserved') 
+                AND reserved_at IS NOT NULL 
+                AND reserved_at < :stale_time"
+            );
+
+            $statement->execute([':stale_time' => $staleTime]);
+
+            $recovered = $statement->rowCount();
+
+            if ($recovered > 0) {
+                Prompt::message(
+                    sprintf("Recovered <bold>%d</bold> stale job(s)", $recovered),
+                    'warning'
+                );
+            }
+
+            return $recovered;
+
+        } catch (\PDOException $e) {
+            throw new RuntimeException('Failed to recover stale jobs: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -596,7 +676,8 @@ class Queue implements QueueContract
             if (!empty($status)) {
                 $status = !is_array($status) ? "'$status'" :
                     "'" . implode("','", $status) . "'";
-                $where = "status IN($status)";
+                $where .= !empty($where) ? " AND " : "";
+                $where .= "status IN($status)";
             }
 
             if (!empty($where)) {
@@ -682,7 +763,7 @@ class Queue implements QueueContract
             // Update jobs to pending status
             $inClause = implode(',', array_fill(0, count($failedJobIds), '?'));
             $updateStatement = $this->pdo->prepare(
-                "UPDATE jobs SET status = 'pending', attempts = 0 WHERE id IN ($inClause)"
+                "UPDATE jobs SET status = 'pending', attempts = 0, reserved_at = NULL WHERE id IN ($inClause)"
             );
             $updateStatement->execute($failedJobIds);
 
@@ -715,7 +796,7 @@ class Queue implements QueueContract
         return [
             'callback' => $job->getCallback(), // Serialize the callback and save it.
             'parameters' => $job->getParameters(), // Save the parameters as it is.
-            'scheduledTime' => $job->getScheduledTime()->toDateTimeString(), // Save the scheduled time as string.
+            'scheduledTime' => $job->getScheduledTime(), // Save the scheduled time as string.
             'repeat' => $job->getRepeat(), // Save the repeat as it is.
             'metadata' => $job->getMetadata(), // Save the metadata as it is.
         ];
@@ -750,6 +831,7 @@ class Queue implements QueueContract
                 'created_at' => $job['created_at'] ?? null,
                 'status' => $job['status'] ?? 'pending',
                 'failed_at' => $job['failed_at'] ?? null,
+                'reserved_at' => $job['reserved_at'] ?? null,
                 'exception' => $job['exception'] ?? null,
             ],
         );

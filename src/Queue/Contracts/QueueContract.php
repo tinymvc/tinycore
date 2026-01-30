@@ -31,7 +31,7 @@ interface QueueContract
      * @param array|string $queue The name(s) of the queue(s) to run
      * @return void
      */
-    public function run(
+    public function work(
         bool $once = false,
         int $timeout = 60,
         int $sleep = 3,

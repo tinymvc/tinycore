@@ -8,7 +8,6 @@ use Spark\Queue\Queue;
 use Spark\Routing\Router;
 use Spark\Utils\FileManager;
 use function in_array;
-use function intval;
 use function is_string;
 use function sprintf;
 use function strlen;
@@ -105,6 +104,19 @@ class PrimaryCommandsHandler
     }
 
     /**
+     * Handles the "queue:install" command by installing the queue system.
+     *
+     * @param Queue $queue
+     *   An instance of the Queue class for managing the queue system.
+     *
+     * @return void
+     */
+    public function installQueue(Queue $queue)
+    {
+        $queue->install();
+    }
+
+    /**
      * Handles the "queue:run" command by running all the pending queue jobs.
      *
      * @param Queue $queue
@@ -116,17 +128,14 @@ class PrimaryCommandsHandler
      */
     public function runQueueJobs(Queue $queue, array $args)
     {
-        $start = microtime(true);
-        Prompt::message("Running queue jobs...", "info");
-
-        $maxJobs = intval($args['_args'][0] ?? 10);
-
-        $queue->run($maxJobs); // Run all pending queue jobs
-
-        Prompt::message(
-            "Queue jobs completed in " . round(microtime(true) - $start, 2) . " seconds.",
-            "success"
-        );
+        $queue->work(
+            once: isset($args['once']),
+            timeout: $args['timeout'] ?? 2400, // 40 minutes
+            sleep: $args['sleep'] ?? 5, // 5 seconds
+            delay: $args['delay'] ?? 10, // 10 seconds on failure
+            tries: $args['tries'] ?? 3, // 3 attempts on failure
+            queue: explode($args['queue'] ?? 'default', ','),
+        ); // Run all pending queue jobs
     }
 
     /**
@@ -137,24 +146,62 @@ class PrimaryCommandsHandler
      *
      * @return void
      */
-    public function listQueueJobs(Queue $queue)
+    public function listQueueJobs(Queue $queue, array $args)
     {
-        $jobs = $queue->getJobs();
+        $jobs = $queue->getJobs(
+            from: $args['from'] ?? null,
+            to: $args['to'] ?? null,
+            queue: explode($args['queue'] ?? '', ','),
+            status: explode($args['status'] ?? '', ',')
+        );
 
-        foreach ($jobs as $id => $job) {
+        foreach ($jobs as $job) {
             Prompt::message(
                 sprintf(
                     "Job <bold>#%s</bold> Scheduled <info>%s</info>%s%s",
-                    $id,
-                    carbon($job['scheduledTime'])->toDateTimeString(),
-                    !empty($job['repeat']) ? ' <danger>(Repeats)</danger> ' : '',
-                    carbon($job['scheduledTime'])->isPast() ? ' <warning>(Ready to run)</warning>' : ''
+                    $job->getDisplayName(),
+                    $job->getScheduledTime()->toDateTimeString(),
+                    $job->isRepeated() ? ' <danger>(Repeats)</danger> ' : '',
+                    $job->getScheduledTime()->isPast() ? ' <warning>(Ready to run)</warning>' : ''
                 ),
             );
         }
 
         if (empty($jobs)) {
             Prompt::message("No scheduled jobs found.", "info");
+        }
+    }
+
+    /**
+     * Lists all failed queue jobs.
+     *
+     * @param Queue $queue
+     *   An instance of the Queue class for managing queue jobs.
+     * 
+     * @return void
+     */
+    public function listFailedQueueJobs(Queue $queue, array $args)
+    {
+        $failedJobs = $queue->getFailedJobs(
+            from: $args['from'] ?? null,
+            to: $args['to'] ?? null,
+        );
+
+        foreach ($failedJobs as $job) {
+            $meta = $job->getMetadata();
+            Prompt::message(
+                sprintf(
+                    "Failed Job <bold>#%s (%s)</bold> Failed At <danger>%s</danger> Reason: <danger>%s</danger>",
+                    $job->getDisplayName(),
+                    $meta['queue'] ?? 'default',
+                    carbon($meta['failed_at'] ?? '')->toDateTimeString(),
+                    $meta['exception'] ?? 'Unknown'
+                ),
+            );
+        }
+
+        if (empty($failedJobs)) {
+            Prompt::message("No failed jobs found.", "info");
         }
     }
 
@@ -170,6 +217,34 @@ class PrimaryCommandsHandler
     {
         $queue->clearAllJobs();
         Prompt::message("Queue jobs cleared.", "success");
+    }
+
+    /**
+     * Lists all failed queue jobs.
+     *
+     * @param Queue $queue
+     *   An instance of the Queue class for managing queue jobs.
+     * 
+     * @return void
+     */
+    public function clearFailedQueueJobs(Queue $queue)
+    {
+        $queue->clearFailedJobs();
+        Prompt::message("Failed queue jobs cleared.", "success");
+    }
+
+    /**
+     * Retries all failed queue jobs.
+     *
+     * @param Queue $queue
+     *   An instance of the Queue class for managing queue jobs.
+     * 
+     * @return void
+     */
+    public function retryFailedQueueJobs(Queue $queue)
+    {
+        $queue->retryFailedJobs();
+        Prompt::message("Failed queue jobs retried.", "success");
     }
 
     /**
