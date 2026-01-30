@@ -4,13 +4,14 @@ namespace Spark\Database\Relation;
 
 use Closure;
 use Spark\Database\Model;
+use Spark\Database\QueryBuilder;
 
 /**
- * Class HasManyThrough
+ * Class HasOneThrough
  * 
- * Represents a "has many through" relationship in a database model.
+ * Represents a "has one through" relationship in a database model.
  * 
- * This class is used to define a many-to-many relationship
+ * This class is used to define a one-to-one relationship
  * between two models through an intermediate model.
  * It encapsulates the related model, the through model,
  * 
@@ -52,7 +53,44 @@ class HasOneThrough extends Relation
     }
 
     /**
-     * Get the configuration for the HasManyThrough relationship.
+     * Build the query for this relationship.
+     * 
+     * @return QueryBuilder
+     */
+    protected function buildQuery(): QueryBuilder
+    {
+        /** @var Model $relatedInstance */
+        $relatedInstance = new ($this->related)();
+
+        /** @var Model $throughInstance */
+        $throughInstance = new ($this->through)();
+
+        $query = $relatedInstance::query();
+
+        // Join the through table
+        $query->join(
+                $throughInstance::$table,
+                $relatedInstance::$table . '.' . $this->secondLocalKey,
+            '=',
+                $throughInstance::$table . '.' . $this->secondKey
+        );
+
+        // Add relationship constraint
+        if ($this->model) {
+            $localValue = $this->model->{$this->localKey};
+            $query->where($throughInstance::$table . '.' . $this->firstKey, '=', $localValue);
+        }
+
+        // Apply custom callback if provided
+        if ($this->callback) {
+            ($this->callback)($query);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Get the configuration for the HasOneThrough relationship.
      * 
      * @return array{
      *     related: string,

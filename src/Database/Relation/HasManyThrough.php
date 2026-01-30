@@ -4,6 +4,7 @@ namespace Spark\Database\Relation;
 
 use Closure;
 use Spark\Database\Model;
+use Spark\Database\QueryBuilder;
 
 /**
  * Class HasManyThrough
@@ -49,6 +50,43 @@ class HasManyThrough extends Relation
         null|Model $model = null
     ) {
         parent::__construct($model);
+    }
+
+    /**
+     * Build the query for this relationship.
+     * 
+     * @return QueryBuilder
+     */
+    protected function buildQuery(): QueryBuilder
+    {
+        /** @var Model $relatedInstance */
+        $relatedInstance = new ($this->related)();
+
+        /** @var Model $throughInstance */
+        $throughInstance = new ($this->through)();
+
+        $query = $relatedInstance::query();
+
+        // Join the through table
+        $query->join(
+                $throughInstance::$table,
+                $relatedInstance::$table . '.' . $this->secondLocalKey,
+            '=',
+                $throughInstance::$table . '.' . $this->secondKey
+        );
+
+        // Add relationship constraint
+        if ($this->model) {
+            $localValue = $this->model->{$this->localKey};
+            $query->where($throughInstance::$table . '.' . $this->firstKey, '=', $localValue);
+        }
+
+        // Apply custom callback if provided
+        if ($this->callback) {
+            ($this->callback)($query);
+        }
+
+        return $query;
     }
 
     /**

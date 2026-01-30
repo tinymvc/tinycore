@@ -17,6 +17,7 @@ use Spark\Database\Relation\Relation;
 use Spark\Support\Str;
 use function array_key_exists;
 use function func_get_args;
+use function get_class;
 use function is_array;
 use function is_string;
 
@@ -408,6 +409,9 @@ trait HasRelation
      * It checks if the relationship is already loaded,
      * and if not, it attempts to lazy load the relationship configuration.
      * 
+     * When called as a property ($model->relation), it executes the query and returns results.
+     * When called as a method ($model->relation()), the Relation instance is returned for chaining.
+     * 
      * @param string $name
      * @return mixed
      */
@@ -418,7 +422,21 @@ trait HasRelation
             return $this->relations[$name];
         }
 
-        // Attempt lazy loading
+        // Check if a relationship method exists
+        if (method_exists($this, $name)) {
+            $relation = $this->$name();
+
+            // If it's a Relation instance, execute and cache the results
+            if ($relation instanceof Relation) {
+                $results = $this->executeRelation($relation, $name);
+                $this->setRelation($name, $results);
+                return $results;
+            }
+
+            return $relation;
+        }
+
+        // Fallback to old eager loading logic for compatibility
         try {
             $relationConfig = $this->getRelationshipConfig($name);
         } catch (UndefinedOrmException $e) {
@@ -438,6 +456,28 @@ trait HasRelation
         }
 
         return null;
+    }
+
+    /**
+     * Execute a Relation instance and return appropriate results.
+     * 
+     * @param Relation $relation
+     * @param string $name
+     * @return mixed
+     */
+    protected function executeRelation(Relation $relation, string $name)
+    {
+        // For hasOne and belongsTo, return single model or null
+        if (
+            $relation instanceof HasOne ||
+            $relation instanceof BelongsTo ||
+            $relation instanceof HasOneThrough
+        ) {
+            return $relation->first();
+        }
+
+        // For hasMany and belongsToMany, return Collection
+        return $relation->get();
     }
 
     /**

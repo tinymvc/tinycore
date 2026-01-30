@@ -112,7 +112,7 @@ use function sprintf;
  * @method static \Spark\Support\Collection filter(?callable $callback = null)
  * @method static \Spark\Support\Collection map(callable $callback)
  * @method static \Spark\Support\Collection mapToDictionary(callable $callback)
- * @method static \Spark\Support\Collection mapWithKeys(callaseletble $callback)
+ * @method static \Spark\Support\Collection mapWithKeys(callable $callback)
  * @method static \Spark\Support\Collection merge($items)
  * @method static \Spark\Support\Collection mergeRecursive($items)
  *

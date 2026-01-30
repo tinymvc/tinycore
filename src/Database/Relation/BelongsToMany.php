@@ -49,6 +49,39 @@ class BelongsToMany extends Relation
     }
 
     /**
+     * Build the query for this relationship.
+     * 
+     * @return QueryBuilder
+     */
+    protected function buildQuery(): QueryBuilder
+    {
+        /** @var Model $relatedInstance */
+        $relatedInstance = new ($this->related)();
+        $query = $relatedInstance::query();
+
+        // Join the pivot table
+        $query->join(
+            $this->table,
+                $relatedInstance::$table . '.' . $this->relatedKey,
+            '=',
+            $this->table . '.' . $this->relatedPivotKey
+        );
+
+        // Add relationship constraint
+        if ($this->model) {
+            $parentKeyValue = $this->model->{$this->parentKey};
+            $query->where($this->table . '.' . $this->foreignPivotKey, '=', $parentKeyValue);
+        }
+
+        // Apply custom callback if provided
+        if ($this->callback) {
+            ($this->callback)($query);
+        }
+
+        return $query;
+    }
+
+    /**
      * Get the configuration for the BelongsToMany relationship.
      * 
      * @return array{

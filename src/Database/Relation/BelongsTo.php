@@ -4,6 +4,7 @@ namespace Spark\Database\Relation;
 
 use Closure;
 use Spark\Database\Model;
+use Spark\Database\QueryBuilder;
 
 /**
  * Class BelongsTo
@@ -37,6 +38,31 @@ class BelongsTo extends Relation
         null|Model $model = null
     ) {
         parent::__construct($model);
+    }
+
+    /**
+     * Build the query for this relationship.
+     * 
+     * @return QueryBuilder
+     */
+    protected function buildQuery(): QueryBuilder
+    {
+        /** @var Model $relatedInstance */
+        $relatedInstance = new ($this->related)();
+        $query = $relatedInstance::query();
+
+        // Add relationship constraint
+        if ($this->model) {
+            $foreignValue = $this->model->{$this->foreignKey};
+            $query->where($this->ownerKey, '=', $foreignValue);
+        }
+
+        // Apply custom callback if provided
+        if ($this->callback) {
+            ($this->callback)($query);
+        }
+
+        return $query;
     }
 
     /**
