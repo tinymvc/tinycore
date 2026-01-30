@@ -182,18 +182,18 @@ class Middleware implements MiddlewareContract
      * It can return a callable directly or instantiate a class if needed.
      * 
      * @param string $name The middleware name.
-     * @throws MiddlewareNotFoundExceptions If the middleware is not registered.
+     * @throws MiddlewareNotFoundExceptions If the middleware cannot be resolved.
      * 
      * @return callable The middleware handler.
      */
     private function getMiddlewareHandler(string $name): callable
     {
         // Check if registered
-        if (!isset($this->middlewares[$name])) {
-            throw new MiddlewareNotFoundExceptions("Middleware '{$name}' not found.");
+        if (isset($this->middlewares[$name])) {
+            $middleware = $this->middlewares[$name];
+        } else {
+            $middleware = $name; // Treat as class name
         }
-
-        $middleware = $this->middlewares[$name];
 
         // Return callable directly
         if (is_callable($middleware)) {
