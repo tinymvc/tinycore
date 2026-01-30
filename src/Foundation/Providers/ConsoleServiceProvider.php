@@ -139,6 +139,10 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('make:cast', [MakeStubCommandsHandler::class, 'makeCast'])
             ->description('Create a new cast class for model attributes');
 
+        // Make a Job class file
+        $commands->addCommand('make:job', [MakeStubCommandsHandler::class, 'makeJob'])
+            ->description('Create a new job class');
+
         // Make a Controller class file
         $commands->addCommand('make:controller', [MakeStubCommandsHandler::class, 'makeController'])
             ->description('Create a new controller class');

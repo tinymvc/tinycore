@@ -14,6 +14,7 @@ use Spark\Utils\Carbon;
 use function count;
 use function get_class;
 use function is_array;
+use function is_string;
 use function sprintf;
 
 /**
@@ -54,7 +55,7 @@ class Queue implements QueueContract
     public function __construct(bool|string $log = true)
     {
         try {
-            $this->pdo = new PDO('sqlite:' . storage_dir('queue.db')); // Initialize SQLite database.
+            $this->pdo = new PDO('sqlite:' . storage_dir('queue/jobs.db')); // Initialize SQLite database.
             $this->pdo->exec("PRAGMA foreign_keys = ON"); // Enable foreign key constraints.
             $this->pdo->exec("PRAGMA journal_mode = WAL"); // Write-Ahead Logging
             $this->pdo->exec("PRAGMA synchronous = NORMAL"); // Faster writes
@@ -291,8 +292,7 @@ class Queue implements QueueContract
         try {
             $this->pdo->beginTransaction();
 
-            $queue = !is_array($queue) ? "'$queue'" :
-                "'" . implode("','", $queue) . "'";
+            $queue = $this->joinEnum($queue);
 
             // Select job and immediately mark it as reserved to prevent race conditions
             $statement = $this->pdo->prepare(
@@ -365,7 +365,7 @@ class Queue implements QueueContract
         $startedMemory = memory_get_usage(true);
 
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
-        Prompt::message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
+        $this->message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
 
         // Recover stale jobs (jobs stuck in 'processing' status for too long)
         $this->recoverStaleJobs();
@@ -373,7 +373,7 @@ class Queue implements QueueContract
         do {
             // Check if timeout has been reached
             if ((microtime(true) - $startedAt) >= $timeout) {
-                Prompt::message('Queue worker timeout reached. Shutting down...', 'warning');
+                $this->message('Queue worker timeout reached. Shutting down...', 'warning');
                 break;
             }
 
@@ -388,7 +388,7 @@ class Queue implements QueueContract
             $jobId = $job->getMetadata()['id'];
             $attempts = $job->getMetadata()['attempts'];
 
-            Prompt::message(
+            $this->message(
                 sprintf(
                     "Processing job <bold>#%d</bold> (%s) - Attempt %d/%d",
                     $jobId,
@@ -412,7 +412,7 @@ class Queue implements QueueContract
                     $nextRun = now()->modify('+' . $job->getRepeat());
                     $this->rescheduleJob($jobId, $nextRun);
 
-                    Prompt::message(
+                    $this->message(
                         sprintf(
                             "Job <bold>#%d</bold> completed and rescheduled for %s",
                             $jobId,
@@ -424,7 +424,7 @@ class Queue implements QueueContract
                     // Remove one-time job
                     $this->removeJobById($jobId);
 
-                    Prompt::message("Job <bold>#$jobId</bold> completed successfully", 'success');
+                    $this->message("Job <bold>#$jobId</bold> completed successfully", 'success');
                 }
 
                 $ranJobs++;
@@ -433,7 +433,7 @@ class Queue implements QueueContract
                 // Job failed
                 $newAttempts = $attempts + 1;
 
-                Prompt::message(
+                $this->message(
                     sprintf("Job <bold>#%d</bold> failed: %s", $jobId, $e->getMessage()),
                     'error'
                 );
@@ -443,7 +443,7 @@ class Queue implements QueueContract
                     $this->markJobAsFailed($jobId, $e, $newAttempts);
                     $failedJobs++;
 
-                    Prompt::message(
+                    $this->message(
                         sprintf(
                             "Job <bold>#%d</bold> failed permanently after %d attempts",
                             $jobId,
@@ -456,7 +456,7 @@ class Queue implements QueueContract
                     $retryTime = now()->addSeconds($delay);
                     $this->retryJob($jobId, $retryTime, $newAttempts);
 
-                    Prompt::message(
+                    $this->message(
                         sprintf(
                             "Job <bold>#%d</bold> will be retried at %s",
                             $jobId,
@@ -484,10 +484,24 @@ class Queue implements QueueContract
             $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
         }
 
-        Prompt::message(
+        $this->message(
             sprintf("Queue worker finished. Ran %d job(s), %d failed", $ranJobs, $failedJobs),
             'info'
         );
+    }
+
+    /**
+     * Logs a message to the queue log file if logging is enabled.
+     *
+     * @param string $message The message to log.
+     * @param string $level The log level (info, warning, error, etc.).
+     *
+     * @return void
+     */
+    private function message(string $message, string $type = 'normal'): void
+    {
+        echo '[' . date('Y-m-d H:i:s') . '] ';
+        Prompt::message($message, $type); // 
     }
 
     /**
@@ -566,12 +580,7 @@ class Queue implements QueueContract
             $statement->execute([
                 ':job_id' => $jobId,
                 ':failed_at' => now(),
-                ':exception' => sprintf(
-                    "%s: %s\n\nStack trace:\n%s",
-                    get_class($exception),
-                    $exception->getMessage(),
-                    $exception->getTraceAsString()
-                ),
+                ':exception' => sprintf("%s: %s", get_class($exception), $exception->getMessage()),
                 ':attempts' => $attempts,
             ]);
 
@@ -667,15 +676,12 @@ class Queue implements QueueContract
         try {
             $where = '';
             if (!empty($queue)) {
-                $queue = !is_array($queue) ? "'$queue'" :
-                    "'" . implode("','", $queue) . "'";
-                $where .= !empty($where) ? " AND " : "";
+                $queue = $this->joinEnum($queue);
                 $where .= "queue IN($queue)";
             }
 
             if (!empty($status)) {
-                $status = !is_array($status) ? "'$status'" :
-                    "'" . implode("','", $status) . "'";
+                $status = $this->joinEnum($status);
                 $where .= !empty($where) ? " AND " : "";
                 $where .= "status IN($status)";
             }
@@ -700,6 +706,29 @@ class Queue implements QueueContract
         }
 
         return $jobs;
+    }
+
+    /**
+     * Joins an array or string of enum values into a single string for SQL queries.
+     *
+     * @param array|string|null $values The enum values to join.
+     *
+     * @return string The joined enum values as a string.
+     */
+    private function joinEnum(array|string|null $values): string
+    {
+        if (empty($values)) {
+            return '';
+        }
+
+        if (is_string($values)) {
+            $values = explode(',', $values);
+        }
+
+        $values = array_map('trim', $values);
+        $values = array_filter($values);
+
+        return "'" . implode("','", $values) . "'";
     }
 
     /**

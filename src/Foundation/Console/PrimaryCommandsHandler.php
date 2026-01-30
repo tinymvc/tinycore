@@ -130,11 +130,11 @@ class PrimaryCommandsHandler
     {
         $queue->work(
             once: isset($args['once']),
-            timeout: $args['timeout'] ?? 2400, // 40 minutes
-            sleep: $args['sleep'] ?? 5, // 5 seconds
-            delay: $args['delay'] ?? 10, // 10 seconds on failure
+            timeout: $args['timeout'] ?? 3000, // 50 minutes
+            sleep: $args['sleep'] ?? 4, // 4 seconds
+            delay: $args['delay'] ?? 8, // 8 seconds on failure
             tries: $args['tries'] ?? 3, // 3 attempts on failure
-            queue: explode($args['queue'] ?? 'default', ','),
+            queue: $args['queue'] ?? 'default',
         ); // Run all pending queue jobs
     }
 
@@ -149,20 +149,24 @@ class PrimaryCommandsHandler
     public function listQueueJobs(Queue $queue, array $args)
     {
         $jobs = $queue->getJobs(
-            from: $args['from'] ?? null,
-            to: $args['to'] ?? null,
-            queue: explode($args['queue'] ?? '', ','),
-            status: explode($args['status'] ?? '', ',')
+            from: $args['from'] ?? 0,
+            to: $args['to'] ?? 500,
+            queue: $args['queue'] ?? null,
+            status: $args['status'] ?? null
         );
 
         foreach ($jobs as $job) {
+            $meta = $job->getMetadata();
+            $status = $meta['status'] ?? 'pending';
+
             Prompt::message(
                 sprintf(
-                    "Job <bold>#%s</bold> Scheduled <info>%s</info>%s%s",
+                    "Job <bold>#%s (%s)</bold> Scheduled <info>%s</info>%s%s",
                     $job->getDisplayName(),
+                    $meta['queue'] ?? 'default',
                     $job->getScheduledTime()->toDateTimeString(),
                     $job->isRepeated() ? ' <danger>(Repeats)</danger> ' : '',
-                    $job->getScheduledTime()->isPast() ? ' <warning>(Ready to run)</warning>' : ''
+                    $status === 'failed' ? ' <danger>(Failed)</danger>' : ($job->getScheduledTime()->isPast() ? ' <warning>(Ready to run)</warning>' : '')
                 ),
             );
         }
@@ -183,8 +187,8 @@ class PrimaryCommandsHandler
     public function listFailedQueueJobs(Queue $queue, array $args)
     {
         $failedJobs = $queue->getFailedJobs(
-            from: $args['from'] ?? null,
-            to: $args['to'] ?? null,
+            from: $args['from'] ?? 0,
+            to: $args['to'] ?? 500,
         );
 
         foreach ($failedJobs as $job) {

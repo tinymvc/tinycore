@@ -224,6 +224,33 @@ class MakeStubCommandsHandler
     }
 
     /**
+     * Create a job stub.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     *
+     * @return void
+     */
+    public function makeJob(array $args)
+    {
+        $this->askName($args, 'What is the name of the job?');
+
+        $name = $this->resolveSuffix($args['_args'][0], 'Job');
+
+        StubCreation::create(
+            $name,
+            [
+                'stub' => __DIR__ . '/stubs/job.stub',
+                'destination' => 'app/Jobs/::subfolder:ucfirst/::name:ucfirst.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'App\Jobs::subfolder:namespace',
+                    '{{ class }}' => '::name:ucfirst',
+                ],
+            ]
+        );
+    }
+
+    /**
      * Create a controller stub.
      *
      * @param array $args

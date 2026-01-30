@@ -836,7 +836,14 @@ if (!function_exists('dd')) {
         $file = $trace[0]['file']; // Get the file name
         $line = $trace[0]['line']; // Get the line number
 
-        echo '<p style="color:#666;font-size: 14px;margin: 25px 25px 0 25px;font-style:italic;"><strong>// Dumped from:</strong> ' . $file . ':' . $line . '</p>';
+        // Make the file path relative to the root directory
+        $file = str_replace(root_dir(), '@', $file);
+
+        if (is_cli()) {
+            echo "// Dumped from: " . $file . ":" . $line . "\n";
+        } else {
+            echo '<p style="color:#666;font-size: 14px;margin: 25px 25px 0 25px;font-style:italic;"><strong>// Dumped from:</strong> ' . $file . ':' . $line . '</p>';
+        }
 
         dump(...$args);
 
