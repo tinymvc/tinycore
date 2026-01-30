@@ -85,12 +85,14 @@ interface ApplicationContract
      * manager from the dependency injection container, allowing custom
      * middleware logic to be executed.
      *
+     * @param null|string $load A middleware or path to load middleware from.
      * @param null|array $register An array of middleware to register.
      * @param null|string|array $queue A middleware or array of middleware to queue.
      * @param null|callable $then The callback to be applied to the middleware manager
      * @return self
      */
     public function withMiddleware(
+        null|string $load = null,
         null|array $register = null,
         null|string|array $queue = null,
         null|callable $then = null,

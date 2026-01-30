@@ -247,12 +247,14 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * manager from the dependency injection container, allowing custom
      * middleware logic to be executed.
      *
+     * @param null|string $load The path to the middleware file to load.
      * @param null|array $register An array of middleware to register.
      * @param null|string|array $queue A middleware or array of middleware to queue.
      * @param null|callable $then The callback to be applied to the middleware manager
      * @return self
      */
     public function withMiddleware(
+        null|string $load = null,
         null|array $register = null,
         null|string|array $queue = null,
         null|callable $then = null,
@@ -261,6 +263,8 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
         $middleware = $this->get(Middleware::class);
 
         $register && $middleware->registerMany($register);
+
+        $load && $middleware->registerMany(require $load);
 
         $queue && $middleware->queue($queue);
 
