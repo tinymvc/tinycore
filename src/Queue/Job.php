@@ -226,15 +226,32 @@ class Job implements JobContract
      */
     public function handle(): void
     {
+        $callbackOrClass = null; // To hold the instantiated class if needed.
+
         try {
-            Application::$app->call($this->callback, $this->parameters);
+            // Instantiate the class if the callback is a class name.
+            $callbackOrClass = is_array($this->callback) ? $this->callback[0] : $this->callback;
+            if (class_exists($callbackOrClass)) {
+                $callbackOrClass = new $callbackOrClass(...$this->parameters);
+            }
+
+            // Determine the appropriate callback to execute.
+            if (is_object($callbackOrClass)) {
+                $method = is_array($this->callback) && isset($this->callback[1])
+                    ? $this->callback[1] : 'handle';
+                $callback = [$callbackOrClass, $method];
+            } else {
+                $callback = $this->callback; // It is a function name or a static method.
+            }
+
+            Application::$app->call($callback);
         } catch (\Throwable $e) {
+            // If the class has a failed method, call it with the exception.
             if (
-                is_array($this->callback) &&
-                method_exists($this->callback[0], 'failed')
+                is_object($callbackOrClass) &&
+                method_exists($callbackOrClass, 'failed')
             ) {
-                $class = new $this->callback[0];
-                $class->failed($e); // Call the failed method with the exception.
+                $callbackOrClass->failed($e); // Call the failed method with the exception.
             }
 
             throw new FailedToResolveJobError(
@@ -311,11 +328,15 @@ class Job implements JobContract
     /**
      * Returns the metadata associated with the job.
      *
-     * @return array
+     * @return null|string|array
      *   The metadata associated with the job.
      */
-    public function getMetadata(): array
+    public function getMetadata(null|string $key = null, mixed $default = null): null|string|array
     {
+        if ($key !== null) {
+            return $this->metadata[$key] ?? $default;
+        }
+
         return $this->metadata;
     }
 
@@ -358,6 +379,50 @@ class Job implements JobContract
         }
 
         return $this->metadata['queue'] ?? 'unknown';
+    }
+
+    /**
+     * Check if the job has failed.
+     *
+     * This method checks the job's metadata to determine if it has failed.
+     *
+     * @return bool True if the job has failed, false otherwise.
+     */
+    public function isFailed(): bool
+    {
+        return isset($this->metadata['status']) && $this->metadata['status'] === 'failed';
+    }
+
+    /**
+     * Get the reason for the job's failure.
+     *
+     * This method retrieves the reason for the job's failure from its metadata.
+     *
+     * @return string The reason for the job's failure.
+     */
+    public function getReasonFailed(): string
+    {
+        return $this->metadata['exception'] ?? 'Unknown';
+    }
+
+    /**
+     * Get the name of the queue to which the job belongs.
+     *
+     * @return string The name of the queue.
+     */
+    public function getQueueName(): string
+    {
+        return $this->metadata['queue'] ?? 'default';
+    }
+
+    /**
+     * Get the unique identifier of the job.
+     *
+     * @return null|string The unique identifier of the job.
+     */
+    public function getId(): null|string
+    {
+        return $this->metadata['id'] ?? null;
     }
 
     /**

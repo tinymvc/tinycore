@@ -367,6 +367,8 @@ class Queue implements QueueContract
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
         $this->message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
 
+        sleep(rand(0, $sleep)); // Random sleep to prevent thundering herd problem.
+
         // Recover stale jobs (jobs stuck in 'processing' status for too long)
         $this->recoverStaleJobs();
 

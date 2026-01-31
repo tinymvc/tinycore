@@ -52,32 +52,6 @@ class EventDispatcher implements EventDispatcherContract
     }
 
     /**
-     * Alias for addListener method to register a listener for a specific event.
-     * 
-     * @param string   $eventName The name of the event.
-     * @param callable $listener  The listener callback.
-     * @param int      $priority  The priority of the listener (default is 0).
-     * @return void
-     */
-    public function add(string $eventName, string|array|callable $listener, int $priority = 0): void
-    {
-        $this->addListener($eventName, $listener, $priority);
-    }
-
-    /**
-     * Alias for addListener method to register a listener for a specific event.
-     * 
-     * @param string   $eventName The name of the event.
-     * @param callable $listener  The listener callback.
-     * @param int      $priority  The priority of the listener (default is 0).
-     * @return void
-     */
-    public function listen(string $eventName, string|array|callable $listener, int $priority = 0): void
-    {
-        $this->addListener($eventName, $listener, $priority);
-    }
-
-    /**
      * Checks if there are any listeners registered for a specific event.
      *
      * @param string $eventName The name of the event.
@@ -86,17 +60,6 @@ class EventDispatcher implements EventDispatcherContract
     public function hasListeners(string $eventName): bool
     {
         return isset($this->listeners[$eventName]) && !empty($this->listeners[$eventName]);
-    }
-
-    /**
-     * Alias for hasListeners method to check if there are any listeners registered for a specific event.
-     * 
-     * @param string $eventName The name of the event.
-     * @return bool True if there are listeners registered, false otherwise.
-     */
-    public function has(string $eventName): bool
-    {
-        return $this->hasListeners($eventName);
     }
 
     /**
@@ -113,18 +76,6 @@ class EventDispatcher implements EventDispatcherContract
         }
 
         return $this->listeners;
-    }
-
-    /**
-     * Alias for getListeners method to retrieve all registered event listeners.
-     * 
-     * @return array
-     *   An associative array where keys are event names and values are arrays
-     *   of callables registered as listeners for the events.
-     */
-    public function get(?string $eventName = null): array
-    {
-        return $this->getListeners($eventName);
     }
 
     /**
@@ -145,16 +96,6 @@ class EventDispatcher implements EventDispatcherContract
         }
 
         $this->listeners = [];
-    }
-
-    /**
-     * Alias for clearListeners method to remove all registered event listeners.
-     * 
-     * @return void
-     */
-    public function clear(?string $eventName = null): void
-    {
-        $this->clearListeners($eventName);
     }
 
     /**
@@ -278,18 +219,6 @@ class EventDispatcher implements EventDispatcherContract
         if (empty($this->listeners[$eventName])) {
             unset($this->listeners[$eventName]);
         }
-    }
-
-    /**
-     * Alias for removeListener.
-     *
-     * @param string $eventName The name of the event.
-     * @param callable|string|array $listener The listener to remove.
-     * @return void
-     */
-    public function forget(string $eventName, callable|string|array $listener): void
-    {
-        $this->removeListener($eventName, $listener);
     }
 
     /**

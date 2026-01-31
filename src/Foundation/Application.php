@@ -315,7 +315,7 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
         /** @var EventDispatcher $event */
         $event = $this->get(EventDispatcher::class);
 
-        $listeners && array_map($event->addListener(...), array_keys($listeners), $listeners);
+        $listeners && $event->subscribe($listeners);
 
         $then && $then($event);
 

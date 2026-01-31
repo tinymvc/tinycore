@@ -130,7 +130,7 @@ class PrimaryCommandsHandler
     {
         $queue->work(
             once: isset($args['once']),
-            timeout: $args['timeout'] ?? 3000, // 50 minutes
+            timeout: $args['timeout'] ?? 3480, // 58 minutes
             sleep: $args['sleep'] ?? 4, // 4 seconds
             delay: $args['delay'] ?? 8, // 8 seconds on failure
             tries: $args['tries'] ?? 3, // 3 attempts on failure
@@ -156,17 +156,14 @@ class PrimaryCommandsHandler
         );
 
         foreach ($jobs as $job) {
-            $meta = $job->getMetadata();
-            $status = $meta['status'] ?? 'pending';
-
             Prompt::message(
                 sprintf(
                     "Job <bold>#%s (%s)</bold> Scheduled <info>%s</info>%s%s",
                     $job->getDisplayName(),
-                    $meta['queue'] ?? 'default',
+                    $job->getQueueName(),
                     $job->getScheduledTime()->toDateTimeString(),
                     $job->isRepeated() ? ' <danger>(Repeats)</danger> ' : '',
-                    $status === 'failed' ? ' <danger>(Failed)</danger>' : ($job->getScheduledTime()->isPast() ? ' <warning>(Ready to run)</warning>' : '')
+                    $job->isFailed() ? ' <danger>(Failed)</danger>' : ($job->getScheduledTime()->isPast() ? ' <warning>(Ready to run)</warning>' : '')
                 ),
             );
         }
@@ -192,14 +189,13 @@ class PrimaryCommandsHandler
         );
 
         foreach ($failedJobs as $job) {
-            $meta = $job->getMetadata();
             Prompt::message(
                 sprintf(
                     "Failed Job <bold>#%s (%s)</bold> Failed At <danger>%s</danger> Reason: <danger>%s</danger>",
                     $job->getDisplayName(),
-                    $meta['queue'] ?? 'default',
-                    carbon($meta['failed_at'] ?? '')->toDateTimeString(),
-                    $meta['exception'] ?? 'Unknown'
+                    $job->getQueueName(),
+                    carbon($job->getMetadata('failed_at', ''))->toDateTimeString(),
+                    $job->getReasonFailed()
                 ),
             );
         }
