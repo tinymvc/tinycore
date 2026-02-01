@@ -441,7 +441,7 @@ class Queue implements QueueContract
      */
     private function message(string $message, $endLine = false): void
     {
-        echo '[' . date('Y-m-d H:i:s') . '] ' . $message . ($endLine ? PHP_EOL : '');
+        echo '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL . ($endLine ? PHP_EOL : '');
     }
 
     /**
