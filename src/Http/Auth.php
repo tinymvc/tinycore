@@ -388,8 +388,7 @@ class Auth implements AuthContract, ArrayAccess
     {
         if ($this->config['cache_enabled']) {
             cache($this->config['cache_name'])
-                ->erase($this->getId())
-                ->unload();
+                ->erase($this->getId());
         }
     }
 

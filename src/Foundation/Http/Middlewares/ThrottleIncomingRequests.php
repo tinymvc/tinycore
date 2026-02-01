@@ -71,17 +71,16 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
 
         $config = [
             'cache_name' => 'throttle_incoming_requests',
-            'cache_dir' => null,
             ...$this->config
         ];
 
-        $cache = new Cache($config['cache_name'] . $suffix, $config['cache_dir']);
+        $cache = new Cache($config['cache_name'] . $suffix);
         $key = md5("$path$ip");
 
         $now = time();
         $windowStart = $now - $minute * 60;
 
-        $timestamps = $cache->get($key, eraseExpired: true) ?: [];
+        $timestamps = $cache->retrieve($key, eraseExpired: true) ?: [];
 
         $timestamps = array_filter($timestamps, fn($timestamp) => $timestamp > $windowStart);
 
