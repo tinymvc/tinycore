@@ -112,11 +112,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     protected function statement(string $key, string $sql): PDOStatement
     {
-        if (!isset($this->statements[$key])) {
-            return $this->statements[$key];
-        }
-
-        return $this->statements[$key] = $this->pdo->prepare($sql);
+        return $this->statements[$key] ??= $this->pdo->prepare($sql);
     }
 
     /**
