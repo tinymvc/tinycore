@@ -215,6 +215,7 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      *
      * @param null|string $web The path to the web routes file.
      * @param null|string $api The path to the API routes file.
+     * @param null|string $webhook The path to the webhook routes file.
      * @param null|string $commands The path to the commands routes file.
      * @param null|callable $then The callback to be applied to the router.
      * @return self
@@ -222,6 +223,7 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
     public function withRouting(
         null|string $web = null,
         null|string $api = null,
+        null|string $webhook = null,
         null|string $commands = null,
         null|callable $then = null
     ): self {
@@ -231,6 +233,11 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
         $api && $router->group(
             ['prefix' => 'api', 'middleware' => ['cors'], 'withoutMiddleware' => ['csrf']],
             fn() => require $api
+        );
+
+        $webhook && $router->group(
+            ['prefix' => 'webhook', 'withoutMiddleware' => ['csrf']],
+            fn() => require $webhook
         );
 
         $web && require $web;
