@@ -307,7 +307,7 @@ class Queue implements QueueContract
         $startedMemory = memory_get_usage(true);
 
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
-        $this->message("Queue worker started for queue(s): <bold>$queueNames</bold>", 'info');
+        $this->message("Queue worker started for queue(s): <bold>$queueNames</bold>");
 
         sleep(rand(0, $sleep)); // Random sleep to prevent thundering herd problem.
 
@@ -317,7 +317,7 @@ class Queue implements QueueContract
         do {
             // Check if timeout has been reached
             if ((microtime(true) - $startedAt) >= $timeout) {
-                $this->message('Queue worker timeout reached. Shutting down...', 'warning');
+                $this->message('Queue worker timeout reached. Shutting down...');
                 break;
             }
 
@@ -340,7 +340,6 @@ class Queue implements QueueContract
                     $attempts + 1,
                     $tries
                 ),
-                'info'
             );
 
             try {
@@ -362,13 +361,13 @@ class Queue implements QueueContract
                             $jobId,
                             $nextRun
                         ),
-                        'success'
+                        true
                     );
                 } else {
                     // Remove one-time job
                     $this->removeJobById($jobId);
 
-                    $this->message("Job <bold>#$jobId</bold> completed successfully", 'success');
+                    $this->message("Job <bold>#$jobId</bold> completed successfully", true);
                 }
 
                 $ranJobs++;
@@ -379,7 +378,6 @@ class Queue implements QueueContract
 
                 $this->message(
                     sprintf("Job <bold>#%d</bold> failed: %s", $jobId, $e->getMessage()),
-                    'error'
                 );
 
                 if ($newAttempts >= $tries) {
@@ -393,7 +391,7 @@ class Queue implements QueueContract
                             $jobId,
                             $newAttempts
                         ),
-                        'danger'
+                        true
                     );
                 } else {
                     // Retry the job after delay
@@ -406,7 +404,7 @@ class Queue implements QueueContract
                             $jobId,
                             $retryTime
                         ),
-                        'warning'
+                        true
                     );
                 }
 
@@ -430,7 +428,6 @@ class Queue implements QueueContract
 
         $this->message(
             sprintf("Queue worker finished. Ran %d job(s), %d failed", $ranJobs, $failedJobs),
-            'info'
         );
     }
 
@@ -438,14 +435,13 @@ class Queue implements QueueContract
      * Logs a message to the queue log file if logging is enabled.
      *
      * @param string $message The message to log.
-     * @param string $level The log level (info, warning, error, etc.).
+     * @param bool $endLine Whether to add a new line at the end of the message.
      *
      * @return void
      */
-    private function message(string $message, string $type = 'normal'): void
+    private function message(string $message, $endLine = false): void
     {
-        echo '[' . date('Y-m-d H:i:s') . '] ';
-        Prompt::message($message, $type); // 
+        echo '[' . date('Y-m-d H:i:s') . '] ' . $message . ($endLine ? PHP_EOL : '');
     }
 
     /**
