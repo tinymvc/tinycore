@@ -180,6 +180,16 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /**
+     * Retrieves the Events instance for the model.
+     *
+     * @return Events The Events instance.
+     */
+    protected function events(): Events
+    {
+        return Events::make();
+    }
+
+    /**
      * Creates a new model instance from the given data and saves it to the database.
      * 
      * @param array|Arrayable $data Key-value pairs of model properties.
