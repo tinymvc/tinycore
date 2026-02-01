@@ -28,6 +28,7 @@ use Spark\Utils\Carbon;
 use Spark\Utils\FileManager;
 use Spark\Utils\Http;
 use Spark\Utils\Image;
+use Spark\Utils\Lock;
 use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
 use Spark\Utils\Tracer;
@@ -1264,9 +1265,39 @@ if (!function_exists('unload_cache')) {
     {
         global $caches;
         if (isset($caches[$name])) {
-            $caches[$name]->unload();
             unset($caches[$name]);
         }
+    }
+}
+
+if (!function_exists('lock')) {
+    /**
+     * Acquire a lock for a given key.
+     *
+     * This function attempts to acquire a lock for the specified key. If the lock
+     * is successfully acquired within the specified wait timeout, it will be held
+     * for the specified timeout duration.
+     *
+     * @param string $key The key to lock.
+     * @param int $timeout The duration (in seconds) to hold the lock. Default is 10 seconds.
+     * @param int $waitTimeout The maximum time (in seconds) to wait for the lock. Default is 5 seconds.
+     * @param string $name The name of the lock instance to use. Default is 'default'.
+     *
+     * @return ($key is null ? Lock : bool) The Lock instance if no key is provided, or true if the lock was acquired, false otherwise.
+     */
+    function lock(null|string $key = null, int $timeout = 10, int $waitTimeout = 5, string $name = 'default'): bool|Lock
+    {
+        global $locks;
+
+        if (!isset($locks[$name])) {
+            $locks[$name] = Lock::make($name);
+        }
+
+        if (empty($key)) {
+            return $locks[$name];
+        }
+
+        return $locks[$name]->lock($key, $timeout, $waitTimeout);
     }
 }
 

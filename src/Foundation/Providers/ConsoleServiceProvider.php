@@ -65,7 +65,7 @@ class ConsoleServiceProvider extends ServiceProvider
 
         // Add the queue:install command
         $commands->addCommand('queue:install', [PrimaryCommandsHandler::class, 'installQueue'])
-            ->description('Install the queue system');
+            ->description('Create the necessary database table for queue jobs');
 
         // Add the queue:work command
         $commands->addCommand('queue:work', [PrimaryCommandsHandler::class, 'runQueueJobs'])

@@ -4,6 +4,6 @@ namespace Spark\Exceptions\Utils;
 
 use Exception;
 
-class FailedToSaveCacheFileException extends Exception
+class CacheUtilException extends Exception
 {
 }

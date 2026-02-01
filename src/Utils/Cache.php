@@ -2,17 +2,21 @@
 
 namespace Spark\Utils;
 
+use PDO;
+use PDOStatement;
 use Spark\Contracts\Utils\CacheUtilContract;
-use Spark\Exceptions\Utils\FailedToSaveCacheFileException;
+use Spark\Exceptions\Utils\CacheUtilException;
 use Spark\Support\Traits\Macroable;
+use function count;
 use function func_get_args;
 use function is_array;
+use function sprintf;
 
 /**
  * Class Cache
  * 
- * Cache class for managing temporary file-based cache storage.
- * Stores serialized data as JSON in the filesystem for fast data retrieval.
+ * Production-ready SQLite-based cache with concurrency support and distributed locking.
+ * Optimized for high-performance caching with WAL mode, prepared statements, and proper indexing.
  * 
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
@@ -21,120 +25,98 @@ class Cache implements CacheUtilContract, \ArrayAccess
 {
     use Macroable;
 
-    /** @var string Path to the cache file */
-    private string $cachePath;
+    /** @var PDO The PDO connection instance */
+    private PDO $pdo;
 
-    /** @var array Holds cached data in memory */
-    private array $cacheData;
+    /** @var array Cached prepared statements */
+    private array $statements = [];
 
-    /** @var bool Indicates if expired data has been erased */
-    private bool $erased;
-
-    /** @var bool Indicates if cache has been loaded from the filesystem */
-    private bool $cached;
-
-    /** @var bool Tracks changes in cache data for saving on destruction */
-    private bool $changed;
-
-    /** @var string The Name of the cache file */
-    private string $name;
-
-    /**
-     * Construct a new cache object.
-     *
-     * @param string $name The name of the cache.
-     * @param null|string $cacheDir The Directory path to store this cache file.
-     */
-    public function __construct(string $name = 'default', ?string $cacheDir = null)
+    public function __construct(string $name = 'default')
     {
-        $this->setName($name, $cacheDir);
+        try {
+            // Determine the cache file path.
+            $cache = sprintf('%s.cache', cache_dir(md5($name)));
+            $createDB = !is_file($cache); // Check if the database file needs to be created.
+
+            // Initialize the PDO connection to SQLite database.
+            $this->pdo = new PDO("sqlite:$cache");
+
+            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+            // Optimize SQLite performance with PRAGMA settings.
+            $this->pdo->exec("PRAGMA journal_mode = WAL");
+            $this->pdo->exec("PRAGMA synchronous = NORMAL");
+            $this->pdo->exec("PRAGMA cache_size = 10000");
+            $this->pdo->exec("PRAGMA temp_store = MEMORY");
+            $this->pdo->exec("PRAGMA locking_mode = NORMAL"); // Allow concurrent access
+            $this->pdo->exec("PRAGMA busy_timeout = 5000"); // 5 second timeout for locks
+
+            $createDB && $this->createTables(); // Create tables if they don't exist.
+        } catch (\PDOException $e) {
+            throw new CacheUtilException("Failed to connect to SQLite database: " . $e->getMessage());
+        }
     }
 
     /**
-     * Sets the name of the cache.
+     * Factory method to create a Cache instance.
      *
-     * The cache name is used to build the filename for the cache storage.
-     * The filename is built by concatenating the md5 of the name with '.cache'
-     * and adding it to the tmp_dir path.
-     *
-     * @param string $name The cache name.
-     * @param string|null $cacheDir The path to the cache directory.
-     * @return self The instance of the cache for method chaining.
+     * @param string $name The name for the cache instance (used for cache file naming).
+     * @return Cache The Cache instance.
      */
-    public function setName(string $name, ?string $cacheDir = null): self
+    public static function make(string $name = 'default'): Cache
     {
-        $cacheDir ??= config('cache_dir');
-
-        $this->name = $name;
-        $this->cachePath = dir_path($cacheDir . '/' . md5($name) . '.cache');
-        $this->cacheData = [];
-        $this->erased = false;
-        $this->cached = false;
-        $this->changed = false;
-
-        return $this;
+        return new self($name);
     }
 
     /**
-     * Alias for setName method.
+     * Creates the necessary tables and indexes for caching and locking.
      *
-     * @param string $name The cache name.
-     * @param string|null $cacheDir The path to the cache directory.
-     * @return self The instance of the cache for method chaining.
+     * @return void
      */
-    public function name(string $name, ?string $cacheDir = null): self
+    private function createTables(): void
     {
-        return $this->setName($name, $cacheDir);
+        $this->pdo->exec("
+            CREATE TABLE IF NOT EXISTS caches (
+                key TEXT PRIMARY KEY,
+                data BLOB NOT NULL,
+                created_at INTEGER NOT NULL,
+                expire_at INTEGER DEFAULT 0,
+                CHECK (expire_at >= 0)
+            )
+        ");
+
+        $this->pdo->exec("
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_key 
+            ON caches(key)
+        ");
+
+        $this->pdo->exec("
+            CREATE INDEX IF NOT EXISTS idx_created 
+            ON caches(created_at)
+        ");
+
+        $this->pdo->exec("
+            CREATE INDEX IF NOT EXISTS idx_expire 
+            ON caches(expire_at) 
+            WHERE expire_at > 0
+        ");
     }
 
     /**
-     * Sets the path of the cache file.
+     * Get or prepare a cached statement.
      *
-     * The set cache path is used to store the cache data.
-     * If the cache path is not set, the cache name is used to build the filename.
-     *
-     * @param string $path The path of the cache file.
-     * @return self The instance of the cache for method chaining.
+     * @param string $key The statement key.
+     * @param string $sql The SQL query.
+     * @return PDOStatement The prepared statement.
      */
-    public function setCachePath(string $path): self
+    protected function statement(string $key, string $sql): PDOStatement
     {
-        $this->cachePath = dir_path($path);
-        return $this;
-    }
-
-    /**
-     * Reloads the cache data from the file if it hasn't been loaded yet.
-     *
-     * @return self
-     */
-    public function reload(): self
-    {
-        if (!$this->cached) {
-            // Cache is loaded, avoid moutiple loads.
-            $this->cached = true;
-
-            // Retrieve all cached entries for this object.
-            $this->cacheData = @file_exists($this->cachePath)
-                ? (array) json_decode(@file_get_contents($this->cachePath), true)
-                : [];
+        if (!isset($this->statements[$key])) {
+            return $this->statements[$key];
         }
 
-        return $this;
-    }
-
-    /**
-     * Unloads the cache by resetting all cache-related properties.
-     * 
-     * Calls the destructor to handle any cleanup, and then sets the cache status
-     * indicators to false and clears the in-memory cache data.
-     */
-    public function unload(): void
-    {
-        $this->saveChanges();
-        $this->cached = false;
-        $this->changed = false;
-        $this->erased = false;
-        $this->cacheData = [];
+        return $this->statements[$key] = $this->pdo->prepare($sql);
     }
 
     /**
@@ -146,16 +128,15 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function has(string $key, bool $eraseExpired = false): bool
     {
-        // Reload cache data if not loaded.
-        $this->reload();
+        $eraseExpired && $this->eraseExpired();
 
-        // Check if cache is already exists, else store it into cache. 
-        if ($eraseExpired) {
-            $this->eraseExpired();
-        }
+        $stmt = $this->statement(
+            'has',
+            "SELECT 1 FROM caches WHERE key = ? AND (expire_at = 0 OR expire_at > ?)"
+        );
 
-        // True if the key exists, otherwise false.
-        return isset($this->cacheData[$key]);
+        $stmt->execute([$key, time()]);
+        return (bool) $stmt->fetchColumn();
     }
 
     /**
@@ -166,20 +147,22 @@ class Cache implements CacheUtilContract, \ArrayAccess
      * @param string|null $expire Expiration time as a string (e.g., '+1 day').
      * @return self
      */
-    public function store(string $key, mixed $data, ?string $expire = null): self
+    public function store(string $key, mixed $data, null|string $expire = null): self
     {
-        // Reload cache data if not loaded.
-        $this->reload();
+        $now = time();
+        $expireAt = $expire !== null ? strtotime($expire) : 0;
 
-        // Push new entry into cacheData.
-        $this->cacheData[$key] = [
-            'time' => time(),
-            'expire' => $expire !== null ? strtotime($expire) - time() : 0,
-            'data' => serialize($data),
-        ];
+        $stmt = $this->statement(
+            'store',
+            "INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)"
+        );
 
-        // Changes applied, save this cache file.
-        $this->changed = true;
+        $stmt->execute([
+            $key,
+            serialize($data),
+            $now,
+            $expireAt
+        ]);
 
         return $this;
     }
@@ -189,36 +172,23 @@ class Cache implements CacheUtilContract, \ArrayAccess
      *
      * @param string $key The cache key.
      * @param callable $callback Function to generate the data if not cached.
-     * @param string|null $expire Optional expiration time.
+     * @param null|string $expire Optional expiration time.
      * @return mixed
      */
-    public function load(string $key, callable $callback, ?string $expire = null): mixed
+    public function load(string $key, callable $callback, null|string $expire = null): mixed
     {
         // Erase expired entries if enabled.
-        if ($expire !== null) {
-            $this->eraseExpired();
-        }
+        $expire && $this->eraseExpired();
 
         // Check if cache is already exists, else store it into cache. 
         if (!$this->has($key)) {
-            $this->store($key, $callback($this), $expire);
+            $data = $callback($this);
+            $this->store($key, $data, $expire);
+            return $data;
         }
 
         // Retrieve entry from cache.
         return $this->retrieve($key);
-    }
-
-    /**
-     * Loads data from cache or generates it using a callback if not present.
-     *
-     * @param string $key The cache key.
-     * @param callable $callback Function to generate the data if not cached.
-     * @param string|null $expire Optional expiration time.
-     * @return mixed
-     */
-    public function remember(string $key, callable $callback, ?string $expire = null): mixed
-    {
-        return $this->load($key, $callback, $expire);
     }
 
     /**
@@ -230,35 +200,37 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function retrieve(string|array $keys, bool $eraseExpired = false): mixed
     {
-        // Erase expired entries if enabled.
-        if ($eraseExpired) {
-            $this->eraseExpired();
+        $eraseExpired && $this->eraseExpired();
+
+        if (empty($keys)) {
+            return is_array($keys) ? [] : null; // Return empty array or null based on input type
         }
 
-        // Holds the cached entries, which are only retriving.
-        $results = [];
+        if (is_array($keys)) {
+            $placeholders = rtrim(str_repeat('?,', count($keys)), ',');
+            $stmt = $this->pdo->prepare(
+                "SELECT key, data FROM caches WHERE key IN ($placeholders) AND (expire_at = 0 OR expire_at > ?)"
+            );
 
-        // Retrieve the cached entries.
-        foreach ((array) $keys as $key) {
-            if ($this->has($key)) {
-                $results[$key] = unserialize($this->cacheData[$key]['data']);
+            $stmt->execute([...$keys, time()]);
+            $results = [];
+
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $results[$row['key']] = unserialize($row['data']);
             }
+
+            return $results;
         }
 
-        // The retrieved data or null if not found.
-        return is_array($keys) ? $results : ($results[$keys] ?? null);
-    }
+        $stmt = $this->statement(
+            'retrieve',
+            "SELECT data FROM caches WHERE key = ? AND (expire_at = 0 OR expire_at > ?)"
+        );
 
-    /**
-     * Alias for retrieve method to get a single cache entry.
-     *
-     * @param string $key The cache key.
-     * @param bool $eraseExpired Whether to erase expired entries before retrieval.
-     * @return mixed The cached data or null if not found.
-     */
-    public function get(string $key, bool $eraseExpired = false): mixed
-    {
-        return $this->retrieve($key, $eraseExpired);
+        $stmt->execute([$keys, time()]);
+        $result = $stmt->fetchColumn();
+
+        return $result !== false ? unserialize($result) : null;
     }
 
     /**
@@ -269,7 +241,15 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function metadata(string $key): mixed
     {
-        return $this->cacheData[$key] ?? null;
+        $stmt = $this->statement(
+            'metadata',
+            "SELECT created_at, expire_at FROM caches WHERE key = ?"
+        );
+
+        $stmt->execute([$key]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row ?: null;
     }
 
     /**
@@ -280,12 +260,21 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function retrieveAll(bool $eraseExpired = false): array
     {
-        if ($eraseExpired) {
-            $this->eraseExpired();
+        $eraseExpired && $this->eraseExpired();
+
+        $stmt = $this->statement(
+            'retrieve_all',
+            "SELECT key, data FROM caches WHERE expire_at = 0 OR expire_at > ?"
+        );
+
+        $stmt->execute([time()]);
+
+        $results = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $results[$row['key']] = unserialize($row['data']);
         }
 
-        // An array of all cached data.
-        return array_map(fn($entry) => unserialize($entry['data']), $this->cacheData);
+        return $results;
     }
 
     /**
@@ -297,49 +286,15 @@ class Cache implements CacheUtilContract, \ArrayAccess
     public function erase(string|array $keys): self
     {
         $keys = is_array($keys) ? $keys : func_get_args();
-        $this->reload();
+        $placeholders = rtrim(str_repeat('?,', count($keys)), ',');
 
-        // Remove the specified keys from cache data.
-        foreach ($keys as $key) {
-            unset($this->cacheData[$key]);
-        }
+        $stmt = $this->pdo->prepare("
+            DELETE FROM caches 
+            WHERE key IN ($placeholders)
+        ");
 
-        $this->changed = true;
-
+        $stmt->execute($keys);
         return $this;
-    }
-
-    /**
-     * Deletes specified cache entries (alias for erase).
-     *
-     * @param string|array $keys Cache key(s) to delete.
-     * @return self
-     */
-    public function delete(string|array $keys): self
-    {
-        return $this->erase(...func_get_args());
-    }
-
-    /**
-     * Forgets specified cache entries (alias for erase).
-     *
-     * @param string|array $keys Cache key(s) to forget.
-     * @return self
-     */
-    public function forget(string|array $keys): self
-    {
-        return $this->erase(...func_get_args());
-    }
-
-    /**
-     * Removes specified cache entries (alias for erase).
-     *
-     * @param string|array $keys Cache key(s) to remove.
-     * @return self
-     */
-    public function remove(string|array $keys): self
-    {
-        return $this->erase(...func_get_args());
     }
 
     /**
@@ -349,17 +304,12 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function eraseExpired(): self
     {
-        $this->reload();
+        $stmt = $this->statement(
+            'erase_expired',
+            "DELETE FROM caches WHERE expire_at > 0 AND expire_at < ?"
+        );
 
-        if (!$this->erased) {
-            $this->erased = true;
-            foreach ($this->cacheData as $key => $entry) {
-                if ($this->isExpired($entry['time'], $entry['expire'])) {
-                    unset($this->cacheData[$key]);
-                    $this->changed = true;
-                }
-            }
-        }
+        $stmt->execute([time()]);
 
         return $this;
     }
@@ -371,13 +321,16 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function getExpired(): array
     {
-        $this->reload();
+        $stmt = $this->statement(
+            'get_expired',
+            "SELECT key, data FROM caches WHERE expire_at > 0 AND expire_at < ?"
+        );
+
+        $stmt->execute([time()]);
         $expired = [];
 
-        foreach ($this->cacheData as $key => $entry) {
-            if ($this->isExpired($entry['time'], $entry['expire'])) {
-                $expired[$key] = unserialize($entry['data']);
-            }
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $expired[$row['key']] = unserialize($row['data']);
         }
 
         return $expired;
@@ -390,11 +343,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function flush(): self
     {
-        $this->reload(); // Ensure cache is loaded before flushing
-
-        $this->cacheData = [];
-        $this->changed = true;
-
+        $this->pdo->exec("DELETE FROM caches");
         return $this;
     }
 
@@ -406,9 +355,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function flushIf(bool $condition): self
     {
-        if ($condition) {
-            $this->flush();
-        }
+        $condition && $this->flush();
 
         return $this;
     }
@@ -421,66 +368,291 @@ class Cache implements CacheUtilContract, \ArrayAccess
      */
     public function clear(): self
     {
-        if (file_exists($this->cachePath)) {
-            unlink($this->cachePath);
-        }
-
-        $this->cacheData = [];
-        $this->erased = false;
-        $this->cached = false;
-        $this->changed = false;
+        $this->flush(); // Ensure all data is deleted.
+        $this->pdo->exec("VACUUM"); // Reclaim space in the database file.
 
         return $this;
     }
 
     /**
-     * Determines if a cache entry has expired.
+     * Stores multiple cache entries in a single transaction.
      *
-     * @param int $timestamp The creation timestamp of the entry.
-     * @param int $expiration Expiration duration in seconds.
-     * @return bool
+     * @param array $items Associative array of key => value pairs.
+     * @param string|null $expire Expiration time as a string.
+     * @return self
      */
-    private function isExpired(int $timestamp, int $expiration): bool
+    public function storeMany(array $items, null|string $expire = null): self
     {
-        // True if expired, otherwise false.
-        return $expiration !== 0 && ((time() - $timestamp) > $expiration);
+        if (empty($items)) {
+            return $this;
+        }
+
+        $now = time();
+        $expireAt = $expire !== null ? strtotime($expire) : 0;
+
+        try {
+            $this->pdo->beginTransaction();
+
+            $stmt = $this->statement(
+                'store',
+                "INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)"
+            );
+
+            foreach ($items as $key => $value) {
+                $stmt->execute([
+                    $key,
+                    serialize($value),
+                    $now,
+                    $expireAt
+                ]);
+            }
+
+            $this->pdo->commit();
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            throw new CacheUtilException("Failed to store multiple items: " . $e->getMessage());
+        }
+
+        return $this;
     }
 
     /**
-     * Saves the updated cache data to the filesystem if there are changes.
+     * Increment a numeric cache value.
      *
-     * Saves the updated cache data to the filesystem if there are changes.
-     * It will create a new directory if the cache directory does not exist,
-     * and throws an exception if the cache directory is not writable.
-     *
-     * @throws FailedToSaveCacheFileException Thrown if the cache directory is not writable.
-     * @return void
+     * @param string $key The cache key.
+     * @param int $amount Amount to increment (default: 1).
+     * @return int|false The new value, or false if the key doesn't exist or isn't numeric.
      */
-    public function saveChanges(): void
+    public function increment(string $key, int $amount = 1): int|false
     {
-        if (!$this->changed) {
-            return; // No changes to save.
+        try {
+            $this->pdo->beginTransaction();
+
+            $value = $this->retrieve($key);
+
+            if ($value === null || !is_numeric($value)) {
+                $this->pdo->rollBack();
+                return false;
+            }
+
+            $newValue = (int) $value + $amount;
+            $this->store($key, $newValue);
+
+            $this->pdo->commit();
+            return $newValue;
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            return false;
+        }
+    }
+
+    /**
+     * Decrement a numeric cache value.
+     *
+     * @param string $key The cache key.
+     * @param int $amount Amount to decrement (default: 1).
+     * @return int|false The new value, or false if the key doesn't exist or isn't numeric.
+     */
+    public function decrement(string $key, int $amount = 1): int|false
+    {
+        return $this->increment($key, -$amount);
+    }
+
+    /**
+     * Store a value if the key doesn't exist.
+     *
+     * @param string $key The cache key.
+     * @param mixed $value The value to store.
+     * @param string|null $expire Expiration time.
+     * @return bool True if stored, false if key already exists.
+     */
+    public function add(string $key, mixed $value, null|string $expire = null): bool
+    {
+        try {
+            $this->pdo->beginTransaction();
+
+            if ($this->has($key)) {
+                $this->pdo->rollBack();
+                return false;
+            }
+
+            $this->store($key, $value, $expire);
+            $this->pdo->commit();
+            return true;
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            return false;
+        }
+    }
+
+    /**
+     * Remember a value in cache forever or retrieve it from callback.
+     *
+     * @param string $key The cache key.
+     * @param callable $callback Callback to generate value if not cached.
+     * @return mixed
+     */
+    public function remember(string $key, callable $callback): mixed
+    {
+        if ($this->has($key)) {
+            return $this->retrieve($key);
         }
 
-        // Set a temp directory to store caches. 
-        $cacheDir = dir_path(config('cache_dir'));
+        $value = $callback($this);
+        $this->store($key, $value);
+        return $value;
+    }
 
-        // Check if cache directory exists, else create a new directory.
-        if (!fm()->ensureDirectoryWritable($cacheDir)) {
-            throw new FailedToSaveCacheFileException("Cache directory is not writable.");
+    /**
+     * Gets statistics about the cache.
+     *
+     * @return array Cache statistics including size, count, locks, etc.
+     */
+    public function stats(): array
+    {
+        try {
+            // Get total cache entries
+            $stmt = $this->pdo->query("SELECT COUNT(*) FROM caches");
+            $totalEntries = (int) $stmt->fetchColumn();
+
+            // Get expired entries count
+            $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM caches WHERE expire_at > 0 AND expire_at < ?");
+            $stmt->execute([time()]);
+            $expiredEntries = (int) $stmt->fetchColumn();
+
+            // Get active entries count
+            $activeEntries = $totalEntries - $expiredEntries;
+
+            // Get database file size
+            $stmt = $this->pdo->query("PRAGMA page_count");
+            $pageCount = (int) $stmt->fetchColumn();
+
+            $stmt = $this->pdo->query("PRAGMA page_size");
+            $pageSize = (int) $stmt->fetchColumn();
+
+            $dbSize = $pageCount * $pageSize;
+
+            return [
+                'total_entries' => $totalEntries,
+                'active_entries' => $activeEntries,
+                'expired_entries' => $expiredEntries,
+                'database_size' => $dbSize,
+            ];
+        } catch (\PDOException $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Pull a value from the cache and delete it.
+     *
+     * @param string $key The cache key.
+     * @param mixed $default Default value if key doesn't exist.
+     * @return mixed
+     */
+    public function pull(string $key, mixed $default = null): mixed
+    {
+        try {
+            $this->pdo->beginTransaction();
+
+            $value = $this->retrieve($key);
+
+            if ($value !== null) {
+                $this->erase($key);
+                $this->pdo->commit();
+                return $value;
+            }
+
+            $this->pdo->commit();
+            return $default;
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            return $default;
+        }
+    }
+
+    /**
+     * Store multiple cache entries from an array where keys expire at different times.
+     *
+     * @param array $items Associative array of key => ['value' => $val, 'expire' => $exp].
+     * @return self
+     */
+    public function storeManyWithExpiry(array $items): self
+    {
+        if (empty($items)) {
+            return $this;
         }
 
-        // Save updated cache data into local filesystem.
-        file_put_contents(
-            $this->cachePath,
-            json_encode($this->cacheData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            LOCK_EX
-        );
+        try {
+            $this->pdo->beginTransaction();
 
-        // Log cache saved event in debug mode.
-        is_debug_mode() && event('app:cache.saved', ['name' => $this->name, 'file' => $this->cachePath]);
+            $stmt = $this->statement(
+                'store',
+                "INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)"
+            );
 
-        $this->changed = false;
+            $now = time();
+            foreach ($items as $key => $config) {
+                $value = $config['value'] ?? null;
+                $expire = $config['expire'] ?? null;
+                $expireAt = $expire !== null ? strtotime($expire) : 0;
+
+                $stmt->execute([
+                    $key,
+                    serialize($value),
+                    $now,
+                    $expireAt
+                ]);
+            }
+
+            $this->pdo->commit();
+        } catch (\PDOException $e) {
+            $this->pdo->rollBack();
+            throw new CacheUtilException("Failed to store items with expiry: " . $e->getMessage());
+        }
+
+        return $this;
+    }
+
+    /**
+     * Get the remaining time to live for a cache key in seconds.
+     *
+     * @param string $key The cache key.
+     * @return int|null Seconds until expiration, null if no expiration or key doesn't exist.
+     */
+    public function ttl(string $key): ?int
+    {
+        $metadata = $this->metadata($key);
+
+        if (!$metadata || $metadata['expire_at'] == 0) {
+            return null;
+        }
+
+        $ttl = $metadata['expire_at'] - time();
+        return $ttl > 0 ? $ttl : 0;
+    }
+
+    /**
+     * Optimize the database by running VACUUM and ANALYZE.
+     *
+     * @return self
+     */
+    public function optimize(): self
+    {
+        try {
+            // Clean expired entries first
+            $this->eraseExpired();
+
+            // Reclaim unused space
+            $this->pdo->exec("VACUUM");
+
+            // Update query planner statistics
+            $this->pdo->exec("ANALYZE");
+        } catch (\PDOException $e) {
+            // Ignore errors
+        }
+
+        return $this;
     }
 
     /**
@@ -526,13 +698,5 @@ class Cache implements CacheUtilContract, \ArrayAccess
     public function offsetUnset(mixed $offset): void
     {
         $this->erase($offset);
-    }
-
-    /**
-     * Destructor to save cache data to the filesystem if there are changes.
-     */
-    public function __destruct()
-    {
-        $this->changed && $this->saveChanges();
     }
 }

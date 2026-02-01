@@ -582,6 +582,24 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Moves an uploaded file to a new destination.
+     *
+     * @param string $key The file key.
+     * @param string $destination The destination path to move the file to.
+     * @return bool True on success, false on failure.
+     */
+    public function moveFile(string $key, string $destination): bool
+    {
+        $file = $this->file($key);
+
+        if ($file && isset($file['tmp_name']) && is_uploaded_file($file['tmp_name'])) {
+            return move_uploaded_file($file['tmp_name'], $destination);
+        }
+
+        return false; // File not found or invalid.
+    }
+
+    /**
      * Retrieves all request data (query, post, files) optionally filtered.
      * 
      * @param array $filter Optional list of keys to filter by.
