@@ -52,7 +52,6 @@ class Lock implements LockUtilContract, \ArrayAccess
             $this->pdo->exec("PRAGMA synchronous = NORMAL");
             $this->pdo->exec("PRAGMA cache_size = 10000");
             $this->pdo->exec("PRAGMA temp_store = MEMORY");
-            $this->pdo->exec("PRAGMA locking_mode = NORMAL"); // Allow concurrent access
             $this->pdo->exec("PRAGMA busy_timeout = 5000"); // 5 second timeout for locks
 
             // Generate unique lock owner identifier
