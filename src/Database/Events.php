@@ -23,9 +23,14 @@ class Events implements EventsContract
      * @param Closure|null $created The closure to be executed when a model is created.
      * @param Closure|null $updated The closure to be executed when a model is updated.
      * @param Closure|null $deleted The closure to be executed when a model is deleted.
+     * @param Closure|null $changed The closure to be executed when a model is changed.
      */
-    public function __construct(private null|Closure $created = null, private null|Closure $updated = null, private null|Closure $deleted = null)
-    {
+    public function __construct(
+        private null|Closure $created = null,
+        private null|Closure $updated = null,
+        private null|Closure $deleted = null,
+        private null|Closure $changed = null,
+    ) {
     }
 
     /**
@@ -34,10 +39,15 @@ class Events implements EventsContract
      * @param Closure|null $created The closure to be executed when a model is created.
      * @param Closure|null $updated The closure to be executed when a model is updated.
      * @param Closure|null $deleted The closure to be executed when a model is deleted.
+     * @param Closure|null $changed The closure to be executed when a model is changed.
      */
-    public static function make(null|Closure $created = null, null|Closure $updated = null, null|Closure $deleted = null): static
-    {
-        return new static($created, $updated, $deleted);
+    public static function make(
+        null|Closure $created = null,
+        null|Closure $updated = null,
+        null|Closure $deleted = null,
+        null|Closure $changed = null,
+    ): static {
+        return new static($created, $updated, $deleted, $changed);
     }
 
     /**
@@ -68,5 +78,15 @@ class Events implements EventsContract
     public function deleted(): void
     {
         $this->deleted && ($this->deleted)();
+    }
+
+    /**
+     * Triggered when a model is changed.
+     *
+     * @return void
+     */
+    public function changed(): void
+    {
+        $this->changed && ($this->changed)();
     }
 }

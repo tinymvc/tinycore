@@ -975,7 +975,14 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return;
         }
 
-        $this->events()->$event(); // Call the event method dynamically.
+        /** @var \Spark\Database\Events $events */
+        $events = $this->events();
+
+        if (in_array($event, ['created', 'updated', 'deleted'])) {
+            $events->changed();
+        }
+
+        $events->$event(); // Call the event method dynamically.
     }
 
     /**
