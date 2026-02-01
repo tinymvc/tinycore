@@ -307,7 +307,7 @@ class Queue implements QueueContract
         $startedMemory = memory_get_usage(true);
 
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
-        $this->message("Queue worker started for queue(s): <bold>$queueNames</bold>");
+        $this->message("Queue worker started for queue(s): $queueNames");
 
         sleep(rand(0, $sleep)); // Random sleep to prevent thundering herd problem.
 
@@ -334,7 +334,7 @@ class Queue implements QueueContract
 
             $this->message(
                 sprintf(
-                    "Processing job <bold>#%d</bold> (%s) - Attempt %d/%d",
+                    "Processing job #%d (%s) - Attempt %d/%d",
                     $jobId,
                     $job->getDisplayName(),
                     $attempts + 1,
@@ -357,17 +357,16 @@ class Queue implements QueueContract
 
                     $this->message(
                         sprintf(
-                            "Job <bold>#%d</bold> completed and rescheduled for %s",
+                            "Job #%d completed and rescheduled for %s",
                             $jobId,
                             $nextRun
                         ),
-                        true
                     );
                 } else {
                     // Remove one-time job
                     $this->removeJobById($jobId);
 
-                    $this->message("Job <bold>#$jobId</bold> completed successfully", true);
+                    $this->message("Job #$jobId completed successfully");
                 }
 
                 $ranJobs++;
@@ -377,7 +376,7 @@ class Queue implements QueueContract
                 $newAttempts = $attempts + 1;
 
                 $this->message(
-                    sprintf("Job <bold>#%d</bold> failed: %s", $jobId, $e->getMessage()),
+                    sprintf("Job #%d failed: %s", $jobId, $e->getMessage()),
                 );
 
                 if ($newAttempts >= $tries) {
@@ -387,11 +386,10 @@ class Queue implements QueueContract
 
                     $this->message(
                         sprintf(
-                            "Job <bold>#%d</bold> failed permanently after %d attempts",
+                            "Job #%d failed permanently after %d attempts",
                             $jobId,
                             $newAttempts
                         ),
-                        true
                     );
                 } else {
                     // Retry the job after delay
@@ -400,11 +398,10 @@ class Queue implements QueueContract
 
                     $this->message(
                         sprintf(
-                            "Job <bold>#%d</bold> will be retried at %s",
+                            "Job #%d will be retried at %s",
                             $jobId,
                             $retryTime
                         ),
-                        true
                     );
                 }
 
@@ -435,13 +432,12 @@ class Queue implements QueueContract
      * Logs a message to the queue log file if logging is enabled.
      *
      * @param string $message The message to log.
-     * @param bool $endLine Whether to add a new line at the end of the message.
      *
      * @return void
      */
-    private function message(string $message, $endLine = false): void
+    private function message(string $message): void
     {
-        echo '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL . ($endLine ? PHP_EOL : '');
+        echo '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
     }
 
     /**
