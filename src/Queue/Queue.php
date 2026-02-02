@@ -513,10 +513,20 @@ class Queue implements QueueContract
                 VALUES (:job_id, :failed_at, :exception, :attempts)"
             );
 
+            // Get the stack trace from the previous exception if available
+            $stackTraceString = $exception->getPrevious()
+                ? $exception->getPrevious()->getTraceAsString()
+                : $exception->getTraceAsString();
+
             $statement->execute([
                 ':job_id' => $jobId,
                 ':failed_at' => now(),
-                ':exception' => sprintf("%s: %s", get_class($exception), $exception->getMessage()),
+                ':exception' => sprintf(
+                    "%s: %s\nStack trace:\n%s",
+                    get_class($exception),
+                    $exception->getMessage(),
+                    $stackTraceString
+                ),
                 ':attempts' => $attempts,
             ]);
 

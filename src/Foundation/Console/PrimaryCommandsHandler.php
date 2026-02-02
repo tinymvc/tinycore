@@ -190,7 +190,7 @@ class PrimaryCommandsHandler
     {
         $queue->work(
             once: isset($args['once']),
-            timeout: $args['timeout'] ?? 3480, // 58 minutes
+            timeout: $args['timeout'] ?? 3580, // 59 minutes and 40 seconds
             sleep: $args['sleep'] ?? 4, // 4 seconds
             delay: $args['delay'] ?? 8, // 8 seconds on failure
             tries: $args['tries'] ?? 3, // 3 attempts on failure
