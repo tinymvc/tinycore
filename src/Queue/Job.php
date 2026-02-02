@@ -216,6 +216,24 @@ class Job implements JobContract
     }
 
     /**
+     * Delays the job execution by a specified number of seconds.
+     *
+     * This method sets the scheduled time for the job to be the current
+     * time plus the specified number of seconds.
+     *
+     * @param int $seconds
+     *   The number of seconds to delay the job execution.
+     *
+     * @return self
+     *   Returns the current Job instance for method chaining.
+     */
+    public function delay(int $seconds): self
+    {
+        $this->scheduledTime = Carbon::now()->addSeconds($seconds);
+        return $this;
+    }
+
+    /**
      * Executes the job's closure function.
      *
      * This method calls the closure function associated with the job

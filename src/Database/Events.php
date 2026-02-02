@@ -51,6 +51,16 @@ class Events implements EventsContract
     }
 
     /**
+     * Create a new Events instance with no event handlers.
+     * 
+     * @return static A new Events instance with no event handlers.
+     */
+    public static function none(): static
+    {
+        return new static();
+    }
+
+    /**
      * Triggered when a new model is created.
      *
      * @return void
@@ -88,5 +98,35 @@ class Events implements EventsContract
     public function changed(): void
     {
         $this->changed && ($this->changed)();
+    }
+
+    /**
+     * Check if any event handlers are set.
+     *
+     * @return bool True if any event handlers are set, false otherwise.
+     */
+    public function hasEvents(): bool
+    {
+        return $this->created !== null ||
+            $this->updated !== null ||
+            $this->deleted !== null ||
+            $this->changed !== null;
+    }
+
+    /**
+     * Check if a specific event handler is set.
+     *
+     * @param string $event The event name to check ('created', 'updated', 'deleted', 'changed').
+     * @return bool True if the specified event handler is set, false otherwise.
+     */
+    public function hasEvent(string $event): bool
+    {
+        return match ($event) {
+            'created' => $this->created !== null,
+            'updated' => $this->updated !== null,
+            'deleted' => $this->deleted !== null,
+            'changed' => $this->changed !== null,
+            default => false,
+        };
     }
 }

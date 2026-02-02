@@ -169,7 +169,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     protected array $appends = [];
 
     /**
-     * The attributes that should be visible in arrays.
+     * The attributes that should be hidden for arrays.
      *
      * @var array
      */
@@ -214,7 +214,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     protected function events(): Events
     {
-        return Events::make();
+        return Events::none();
     }
 
     /**
@@ -1001,6 +1001,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     {
         /** @var \Spark\Database\Events $events */
         $events = $this->events();
+
+        if (!$events->hasEvents()) {
+            return; // No events to trigger.
+        }
 
         if (in_array($event, ['created', 'updated', 'deleted'])) {
             $events->changed();
