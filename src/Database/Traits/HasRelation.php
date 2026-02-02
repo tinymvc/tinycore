@@ -489,7 +489,7 @@ trait HasRelation
             $relation instanceof BelongsTo ||
             $relation instanceof HasOneThrough
         ) {
-            return $relation->first();
+            return $relation->first() ?: null;
         }
 
         // For hasMany and belongsToMany, return Collection
