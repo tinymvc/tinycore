@@ -6,7 +6,6 @@ use Spark\Database\Casts\Castable;
 use Spark\Database\Contracts\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
-use Spark\Database\Exceptions\InvalidModelFillableException;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Traits\HasRelation;
 use Spark\Support\Str;

@@ -1,4 +1,5 @@
 <?php
+
 namespace Spark\Routing;
 
 use Spark\Contracts\Support\Arrayable;
