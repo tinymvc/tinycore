@@ -24,6 +24,13 @@ use function is_string;
 trait Castable
 {
     /**
+     * The attributes that should be cast to native types.
+     *  
+     * @var array
+     */
+    protected array $casts = [];
+
+    /**
      * Cast an attribute to a native PHP type.
      *
      * @param string $key The attribute key
@@ -156,7 +163,7 @@ trait Castable
      */
     public function hasCast(string $key): bool
     {
-        return property_exists($this, 'casts') && isset($this->casts[$key]);
+        return isset($this->casts[$key]);
     }
 
     /**
@@ -166,7 +173,7 @@ trait Castable
      */
     public function hasAnyCast(): bool
     {
-        return property_exists($this, 'casts') && !empty($this->casts);
+        return !empty($this->casts);
     }
 
     /**

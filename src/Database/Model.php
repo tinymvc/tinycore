@@ -148,6 +148,34 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     protected array $attributes = [];
 
     /**
+     * The attributes that aren't mass assignable.
+     *
+     * @var array
+     */
+    protected array $guarded = [];
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array
+     */
+    protected array $fillable = [];
+
+    /**
+     * The accessors to append to the model's array form.
+     * 
+     * @var array
+     */
+    protected array $appends = [];
+
+    /**
+     * The attributes that should be visible in arrays.
+     *
+     * @var array
+     */
+    protected array $hidden = [];
+
+    /**
      * Track vars for internal usage.
      *
      * @var array
@@ -395,9 +423,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     private function getFillableData(): array
     {
         // Check if either 'guarded' or 'fillable' property exists in the model.
-        $existsGuarded = property_exists($this, 'guarded');
-        $existsFillable = property_exists($this, 'fillable');
-        if (!$existsGuarded && !$existsFillable) {
+        if (empty($this->guarded) && empty($this->fillable)) {
             throw new InvalidModelFillableException(
                 'Either fillable or guarded must be defined for the model: ' . static::class
             );
@@ -405,16 +431,13 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         $data = [];
 
-        $guarded = $existsGuarded ? (array) $this->guarded : [];
-        $fillable = $existsFillable ? (array) $this->fillable : [];
-
         foreach ($this->attributes as $key => $value) {
             // If fillable is defined, only allow fillable fields unless guarded explicitly restricts it.
-            if (!empty($fillable) && in_array($key, $fillable)) {
+            if (!empty($this->fillable) && in_array($key, $this->fillable)) {
                 $data[$key] = $value;
             }
             // If fillable is empty, assume all fields are fillable except the guarded ones.
-            elseif (empty($fillable) && !in_array($key, $guarded)) {
+            elseif (empty($this->fillable) && !in_array($key, $this->guarded)) {
                 $data[$key] = $value;
             }
         }
@@ -646,11 +669,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         $attributes = array_diff_key($attributes, array_flip($hidden));
 
-        if (property_exists($this, 'appends')) {
-            foreach ((array) $this->appends as $key) {
-                if ($this->hasAccessor($key)) {
-                    $attributes[$key] = $this->getAttributeValue($key, $this->attributes[$key] ?? null);
-                }
+        foreach ($this->appends as $key) {
+            if ($this->hasAccessor($key)) {
+                $attributes[$key] = $this->getAttributeValue($key, $this->attributes[$key] ?? null);
             }
         }
 
@@ -664,10 +685,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function getHidden(): array
     {
-        return array_merge(
-            $this->tracking['__hidden'] ?? [],
-            property_exists($this, 'hidden') ? (array) $this->hidden : []
-        );
+        return [
+            ...$this->tracking['__hidden'] ?? [],
+            ...$this->hidden
+        ];
     }
 
     /**
@@ -677,10 +698,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function getVisible(): array
     {
-        $visible = array_merge(
-            $this->tracking['__visible'] ?? [],
-            property_exists($this, 'visible') ? (array) $this->visible : []
-        );
+        $visible = $this->tracking['__visible'] ?? [];
 
         return array_diff($visible, $this->getHidden());
     }
@@ -981,10 +999,6 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function triggerEvent(string $event): void
     {
-        if (!method_exists($this, 'events')) {
-            return;
-        }
-
         /** @var \Spark\Database\Events $events */
         $events = $this->events();
 
