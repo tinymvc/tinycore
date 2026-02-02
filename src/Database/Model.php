@@ -422,13 +422,6 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     private function getFillableData(): array
     {
-        // Check if either 'guarded' or 'fillable' property exists in the model.
-        if (empty($this->guarded) && empty($this->fillable)) {
-            throw new InvalidModelFillableException(
-                'Either fillable or guarded must be defined for the model: ' . static::class
-            );
-        }
-
         $data = [];
 
         foreach ($this->attributes as $key => $value) {
