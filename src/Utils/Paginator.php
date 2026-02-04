@@ -361,7 +361,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
                     '<li class="%s disabled"><span class="%s">%s</span></li>',
                     $classes['li'] ?? 'page-item',
                     $classes['a'] ?? 'page-link',
-                    $link['label']
+                    $entity['ellipsis'] ?? ($link['label'] ?? '...')
                 );
             } else {
                 $output[] = sprintf(
@@ -369,7 +369,9 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
                     $classes['li'] ?? 'page-item',
                     $classes['a'] ?? 'page-link',
                     $link['url'] ?? '#',
-                    $link['label'] ?? ''
+                    $link['type'] === 'previous' && isset($entity['prev']) ? $entity['prev'] : (
+                        $link['type'] === 'next' && isset($entity['next']) ? $entity['next'] : ($link['label'] ?? '')
+                    )
                 );
             }
         }
