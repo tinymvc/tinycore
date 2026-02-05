@@ -364,8 +364,8 @@ trait HasRelation
             localKey: $localKey,
             secondLocalKey: $secondLocalKey,
             lazy: $lazy,
-            callback: $callback,
             append: $append,
+            callback: $callback,
             model: $this
         );
     }

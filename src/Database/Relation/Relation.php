@@ -138,11 +138,7 @@ abstract class Relation
      */
     public function getQuery(): QueryBuilder
     {
-        if ($this->query === null) {
-            $this->query = $this->buildQuery();
-        }
-
-        return $this->query;
+        return $this->query ??= $this->buildQuery();
     }
 
     /**
