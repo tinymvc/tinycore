@@ -7,6 +7,7 @@ use Spark\Contracts\Http\AuthContract;
 use Spark\Contracts\Http\AuthDriverContract;
 use Spark\Database\Model;
 use Spark\Support\Traits\Macroable;
+use Spark\Utils\JWT;
 use Throwable;
 use function intval;
 use function is_array;
@@ -317,10 +318,15 @@ class Auth implements AuthContract, ArrayAccess
     {
         $expire = $this->config['jwt_expire'] ?? '1 year';
 
-        $payload['id'] = $user->id;
-        $payload['exp'] = strtotime("+$expire");
+        $payload = [
+            'id' => $user->id,
+            'email' => $user->email ?? null,
+            'username' => $user->username ?? null,
+            'exp' => strtotime("+$expire"),
+            ...$payload
+        ];
 
-        return encrypt($payload);
+        return JWT::encode($payload, env('app_key'));
     }
 
     /**
@@ -565,9 +571,9 @@ class Auth implements AuthContract, ArrayAccess
             $token = $matches[1];
 
             try {
-                $payload = decrypt($token);
-                if (is_array($payload) && isset($payload['id'], $payload['exp']) && carbon($payload['exp'])->isFuture()) {
-                    return $payload['id'];
+                $payload = JWT::decode($token, env('app_key'));
+                if (isset($payload, $payload->id, $payload->exp) && carbon($payload->exp)->isFuture()) {
+                    return $payload->id;
                 }
             } catch (Throwable $e) {
                 // Ignore decryption errors
