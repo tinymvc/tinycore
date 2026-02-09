@@ -11,9 +11,7 @@ use Spark\View\Contracts\BladeCompilerContract;
 use Spark\View\Contracts\BladeContract;
 use Spark\View\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\View\Exceptions\ViewException;
-use function in_array;
 use function is_array;
-use function sprintf;
 
 /**
  * Class Blade
@@ -595,20 +593,7 @@ class Blade implements BladeContract
      */
     public function compileClassArray(array $classes): string
     {
-        $compiledClasses = [];
-
-        foreach ($classes as $key => $value) {
-            // Simple class name like 'p-4'
-            if (is_numeric($key)) {
-                $compiledClasses[] = $value;
-            }
-            // Conditional class like 'font-bold' => $isActive
-            elseif ($value) {
-                $compiledClasses[] = $key;
-            }
-        }
-
-        return implode(' ', $compiledClasses);
+        return new Attributes(['class' => $classes])->toHtml();
     }
 
     /**
@@ -620,30 +605,7 @@ class Blade implements BladeContract
      */
     public function compileAttributesArray(array $attributes): string
     {
-        $compiledAttributes = [];
-
-        foreach ($attributes as $key => $value) {
-            // Special handling for class & style attribute
-            if (in_array($key, ['class', 'style']) && is_array($value)) {
-                $compiledAttributes[] = sprintf(
-                    '%s="%s"',
-                    $key,
-                    $key === 'class'
-                    ? $this->compileClassArray($value)
-                    : $this->compileStyleArray($value)
-                );
-            }
-            // Simple attribute like 'data-id="123"'
-            elseif (is_numeric($key)) {
-                $compiledAttributes[] = $value;
-            }
-            // Conditional attribute like 'disabled' => $isDisabled
-            elseif ($value) {
-                $compiledAttributes[] = str_contains($key, '=') ? $key : "$key=\"$value\"";
-            }
-        }
-
-        return implode(' ', $compiledAttributes);
+        return new Attributes($attributes)->toHtml();
     }
 
     /**
@@ -655,19 +617,6 @@ class Blade implements BladeContract
      */
     public function compileStyleArray(array $styles): string
     {
-        $compiledStyles = [];
-
-        foreach ($styles as $key => $value) {
-            // Simple style like 'background-color: red'
-            if (is_numeric($key)) {
-                $compiledStyles[] = $value;
-            }
-            // Key-value pair style like 'color' => 'red' or conditional 'font-weight:bold' => $isActive
-            elseif ($value) {
-                $compiledStyles[] = str_contains($key, ':') ? $key : "$key: $value";
-            }
-        }
-
-        return implode('; ', $compiledStyles);
+        return new Attributes(['style' => $styles])->toHtml();
     }
 }
