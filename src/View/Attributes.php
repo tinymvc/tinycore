@@ -554,8 +554,8 @@ class Attributes implements AttributesContract, Arrayable, Htmlable, \Stringable
         $key = trim((string) $key);
 
         // Remove any characters that aren't valid in HTML attribute names
-        // Valid: letters, digits, hyphens, periods, colons, underscores
-        $sanitized = preg_replace('/[^a-zA-Z0-9\-_:.]/', '', $key);
+        // Valid: letters, digits, hyphens, periods, colons, underscores, and @
+        $sanitized = preg_replace('/[^a-zA-Z0-9\-_@:.]/', '', $key);
 
         return $sanitized !== null ? $sanitized : '';
     }
