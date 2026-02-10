@@ -931,9 +931,9 @@ class BladeCompiler implements BladeCompilerContract
             'selected' => "echo (%s) ? 'selected' : '';",
             'readonly' => "echo (%s) ? 'readonly' : '';",
             'required' => "echo (%s) ? 'required' : '';",
-            'style' => "echo 'style=\"' . \$this->compileStyleArray(%s) . '\"';",
-            'class' => "echo 'class=\"' . \$this->compileClassArray(%s) . '\"';",
-            'attributes' => "echo \$this->compileAttributesArray(%s);",
+            'style' => "echo \$this->compileAttributes(['style' => %s]);",
+            'class' => "echo \$this->compileAttributes(['class' => %s]);",
+            'attributes' => "echo \$this->compileAttributes(%s);",
             'errors' => "if(errors()->any() && errors()->has('%s')): foreach(errors()->get('%s') as \$message):",
             'error' => "if(errors()->any() && errors()->has('%s')): \$message = errors()->first('%s');",
         ];

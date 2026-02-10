@@ -78,14 +78,14 @@ class Blade implements BladeContract
      * 
      * @var string|null
      */
-    private ?string $currentSection = null;
+    private string|null $currentSection = null;
 
     /**
      * Template that this view extends
      * 
      * @var string|null
      */
-    private ?string $extendsTemplate = null;
+    private string|null $extendsTemplate = null;
 
     /**
      * Initializes the template path and compiler.
@@ -93,7 +93,7 @@ class Blade implements BladeContract
      * @param string|null $path Optional base path for templates
      * @param string|null $cachePath Optional cache path for compiled templates
      */
-    public function __construct(?string $path = null, ?string $cachePath = null)
+    public function __construct(string|null $path = null, string|null $cachePath = null)
     {
         $path ??= views_dir();
         $cachePath ??= temp_dir('views');
@@ -111,7 +111,7 @@ class Blade implements BladeContract
         self::$shared = ['app' => Application::$app, ...self::$shared];
 
         // Add request, session, and errors to shared data if not in CLI
-        if (!is_cli() && Application::$app->resolved(Request::class)) {
+        if (is_web() && Application::$app->resolved(Request::class)) {
             self::$shared = [
                 'request' => Application::$app->get(Request::class),
                 'session' => Application::$app->get(Session::class),
@@ -585,38 +585,14 @@ class Blade implements BladeContract
     }
 
     /**
-     * Helper method for compiling class arrays
-     * This should be available in your view context
-     * 
-     * @param array $classes
-     * @return string
-     */
-    public function compileClassArray(array $classes): string
-    {
-        return new Attributes(['class' => $classes])->toHtml();
-    }
-
-    /**
      * Helper method for compiling attributes arrays
      * This should be available in your view context
      * 
      * @param array $attributes
      * @return string
      */
-    public function compileAttributesArray(array $attributes): string
+    public function compileAttributes(array $attributes): string
     {
-        return new Attributes($attributes)->toHtml();
-    }
-
-    /**
-     * Helper method for compiling style arrays
-     * This should be available in your view context
-     * 
-     * @param array $styles
-     * @return string
-     */
-    public function compileStyleArray(array $styles): string
-    {
-        return new Attributes(['style' => $styles])->toHtml();
+        return new Attributes($attributes);
     }
 }
