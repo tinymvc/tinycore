@@ -443,14 +443,21 @@ if (!function_exists('inertia')) {
     /**
      * Create an Inertia response.
      *
-     * @param string $component The component name to render
+     * @param null|string $component The component name to render
      * @param array $props The props to pass to the component
      * @param array $headers Optional headers to include in the response
-     * @return \Spark\Http\Response The response instance
+     * @return ($component is null ? Inertia : Response) The Inertia instance or the response with the rendered component
      */
-    function inertia(string $component, array $props = [], array $headers = []): Response
+    function inertia(null|string $component = null, array $props = [], array $headers = []): Inertia|Response
     {
-        return Inertia::render($component, $props, $headers);
+        /** @var \Spark\View\Inertia $inertia The Inertia adapter instance */
+        $inertia = get(Inertia::class);
+
+        if ($component === null) {
+            return $inertia;
+        }
+
+        return $inertia->render($component, $props, $headers);
     }
 }
 

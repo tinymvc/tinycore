@@ -259,6 +259,45 @@ class Response implements ResponseContract
     }
 
     /**
+     * Sets multiple headers for the response.
+     *
+     * @param array $headers An associative array of headers to set (e.g., ['Content-Type' => 'application/json']).
+     * @return $this Current response instance for method chaining.
+     */
+    public function withHeaders(array $headers): self
+    {
+        foreach ($headers as $key => $value) {
+            $this->setHeader($key, $value);
+        }
+        return $this;
+    }
+
+    /**
+     * Sets the response content to the provided data, which can be an array, Arrayable, or Stringable.
+     *
+     * @param array|string|Arrayable|Stringable $data The data to set as the response content.
+     * @return $this Current response instance for method chaining.
+     */
+    public function withData(array|string|Arrayable|Stringable $data): self
+    {
+        $this->content = $data;
+        return $this;
+    }
+
+    /**
+     * Sets the response content to a JSON-encoded version of the provided data.
+     *
+     * @param array|Arrayable $data The data to be encoded as JSON and set as the response content.
+     * @param int $statusCode The HTTP status code to send with the response. Defaults to 200.
+     * @param int $flags The JSON encoding flags. Defaults to 0.
+     * @return $this Current response instance for method chaining.
+     */
+    public function withJson(array|Arrayable $data, int $statusCode = 200, int $flags = 0, int $depth = 512): self
+    {
+        return $this->json($data, $statusCode, $flags, $depth);
+    }
+
+    /**
      * Flash a key-value pair to the session.
      *
      * This method stores a key-value pair in the session flash data,
