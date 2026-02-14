@@ -2,8 +2,10 @@
 
 namespace Spark\Http;
 
+use Closure;
 use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Helpers\LazyProp;
 use Spark\Support\Traits\Macroable;
 use Stringable;
 use function is_array;
@@ -438,6 +440,14 @@ class Response implements ResponseContract
             $data instanceof \Spark\Utils\Carbon
         ) {
             return (string) $data;
+        }
+
+        if ($data instanceof Closure) {
+            return $data(); // Call the closure and return its result
+        }
+
+        if ($data instanceof LazyProp) {
+            return $data->resolve();
         }
 
         // If it's an object that knows how to cast itself to array, do it and recurse

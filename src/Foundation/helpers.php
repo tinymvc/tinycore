@@ -444,11 +444,11 @@ if (!function_exists('inertia')) {
      * Create an Inertia response.
      *
      * @param null|string $component The component name to render
-     * @param array $props The props to pass to the component
+     * @param Arrayable|array $props The props to pass to the component
      * @param array $headers Optional headers to include in the response
      * @return ($component is null ? Inertia : Response) The Inertia instance or the response with the rendered component
      */
-    function inertia(null|string $component = null, array $props = [], array $headers = []): Inertia|Response
+    function inertia(null|string $component = null, Arrayable|array $props = [], array $headers = []): Inertia|Response
     {
         /** @var \Spark\View\Inertia $inertia The Inertia adapter instance */
         $inertia = get(Inertia::class);

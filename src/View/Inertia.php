@@ -3,6 +3,7 @@
 namespace Spark\View;
 
 use Closure;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
 use Spark\Helpers\LazyProp;
 use Spark\Http\Request;
@@ -145,14 +146,19 @@ class Inertia implements InertiaAdapterContract
      * If it's not an AJAX request, it renders a view with the component data embedded in a 'page' variable.
      *
      * @param string $component The name of the Inertia component to render.
-     * @param array $props An associative array of props to pass to the component.
+     * @param Arrayable|array $props An associative array of props to pass to the component.
      * @param array $headers Optional headers to include in the response.
      * @return Response The response instance containing the rendered component or JSON data.
      */
-    public function render(string $component, array $props = [], array $headers = []): Response
+    public function render(string $component, Arrayable|array $props = [], array $headers = []): Response
     {
         // Run any registered composers for the component
         $this->runComposers($component);
+
+        // Convert Arrayable props to arrays
+        if ($props instanceof Arrayable) {
+            $props = $props->toArray();
+        }
 
         // Merge shared props with component props
         $props = [...self::$shared, ...$props];
@@ -181,7 +187,7 @@ class Inertia implements InertiaAdapterContract
 
         // If it's an Inertia AJAX request, return JSON
         if ($isInertiaRequest) {
-            return response()->withJson($page)
+            return response()->withJson($page, flags: JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
                 ->withHeaders(['X-Inertia' => 'true', ...$headers]);
         }
 

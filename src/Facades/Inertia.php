@@ -3,7 +3,6 @@
 namespace Spark\Facades;
 
 use Spark\View\Inertia as BaseInertia;
-use Spark\Http\Response;
 
 /**
  * Facade Inertia
@@ -15,10 +14,10 @@ use Spark\Http\Response;
  * @method static void setVersion(string $version)
  * @method static void share(array $data)
  * @method static void composer(string|array $components, callable $composer)
- * @method static Response render(string $component, array $props = [], array $headers = [])
- * @method static Response redirect(string $url, int $status = 302, array $headers = [])
- * @method static Response back(int $status = 302, array $headers = [])
- * @method static Response forceRefresh()
+ * @method static \Spark\Http\Response render(string $component, \Spark\Contracts\Support\Arrayable|array $props = [], array $headers = [])
+ * @method static \Spark\Http\Response redirect(string $url, int $status = 302, array $headers = [])
+ * @method static \Spark\Http\Response back(int $status = 302, array $headers = [])
+ * @method static \Spark\Http\Response forceRefresh()
  * @method static \Spark\Helpers\LazyProp lazy(\Closure $callback)
  * @method static \Spark\Contracts\Support\Htmlable renderRootElement(string|array $page = '{}')
  * 
