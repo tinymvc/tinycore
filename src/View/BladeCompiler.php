@@ -952,6 +952,7 @@ class BladeCompiler implements BladeCompilerContract
             'guest' => '<?php if(is_guest()): ?>',
             'endauth' => '<?php endif; ?>',
             'endguest' => '<?php endif; ?>',
+            'inertia' => '<?= \Spark\View\Inertia::renderRootElement($page ?? \'{}\'); ?>',
         ];
 
         // Compile conditional directives

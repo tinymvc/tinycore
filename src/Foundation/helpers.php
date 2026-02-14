@@ -2,7 +2,6 @@
 
 use Spark\Concurrency;
 use Spark\Console\Commands;
-use Spark\Container;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Database\DB;
@@ -35,6 +34,7 @@ use Spark\Utils\Tracer;
 use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
+use Spark\View\Inertia;
 
 if (!function_exists('app')) {
     /**
@@ -174,12 +174,12 @@ if (!function_exists('response')) {
      * This function returns the current response instance. If arguments are provided,
      * it creates a new response instance with those arguments.
      *
-     * @param string $content The content of the response.
+     * @param mixed $content The content of the response.
      * @param int $statusCode The HTTP status code for the response. Default is 200.
      * @param array $headers Optional headers to include in the response.
      * @return Response The response instance.
      */
-    function response(string $content = '', int $statusCode = 200, array $headers = []): Response
+    function response(mixed $content = '', int $statusCode = 200, array $headers = []): Response
     {
         if (func_num_args() > 0) {
             // Create and return a new Response with the provided arguments.
@@ -436,6 +436,21 @@ if (!function_exists('fireline')) {
 
         // Otherwise, return a regular HTTP response with the rendered HTML
         return view($template, $context);
+    }
+}
+
+if (!function_exists('inertia')) {
+    /**
+     * Create an Inertia response.
+     *
+     * @param string $component The component name to render
+     * @param array $props The props to pass to the component
+     * @param array $headers Optional headers to include in the response
+     * @return \Spark\Http\Response The response instance
+     */
+    function inertia(string $component, array $props = [], array $headers = []): Response
+    {
+        return Inertia::render($component, $props, $headers);
     }
 }
 
