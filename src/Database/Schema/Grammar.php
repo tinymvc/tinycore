@@ -302,6 +302,45 @@ class Grammar implements GrammarContract
     }
 
     /**
+     * Compile an ADD FOREIGN KEY statement for ALTER TABLE.
+     *
+     * @param string $table The table name.
+     * @param ForeignKeyConstraint $fk The foreign key constraint object.
+     * @return string The SQL for the ADD FOREIGN KEY statement.
+     */
+    public function compileAddForeignKey(string $table, ForeignKeyConstraint $fk): string
+    {
+        // SQLite doesn't support adding foreign keys to existing tables
+        if ($this->isSQLite()) {
+            throw new SqliteAlterFailedException('SQLite does not support adding foreign keys to existing tables');
+        }
+
+        // Validate required parameters
+        if (!isset($fk->onTable, $fk->columns, $fk->references)) {
+            throw new InvalidForeignKeyException(
+                'Foreign key constraint requires onTable, columns, and references properties'
+            );
+        }
+
+        $constraintName = "fk_{$fk->onTable}_" . implode('_', $fk->columns);
+        $sql = "ALTER TABLE " . $this->wrapper->wrapTable($table) . " ADD CONSTRAINT ";
+        $sql .= $this->wrapper->wrap($constraintName) . ' ';
+        $sql .= 'FOREIGN KEY (' . $this->wrapper->columnize($fk->columns) . ') ';
+        $sql .= 'REFERENCES ' . $this->wrapper->wrapTable($fk->onTable);
+        $sql .= ' (' . $this->wrapper->columnize($fk->references) . ')';
+
+        if (isset($fk->onDelete)) {
+            $sql .= " ON DELETE " . strtoupper($fk->onDelete);
+        }
+
+        if (isset($fk->onUpdate)) {
+            $sql .= " ON UPDATE " . strtoupper($fk->onUpdate);
+        }
+
+        return $sql;
+    }
+
+    /**
      * Compile a drop statement.
      *
      * @param string $table The table name.

@@ -577,6 +577,17 @@ class Blueprint implements BlueprintContract
     }
 
     /**
+     * Drop a unique index from the blueprint.
+     *
+     * @param string|array $columns The name(s) of the unique index(es) to drop.
+     * @return self
+     */
+    public function dropUnique($columns): self
+    {
+        return $this->dropIndex($columns, 'unique');
+    }
+
+    /**
      * Drop a foreign key constraint from the blueprint.
      *
      * @param string|array $columns The name(s) of the foreign key constraint(s) to drop.
@@ -616,6 +627,16 @@ class Blueprint implements BlueprintContract
             $statements[] = $grammar->compileAddColumn($this->table, $column);
         }
 
+        // Add indexes
+        foreach ($this->indexes as $index) {
+            $statements[] = $grammar->compileIndex($this->table, $index);
+        }
+
+        // Add foreign keys
+        foreach ($this->foreignKeys as $foreignKey) {
+            $statements[] = $grammar->compileAddForeignKey($this->table, $foreignKey);
+        }
+
         foreach ($this->drops as $drop) {
             $statements[] = $grammar->compileDrop($this->table, $drop);
         }
@@ -623,6 +644,12 @@ class Blueprint implements BlueprintContract
         foreach ($this->renames as $rename) {
             $statements[] = $grammar->compileRenameColumn($this->table, $rename['from'], $rename['to']);
         }
+
+        // Remove trailing semicolons from statements to ensure proper concatenation
+        $statements = array_map(
+            fn($stmt) => rtrim($stmt, ';'),
+            $statements
+        );
 
         return implode(";\n", $statements);
     }
