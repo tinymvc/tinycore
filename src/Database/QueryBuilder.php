@@ -2483,7 +2483,9 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function exists(): bool
     {
-        return $this->selectRaw('EXISTS(SELECT 1)')
+        $query = clone $this; // Clone the current query builder to avoid modifying the original query.
+
+        return $query->selectRaw('EXISTS(SELECT 1)')
             ->fetchColumn()
             ->first() == 1;
     }
