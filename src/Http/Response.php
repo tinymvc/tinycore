@@ -145,7 +145,6 @@ class Response implements ResponseContract
 
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $mimeType = finfo_file($finfo, $filePath);
-        finfo_close($finfo);
 
         header('Content-Description: File Transfer');
         header("Content-Type: $mimeType");
@@ -194,10 +193,10 @@ class Response implements ResponseContract
      *
      * @param array|Arrayable $data The data to be encoded as JSON.
      * @param int $statusCode The HTTP status code to send with the response. Defaults to 200.
-     * @param int $flags The JSON encoding flags. Defaults to 0.
+     * @param int $flags The JSON encoding flags. Defaults to 320.
      * @return $this Current response instance for method chaining.
      */
-    public function json(array|Arrayable $data, int $statusCode = 200, int $flags = 0, int $depth = 512): self
+    public function json(array|Arrayable $data, int $statusCode = 200, int $flags = 320, int $depth = 512): self
     {
         $this->setStatusCode($statusCode);
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -411,7 +410,7 @@ class Response implements ResponseContract
         if (is_array($this->content) || $this->content instanceof Arrayable) {
             $this->setHeader('Content-Type', 'application/json; charset=utf-8');
             $this->setContent(
-                json_encode($this->toPureArray($this->content))
+                json_encode($this->toPureArray($this->content), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             );
         } elseif (!is_string($this->content)) {
             $this->setContent((string) $this->content); // Ensure content is a string

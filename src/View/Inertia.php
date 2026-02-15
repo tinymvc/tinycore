@@ -187,7 +187,7 @@ class Inertia implements InertiaAdapterContract
 
         // If it's an Inertia AJAX request, return JSON
         if ($isInertiaRequest) {
-            return response()->withJson($page, flags: JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            return json($page)
                 ->withHeaders(['X-Inertia' => 'true', ...$headers]);
         }
 
@@ -210,53 +210,6 @@ class Inertia implements InertiaAdapterContract
         return response(statusCode: 409, headers: [
             'X-Inertia-Location' => $this->request->getUrl()
         ]);
-    }
-
-    /**
-     * Check if there is a version mismatch between client and server.
-     *
-     * @return bool True if versions don't match, false otherwise.
-     */
-    protected function hasVersionMismatch(): bool
-    {
-        $clientVersion = $this->request->header('X-Inertia-Version');
-
-        // If no client version provided, no mismatch
-        if ($clientVersion === null) {
-            return false;
-        }
-
-        return $clientVersion !== $this->version;
-    }
-
-    /**
-     * Check if this is a partial reload request for the given component.
-     *
-     * @param string $component The component being rendered.
-     * @return bool True if this is a partial reload for this component.
-     */
-    protected function isPartialReload(string $component): bool
-    {
-        $partialComponent = $this->request->header('X-Inertia-Partial-Component');
-
-        // Must have partial component header and it must match current component
-        return $partialComponent !== null && $partialComponent === $component;
-    }
-
-    /**
-     * Get the list of props requested in a partial reload.
-     *
-     * @return array List of prop names to include.
-     */
-    protected function getPartialData(): array
-    {
-        $partialData = $this->request->header('X-Inertia-Partial-Data');
-
-        if ($partialData === null || $partialData === '') {
-            return [];
-        }
-
-        return array_filter(explode(',', $partialData));
     }
 
     /**
@@ -296,6 +249,15 @@ class Inertia implements InertiaAdapterContract
                 continue;
             }
 
+            // If it's a Stringable or specific object, cast to string
+            if (
+                $value instanceof \Spark\Url ||
+                $value instanceof \Spark\Utils\Carbon
+            ) {
+                $result[$key] = (string) $value;
+                continue;
+            }
+
             // Handle nested arrays recursively
             if (is_array($value)) {
                 $result[$key] = $this->processNestedProps($value, $isPartialReload);
@@ -332,6 +294,15 @@ class Inertia implements InertiaAdapterContract
             // Handle closures
             if ($value instanceof Closure) {
                 $result[$key] = $value();
+                continue;
+            }
+
+            // If it's a Stringable or specific object, cast to string
+            if (
+                $value instanceof \Spark\Url ||
+                $value instanceof \Spark\Utils\Carbon
+            ) {
+                $result[$key] = (string) $value;
                 continue;
             }
 
@@ -412,6 +383,53 @@ class Inertia implements InertiaAdapterContract
         $referer = $this->request->referer() ?: '/';
 
         return $this->redirect($referer, $status, $headers);
+    }
+
+    /**
+     * Check if there is a version mismatch between client and server.
+     *
+     * @return bool True if versions don't match, false otherwise.
+     */
+    protected function hasVersionMismatch(): bool
+    {
+        $clientVersion = $this->request->header('X-Inertia-Version');
+
+        // If no client version provided, no mismatch
+        if ($clientVersion === null) {
+            return false;
+        }
+
+        return $clientVersion !== $this->version;
+    }
+
+    /**
+     * Check if this is a partial reload request for the given component.
+     *
+     * @param string $component The component being rendered.
+     * @return bool True if this is a partial reload for this component.
+     */
+    protected function isPartialReload(string $component): bool
+    {
+        $partialComponent = $this->request->header('X-Inertia-Partial-Component');
+
+        // Must have partial component header and it must match current component
+        return $partialComponent !== null && $partialComponent === $component;
+    }
+
+    /**
+     * Get the list of props requested in a partial reload.
+     *
+     * @return array List of prop names to include.
+     */
+    protected function getPartialData(): array
+    {
+        $partialData = $this->request->header('X-Inertia-Partial-Data');
+
+        if ($partialData === null || $partialData === '') {
+            return [];
+        }
+
+        return array_filter(explode(',', $partialData));
     }
 
     /**

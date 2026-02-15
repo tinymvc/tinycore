@@ -201,12 +201,12 @@ if (!function_exists('json')) {
      *
      * @param array $data The data to be included in the JSON response.
      * @param int $statusCode The HTTP status code for the response. Default is 200.
-     * @param int $flags JSON encoding options. Default is 0.
+     * @param int $flags JSON encoding options. Default is 320.
      * @param int $depth The maximum depth to encode. Default is 512.
      *
      * @return Response The JSON response instance.
      */
-    function json(array $data, int $statusCode = 200, int $flags = 0, int $depth = 512): Response
+    function json(array $data, int $statusCode = 200, int $flags = 320, int $depth = 512): Response
     {
         return response()->json($data, $statusCode, $flags, $depth);
     }
