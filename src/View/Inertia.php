@@ -258,6 +258,10 @@ class Inertia implements InertiaAdapterContract
                 continue;
             }
 
+            if ($value instanceof Arrayable) {
+                $value = $value->toArray(); // Convert Arrayable to array for further processing
+            }
+
             // Handle nested arrays recursively
             if (is_array($value)) {
                 $result[$key] = $this->processNestedProps($value, $isPartialReload);
@@ -304,6 +308,10 @@ class Inertia implements InertiaAdapterContract
             ) {
                 $result[$key] = (string) $value;
                 continue;
+            }
+
+            if ($value instanceof Arrayable) {
+                $value = $value->toArray(); // Convert Arrayable to array for further processing
             }
 
             // Handle deeper nested arrays
