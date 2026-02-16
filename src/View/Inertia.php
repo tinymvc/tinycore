@@ -163,20 +163,6 @@ class Inertia implements InertiaAdapterContract
         // Merge shared props with component props
         $props = [...self::$shared, ...$props];
 
-        // Check if this is an Inertia request
-        $isInertiaRequest = (bool) $this->request->header('X-Inertia');
-
-        // Handle version mismatch - force full page reload
-        if ($isInertiaRequest && $this->hasVersionMismatch()) {
-            return $this->forceRefresh();
-        }
-
-        // Handle partial reloads
-        $isPartialReload = $isInertiaRequest && $this->isPartialReload($component);
-
-        // Process props based on request type
-        $props = $this->processProps($props, $isPartialReload);
-
         // Prepare the page data to be sent to the client
         $page = [
             'component' => $component,
@@ -185,16 +171,22 @@ class Inertia implements InertiaAdapterContract
             'version' => $this->version
         ];
 
-        // If it's an Inertia AJAX request, return JSON
-        if ($isInertiaRequest) {
-            return json($page)
-                ->withHeaders(['X-Inertia' => 'true', ...$headers]);
+        // Check if this is an Inertia request, if not, render the root view with the page data
+        if (!(bool) $this->request->header('X-Inertia')) {
+            return view($this->rootView, compact('page'));
         }
 
-        // Otherwise, render the view with data-page attribute
-        return view($this->rootView, [
-            'page' => json_encode($page, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        ]);
+        // Handle version mismatch - force full page reload
+        if ($this->hasVersionMismatch()) {
+            return $this->forceRefresh();
+        }
+
+        // Process props based on request type
+        $page['props'] = $this->processProps($props, $this->isPartialReload($component));
+
+        // If it's an Inertia AJAX request, return JSON
+        return json($page)
+            ->withHeaders(['X-Inertia' => 'true', 'Vary' => 'X-Inertia', ...$headers]);
     }
 
     /**
