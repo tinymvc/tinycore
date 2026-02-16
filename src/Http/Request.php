@@ -432,6 +432,21 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Checks if the current request is a precognitive request.
+     * 
+     * Precognitive requests contain specific headers that indicate they are intended
+     * for pre-validation before the main request is processed. This method checks
+     * for the presence of these headers to determine if the current request is
+     * a precognitive request.
+     * 
+     * @return bool True if the current request is a precognitive request, false otherwise.
+     */
+    public function isPrecognitive(): bool
+    {
+        return $this->headers->hasAny('precognition', 'x-precognition');
+    }
+
+    /**
      * Checks if the current request's path matches the given path.
      * 
      * The current request's path is compared to the given path after both
@@ -1251,6 +1266,16 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         $validator = new Validator(); // Get the validator instance
 
+        // If the request is precognitive and has the 'precognition-validate-only' header, 
+        // filter the rules to only validate the specified fields
+        if ($this->isPrecognitive() && $this->headers->hasAny('precognition-validate-only', 'x-precognition-validate-only')) {
+            $rules = collect($rules)
+                ->only(
+                    explode(',', $this->headers->only('precognition-validate-only', 'x-precognition-validate-only')->first() ?: '')
+                )
+                ->all();
+        }
+
         if (!$validator->validate($rules, $this->all())) { // Validate the request
             $errors = $validator->getErrors(); // Get the errors as an array
 
@@ -1278,6 +1303,21 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
                     ->withInput($this->all(array_keys($rules))) // Preserve input values
                     ->send(); // Redirect the user back to the previous page
             }
+            exit; // Exit the script to prevent further execution
+        }
+
+        // If the request is precognitive, return a 204 No Content response with appropriate headers
+        if ($this->isPrecognitive()) {
+            response()
+                ->noContent()
+                ->withHeaders([
+                    'Precognition' => 'true',
+                    'X-Precognition' => 'true',
+                    'Precognition-Success' => 'true',
+                    'X-Precognition-Success' => 'true',
+                    'Vary' => 'Precognition',
+                ])
+                ->send();
             exit; // Exit the script to prevent further execution
         }
 

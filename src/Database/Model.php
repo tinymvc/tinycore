@@ -366,6 +366,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $updatedStatus = false;
         $createdId = 0;
 
+        unset($this->tracking['__was_updated'], $this->tracking['__was_created']); // Reset update and create tracking.
+
         // Update this records if it has an id, else insert this records into database.
         if ($this->hasPrimaryValue()) {
             $condition = [static::$primaryKey => $this->primaryValue()];
@@ -928,11 +930,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function isDirty(null|string $field = null): bool
     {
-        if ($field !== null) {
-            return in_array($field, array_keys($this->getChanges()));
-        }
+        $dirty = $field === null ? $this->hasChanges()
+            : in_array($field, array_keys($this->getChanges()));
 
-        return $this->hasChanges();
+        return $dirty && !$this->wasUpdated(); // Consider the model dirty only if it has changes and hasn't been marked as updated yet.
     }
 
     /**
