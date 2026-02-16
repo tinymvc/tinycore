@@ -205,12 +205,31 @@ class Router implements RouterContract
      *
      * @param string $path The path for the route.
      * @param string $template The Fireline template to render.
+     * @param array $context Optional context data to pass to the Fireline template.
      *
      * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
      */
-    public function fireline(string $path, string $template): Route
+    public function fireline(string $path, string $template, array $context = []): Route
     {
-        return new Route($path, callback: fn() => fireline($template));
+        return new Route($path, callback: fn() => fireline($template, $context));
+    }
+
+    /**
+     * Add a route that renders an Inertia component.
+     *
+     * This method is a convenience method for adding routes that render
+     * Inertia components, allowing for easy integration with the Inertia.js
+     * framework.
+     *
+     * @param string $path The path for the route.
+     * @param string $component The Inertia component to render.
+     * @param array $props Optional props to pass to the Inertia component.
+     *
+     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     */
+    public function inertia(string $path, string $component, array $props = []): Route
+    {
+        return new Route($path, callback: fn() => inertia($component, $props));
     }
 
     /**

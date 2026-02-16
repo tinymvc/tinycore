@@ -241,6 +241,25 @@ if (!function_exists('redirect')) {
     }
 }
 
+if (!function_exists('to_route')) {
+    /**
+     * Redirect to a named route with an optional context and HTTP status code.
+     *
+     * This function generates a URL for the specified named route using the
+     * provided context and then redirects to that URL with the given HTTP status code.
+     *
+     * @param string $name The name of the route to redirect to.
+     * @param null|string|array|Arrayable $context Optional context to include in the route URL generation.
+     * @param int $httpCode The HTTP status code for the redirection. Default is 0.
+     *
+     * @return Response The response instance after setting the redirect to the generated route URL.
+     */
+    function to_route(string $name, null|string|array|Arrayable $context = null, int $httpCode = 0): Response
+    {
+        return redirect(route_url($name, $context), $httpCode);
+    }
+}
+
 if (!function_exists('back')) {
     /**
      * Redirect back to the previous page.
