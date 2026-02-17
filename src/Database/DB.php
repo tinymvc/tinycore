@@ -349,6 +349,11 @@ class DB implements DBContract
             );
         }
 
+        // Set the default timezone for the database connection.
+        if (isset($this->config['timezone']) && $this->isMySQL()) {
+            $this->pdo->exec(sprintf("SET time_zone = '%s';", $this->config['timezone']));
+        }
+
         return $this;
     }
 

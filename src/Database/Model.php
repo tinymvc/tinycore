@@ -839,11 +839,14 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $path = implode('.', array_slice($segments, 1));
         $rootKey = $segments[0];
 
+        $rootValue = null;
         if ($this->hasAccessor($rootKey)) {
             $rootValue = $this->getAttributeValue($rootKey, $this->attributes[$rootKey] ?? null);
-            return data_get(array_filter($rootValue), $path, $default);
         } elseif ($this->relationLoaded($rootKey)) {
             $rootValue = $this->getRelationshipAttribute($rootKey);
+        }
+
+        if ($rootValue) {
             return data_get(array_filter($rootValue), $path, $default);
         }
 

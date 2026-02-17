@@ -33,7 +33,6 @@ class Migration implements MigrationContract
      *   The path to the JSON file containing the list of applied migrations.
      *   Defaults to "database/migrations.json" in the root directory.
      */
-
     public function __construct(private ?string $migrationsFolder = null, private ?string $migrationFile = null)
     {
         $this->migrationsFolder ??= root_dir('database/migrations'); // Default to the root directory
@@ -92,7 +91,7 @@ class Migration implements MigrationContract
      *  An array containing the arguments for the migration.
      * @return void
      */
-    public function up(array $args): void
+    public function up(array $args = []): void
     {
         $appliedMigrations = $this->getAppliedMigrations();
 
@@ -156,7 +155,7 @@ class Migration implements MigrationContract
      *   If 'step' is not provided, it defaults to 1.
      * @return void
      */
-    public function down(array $args): void
+    public function down(array $args = []): void
     {
         $steps = $args['step'] ?? ($args['_args'][0] ?? 1);
 
@@ -216,7 +215,7 @@ class Migration implements MigrationContract
      *  An array containing the number of steps to rollback.
      * @return void
      */
-    public function refresh(array $args): void
+    public function refresh(array $args = []): void
     {
         $args['all'] = true; // Default to rolling back all applied migrations
 
