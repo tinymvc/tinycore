@@ -27,7 +27,6 @@ use Spark\Http\Session;
 use Spark\Utils\Tracer;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
-use Spark\View\Inertia;
 use Throwable;
 use function get_class;
 
@@ -87,7 +86,6 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
             $this->singleton(Gate::class);
             $this->singleton(Auth::class);
             $this->singleton(Vite::class);
-            $this->singleton(Inertia::class);
         }
     }
 

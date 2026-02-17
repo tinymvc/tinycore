@@ -34,7 +34,6 @@ use Spark\Utils\Tracer;
 use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
-use Spark\View\Inertia;
 
 if (!function_exists('app')) {
     /**
@@ -455,28 +454,6 @@ if (!function_exists('fireline')) {
 
         // Otherwise, return a regular HTTP response with the rendered HTML
         return view($template, $context);
-    }
-}
-
-if (!function_exists('inertia')) {
-    /**
-     * Create an Inertia response.
-     *
-     * @param null|string $component The component name to render
-     * @param Arrayable|array $props The props to pass to the component
-     * @param array $headers Optional headers to include in the response
-     * @return ($component is null ? Inertia : Response) The Inertia instance or the response with the rendered component
-     */
-    function inertia(null|string $component = null, Arrayable|array $props = [], array $headers = []): Inertia|Response
-    {
-        /** @var \Spark\View\Inertia $inertia The Inertia adapter instance */
-        $inertia = get(Inertia::class);
-
-        if ($component === null) {
-            return $inertia;
-        }
-
-        return $inertia->render($component, $props, $headers);
     }
 }
 
