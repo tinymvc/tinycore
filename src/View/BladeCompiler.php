@@ -1115,6 +1115,7 @@ class BladeCompiler implements BladeCompilerContract
     private function compileCustomDirectives(string $template): string
     {
         foreach ($this->customDirectives as $directive => $callback) {
+            // First, handle directives with parentheses: @directive(expression)
             $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
             $offset = 0;
 
@@ -1134,6 +1135,10 @@ class BladeCompiler implements BladeCompilerContract
 
                 $offset = $matchStart + strlen($replacement);
             }
+
+            // Then, handle directives without parentheses: @directive
+            $patternWithoutParens = '/\@' . preg_quote($directive, '/') . '\b(?!\s*\()/';
+            $template = preg_replace_callback($patternWithoutParens, fn($matches) => $callback(''), $template);
         }
 
         return $template;
