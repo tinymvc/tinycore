@@ -36,7 +36,7 @@ abstract class Facade
     {
         $instance = Application::$app->make(static::getFacadeAccessor());
 
-        if (method_exists($instance, $method)) {
+        if (method_exists($instance, $method) || $instance->hasMacro($method)) {
             return $instance->$method(...$args);
         }
 
