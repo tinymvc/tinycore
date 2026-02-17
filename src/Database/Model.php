@@ -11,6 +11,7 @@ use Spark\Database\Traits\HasRelation;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
+use function array_slice;
 use function func_get_args;
 use function in_array;
 use function is_array;
@@ -327,23 +328,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $data = $data->toArray();
         }
 
-        $hasPrimary = $this->hasPrimaryValue(); // Check if the model has a primary key value.
-
         // Fill the model with the given data.
         foreach ($data as $key => $value) {
-            if (isset($this->attributes[$key]) && $this->attributes[$key] === $value) {
-                continue;
-            }
-
-            // Track original attributes for change detection.
-            if (
-                $hasPrimary &&
-                !array_key_exists($key, $this->tracking['__original_attributes'] ?? [])
-            ) {
-                $this->tracking['__original_attributes'][$key] = ($this->attributes[$key] ?? null);
-            }
-
-            $this->attributes[$key] = $value; // Set the attribute value.
+            $this->updateAttributeValue($key, $value);
         }
 
         $this->castStoredData(); // Apply casting to the data.
@@ -486,16 +473,17 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     private function castStoredData(): void
     {
-        if (!$this->hasAnyCast()) {
-            return; // No casts defined, nothing to do.
-        }
-
         // Go Through all the properties of this model.
-        foreach ($this->attributes as $key => $value) {
-            if ($this->hasCast($key)) {
-                $this->attributes[$key] = $this->castAttribute($key, $value);
+        if ($this->hasAnyCast()) {
+            foreach ($this->attributes as $key => $value) {
+                if ($this->hasCast($key)) {
+                    $this->attributes[$key] = $this->castAttribute($key, $value);
+                }
             }
         }
+
+        // Store the initial hash of the model's data for change tracking.
+        $this->hasPrimaryValue() && ($this->tracking['__hash'] ??= $this->makeHash());
     }
 
     /**
@@ -780,7 +768,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         if ($this->relationLoaded($offset)) {
             $this->setRelation($offset, $value);
         } else {
-            $this->attributes[$offset] = $value;
+            $this->updateAttributeValue($offset, $value);
         }
     }
 
@@ -795,7 +783,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         if ($this->relationLoaded($offset)) {
             $this->forgetRelation($offset);
         } else {
-            unset($this->attributes[$offset]);
+            $this->updateAttributeValue($offset, null);
+            unset($this->attributes[$offset]); // Also remove the attribute from the model's attributes array.
         }
     }
 
@@ -811,7 +800,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         if ($this->relationLoaded($name)) {
             $this->setRelation($name, $value);
         } else {
-            data_set($this->attributes, $name, $value);
+            $this->updateNestedAttributeValue($name, $value);
         }
     }
 
@@ -827,6 +816,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             if ($this->relationLoaded($name)) {
                 $this->forgetRelation($name);
             } else {
+                $this->trackNestedAttributeRemoval($name);
                 data_forget($this->attributes, $name);
             }
         }
@@ -841,12 +831,23 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function get(string $name, $default = null): mixed
     {
-        if ($this->hasAccessor($name)) {
-            return $this->getAttributeValue($name, $this->attributes[$name] ?? $default);
+        if (!str_contains($name, '.')) {
+            return $this->offsetGet($name) ?: $default;
         }
 
-        $attributes = [...$this->attributes, ...$this->getRelations()];
-        return data_get(array_filter($attributes), $name, $default);
+        $segments = explode('.', $name);
+        $path = implode('.', array_slice($segments, 1));
+        $rootKey = $segments[0];
+
+        if ($this->hasAccessor($rootKey)) {
+            $rootValue = $this->getAttributeValue($rootKey, $this->attributes[$rootKey] ?? null);
+            return data_get(array_filter($rootValue), $path, $default);
+        } elseif ($this->relationLoaded($rootKey)) {
+            $rootValue = $this->getRelationshipAttribute($rootKey);
+            return data_get(array_filter($rootValue), $path, $default);
+        }
+
+        return data_get(array_filter($this->attributes), $name, $default);
     }
 
     /**
@@ -879,6 +880,32 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /**
+     * Get the original value of a nested attribute before any changes.
+     *
+     * @param string $path The dot-notation path to the attribute.
+     * @param mixed $default The default value if no original exists.
+     * @return mixed The original value or the default.
+     */
+    public function getNestedOriginal(string $path, mixed $default = null): mixed
+    {
+        // Check if we have a direct record of this path's original value
+        if (isset($this->tracking['__changed_paths'][$path])) {
+            return $this->tracking['__changed_paths'][$path]['original'];
+        }
+
+        // Fall back to getting from the original root attribute
+        $segments = explode('.', $path);
+        $rootKey = array_shift($segments);
+
+        if (isset($this->tracking['__original_attributes'][$rootKey])) {
+            $originalRoot = $this->tracking['__original_attributes'][$rootKey];
+            return data_get($originalRoot, implode('.', $segments), $default);
+        }
+
+        return data_get($this->attributes, $path, $default);
+    }
+
+    /**
      * Get the changes made to the model compared to its original state.
      *
      * @return array An associative array of changed attributes and their new values.
@@ -890,6 +917,16 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         return $this->tracking['__original_attributes'];
+    }
+
+    /**
+     * Get all nested paths that have been changed.
+     *
+     * @return array An associative array of changed paths with their original and new values.
+     */
+    public function getNestedChanges(): array
+    {
+        return $this->tracking['__changed_paths'] ?? [];
     }
 
     /**
@@ -909,7 +946,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function clearOriginal(): void
     {
-        unset($this->tracking['__original_attributes']);
+        unset($this->tracking['__original_attributes'], $this->tracking['__changed_paths']);
     }
 
     /**
@@ -930,10 +967,48 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function isDirty(null|string $field = null): bool
     {
+        if (($originalHash = ($this->tracking['__hash'] ?? null)) === null) {
+            return false; // No original hash means we can't determine if it's dirty.
+        }
+
+        $currentHash = $this->makeHash();
+
         $dirty = $field === null ? $this->hasChanges()
             : in_array($field, array_keys($this->getChanges()));
 
-        return $dirty && !$this->wasUpdated(); // Consider the model dirty only if it has changes and hasn't been marked as updated yet.
+        // If the model is dirty, it must have changes and the current 
+        // hash should differ from the original hash.
+        return $dirty && !$this->wasUpdated() && $currentHash !== $originalHash;
+    }
+
+    /**
+     * Check if a specific nested path has been changed.
+     *
+     * @param string|null $path The dot-notation path to check, or null to check if any nested path changed.
+     * @return bool True if the path (or any path) has been changed.
+     */
+    public function isNestedDirty(null|string $path = null): bool
+    {
+        $changedPaths = $this->tracking['__changed_paths'] ?? [];
+
+        if ($path === null) {
+            return !empty($changedPaths);
+        }
+
+        // Check exact path match
+        if (isset($changedPaths[$path])) {
+            return true;
+        }
+
+        // Check if any child paths of the given path have changed
+        $prefix = "$path.";
+        foreach (array_keys($changedPaths) as $changedPath) {
+            if (str_starts_with($changedPath, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -959,6 +1034,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function trackUpdated(): void
     {
         $this->tracking['__was_updated'] = true;
+        $this->tracking['__hash'] = $this->makeHash();
         $this->triggerEvent('updated'); // Trigger the 'updated' event.
     }
 
@@ -970,6 +1046,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function trackCreated(): void
     {
         $this->tracking['__was_created'] = true;
+        $this->tracking['__hash'] = $this->makeHash();
         $this->triggerEvent('created'); // Trigger the 'created' event.
     }
 
@@ -1158,8 +1235,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
             if ($fresh) {
                 $this->attributes = $fresh; // Update attributes with fresh data.
-                $this->castStoredData();
                 $this->clearTracks();
+                $this->castStoredData();
                 $this->reloadRelations();
             }
         }
@@ -1197,5 +1274,124 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         return self::query()->$name(...$arguments);
+    }
+
+    /**
+     * Generate a hash of the model's fillable data for change tracking.
+     *
+     * @return string The generated hash.
+     */
+    protected function makeHash(): string
+    {
+        $data = $this->castDataForStorage($this->getFillableData());
+        return md5(json_encode($data));
+    }
+
+    /**
+     * Update the value of a specific attribute and track changes if necessary.
+     *
+     * @param string $key The name of the attribute to update.
+     * @param mixed $value The new value for the attribute.
+     * @return void
+     */
+    protected function updateAttributeValue(string $key, mixed $value): void
+    {
+        // Only track changes if the model has a primary key and an original hash exists (i.e., it exists in the database).
+        if (
+            $this->hasPrimaryValue() && isset($this->tracking['__hash']) &&
+            !array_key_exists($key, $this->tracking['__original_attributes'] ?? []) &&
+            ($this->attributes[$key] ?? null) !== $value
+        ) {
+            $this->tracking['__original_attributes'][$key] = ($this->attributes[$key] ?? null);
+        }
+
+        $this->attributes[$key] = $value; // Set the new value for the attribute.
+    }
+
+    /**
+     * Update a nested attribute value using dot notation and track changes.
+     *
+     * This method handles both simple attributes (e.g., 'name') and nested paths
+     * (e.g., 'meta.country'). For nested paths, it tracks the root attribute's original
+     * value and records which specific nested paths were modified.
+     *
+     * @param string $path The dot-notation path to the attribute (e.g., 'meta.country').
+     * @param mixed $value The new value for the attribute.
+     * @return void
+     */
+    protected function updateNestedAttributeValue(string $path, mixed $value): void
+    {
+        // If no dot notation, delegate to simple attribute update
+        if (!str_contains($path, '.')) {
+            $this->updateAttributeValue($path, $value);
+            return;
+        }
+
+        // Only track if model exists in database
+        if ($this->hasPrimaryValue() && isset($this->tracking['__hash'])) {
+            // Track the specific nested path that was changed
+            $currentValue = data_get($this->attributes, $path);
+            if ($currentValue !== $value) {
+                return; // No change, so no need to track
+            }
+
+            // Extract the root key (e.g., 'meta' from 'meta.country')
+            $segments = explode('.', $path);
+            $rootKey = $segments[0];
+
+            // Track the original value of the root attribute if not already tracked
+            if (!array_key_exists($rootKey, $this->tracking['__original_attributes'] ?? [])) {
+                $this->tracking['__original_attributes'][$rootKey] = $this->attributes[$rootKey] ?? null;
+            }
+
+            // Track the specific nested path change with original and new values
+            $this->tracking['__changed_paths'][$path] = ['original' => $currentValue, 'new' => $value];
+        }
+
+        // Set the nested value
+        data_set($this->attributes, $path, $value);
+    }
+
+    /**
+     * Track the removal of a nested attribute before it's forgotten.
+     *
+     * @param string $path The dot-notation path to the attribute being removed.
+     * @return void
+     */
+    protected function trackNestedAttributeRemoval(string $path): void
+    {
+        // Only track if model exists in database
+        if (!$this->hasPrimaryValue() || !isset($this->tracking['__hash'])) {
+            return;
+        }
+
+        if (!str_contains($path, '.')) {
+            // Simple attribute removal - track the original value
+            if (
+                !array_key_exists($path, $this->tracking['__original_attributes'] ?? []) &&
+                array_key_exists($path, $this->attributes)
+            ) {
+                $this->tracking['__original_attributes'][$path] = $this->attributes[$path];
+            }
+            return;
+        }
+
+        // For nested paths, track the root attribute's original value
+        $segments = explode('.', $path);
+        $rootKey = $segments[0];
+
+        if (!array_key_exists($rootKey, $this->tracking['__original_attributes'] ?? [])) {
+            $this->tracking['__original_attributes'][$rootKey] = $this->attributes[$rootKey] ?? null;
+        }
+
+        // Track the specific path removal
+        $currentValue = data_get($this->attributes, $path);
+        if ($currentValue !== null) {
+            $this->tracking['__changed_paths'][$path] = [
+                'original' => $currentValue,
+                'new' => null,
+                'removed' => true,
+            ];
+        }
     }
 }
