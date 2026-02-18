@@ -441,7 +441,7 @@ class Response implements ResponseContract
         }
 
         if ($data instanceof Closure) {
-            return $data(); // Call the closure and return its result
+            return $this->toPureArray($data()); // Call the closure and return its result
         }
 
         // If it's an object that knows how to cast itself to array, do it and recurse
