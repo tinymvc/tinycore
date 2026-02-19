@@ -26,7 +26,7 @@ use Spark\Http\Auth as BaseAuth;
  * @method static void login(Model $user, bool $remember = false)
  * @method static void logout()
  * @method static void check()
- * @method static void clearCache()
+ * @method static void clearCache(null|int $id = null)
  * @method static void refresh()
  * @method static string getJwtToken(Model $user, array $payload = [])
  * @method static string createJwtToken(array $payload = [])

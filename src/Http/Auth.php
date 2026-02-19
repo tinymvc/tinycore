@@ -387,14 +387,22 @@ class Auth implements AuthContract, ArrayAccess
      *
      * This method erases the cached user instance if caching is enabled,
      * using the configured cache name and session key to identify the user.
+     * 
+     * @param int|null $id Optional user ID to clear cache for. If not provided, it will clear cache for the currently logged in user.
      *
      * @return void
      */
-    public function clearCache(): void
+    public function clearCache(null|int $id = null): void
     {
+        $id ??= $this->getId();
+
         if ($this->config['cache_enabled']) {
-            cache($this->config['cache_name'])
-                ->erase($this->getId());
+            $cache = cache($this->config['cache_name']);
+            if ($id > 0) {
+                $cache->erase($id);
+            } else {
+                $cache->clear();
+            }
         }
     }
 
