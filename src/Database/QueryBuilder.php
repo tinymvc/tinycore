@@ -2323,21 +2323,23 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Sets the query to order results by the latest created_at timestamp.
      *
+     * @param string $field The field to order by.
      * @return self
      */
-    public function latest(): self
+    public function latest(string $field = 'created_at'): self
     {
-        return $this->orderDesc($this->withAlias('created_at'));
+        return $this->orderDesc($this->withAlias($field));
     }
 
     /**
      * Sets the query to order results by the oldest created_at timestamp.
-     *
+     * 
+     * @param string $field The field to order by.
      * @return self
      */
-    public function oldest(): self
+    public function oldest(string $field = 'created_at'): self
     {
-        return $this->orderAsc($this->withAlias('created_at'));
+        return $this->orderAsc($this->withAlias($field));
     }
 
     /**
