@@ -832,8 +832,13 @@ trait HasRelation
         );
         $appendField = !empty($appendField) ? ", {$appendField}" : '';
 
+        $columns = join(
+            ', ',
+            array_map(fn($col) => "r.{$col}", $config['columns'] ?? ['*'])
+        );
+
         $query = $relatedModel->query()
-            ->select("r.*, p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}{$appendField}")
+            ->select($columns, "p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}{$appendField}")
             ->from($relatedModel->getTable(), 'r')
             ->join($config['table'] . ' as p', "p.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
             ->whereIn("p.{$config['foreignPivotKey']}", $parentValues);
@@ -885,8 +890,13 @@ trait HasRelation
         );
         $appendField = !empty($appendField) ? ", {$appendField}" : '';
 
+        $columns = join(
+            ', ',
+            array_map(fn($col) => "r.{$col}", $config['columns'] ?? ['*'])
+        );
+
         $query = $relatedModel->query()
-            ->select('r.*', "t.{$config['firstKey']}{$appendField}")
+            ->select($columns, "t.{$config['firstKey']}{$appendField}")
             ->from($relatedModel->getTable(), 'r')
             ->join($throughModel->getTable() . " as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
             ->whereIn("t.{$config['firstKey']}", $localValues);
