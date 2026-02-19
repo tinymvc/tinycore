@@ -155,12 +155,12 @@ trait CreateDeleteForHasRelation
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before deleting related models.");
         }
 
-        $relatedClass = $this->related;
-        $query = $relatedClass::where($this->foreignKey, $foreignKeyValue);
+        $relatedClass = new ($this->related);
+        $query = $relatedClass->where($this->foreignKey, $foreignKeyValue);
 
         if ($conditions !== null) {
             if (is_int($conditions)) {
-                $query->where($relatedClass::$primaryKey, $conditions);
+                $query->where($relatedClass->getPrimaryKey(), $conditions);
             } else {
                 $query->where($conditions);
             }

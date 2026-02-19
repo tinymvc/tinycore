@@ -69,16 +69,16 @@ class HasManyThrough extends Relation
 
         // Join the through table
         $query->join(
-                $throughInstance::$table,
-                $relatedInstance::$table . '.' . $this->secondLocalKey,
+            $throughInstance->getTable(),
+            $relatedInstance->getTable() . '.' . $this->secondLocalKey,
             '=',
-                $throughInstance::$table . '.' . $this->secondKey
+            $throughInstance->getTable() . '.' . $this->secondKey
         );
 
         // Add relationship constraint
         if ($this->model) {
             $localValue = $this->model->{$this->localKey};
-            $query->where($throughInstance::$table . '.' . $this->firstKey, '=', $localValue);
+            $query->where($throughInstance->getTable() . '.' . $this->firstKey, '=', $localValue);
         }
 
         // Apply custom callback if provided

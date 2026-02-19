@@ -131,14 +131,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     /**
      * @var string The table name associated with this model.
      */
-    public static string $table;
+    protected string $table;
 
     /**
-     * The primary key of the model.
-     *
-     * @var string Default value: 'id'
+     * @var string The primary key of the model.
      */
-    public static string $primaryKey = 'id';
+    protected string $primaryKey;
 
     /**
      * The model attributes.
@@ -200,11 +198,30 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     {
         /** @var QueryBuilder The query builder instance. */
         $query = app(QueryBuilder::class);
+        $model = new static();
 
-        return $query->table(
-            static::$table ??= Str::snake(Str::plural(class_basename(static::class)))
-        )
+        return $query->table($model->getTable())
             ->fetchModel(static::class);
+    }
+
+    /**
+     * Retrieves the table name associated with the model.
+     *
+     * @return string The table name for the model.
+     */
+    public function getTable(): string
+    {
+        return $this->table ??= Str::snake(Str::plural(class_basename(static::class)));
+    }
+
+    /**
+     * Retrieves the primary key field name for the model.
+     *
+     * @return string The primary key field name.
+     */
+    public function getPrimaryKey(): string
+    {
+        return $this->primaryKey ??= 'id';
     }
 
     /**
@@ -357,7 +374,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         // Update this records if it has an id, else insert this records into database.
         if ($this->hasPrimaryValue()) {
-            $condition = [static::$primaryKey => $this->primaryValue()];
+            $condition = [$this->getPrimaryKey() => $this->primaryValue()];
             $updatedStatus = (bool) $this->query()->update($data, $condition);
 
             // If update fails and no record exists, insert a new record.
@@ -376,7 +393,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         // Save model id if it is newly created.
         if (!$this->hasPrimaryValue() && is_int($createdId) && $createdId > 0) {
-            $this->attributes[static::$primaryKey] = $createdId;
+            $this->attributes[$this->getPrimaryKey()] = $createdId;
         }
 
         $updatedStatus && $this->trackUpdated();
@@ -392,7 +409,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function remove(): bool
     {
-        $deleted = $this->query()->delete([static::$primaryKey => $this->primaryValue()]);
+        $deleted = $this->query()->delete([$this->getPrimaryKey() => $this->primaryValue()]);
         if ($deleted) {
             $this->trackDeleted();
         }
@@ -494,7 +511,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function primaryValue($default = null): mixed
     {
-        return $this->attributes[static::$primaryKey] ?? $default;
+        return $this->attributes[$this->getPrimaryKey()] ?? $default;
     }
 
     /**
@@ -519,7 +536,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         return $this->tracking['__exists'] ??= $this->query()
-            ->where([static::$primaryKey => $this->primaryValue()])
+            ->where([$this->getPrimaryKey() => $this->primaryValue()])
             ->exists();
     }
 
@@ -1232,7 +1249,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     {
         if ($this->hasPrimaryValue()) {
             $fresh = static::query()
-                ->where([static::$primaryKey => $this->primaryValue()])
+                ->where([$this->getPrimaryKey() => $this->primaryValue()])
                 ->fetchAssoc()
                 ->first();
 

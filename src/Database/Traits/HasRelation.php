@@ -135,7 +135,7 @@ trait HasRelation
         null|Closure $callback = null
     ): HasOne {
         $foreignKey ??= $this->getForeignKey();
-        $localKey ??= static::$primaryKey ?? 'id';
+        $localKey ??= $this->getPrimaryKey();
 
         return new HasOne(
             related: $related,
@@ -169,7 +169,7 @@ trait HasRelation
         null|Closure $callback = null
     ): HasMany {
         $foreignKey ??= $this->getForeignKey();
-        $localKey ??= static::$primaryKey ?? 'id';
+        $localKey ??= $this->getPrimaryKey();
 
         return new HasMany(
             related: $related,
@@ -203,9 +203,9 @@ trait HasRelation
         null|Closure $callback = null
     ): BelongsTo {
         $relatedModel = new $related;
-        $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($related));
-        $foreignKey ??= $this->generateForeignKey($relatedTable);
-        $ownerKey ??= $relatedModel::$primaryKey ?? 'id';
+
+        $foreignKey ??= $this->generateForeignKey($relatedModel->getTable());
+        $ownerKey ??= $relatedModel->getPrimaryKey();
 
         return new BelongsTo(
             related: $related,
@@ -247,12 +247,12 @@ trait HasRelation
         null|Closure $callback = null,
     ): BelongsToMany {
         $relatedModel = new $related;
-        $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($related));
+
         $table ??= $this->generatePivotTableName($relatedModel);
         $foreignPivotKey ??= $this->getForeignKey();
-        $relatedPivotKey ??= $this->generateForeignKey($relatedTable);
-        $parentKey ??= static::$primaryKey ?? 'id';
-        $relatedKey ??= $relatedModel::$primaryKey ?? 'id';
+        $relatedPivotKey ??= $this->generateForeignKey($relatedModel->getTable());
+        $parentKey ??= $this->getPrimaryKey();
+        $relatedKey ??= $relatedModel->getPrimaryKey();
 
         return new BelongsToMany(
             related: $related,
@@ -298,12 +298,11 @@ trait HasRelation
         null|Closure $callback = null
     ): HasManyThrough {
         $throughModel = new $through;
-        $throughTable = $throughModel::$table ?? Str::snake(class_basename($through));
 
         $firstKey ??= $this->getForeignKey();
-        $secondKey ??= $this->generateForeignKey($throughTable);
-        $localKey ??= static::$primaryKey ?? 'id';
-        $secondLocalKey ??= $throughModel::$primaryKey ?? 'id';
+        $secondKey ??= $this->generateForeignKey($throughModel->getTable());
+        $localKey ??= $this->getPrimaryKey();
+        $secondLocalKey ??= $throughModel->getPrimaryKey();
 
         return new HasManyThrough(
             related: $related,
@@ -349,12 +348,11 @@ trait HasRelation
         null|Closure $callback = null
     ): HasOneThrough {
         $throughModel = new $through;
-        $throughTable = $throughModel::$table ?? Str::snake(class_basename($through));
 
         $firstKey ??= $this->getForeignKey();
-        $secondKey ??= $this->generateForeignKey($throughTable);
-        $localKey ??= static::$primaryKey ?? 'id';
-        $secondLocalKey ??= $throughModel::$primaryKey ?? 'id';
+        $secondKey ??= $this->generateForeignKey($throughModel->getTable());
+        $localKey ??= $this->getPrimaryKey();
+        $secondLocalKey ??= $throughModel->getPrimaryKey();
 
         return new HasOneThrough(
             related: $related,
@@ -664,7 +662,7 @@ trait HasRelation
 
             // Load the polymorphic models
             $morphModel = new $morphClass;
-            $primaryKey = $morphModel::$primaryKey ?? 'id';
+            $primaryKey = $morphModel->getPrimaryKey();
 
             $query = $morphModel->query()->whereIn($primaryKey, $ids);
 
@@ -822,7 +820,6 @@ trait HasRelation
     private function loadBelongsToMany(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
-        $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($config['related']));
         $parentValues = collect($models)->pluck($config['parentKey'])->unique()->filter()->all();
 
         if (empty($parentValues)) {
@@ -837,7 +834,7 @@ trait HasRelation
 
         $query = $relatedModel->query()
             ->select("r.*, p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}{$appendField}")
-            ->from($relatedTable, 'r')
+            ->from($relatedModel->getTable(), 'r')
             ->join($config['table'] . ' as p', "p.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
             ->whereIn("p.{$config['foreignPivotKey']}", $parentValues);
 
@@ -870,9 +867,11 @@ trait HasRelation
     {
         $relatedModel = new $config['related'];
         $throughModel = new $config['through'];
-        $relatedTable = $relatedModel::$table ?? Str::snake(class_basename($config['related']));
-        $throughTable = $throughModel::$table ?? Str::snake(class_basename($config['through']));
-        $localValues = collect($models)->pluck($config['localKey'])->unique()->filter()->all();
+        $localValues = collect($models)
+            ->pluck($config['localKey'])
+            ->unique()
+            ->filter()
+            ->all();
 
         $isOne = $config['type'] === 'hasOneThrough';
 
@@ -888,8 +887,8 @@ trait HasRelation
 
         $query = $relatedModel->query()
             ->select('r.*', "t.{$config['firstKey']}{$appendField}")
-            ->from($relatedTable, 'r')
-            ->join("$throughTable as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
+            ->from($relatedModel->getTable(), 'r')
+            ->join($throughModel->getTable() . " as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
             ->whereIn("t.{$config['firstKey']}", $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -1101,16 +1100,6 @@ trait HasRelation
     }
 
     /**
-     * Get the table name for this model.
-     * 
-     * @return string
-     */
-    private function getTable(): string
-    {
-        return static::$table ?? Str::snake(Str::plural(class_basename(static::class)));
-    }
-
-    /**
      * Generate a foreign key name from a table name.
      * 
      * This method generates a foreign key name based on the table name.
@@ -1130,12 +1119,12 @@ trait HasRelation
      * This method generates a pivot table name based on the related model's table name
      * and the current model's table name.
      * 
-     * @param string $relatedModel
+     * @param \Spark\Database\Model $relatedModel
      * @return string
      */
     private function generatePivotTableName($relatedModel): string
     {
-        $relatedTable = $relatedModel::$table ?? Str::snake(Str::plural(class_basename($relatedModel)));
+        $relatedTable = $relatedModel->getTable();
         $currentTable = $this->getTable();
 
         $tables = [Str::lower($currentTable), Str::lower($relatedTable)];

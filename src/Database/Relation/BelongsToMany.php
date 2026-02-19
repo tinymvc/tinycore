@@ -62,7 +62,7 @@ class BelongsToMany extends Relation
         // Join the pivot table
         $query->join(
             $this->table,
-                $relatedInstance::$table . '.' . $this->relatedKey,
+            $relatedInstance->getTable() . '.' . $this->relatedKey,
             '=',
             $this->table . '.' . $this->relatedPivotKey
         );

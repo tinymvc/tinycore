@@ -114,7 +114,7 @@ trait ManageRelation
         $model = $this->getRelatedModel();
 
         return $this
-            ->where([$model::$primaryKey => $value])
+            ->where([$model->getPrimaryKey() => $value])
             ->first();
     }
 
@@ -130,7 +130,7 @@ trait ManageRelation
         $model = $this->getRelatedModel();
 
         return $this
-            ->where([$model::$primaryKey => $value])
+            ->where([$model->getPrimaryKey() => $value])
             ->firstOrFail();
     }
 
@@ -143,7 +143,7 @@ trait ManageRelation
     public function destroy(string|int $value): bool
     {
         $model = $this->getRelatedModel();
-        $deleted = $this->delete([$model::$primaryKey => $value]);
+        $deleted = $this->delete([$model->getPrimaryKey() => $value]);
 
         if ($deleted) {
             $model->trackDeleted();
@@ -644,7 +644,7 @@ trait ManageRelation
         }
 
         if ($model->hasPrimaryValue()) {
-            $this->where([$model::$primaryKey => $model->primaryValue()]);
+            $this->where([$model->getPrimaryKey() => $model->primaryValue()]);
         }
     }
 
@@ -694,7 +694,7 @@ trait ManageRelation
     private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null, string $function = 'count', string $column = '*'): array
     {
         $relatedModel = new $relationConfig['related'];
-        $relatedTable = $relatedModel::$table ?? $this->getTableFromClass($relationConfig['related']);
+        $relatedTable = $relatedModel->getTable();
 
         // Build the aggregate expression
         $aggregateExpression = $this->buildAggregateExpression($function, $column, $relatedTable);
@@ -737,7 +737,7 @@ trait ManageRelation
             case 'hasManyThrough':
             case 'hasOneThrough':
                 $throughModel = new $relationConfig['through'];
-                $throughTable = $throughModel::$table ?? $this->getTableFromClass($relationConfig['through']);
+                $throughTable = $throughModel->getTable();
 
                 $query = $relatedModel->query()
                     ->select($aggregateExpression)
@@ -805,7 +805,7 @@ trait ManageRelation
         $relationConfig = $model->getRelationshipConfig($relation);
 
         $relatedModel = new $relationConfig['related'];
-        $relatedTable = $relatedModel::$table ?? $this->getTableFromClass($relationConfig['related']);
+        $relatedTable = $relatedModel->getTable();
 
         // Add the related table prefix to the column
         return "$relatedTable.$column";
@@ -852,18 +852,6 @@ trait ManageRelation
             'bindings' => $query->getBindings(),
             'parameters' => $query->getParameters()
         ];
-    }
-
-    /**
-     * Get table name from class name.
-     * 
-     * @param string $class
-     * @return string
-     */
-    private function getTableFromClass(string $class): string
-    {
-        // This should match the logic in your Model class
-        return $class::$table ?? Str::snake(Str::plural(class_basename($class)));
     }
 
     /**
