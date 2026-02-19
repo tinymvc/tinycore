@@ -216,10 +216,10 @@ if (!function_exists('redirect')) {
      * Redirect to a specified URL.
      *
      * @param string $url The URL to redirect to.
-     * @param int $httpCode The HTTP status code for the redirection. Default is 0.
+     * @param int $httpCode The HTTP status code for the redirection. Default is 302.
      * @return Response The response instance after setting the redirect.
      */
-    function redirect(string $url, int $httpCode = 0): Response
+    function redirect(string $url, int $httpCode = 302): Response
     {
         // If the URL is not a valid URL, try to generate it using route_url or home_url
         if (filter_var($url, FILTER_VALIDATE_URL) === false) {
@@ -249,11 +249,11 @@ if (!function_exists('to_route')) {
      *
      * @param string $name The name of the route to redirect to.
      * @param null|string|array|Arrayable $context Optional context to include in the route URL generation.
-     * @param int $httpCode The HTTP status code for the redirection. Default is 0.
+     * @param int $httpCode The HTTP status code for the redirection. Default is 302.
      *
      * @return Response The response instance after setting the redirect to the generated route URL.
      */
-    function to_route(string $name, null|string|array|Arrayable $context = null, int $httpCode = 0): Response
+    function to_route(string $name, null|string|array|Arrayable $context = null, int $httpCode = 302): Response
     {
         return redirect(route_url($name, $context), $httpCode);
     }
