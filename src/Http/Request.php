@@ -1298,8 +1298,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
                 json(['message' => $message, 'errors' => $errors], 422)->send();
             } else {
                 // Store the errors in the session flash data
-                back()
-                    ->withErrors($errors) // Attach the error messages
+                if ($this->header('X-Inertia') && function_exists('inertia')) {
+                    $resp = inertia()->back();
+                } else {
+                    $resp = back();
+                }
+
+                $resp->withErrors($errors) // Attach the error messages
                     ->withInput($this->all(array_keys($rules))) // Preserve input values
                     ->send(); // Redirect the user back to the previous page
             }
