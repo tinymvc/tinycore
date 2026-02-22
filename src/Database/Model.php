@@ -101,7 +101,7 @@ use function sprintf;
  * @method static false|Model find($value)
  * @method static Model findOrFail($value)
  * @method static bool destroy($value)
- * @method static array all()
+ * @method static array all($fields = null)
  * @method static array raw(string $sql, array $bindings = [])
  * @method static array pluck(string $column)
  * @method static mixed value(string $column)

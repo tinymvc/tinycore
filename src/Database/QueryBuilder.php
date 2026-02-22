@@ -2356,10 +2356,13 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Retrieves all results from the executed query.
      *
+     * @param null|string|array $fields Optional fields to select.
      * @return array Array of query results.
      */
-    public function all(): array
+    public function all($fields = null): array
     {
+        $fields && $this->select($fields);
+
         // Execute current sql select command.
         $this->executeSelectQuery();
 
@@ -2379,11 +2382,12 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Retrieves all results from the executed query and returns them in a collection.
      *
+     * @param null|string|array $fields Optional fields to select.
      * @return \Spark\Support\Collection Array of query results.
      */
-    public function get(): Collection
+    public function get($fields = null): Collection
     {
-        return collect($this->all());
+        return collect($this->all($fields));
     }
 
     /**
