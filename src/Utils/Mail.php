@@ -123,6 +123,23 @@ class Mail extends PHPMailer implements MailUtilContract
     }
 
     /**
+     * Configure the mailer instance using a callback function.
+     *
+     * This method takes a callback function as its argument, which receives the
+     * mailer instance as its parameter. The callback function can be used to
+     * configure the mailer instance using any of the available methods.
+     *
+     * @param callable $callback A callback function that receives the mailer instance as its parameter.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function configure(callable $callback): self
+    {
+        $callback($this);
+        return $this;
+    }
+
+    /**
      * Enable or disable SMTP keep-alive.
      *
      * This method sets the SMTPKeepAlive property to the specified value.
@@ -271,6 +288,23 @@ class Mail extends PHPMailer implements MailUtilContract
      * @return self Returns the instance of the class for method chaining.
      */
     public function mailer($address, $name = null): self
+    {
+        $this->setFrom($address, $name);
+        return $this;
+    }
+
+    /**
+     * Set the sender of the email.
+     *
+     * This method takes an email address and an optional name, and sets the sender of the email.
+     * The method returns the instance of the class for method chaining.
+     *
+     * @param string $address The email address of the sender.
+     * @param string|null $name The name of the sender.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function from($address, $name = null): self
     {
         $this->setFrom($address, $name);
         return $this;
