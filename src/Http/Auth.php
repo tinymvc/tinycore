@@ -96,6 +96,7 @@ class Auth implements AuthContract, ArrayAccess
     {
         // Merge the provided configuration with the existing configuration
         $this->config = [...$this->config, ...$config];
+        $this->check(); // Re-check authentication after configuration changes
     }
 
     /**
@@ -277,7 +278,7 @@ class Auth implements AuthContract, ArrayAccess
 
         if ($remember && $this->config['cookie_enabled']) {
             // set cookie expiration time
-            $tokenExpire = strtotime($this->config['cookie_expire'] ?? '1 year');
+            $tokenExpire = strtotime($this->config['cookie_expire'] ?? '6 months');
 
             // add user hashed token in cookie with expiration
             if ($this->config['use_remember_token']) {
@@ -285,9 +286,7 @@ class Auth implements AuthContract, ArrayAccess
                 $rememberToken = hasher()->random(16);
                 $token = encrypt($rememberToken);
 
-                // update the user's remember token in the database
-                $this->user->set('remember_token', $rememberToken);
-                $this->user->save(); // Save the updated user model
+                $this->user->update(['remember_token' => $rememberToken]);
             } else {
                 // create an encrypted token with user id and expiration
                 $token = encrypt(['id' => $user->id, 'expire' => $tokenExpire]);
@@ -316,7 +315,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function getJwtToken(Model $user, array $payload = []): string
     {
-        $expire = $this->config['jwt_expire'] ?? '1 year';
+        $expire = $this->config['jwt_expire'] ?? '6 months';
 
         $payload = [
             'id' => $user->id,
@@ -368,8 +367,7 @@ class Auth implements AuthContract, ArrayAccess
         if ($this->config['cookie_enabled']) {
             // Clear the remember token from the database
             if ($this->hasId() && isset($this->user, $this->user['remember_token']) && $this->config['use_remember_token']) {
-                $this->user->set('remember_token', null);
-                $this->user->save(); // Save the updated user model
+                $this->user->update(['remember_token' => null]);
             }
 
             // Delete the authentication cookie by setting its expiration in the past
