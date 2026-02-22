@@ -137,10 +137,10 @@ trait ManageRelation
     /**
      * Deletes the model from the database by its primary key value.
      *
-     * @param string|int $value The unique identifier of the model to delete.
+     * @param string|int|array $value The unique identifier(s) of the model(s) to delete.
      * @return bool True if deletion was successful, false otherwise.
      */
-    public function destroy(string|int $value): bool
+    public function destroy(string|int|array $value): bool
     {
         $model = $this->getRelatedModel();
         $deleted = $this->delete([$model->getPrimaryKey() => $value]);
