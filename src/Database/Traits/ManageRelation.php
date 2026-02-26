@@ -729,7 +729,7 @@ trait ManageRelation
                         "{$relatedTable}.{$relationConfig['relatedKey']}"
                     )
                     ->whereRaw(
-                        $this->wrapper->wrapTable($relationConfig['table']) . "." . $this->wrapper->wrapColumn($relationConfig['relatedPivotKey']) . " = " .
+                        $this->wrapper->wrapTable($relationConfig['table']) . "." . $this->wrapper->wrapColumn($relationConfig['foreignPivotKey']) . " = " .
                         $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['parentKey'])
                     );
                 break;
