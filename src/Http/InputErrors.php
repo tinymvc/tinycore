@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Helpers;
+namespace Spark\Http;
 
 use Spark\Contracts\Support\Arrayable;
 use function count;
@@ -11,10 +11,20 @@ use function count;
  * This class handles HTTP request errors, providing methods to retrieve error messages,
  * old input values, and check for the existence of errors.
  *
- * @package Spark\Helpers
+ * @package Spark\Http
  */
 class InputErrors implements Arrayable, \ArrayAccess, \IteratorAggregate, \Stringable
 {
+    /**
+     * @var array Stores error messages for fields
+     */
+    private array $messages;
+
+    /**
+     * @var array Stores attributes from the previous request
+     */
+    private array $attributes;
+
     /**
      * Construct the error object.
      *
@@ -24,18 +34,10 @@ class InputErrors implements Arrayable, \ArrayAccess, \IteratorAggregate, \Strin
      *
      * @return void
      */
-    public function __construct(
-        /**
-         * @var array Stores error messages for fields
-         */
-        private array $messages = [],
-
-        /**
-         * @var array Stores attributes from the previous request
-         */
-        private array $attributes = [],
-    ) {
-
+    public function __construct(Session $session)
+    {
+        $this->messages = $session->getFlash('errors', []);
+        $this->attributes = $session->getFlash('input', []);
     }
 
     /**

@@ -1,9 +1,10 @@
 <?php
 
-namespace Spark\Helpers;
+namespace Spark\Ping;
 
 use ArrayAccess;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Ping\Contracts\HttpResponseContract;
 
 /**
  * HttpResponse class provides a structured way to handle HTTP responses.
@@ -14,7 +15,7 @@ use Spark\Contracts\Support\Arrayable;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class HttpResponse implements Arrayable, ArrayAccess, \Stringable
+class HttpResponse implements HttpResponseContract, Arrayable, ArrayAccess, \Stringable
 {
     public array $json; // The JSON-decoded response body
 

@@ -1,8 +1,9 @@
 <?php
 
-namespace Spark\Helpers;
+namespace Spark\Ping;
 
-use Spark\Exceptions\Utils\PingUtilException;
+use Spark\Ping\Contracts\HttpPoolContract;
+use Spark\Ping\Exceptions\PingException;
 use Spark\Support\Traits\Macroable;
 use function count;
 
@@ -12,10 +13,10 @@ use function count;
  * Helper class for managing concurrent HTTP requests.
  * This class allows you to send multiple HTTP requests in parallel using curl_multi.
  * 
- * @package Spark\Utils
+ * @package Spark\Ping
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class HttpPool
+class HttpPool implements HttpPoolContract
 {
     use Macroable;
 
@@ -149,7 +150,7 @@ class HttpPool
      * Execute all pending requests concurrently.
      * 
      * @return array Array of HttpResponse objects
-     * @throws PingUtilException
+     * @throws \Spark\Ping\Exceptions\PingException
      */
     public function executePendingRequests(): array
     {
@@ -161,7 +162,7 @@ class HttpPool
      * 
      * @param array $requests Array of HttpPendingRequest objects
      * @return array Array of HttpResponse objects
-     * @throws PingUtilException
+     * @throws \Spark\Ping\Exceptions\PingException
      */
     public function execute(array $requests): array
     {
@@ -171,7 +172,7 @@ class HttpPool
 
         $multiHandle = curl_multi_init();
         if (!$multiHandle) {
-            throw new PingUtilException('Failed to initialize curl_multi.');
+            throw new PingException('Failed to initialize curl_multi.');
         }
 
         $handles = [];

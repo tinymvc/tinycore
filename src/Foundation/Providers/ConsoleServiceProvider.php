@@ -7,7 +7,6 @@ use Spark\Console\Console;
 use Spark\Database\Migration;
 use Spark\Foundation\Console\PrimaryCommandsHandler;
 use Spark\Foundation\Console\MakeStubCommandsHandler;
-use Spark\Foundation\Services\Tinker;
 
 /**
  * Registers services for CLI commands.
@@ -160,7 +159,7 @@ class ConsoleServiceProvider extends ServiceProvider
             ->description('Create a new view component file');
 
         // Add the tinker command
-        $commands->addCommand('tinker', (new Tinker())->run(...))
+        $commands->addCommand('tinker', \Spark\Tinker::start(...))
             ->description('Start an interactive shell session');
     }
 }

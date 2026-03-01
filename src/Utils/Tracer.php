@@ -116,13 +116,6 @@ class Tracer implements TracerUtilContract
      */
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
-        // Ensure the storage directory is writable to store error logs 
-        // and store compiled error templates.
-        if (!is_writable(storage_dir())) {
-            $this->displayRawError('Attention!', 'The storage directory is not writable. Please check the permissions.');
-            return;
-        }
-
         // Log the error message unless it's from Tinker context
         !$this->isFromTinkerContext($file) && $this->log("$type: $message in $file on line $line"); // Log the error message
 
@@ -178,36 +171,6 @@ class Tracer implements TracerUtilContract
     }
 
     /**
-     * Renders a simple raw error message.
-     * 
-     * @param string $type The type of error.
-     * @param string $message The error message.
-     * 
-     * @return void
-     */
-    public function displayRawError(string $type, string $message): void
-    {
-        if (is_cli()) {
-            Prompt::message($type, 'danger');
-            Prompt::message($message, 'warning');
-            exit(1); // Exit after CLI message
-        }
-
-        // Set HTTP response code to 500 for server error.
-        if (!headers_sent()) {
-            http_response_code(500);
-        }
-
-        echo <<<HTML
-            <div style="font-family: Arial, sans-serif;margin: 20px 10px;border: 2px solid red;padding: 20px;border-radius: 6px;background-color: #ffe6e6;color: red;">
-                <h1 style="font-size: 36px;font-weight: bold;margin: 0px 0px 10px 0px;">{$type}</h1>
-                <p style="font-size: 18px;margin: 0px;">{$message}</p>
-            </div>
-        HTML;
-        exit;
-    }
-
-    /**
      * Checks if the error originated from the Tinker context.
      * 
      * @param string $file The file path where the error occurred.
@@ -216,7 +179,7 @@ class Tracer implements TracerUtilContract
      */
     private function isFromTinkerContext(string $file): bool
     {
-        return is_cli() && str_contains($file, dir_path('src/Foundation/Services/Tinker.php'));
+        return is_cli() && str_contains($file, dir_path('src/Tinker.php'));
     }
 
     /**
@@ -228,6 +191,10 @@ class Tracer implements TracerUtilContract
     public function log(string $message): void
     {
         $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
+
+        if (!is_writable(dirname($this->logFile))) {
+            return; // Skip logging if the directory is not writable
+        }
 
         // Check if log file exists and its size and rotate if it exceeds the max size.
         if (is_file($this->logFile) && filesize($this->logFile) >= $maxFileSize) {

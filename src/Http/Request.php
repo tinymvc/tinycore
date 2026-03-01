@@ -5,7 +5,6 @@ namespace Spark\Http;
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
-use Spark\Helpers\InputErrors;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
@@ -90,16 +89,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @var Collection
      */
     public Collection $server;
-
-    /**
-     * The error object.
-     *
-     * This property contains the error messages
-     * when the validation fails.
-     *
-     * @var InputErrors
-     */
-    private InputErrors $errors;
 
     /**
      * Sanitizer instance for validated input data.
@@ -1355,25 +1344,23 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * @param null|array|string $field The field name to retrieve the error messages for.
      *                                  If null, all error object will be returned.
-     * @return ($field is null ? InputErrors : bool) An object containing the error messages from the current request.
+     * @return ($field is null ? \Spark\Http\InputErrors : bool) An object containing the error messages from the current request.
      */
     public function errors(null|array|string $field = null): bool|InputErrors
     {
-        $this->errors ??= new InputErrors(
-            messages: $this->session()->getFlash('errors', []),
-            attributes: $this->session()->getFlash('input', []),
-        );
+        /** @var \Spark\Http\InputErrors $errors */
+        $errors = app(InputErrors::class);
 
         if ($field !== null) {
             foreach ((array) $field as $name) {
-                if ($this->errors->has($name)) {
+                if ($errors->has($name)) {
                     return true;
                 }
             }
             return false;
         }
 
-        return $this->errors;
+        return $errors;
     }
 
     /**

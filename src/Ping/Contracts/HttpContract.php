@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Utils;
+namespace Spark\Ping\Contracts;
 
 /**
  * Interface defining the contract for the Http utility class.
@@ -8,7 +8,7 @@ namespace Spark\Contracts\Utils;
  * The Ping utility class provides a simple way to make HTTP requests from
  * your application. It uses the GuzzleHttp\Client class under the hood.
  */
-interface HttpUtilContract
+interface HttpContract
 {
     /**
      * Sets a single cURL option.

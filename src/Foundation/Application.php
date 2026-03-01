@@ -13,6 +13,7 @@ use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Foundation\Exceptions\TooManyRequests;
 use Spark\Hash;
 use Spark\Http\Auth;
+use Spark\Http\InputErrors;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -81,6 +82,7 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
         // Bind core services to the container for Http Client
         if (is_web()) {
             $this->singleton(Session::class);
+            $this->singleton(InputErrors::class);
             $this->singleton(Request::class);
             $this->singleton(Response::class);
             $this->singleton(Gate::class);

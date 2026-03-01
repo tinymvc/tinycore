@@ -3,8 +3,8 @@
 namespace Spark\Facades;
 
 use Spark\Facades\Facade;
-use Spark\Helpers\HttpResponse;
-use Spark\Utils\Http as BaseHttp;
+use Spark\Ping\HttpResponse;
+use Spark\Ping\Http as BaseHttp;
 
 /**
  * Class Http

@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Foundation\Services;
+namespace Spark;
 
 use Spark\Console\Commands;
 use Spark\Console\Prompt;
@@ -83,6 +83,15 @@ class Tinker
                 stream_set_blocking($this->stdin, true);
             }
         }
+    }
+
+    /**
+     * Start the Tinker shell
+     */
+    public static function start(): void
+    {
+        $tinker = new self();
+        $tinker->run();
     }
 
     /**

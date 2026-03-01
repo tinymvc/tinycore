@@ -9,7 +9,8 @@ use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
 use Spark\Foundation\Application;
 use Spark\Hash;
-use Spark\Helpers\HttpResponse;
+use Spark\Ping\Http;
+use Spark\Ping\HttpResponse;
 use Spark\Pipeline;
 use Spark\Routing\Router;
 use Spark\Url;
@@ -25,7 +26,6 @@ use Spark\Translator;
 use Spark\Utils\Cache;
 use Spark\Utils\Carbon;
 use Spark\Utils\FileManager;
-use Spark\Utils\Http;
 use Spark\Utils\Image;
 use Spark\Utils\Lock;
 use Spark\Utils\Mail;
@@ -1472,9 +1472,9 @@ if (!function_exists('errors')) {
      *
      * @param null|array|string $field The field name to retrieve the error messages for.
      *                                  If null, all error object will be returned.
-     * @return ($field is null ? \Spark\Helpers\InputErrors : bool) An object containing the error messages from the current request.
+     * @return ($field is null ? \Spark\Http\InputErrors : bool) An object containing the error messages from the current request.
      */
-    function errors(null|array|string $field = null): \Spark\Helpers\InputErrors|bool
+    function errors(null|array|string $field = null): \Spark\Http\InputErrors|bool
     {
         return request()->errors($field);
     }
@@ -1772,7 +1772,7 @@ if (!function_exists('http')) {
      * @param array $params Optional. The query parameters for the request.
      * @param array $headers Optional. The headers for the request.
      * @param array $options Optional. Additional options for the HTTP request.
-     * @return ($url is null ? Http : HttpResponse) The HTTP instance or the response from the request.
+     * @return ($url is null ? \Spark\Ping\Http : \Spark\Ping\HttpResponse) The HTTP instance or the response from the request.
      */
     function http(string $method = 'GET', null|string $url = null, array $params = [], array $headers = [], array $options = []): Http|HttpResponse
     {
