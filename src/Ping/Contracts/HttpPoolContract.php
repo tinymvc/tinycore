@@ -90,7 +90,7 @@ interface HttpPoolContract
      * Execute all pending requests concurrently.
      * 
      * @return array<HttpResponseContract[]> Array of HttpResponse objects
-     * @throws \Spark\Ping\Exceptions\PingException
+     * @throws \Spark\Ping\Exceptions\HttpException
      */
     public function executePendingRequests(): array;
 
@@ -99,7 +99,7 @@ interface HttpPoolContract
      * 
      * @param array<HttpRequestContract[]> $requests Array of HttpPendingRequest objects
      * @return array<HttpResponseContract[]> Array of HttpResponse objects
-     * @throws \Spark\Ping\Exceptions\PingException
+     * @throws \Spark\Ping\Exceptions\HttpException
      */
     public function execute(array $requests): array;
 }

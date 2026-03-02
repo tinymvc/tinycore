@@ -4,7 +4,7 @@ namespace Spark\Ping;
 
 use Spark\Ping\Contracts\HttpContract;
 use Spark\Ping\Contracts\HttpResponseContract;
-use Spark\Ping\Exceptions\PingException;
+use Spark\Ping\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
 use function is_array;
 use function is_resource;
@@ -40,7 +40,7 @@ class Http extends HttpRequest implements HttpContract
      * @param string $url Target URL
      * @param array $params Query parameters
      * @param string|array $data POST/PUT/PATCH/DELETE data
-     * @throws \Spark\Ping\Exceptions\PingException If cURL extension is not loaded
+     * @throws \Spark\Ping\Exceptions\HttpException If cURL extension is not loaded
      */
     public function __construct(
         string $method = 'GET',
@@ -50,7 +50,7 @@ class Http extends HttpRequest implements HttpContract
     ) {
         // Check if cURL extension is loaded
         if (!extension_loaded('curl')) {
-            throw new PingException('cURL extension is not loaded.');
+            throw new HttpException('cURL extension is not loaded.');
         }
 
         // Call parent constructor
@@ -99,7 +99,7 @@ class Http extends HttpRequest implements HttpContract
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
      * @return \Spark\Ping\Contracts\HttpResponseContract The response data, including body, status code, final URL, and content length.
-     * @throws \Spark\Ping\Exceptions\PingException If cURL initialization fails.
+     * @throws \Spark\Ping\Exceptions\HttpException If cURL initialization fails.
      */
     public function send(string $url, array $params = []): HttpResponseContract
     {
@@ -128,12 +128,12 @@ class Http extends HttpRequest implements HttpContract
 
         // Check if output buffering was successful
         if ($body === false) {
-            throw new PingException('Failed to capture cURL output.');
+            throw new HttpException('Failed to capture cURL output.');
         }
 
         // Check for cURL errors
         if (curl_errno($curl)) {
-            throw new PingException('cURL Error: ' . curl_error($curl));
+            throw new HttpException('cURL Error: ' . curl_error($curl));
         }
 
         // Execute the cURL request and gather response data
@@ -190,7 +190,7 @@ class Http extends HttpRequest implements HttpContract
      * @param callable $callback A callback that receives a Pool instance and returns an array of requests
      * @return array An array of HttpResponse objects, keyed by their index or custom key
      * 
-     * @throws \Spark\Ping\Exceptions\PingException If the callback does not return an array of requests
+     * @throws \Spark\Ping\Exceptions\HttpException If the callback does not return an array of requests
      */
     public function pool(callable $callback): array
     {
@@ -198,7 +198,7 @@ class Http extends HttpRequest implements HttpContract
         $requests = $callback($pool);
 
         if (!is_array($requests)) {
-            throw new PingException('Pool callback must return an array of requests.');
+            throw new HttpException('Pool callback must return an array of requests.');
         }
 
         return $pool->execute($requests);

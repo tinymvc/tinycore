@@ -4,7 +4,7 @@ namespace Spark\Ping;
 
 use Spark\Ping\Contracts\HttpPoolContract;
 use Spark\Ping\Contracts\HttpRequestContract;
-use Spark\Ping\Exceptions\PingException;
+use Spark\Ping\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
 use function count;
 
@@ -151,7 +151,7 @@ class HttpPool implements HttpPoolContract
      * Execute all pending requests concurrently.
      * 
      * @return array<string|int,\Spark\Ping\Contracts\HttpResponseContract> Array of HttpResponse objects
-     * @throws \Spark\Ping\Exceptions\PingException
+     * @throws \Spark\Ping\Exceptions\HttpException
      */
     public function executePendingRequests(): array
     {
@@ -163,7 +163,7 @@ class HttpPool implements HttpPoolContract
      * 
      * @param array<string|int,\Spark\Ping\Contracts\HttpRequestContract> $requests Array of HttpPendingRequest objects
      * @return array<string|int,\Spark\Ping\Contracts\HttpResponseContract> Array of HttpResponse objects
-     * @throws \Spark\Ping\Exceptions\PingException
+     * @throws \Spark\Ping\Exceptions\HttpException
      */
     public function execute(array $requests): array
     {
@@ -173,7 +173,7 @@ class HttpPool implements HttpPoolContract
 
         $multiHandle = curl_multi_init();
         if (!$multiHandle) {
-            throw new PingException('Failed to initialize curl_multi.');
+            throw new HttpException('Failed to initialize curl_multi.');
         }
 
         $handles = [];

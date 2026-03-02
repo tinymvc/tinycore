@@ -4,6 +4,6 @@ namespace Spark\Ping\Exceptions;
 
 use Exception;
 
-class PingException extends Exception
+class HttpException extends Exception
 {
 }

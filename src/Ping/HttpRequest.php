@@ -4,7 +4,7 @@ namespace Spark\Ping;
 
 use Spark\Ping\Contracts\HttpRequestContract;
 use Spark\Ping\Contracts\HttpResponseContract;
-use Spark\Ping\Exceptions\PingException;
+use Spark\Ping\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
 use function in_array;
 use function is_array;
@@ -517,13 +517,13 @@ class HttpRequest implements HttpRequestContract
      * Build the cURL handle for this request.
      * 
      * @return resource|\CurlHandle The cURL handle
-     * @throws \Spark\Ping\Exceptions\PingException
+     * @throws \Spark\Ping\Exceptions\HttpException
      */
     public function buildCurlHandle()
     {
         $curl = curl_init();
         if ($curl === false) {
-            throw new PingException('Failed to initialize cURL.');
+            throw new HttpException('Failed to initialize cURL.');
         }
 
         // Get the HTTP method in uppercase
@@ -577,7 +577,7 @@ class HttpRequest implements HttpRequestContract
      * Execute the HTTP request.
      * 
      * @return \Spark\Ping\Contracts\HttpResponseContract
-     * @throws \Spark\Ping\Exceptions\PingException
+     * @throws \Spark\Ping\Exceptions\HttpException
      */
     public function execute(): HttpResponseContract
     {
@@ -585,12 +585,12 @@ class HttpRequest implements HttpRequestContract
         $body = curl_exec($curl);
 
         if ($body === false) {
-            throw new PingException('cURL error: ' . curl_error($curl));
+            throw new HttpException('cURL error: ' . curl_error($curl));
         }
 
         // Check for cURL errors
         if (curl_errno($curl)) {
-            throw new PingException('cURL Error: ' . curl_error($curl));
+            throw new HttpException('cURL Error: ' . curl_error($curl));
         }
 
         return new HttpResponse(
