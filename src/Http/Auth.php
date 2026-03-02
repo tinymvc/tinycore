@@ -79,7 +79,7 @@ class Auth implements AuthContract, ArrayAccess
             ...$config
         ];
 
-        $this->check(); // Check and set the authentication ID from the session
+        $this->checkId(); // Check and set the authentication ID from the session
     }
 
     /**
@@ -96,7 +96,7 @@ class Auth implements AuthContract, ArrayAccess
     {
         // Merge the provided configuration with the existing configuration
         $this->config = [...$this->config, ...$config];
-        $this->check(); // Re-check authentication after configuration changes
+        $this->checkId(); // Re-check authentication after configuration changes
     }
 
     /**
@@ -414,7 +414,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function refresh(): void
     {
-        $this->check(); // Ensure the authentication state is up to date
+        $this->checkId(); // Ensure the authentication state is up to date
 
         if ($this->isGuest()) {
             return;
@@ -629,7 +629,7 @@ class Auth implements AuthContract, ArrayAccess
      *
      * @return void
      */
-    public function check(): void
+    public function checkId(): void
     {
         if ($this->hasDriver()) {
             $this->id = $this->getDriver()->checkId();
@@ -657,6 +657,19 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         $this->id = intval($this->session->get($this->config['session_key'], 0));
+    }
+
+    /**
+     * Checks if the user is authenticated.
+     *
+     * This method checks if the user has a valid ID and if the user model is not null,
+     * indicating that the user is authenticated.
+     *
+     * @return bool True if the user is authenticated, false otherwise.
+     */
+    public function check(): bool
+    {
+        return $this->id > 0 && $this->getUser() !== null;
     }
 
     /**

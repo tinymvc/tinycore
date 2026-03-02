@@ -4,6 +4,7 @@ namespace Spark\Http;
 
 use Spark\Contracts\Support\Arrayable;
 use function count;
+use function is_array;
 
 /**
  * Class InputErrors - HTTP Request input validation errors
@@ -150,7 +151,8 @@ class InputErrors implements Arrayable, \ArrayAccess, \IteratorAggregate, \Strin
      */
     public function first(string $field): ?string
     {
-        return $this->messages[$field][0] ?? null;
+        $error = $this->messages[$field] ?? null;
+        return is_array($error) ? ($error[0] ?? null) : ((string) $error ?: null);
     }
 
     /**

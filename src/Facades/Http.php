@@ -3,7 +3,7 @@
 namespace Spark\Facades;
 
 use Spark\Facades\Facade;
-use Spark\Ping\HttpResponse;
+use Spark\Ping\Contracts\HttpResponseContract as HttpResponse;
 use Spark\Ping\Http as BaseHttp;
 
 /**
@@ -17,6 +17,7 @@ use Spark\Ping\Http as BaseHttp;
  * @method static HttpResponse patch(string $url, array $data = [])
  * @method static HttpResponse delete(string $url, array $data = [])
  * @method static HttpResponse send(string $url, array $params = [])
+ * @method static BaseHttp make(string $method, string $url = '', array $params = [], string|array $data = [])
  * @method static BaseHttp timeout(int $seconds)
  * @method static BaseHttp option(int $key, mixed $value)
  * @method static BaseHttp options(array $options)

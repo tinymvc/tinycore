@@ -3,6 +3,7 @@
 namespace Spark\Ping;
 
 use Spark\Ping\Contracts\HttpContract;
+use Spark\Ping\Contracts\HttpResponseContract;
 use Spark\Ping\Exceptions\PingException;
 use Spark\Support\Traits\Macroable;
 use function is_array;
@@ -57,6 +58,20 @@ class Http extends HttpRequest implements HttpContract
     }
 
     /**
+     * Creates a new Http instance with the specified method, URL, parameters, and data.
+     * 
+     * @param string $method HTTP method
+     * @param string $url Target URL (optional)
+     * @param array $params Query parameters
+     * @param string|array $data POST/PUT/PATCH/DELETE data
+     * @return self A new Http instance
+     */
+    public static function make(string $method, string $url = '', array $params = [], string|array $data = []): self
+    {
+        return new self($method, $url, $params, $data);
+    }
+
+    /**
      * Resets the current configuration back to default, optionally overriding
      * certain configuration settings.
      * 
@@ -83,10 +98,10 @@ class Http extends HttpRequest implements HttpContract
      *
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
-     * @return \Spark\Ping\HttpResponse The response data, including body, status code, final URL, and content length.
+     * @return \Spark\Ping\Contracts\HttpResponseContract The response data, including body, status code, final URL, and content length.
      * @throws \Spark\Ping\Exceptions\PingException If cURL initialization fails.
      */
-    public function send(string $url, array $params = []): HttpResponse
+    public function send(string $url, array $params = []): HttpResponseContract
     {
         $this->setUrl($url);
         $this->setParams($params);
@@ -383,9 +398,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $url Target URL
      * @param array $params Query parameters
-     * @return HttpResponse
+     * @return \Spark\Ping\Contracts\HttpResponseContract The response data, including body, status code, final URL, and content length.
      */
-    public function get(string $url, array $params = []): HttpResponse
+    public function get(string $url, array $params = []): HttpResponseContract
     {
         $this->setMethod('GET');
         return $this->send($url, $params);
@@ -396,9 +411,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $url Target URL
      * @param array|string $data POST data
-     * @return HttpResponse
+     * @return \Spark\Ping\Contracts\HttpResponseContract The response data, including body, status code, final URL, and content length.
      */
-    public function post(string $url, array|string $data = []): HttpResponse
+    public function post(string $url, array|string $data = []): HttpResponseContract
     {
         $this->setMethod('POST');
         $this->setData($data);
@@ -411,9 +426,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $url Target URL
      * @param array|string $data PUT data
-     * @return HttpResponse
+     * @return HttpResponseContract The response data, including body, status code, final URL, and content length.
      */
-    public function put(string $url, array|string $data = []): HttpResponse
+    public function put(string $url, array|string $data = []): HttpResponseContract
     {
         $this->setMethod('PUT');
         $this->setData($data);
@@ -426,9 +441,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $url Target URL
      * @param array|string $data PATCH data
-     * @return HttpResponse
+     * @return HttpResponseContract The response data, including body, status code, final URL, and content length.
      */
-    public function patch(string $url, array|string $data = []): HttpResponse
+    public function patch(string $url, array|string $data = []): HttpResponseContract
     {
         $this->setMethod('PATCH');
         $this->setData($data);
@@ -441,9 +456,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $url Target URL
      * @param array|string $data DELETE data
-     * @return HttpResponse
+     * @return HttpResponseContract The response data, including body, status code, final URL, and content length.
      */
-    public function delete(string $url, array|string $data = []): HttpResponse
+    public function delete(string $url, array|string $data = []): HttpResponseContract
     {
         $this->setMethod('DELETE');
         $this->setData($data);

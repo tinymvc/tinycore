@@ -3,6 +3,7 @@
 namespace Spark\Ping;
 
 use Spark\Ping\Contracts\HttpRequestContract;
+use Spark\Ping\Contracts\HttpResponseContract;
 use Spark\Ping\Exceptions\PingException;
 use Spark\Support\Traits\Macroable;
 use function in_array;
@@ -575,10 +576,10 @@ class HttpRequest implements HttpRequestContract
     /**
      * Execute the HTTP request.
      * 
-     * @return \Spark\Ping\HttpResponse
+     * @return \Spark\Ping\Contracts\HttpResponseContract
      * @throws \Spark\Ping\Exceptions\PingException
      */
-    public function execute(): HttpResponse
+    public function execute(): HttpResponseContract
     {
         $curl = $this->buildCurlHandle();
         $body = curl_exec($curl);

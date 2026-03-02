@@ -3,6 +3,7 @@
 namespace Spark\Ping;
 
 use Spark\Ping\Contracts\HttpPoolContract;
+use Spark\Ping\Contracts\HttpRequestContract;
 use Spark\Ping\Exceptions\PingException;
 use Spark\Support\Traits\Macroable;
 use function count;
@@ -43,9 +44,9 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param array $params Optional query parameters
-     * @return HttpRequest
+     * @return \Spark\Ping\Contracts\HttpRequestContract
      */
-    public function get(string $url, array $params = []): HttpRequest
+    public function get(string $url, array $params = []): HttpRequestContract
     {
         return $this->addRequest('GET', $url, $params);
     }
@@ -55,9 +56,9 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The POST data
-     * @return HttpRequest
+     * @return \Spark\Ping\Contracts\HttpRequestContract
      */
-    public function post(string $url, string|array $data = []): HttpRequest
+    public function post(string $url, string|array $data = []): HttpRequestContract
     {
         return $this->addRequest('POST', $url, [], $data);
     }
@@ -67,9 +68,9 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The PUT data
-     * @return HttpRequest
+     * @return \Spark\Ping\Contracts\HttpRequestContract
      */
-    public function put(string $url, string|array $data = []): HttpRequest
+    public function put(string $url, string|array $data = []): HttpRequestContract
     {
         return $this->addRequest('PUT', $url, [], $data);
     }
@@ -79,9 +80,9 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The PATCH data
-     * @return HttpRequest
+     * @return \Spark\Ping\Contracts\HttpRequestContract
      */
-    public function patch(string $url, string|array $data = []): HttpRequest
+    public function patch(string $url, string|array $data = []): HttpRequestContract
     {
         return $this->addRequest('PATCH', $url, [], $data);
     }
@@ -91,9 +92,9 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The DELETE data
-     * @return HttpRequest
+     * @return \Spark\Ping\Contracts\HttpRequestContract
      */
-    public function delete(string $url, string|array $data = []): HttpRequest
+    public function delete(string $url, string|array $data = []): HttpRequestContract
     {
         return $this->addRequest('DELETE', $url, [], $data);
     }
@@ -105,9 +106,9 @@ class HttpPool implements HttpPoolContract
      * @param string $url Target URL
      * @param array $params Query parameters
      * @param array $data POST/PUT/PATCH data
-     * @return HttpRequest
+     * @return \Spark\Ping\Contracts\HttpRequestContract
      */
-    private function addRequest(string $method, string $url, array $params = [], array $data = []): HttpRequest
+    private function addRequest(string $method, string $url, array $params = [], array $data = []): HttpRequestContract
     {
         $key = $this->nextKey ?? count($this->pendingRequests);
         $this->nextKey = null;
@@ -121,7 +122,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Get all pending requests.
      * 
-     * @return array Array of HttpPendingRequest objects
+     * @return array<\Spark\Ping\Contracts\HttpRequestContract[]> Array of HttpPendingRequest objects
      */
     public function getPendingRequests(): array
     {
@@ -139,7 +140,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Set the pending requests.
      * 
-     * @param array $requests Array of HttpPendingRequest objects
+     * @param array<\Spark\Ping\Contracts\HttpRequestContract[]> $requests Array of HttpPendingRequest objects
      */
     public function setPendingRequests(array $requests): void
     {
@@ -149,7 +150,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Execute all pending requests concurrently.
      * 
-     * @return array Array of HttpResponse objects
+     * @return array<\Spark\Ping\Contracts\HttpResponseContract[]> Array of HttpResponse objects
      * @throws \Spark\Ping\Exceptions\PingException
      */
     public function executePendingRequests(): array
@@ -160,8 +161,8 @@ class HttpPool implements HttpPoolContract
     /**
      * Execute all pending requests concurrently.
      * 
-     * @param array $requests Array of HttpPendingRequest objects
-     * @return array Array of HttpResponse objects
+     * @param array<\Spark\Ping\Contracts\HttpRequestContract[]> $requests Array of HttpPendingRequest objects
+     * @return array<\Spark\Ping\Contracts\HttpResponseContract[]> Array of HttpResponse objects
      * @throws \Spark\Ping\Exceptions\PingException
      */
     public function execute(array $requests): array

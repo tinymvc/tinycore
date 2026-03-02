@@ -9,8 +9,6 @@ use Spark\Database\QueryBuilder;
 use Spark\EventDispatcher;
 use Spark\Foundation\Application;
 use Spark\Hash;
-use Spark\Ping\Http;
-use Spark\Ping\HttpResponse;
 use Spark\Pipeline;
 use Spark\Routing\Router;
 use Spark\Url;
@@ -1772,11 +1770,16 @@ if (!function_exists('http')) {
      * @param array $params Optional. The query parameters for the request.
      * @param array $headers Optional. The headers for the request.
      * @param array $options Optional. Additional options for the HTTP request.
-     * @return ($url is null ? \Spark\Ping\Http : \Spark\Ping\HttpResponse) The HTTP instance or the response from the request.
+     * @return ($url is null ? \Spark\Ping\Contracts\HttpContract : \Spark\Ping\Contracts\HttpResponseContract) The HTTP instance or the response from the request.
      */
-    function http(string $method = 'GET', null|string $url = null, array $params = [], array $headers = [], array $options = []): Http|HttpResponse
-    {
-        $http = new Http($method);
+    function http(
+        string $method = 'GET',
+        null|string $url = null,
+        array $params = [],
+        array $headers = [],
+        array $options = []
+    ): \Spark\Ping\Contracts\HttpContract|\Spark\Ping\Contracts\HttpResponseContract {
+        $http = \Spark\Ping\Http::make($method);
         $http->withHeaders($headers);
         $http->withOptions($options);
 
