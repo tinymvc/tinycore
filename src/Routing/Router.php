@@ -37,6 +37,8 @@ class Router implements RouterContract
      */
     private array $groupStack = [];
 
+    private null|array $config = null;
+
     /**
      * @var array|callable|null $fallback
      * 
@@ -234,6 +236,131 @@ class Router implements RouterContract
     }
 
     /**
+     * Add middleware to the route or group.
+     *
+     * This method allows you to specify middleware that should be applied to the route or group.
+     * Middleware can be defined as a string (class name), an array of strings, or a callable.
+     *
+     * @param string|array $middleware The middleware(s) to apply.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function middleware(string|array $middleware): self
+    {
+        $this->config['middleware'] = $middleware;
+        return $this;
+    }
+
+    /**
+     * Exclude middleware from the route or group.
+     *
+     * This method allows you to specify middleware that should be excluded from the route or group.
+     * Middleware can be defined as a string (class name) or an array of strings.
+     *
+     * @param string|array $middleware The middleware(s) to exclude.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function withoutMiddleware(string|array $middleware): self
+    {
+        $this->config['withoutMiddleware'] = $middleware;
+        return $this;
+    }
+
+    /**
+     * Set the name for the route or group.
+     *
+     * This method allows you to specify a name for the route or group, which can be used for generating URLs
+     * and referencing the route in other parts of the application.
+     *
+     * @param string $name The name to assign to the route or group.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function name(string $name): self
+    {
+        $this->config['name'] = $name;
+        return $this;
+    }
+
+    /**
+     * Alias for the name() method to set the name for the route or group.
+     *
+     * @param string $name The name to assign to the route or group.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function as(string $name): self
+    {
+        $this->config['name'] = $name;
+        return $this;
+    }
+
+    /**
+     * Set the prefix for the route or group.
+     *
+     * This method allows you to specify a URL prefix for the route or group, which will be applied to all routes
+     * defined within the group.
+     *
+     * @param string $name The prefix to assign to the route or group.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function prefix(string $name): self
+    {
+        $this->config['prefix'] = $name;
+        return $this;
+    }
+
+    /**
+     * Set the path for the route or group.
+     *
+     * This method allows you to specify a path for the route or group, which will be applied to all routes
+     * defined within the group.
+     *
+     * @param string $name The path to assign to the route or group.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function path(string $name): self
+    {
+        $this->config['path'] = $name;
+        return $this;
+    }
+
+    /**
+     * Set the HTTP method for the route or group.
+     *
+     * This method allows you to specify an HTTP method for the route or group, which will be applied to all routes
+     * defined within the group.
+     *
+     * @param string $name The HTTP method to assign to the route or group.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function method(string $name): self
+    {
+        $this->config['method'] = $name;
+        return $this;
+    }
+
+    /**
+     * Set the callback for the route or group.
+     *
+     * This method allows you to specify a callback for the route or group, which will be applied to all routes
+     * defined within the group.
+     *
+     * @param callable|string|array $callback The handler or callback for the route or group.
+     *
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function callback(callable|string|array $callback): self
+    {
+        $this->config['callback'] = $callback;
+        return $this;
+    }
+
+    /**
      * Register a fallback route for when no other routes match.
      *
      * @param callable|string|array $callback The handler or callback for the fallback route.
@@ -296,6 +423,11 @@ class Router implements RouterContract
             $callback = $attrsOrCallback;
         }
 
+        if (isset($this->config)) {
+            $attributes = [...$this->config, ...$attributes];
+            $this->config = null; // Reset config after applying to group
+        }
+
         $this->groupStack[] = []; // Initialize a new group context
 
         return (new RouteGroup(callback: $callback))
@@ -324,6 +456,24 @@ class Router implements RouterContract
         string|array $middleware = [],
         string|array $withoutMiddleware = []
     ): self {
+        if (isset($this->config)) {
+            $attributes = $this->config;
+            $this->config = null; // Reset config after applying to route
+            $this->group(
+                attrsOrCallback: $attributes,
+                callback: fn() => $this->add(
+                    path: $path,
+                    method: $method,
+                    callback: $callback,
+                    template: $template,
+                    name: $name,
+                    middleware: $middleware,
+                    withoutMiddleware: $withoutMiddleware
+                )
+            );
+            return $this; // Return early since the route will be added within the group context
+        }
+
         $path = '/' . trim($path, '/'); // ensure it starts with a slash
         $method ??= 'GET'; // Set the default method to GET if not provided
 

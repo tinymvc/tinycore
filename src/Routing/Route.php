@@ -99,6 +99,18 @@ class Route implements RouteContract
     }
 
     /**
+     * Alias for the name() method to set the name of the route.
+     *
+     * @param string $name The name of the route.
+     * @return self Returns the current instance for method chaining.
+     */
+    public function as(string $name): self
+    {
+        $this->name = $name;
+        return $this;
+    }
+
+    /**
      * Set middleware for the route.
      *
      * @param string|array $middleware Middleware to be applied to the route.

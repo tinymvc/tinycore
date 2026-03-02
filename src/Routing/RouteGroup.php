@@ -140,6 +140,17 @@ class RouteGroup implements RouteGroupContract
     }
 
     /**
+     * Alias for name method to assign a name to the most recently added route or pending group.
+     *
+     * @param string $name The name to assign to the route.
+     * @return self Returns the router instance to allow method chaining.
+     */
+    public function as(string $name): self
+    {
+        return $this->name($name);
+    }
+
+    /**
      * Merge attributes into the current group on the stack.
      *
      * @param string $name The attribute name.
