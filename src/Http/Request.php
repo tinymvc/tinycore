@@ -93,9 +93,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Sanitizer instance for validated input data.
      * 
-     * @var Sanitizer
+     * @var Input
      */
-    private Sanitizer $validated;
+    private Input $validated;
 
     /**
      * request constructor.
@@ -498,14 +498,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param null|string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return ($key is null ? \Spark\Http\Sanitizer : mixed) The parameter value or default.
+     * @return ($key is null ? \Spark\Http\Input : mixed) The parameter value or default.
      */
     public function query(null|string $key = null, $default = null): mixed
     {
         if ($key !== null) {
             return $this->query->get($key, $default);
         }
-        return new Sanitizer($this->query);
+        return new Input($this->query);
     }
 
     /**
@@ -524,14 +524,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param null|string $key The parameter key.
      * @param mixed $default Default value if key does not exist.
-     * @return ($key is null ? \Spark\Http\Sanitizer : mixed) The parameter value or default.
+     * @return ($key is null ? \Spark\Http\Input : mixed) The parameter value or default.
      */
     public function post(null|string $key = null, $default = null): mixed
     {
         if ($key !== null) {
             return $this->post->get($key, $default);
         }
-        return new Sanitizer($this->post);
+        return new Input($this->post);
     }
 
     /**
@@ -995,11 +995,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * @param null|string|array $filter Optional filter to apply to the input data.
      * @param mixed $default Default value to return if the filter is a string and the key does not exist.
-     * @return ($filter is null ? \Spark\Http\Sanitizer : mixed) The Sanitizer instance or filtered input value.
+     * @return ($filter is null ? \Spark\Http\Input : mixed) The Sanitizer instance or filtered input value.
      */
     public function input(null|string|array $filter = null, $default = null): mixed
     {
-        $input = new Sanitizer($this->query->merge($this->post)->merge($this->files));
+        $input = Input::make($this);
 
         // Return filtered input based on the provided filter.
         if ($filter !== null && is_array($filter)) {
@@ -1248,10 +1248,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param array $rules
      *   The validation rules.
      *
-     * @return Sanitizer
+     * @return Input
      *   Returns the validated attributes as an Sanitizer instance.
      */
-    public function validate(array $rules): Sanitizer
+    public function validate(array $rules): Input
     {
         $validator = new Validator(); // Get the validator instance
 
@@ -1324,13 +1324,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * This method returns the validated data from the request as a Sanitizer instance.
      * It assumes that the validate() method has been called previously to perform validation.
      *
-     * @return \Spark\Http\Sanitizer
+     * @return \Spark\Http\Input
      *   The validated data as a Sanitizer instance.
      *
      * @throws \RuntimeException
      *   If no data has been validated yet.
      */
-    public function validated(): Sanitizer
+    public function validated(): Input
     {
         if (!isset($this->validated) || $this->validated->isEmpty()) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');

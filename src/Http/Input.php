@@ -2,7 +2,7 @@
 
 namespace Spark\Http;
 
-use Spark\Contracts\Http\SanitizerContract;
+use Spark\Contracts\Http\InputContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Collection;
@@ -110,7 +110,7 @@ use function strval;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, \ArrayAccess, \IteratorAggregate
+class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAccess, \IteratorAggregate
 {
     use Macroable {
         __call as macroCall;
@@ -124,11 +124,11 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     public Collection $data;
 
     /**
-     * Constructs a new sanitizer instance with optional initial data.
+     * Constructs a new input instance with optional initial data.
      *
-     * @param array $data Key-value data array to be sanitized.
+     * @param array|Request|Collection|Arrayable $data Key-value data array to be sanitized.
      */
-    public function __construct(array|Arrayable $data = [])
+    public function __construct(array|Request|Collection|Arrayable $data = [])
     {
         $this->setData($data);
     }
@@ -136,24 +136,34 @@ class Sanitizer implements SanitizerContract, Arrayable, Jsonable, \Stringable, 
     /**
      * Sets the data array to be sanitized.
      *
-     * @param array|Arrayable $data Key-value data array to be set.
+     * @param array|Request|Collection|Arrayable $data Key-value data array to be set.
      * @return self Returns the current instance for method chaining.
      */
-    public function setData(array|Arrayable $data): self
+    public function setData(array|Request|Collection|Arrayable $data): self
     {
         // Convert to Collection if not already
-        if (!$data instanceof Collection) {
+        if ($data instanceof Request) {
+            $data = $data->query->merge($data->post)->merge($data->files);
+        } elseif (!$data instanceof Collection) {
             if ($data instanceof Arrayable) {
                 $data = $data->toArray(); // Convert Arrayable to array
             }
-
-            if (is_array($data)) {
-                $data = collect($data); // Convert array to Collection
-            }
+            $data = collect($data); // Convert array to Collection
         }
 
         $this->data = $data;
         return $this;
+    }
+
+    /**
+     * Static factory method to create a new input instance with optional initial data.
+     *
+     * @param array|Request|Collection|Arrayable $data Key-value data array to be sanitized.
+     * @return self Returns a new instance of the Input class with the provided data.
+     */
+    public static function make(array|Request|Collection|Arrayable $data = []): self
+    {
+        return new self($data);
     }
 
     /**

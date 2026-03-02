@@ -38,8 +38,8 @@ class Validator implements ValidatorContract
      */
     private static array $errorMessages = [];
 
-    /** @var Sanitizer */
-    private Sanitizer $cleanData;
+    /** @var Input */
+    private Input $cleanData;
 
     /**
      * Constructs a new validator instance.
@@ -56,10 +56,10 @@ class Validator implements ValidatorContract
      * @param string|array $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
      * @param array $inputData Array of input data to validate.
-     * @return bool|Sanitizer Returns validated data as an Sanitizer instance if valid,
+     * @return bool|Input Returns validated data as an Sanitizer instance if valid,
      *                             or false if validation fails.
      */
-    public function validate(string|array $rules, array $inputData): bool|Sanitizer
+    public function validate(string|array $rules, array $inputData): bool|Input
     {
         $validData = [];
         foreach ($rules as $field => $fieldRules) {
@@ -165,7 +165,7 @@ class Validator implements ValidatorContract
         }
 
         // Return validated data or false if there are errors
-        return empty($this->errors) ? $this->cleanData = new Sanitizer($validData) : false;
+        return empty($this->errors) ? $this->cleanData = new Input($validData) : false;
     }
 
     /**
@@ -854,9 +854,9 @@ class Validator implements ValidatorContract
      * Returns the sanitized data after validation has been performed.
      * Throws an exception if no data has been validated yet.
      *
-     * @return Sanitizer
+     * @return Input
      */
-    public function validated(): Sanitizer
+    public function validated(): Input
     {
         if (!isset($this->cleanData)) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');

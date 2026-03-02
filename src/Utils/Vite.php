@@ -13,7 +13,7 @@ use function sprintf;
  * Helper class for integrating Vite with a PHP application. Handles configuration, 
  * development server checks, and generates script and link tags for JavaScript and CSS assets.
  * 
- * @package Spark\Helpers
+ * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Vite implements ViteUtilContract

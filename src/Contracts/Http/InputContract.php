@@ -3,12 +3,12 @@
 namespace Spark\Contracts\Http;
 
 /**
- * Interface SanitizerUtilContract
+ * Interface InputContract
  *
  * Defines the contract for a utility that provides methods
- * to sanitize and validate different data types.
+ * to sanitize and validate different request data types.
  */
-interface SanitizerContract
+interface InputContract
 {
     /**
      * Sanitizes an email address.

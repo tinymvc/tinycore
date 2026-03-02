@@ -16,9 +16,9 @@ interface ValidatorContract
      * @param string|array $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
      * @param array $inputData Array of input data to validate.
-     * @return bool|SanitizerContract Returns validated data as an SanitizerContract instance if valid,
+     * @return bool|InputContract Returns validated data as an SanitizerContract instance if valid,
      */
-    public function validate(string|array $rules, array $inputData): bool|SanitizerContract;
+    public function validate(string|array $rules, array $inputData): bool|InputContract;
 
     /**
      * Returns all validation errors.

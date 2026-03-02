@@ -16,7 +16,7 @@ use Spark\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
-use Spark\Http\Sanitizer;
+use Spark\Http\Input;
 use Spark\Http\Validator;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -1375,7 +1375,7 @@ if (!function_exists('input')) {
      *
      * @param string|array $filter An optional array of filters to apply to the input data.
      * @param mixed $default The default value to return if the specified filter does not exist in the input data.
-     * @return Sanitizer|mixed An instance of the sanitizer.
+     * @return Input|mixed An instance of the sanitizer.
      */
     function input(string|array $filter = [], $default = null): mixed
     {
