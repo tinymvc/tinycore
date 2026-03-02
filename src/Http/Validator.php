@@ -51,15 +51,32 @@ class Validator implements ValidatorContract
     }
 
     /**
+     * Static method to create a new validator instance and validate data.
+     *
+     * @param null|array $rules An array of validation rules to apply.
+     * @param array|null $data An optional array of data to validate. If not provided, it will use all request data.
+     * @return static Returns a validator instance with validation results.
+     */
+    public static function make(null|array $rules = null, null|array $data = null): static
+    {
+        $validator = new static();
+        if ($rules !== null) {
+            $inputData = $data ?: request()->all();
+            $validator->validate($rules, $inputData);
+        }
+        return $validator;
+    }
+
+    /**
      * Validates input data against specified rules.
      *
-     * @param string|array $rules Array of validation rules where the key is the field name
+     * @param array<string,mixed> $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
      * @param array $inputData Array of input data to validate.
      * @return bool|Input Returns validated data as an Sanitizer instance if valid,
      *                             or false if validation fails.
      */
-    public function validate(string|array $rules, array $inputData): bool|Input
+    public function validate(array $rules, array $inputData): bool|Input
     {
         $validData = [];
         foreach ($rules as $field => $fieldRules) {

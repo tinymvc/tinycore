@@ -22,9 +22,6 @@ use function sprintf;
  */
 abstract class ThrottleIncomingRequests implements MiddlewareInterface
 {
-    /** @var array<string, mixed> The cache configuration */
-    protected array $config = [];
-
     /**
      * Throttle incoming requests.
      *
@@ -69,12 +66,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
             return false;
         }
 
-        $config = [
-            'cache_name' => 'throttle_incoming_requests',
-            ...$this->config
-        ];
-
-        $cache = new Cache($config['cache_name'] . $suffix);
+        $cache = new Cache("throttle_incoming_requests$suffix");
         $key = md5("$path$ip");
 
         $now = time();

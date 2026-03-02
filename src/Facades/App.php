@@ -32,7 +32,6 @@ use Spark\Foundation\Application;
  * @method static Application reset(string $abstract, callable|string|null $concrete = null)
  * @method static Application when(string|array $concrete, string $needs, callable|string $give)
  * 
- * 
  * @package Spark\Facades
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>

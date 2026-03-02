@@ -9,6 +9,7 @@ use Spark\Database\Model;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\JWT;
 use Throwable;
+use function in_array;
 use function intval;
 use function is_array;
 
@@ -48,18 +49,14 @@ class Auth implements AuthContract, ArrayAccess
      * Initializes the Auth instance with the specified session management, user model,
      * and optional configuration settings.
      *
-     * @param Session $session The session instance used for managing user sessions.
      * @param string $model The fully qualified class name of the user model.
      * @param array $config Optional configuration array for customizing session key,
      *                      cache settings, and route redirections.
      */
     public function __construct(null|string $model = null, array $config = [])
     {
-        /** @var Session $session */
-        $this->session = \Spark\Foundation\Application::$app->make(Session::class);
-
         // Set the user model, defaulting to \App\Models\User if none is provided
-        $this->model = $model ?? \App\Models\User::class;
+        $this->model = $model ?: \App\Models\User::class;
 
         $this->config = [
             'session_key' => 'user_id',
@@ -71,9 +68,8 @@ class Auth implements AuthContract, ArrayAccess
             'cookie_enabled' => true,
             'cookie_name' => 'auth',
             'cookie_expire' => '6 months',
-            'jwt_enabled' => false,
             'jwt_expire' => '6 months',
-            'basic_auth' => false,
+            'channels' => ['session', 'jwt', 'basic'],
             'use_remember_token' => false,
             'driver' => null,
             ...$config
@@ -231,8 +227,8 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function getRedirectRoute(): string
     {
-        if ($this->session->hasFlash('__auth_redirect')) {
-            return $this->session->getFlash('__auth_redirect');
+        if (in_array('session', $this->config['channels']) && session()->hasFlash('__auth_redirect')) {
+            return session()->getFlash('__auth_redirect');
         }
 
         return route_url($this->config['redirect_route']);
@@ -272,9 +268,14 @@ class Auth implements AuthContract, ArrayAccess
             return; // If a driver is set, use it to handle login
         }
 
-        $this->session->set($this->config['session_key'], $user->id);
         $this->user = $user;
         $this->id = $user->id;
+
+        if (!in_array('session', $this->config['channels'])) {
+            return; // If session channel is not enabled, skip setting session
+        }
+
+        session([$this->config['session_key'] => $user->id]);
 
         if ($remember && $this->config['cookie_enabled']) {
             // set cookie expiration time
@@ -363,6 +364,13 @@ class Auth implements AuthContract, ArrayAccess
         // Erase the cache for the logged in user.
         $this->clearCache();
 
+        $this->user = null;
+        $this->id = 0;
+
+        if (!in_array('session', $this->config['channels'])) {
+            return; // If session channel is not enabled, skip clearing session
+        }
+
         // destroy cookie auth if enabled
         if ($this->config['cookie_enabled']) {
             // Clear the remember token from the database
@@ -375,9 +383,7 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         // Delete the session variable and unset the user property.
-        $this->session->delete($this->config['session_key']);
-        $this->user = null;
-        $this->id = 0;
+        session()->delete($this->config['session_key']);
     }
 
     /**
@@ -542,7 +548,7 @@ class Auth implements AuthContract, ArrayAccess
                 if ($this->config['use_remember_token']) {
                     $userId = $this->model::column('id')->where('remember_token', $token)->first();
                     if ($userId) {
-                        $this->session->set($this->config['session_key'], $userId);
+                        session([$this->config['session_key'] => $userId]);
                     }
 
                     return; // Exit after processing remember token
@@ -550,8 +556,7 @@ class Auth implements AuthContract, ArrayAccess
 
                 // Verify that the decrypted value is an array with an 'id' and 'expire' key
                 if (is_array($token) && isset($token['expire'], $token['id']) && carbon($token['expire'])->isFuture()) {
-                    // Set the user ID in the session and return true
-                    $this->session->set($this->config['session_key'], $token['id']);
+                    session([$this->config['session_key'] => $token['id']]);
                 }
             } catch (Throwable $e) {
                 // Ignore encryption errors
@@ -631,16 +636,14 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function checkId(): void
     {
+        unset($this->id); // Unset the ID property to ensure a fresh check
+
         if ($this->hasDriver()) {
             $this->id = $this->getDriver()->checkId();
             return; // If a driver is set, use it to check the ID
         }
 
-        if (!$this->session->has($this->config['session_key']) && $this->config['cookie_enabled']) {
-            $this->checkCookieAuth(); // Check cookie authentication if enabled
-        }
-
-        if (!$this->session->has($this->config['session_key']) && $this->config['jwt_enabled']) {
+        if (in_array('jwt', $this->config['channels'])) {
             $id = $this->checkJwtAuth(); // Check JWT authentication if enabled
             if ($id && $id > 0) {
                 $this->id = intval($id);
@@ -648,7 +651,7 @@ class Auth implements AuthContract, ArrayAccess
             }
         }
 
-        if (!$this->session->has($this->config['session_key']) && $this->config['basic_auth']) {
+        if (in_array('basic', $this->config['channels'])) {
             $id = $this->checkBasicAuth(); // Check basic authentication if enabled
             if ($id && $id > 0) {
                 $this->id = intval($id);
@@ -656,7 +659,13 @@ class Auth implements AuthContract, ArrayAccess
             }
         }
 
-        $this->id = intval($this->session->get($this->config['session_key'], 0));
+        if (in_array('session', $this->config['channels'])) {
+            if (!session()->has($this->config['session_key']) && $this->config['cookie_enabled']) {
+                $this->checkCookieAuth(); // Check cookie authentication if enabled
+            }
+
+            $this->id = intval(session($this->config['session_key'], 0));
+        }
     }
 
     /**

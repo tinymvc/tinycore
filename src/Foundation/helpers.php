@@ -14,7 +14,6 @@ use Spark\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
-use Spark\Http\Input;
 use Spark\Http\Validator;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -1371,11 +1370,11 @@ if (!function_exists('input')) {
      * the specified filter. The data is then passed through a sanitizer to ensure
      * it is safe for further processing.
      *
-     * @param string|array $filter An optional array of filters to apply to the input data.
-     * @param mixed $default The default value to return if the specified filter does not exist in the input data.
-     * @return Input|mixed An instance of the sanitizer.
+     * @param null|string|array $filter Optional filter to apply to the input data.
+     * @param mixed $default Default value to return if the filter is a string and the key does not exist.
+     * @return ($filter is null ? \Spark\Http\Input : mixed) The Sanitizer instance or filtered input value.
      */
-    function input(string|array $filter = [], $default = null): mixed
+    function input(null|string|array $filter = null, $default = null): mixed
     {
         return request()->input($filter, $default);
     }
@@ -1387,16 +1386,11 @@ if (!function_exists('validator')) {
      *
      * @param string|array $rules An array of validation rules to apply.
      * @param array|null $data An optional array of data to validate.
-     * @return Validator Returns a validator object.
+     * @return \Spark\Http\Validator Returns a validator object.
      */
     function validator(string|array $rules, null|array $data = null): Validator
     {
-        $data ??= request()->all();
-
-        $validator = new Validator();
-        $validator->validate($rules, $data);
-
-        return $validator; // Return the sanitized input data
+        return Validator::make($rules, $data);
     }
 }
 
@@ -1546,7 +1540,7 @@ if (!function_exists('mailer')) {
 
         if (isset($form)) {
             // Set the email address of the sender
-            $mailer->mailer(...array_values((array) $form));
+            $mailer->from(...array_values((array) $form));
         }
 
         if (isset($reply)) {
@@ -1803,7 +1797,7 @@ if (!function_exists('image')) {
      */
     function image(string $imageSource): Image
     {
-        return new Image($imageSource);
+        return Image::from($imageSource);
     }
 }
 

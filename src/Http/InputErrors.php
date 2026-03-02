@@ -2,6 +2,7 @@
 
 namespace Spark\Http;
 
+use Spark\Contracts\Http\InputErrorsContract;
 use Spark\Contracts\Support\Arrayable;
 use function count;
 use function is_array;
@@ -14,7 +15,7 @@ use function is_array;
  *
  * @package Spark\Http
  */
-class InputErrors implements Arrayable, \ArrayAccess, \IteratorAggregate, \Stringable
+class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \IteratorAggregate, \Stringable
 {
     /**
      * @var array Stores error messages for fields
@@ -108,9 +109,9 @@ class InputErrors implements Arrayable, \ArrayAccess, \IteratorAggregate, \Strin
      * Get the error message for a specific field.
      *
      * @param string $field
-     * @return array|null
+     * @return null|string|array
      */
-    public function error(string $field): ?array
+    public function error(string $field): null|string|array
     {
         return $this->messages[$field] ?? null;
     }
@@ -133,10 +134,10 @@ class InputErrors implements Arrayable, \ArrayAccess, \IteratorAggregate, \Strin
      * 
      * @param string $field The field name to retrieve the error message for.
      * 
-     * @return array|null
+     * @return null|string|array
      *   The error messages for the given field, or null if no error exists for the field.
      */
-    public function get(string $field): ?array
+    public function get(string $field): null|string|array
     {
         return $this->error($field);
     }

@@ -1,7 +1,6 @@
 <?php
 
-namespace {{ namespace }};
-{{ controllerUse }}
+namespace {{ namespace }};{{ controllerUse }}
 use Spark\Http\Request;
 
 class {{ class }} extends Controller

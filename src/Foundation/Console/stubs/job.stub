@@ -2,7 +2,9 @@
 
 namespace {{ namespace }};
 
-class {{ class }}
+use Queue\Contracts\JobInterface;
+
+class {{ class }} implements JobInterface
 {
     /**
      * Execute the job.

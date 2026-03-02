@@ -16,4 +16,16 @@ interface ConsoleContract
      * @return void
      */
     public function run(): void;
+
+    /**
+     * Executes a console command.
+     *
+     * @param string $name
+     *   The name of the command to execute.
+     * @param array $args
+     *   The arguments to pass to the command.
+     *
+     * @return void
+     */
+    public function executeCommand(string $name, array $args): void;
 }

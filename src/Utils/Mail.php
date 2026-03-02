@@ -43,9 +43,9 @@ class Mail extends PHPMailer implements MailUtilContract
             ...$config
         ];
 
-        // Set mailer configuration
-        if (isset($config['mailer']['address'])) {
-            $this->setFrom($config['mailer']['address'], $config['mailer']['name'] ?? '');
+        // Set from configuration
+        if (isset($config['from']['address'])) {
+            $this->setFrom($config['from']['address'], $config['from']['name'] ?? '');
         }
 
         if (isset($config['reply']['address'])) {
@@ -56,6 +56,21 @@ class Mail extends PHPMailer implements MailUtilContract
         if (isset($config['smtp']) && ($config['smtp']['enabled'] ?? true)) {
             $this->configureSmtp($config['smtp']);
         }
+    }
+
+    /**
+     * Create a new instance of the Mail utility class.
+     *
+     * This static method serves as a factory method for creating new instances of the Mail class.
+     * It takes an optional array of configuration options and returns a new instance of the Mail class.
+     *
+     * @param array $config An associative array of configuration options.
+     *
+     * @return self Returns a new instance of the Mail class.
+     */
+    public static function make(array $config = []): self
+    {
+        return new self($config);
     }
 
     /**
@@ -273,23 +288,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public function attachFile($path, $name = null): self
     {
         $this->addAttachment($path, $name);
-        return $this;
-    }
-
-    /**
-     * Set the sender of the email.
-     *
-     * This method takes an email address and an optional name, and sets the sender of the email.
-     * The method returns the instance of the class for method chaining.
-     *
-     * @param string $address The email address of the sender.
-     * @param string|null $name The name of the sender.
-     *
-     * @return self Returns the instance of the class for method chaining.
-     */
-    public function mailer($address, $name = null): self
-    {
-        $this->setFrom($address, $name);
         return $this;
     }
 

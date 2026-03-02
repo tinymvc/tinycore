@@ -76,6 +76,17 @@ class RouteResource implements RouteResourceContract
     }
 
     /**
+     * Alias for the name method to set the name prefix for the resource routes.
+     *
+     * @param string $name The name prefix.
+     * @return self Returns the current instance for method chaining.
+     */
+    public function as(string $name): self
+    {
+        return $this->name($name);
+    }
+
+    /**
      * Set middleware for the resource routes.
      *
      * @param string|array $middleware Middleware to be applied to all routes.

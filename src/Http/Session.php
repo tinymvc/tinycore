@@ -37,7 +37,7 @@ class Session implements SessionContract
      */
     public static function start(): void
     {
-        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+        if (session_status() === PHP_SESSION_NONE && !headers_sent() && is_web()) {
             session_start();
         }
     }

@@ -47,6 +47,17 @@ class Image implements ImageUtilContract
     }
 
     /**
+     * Static factory method to create an instance of the Image class from a given image source.
+     *
+     * @param string $imageSource The source path of the image to be loaded.
+     * @return static An instance of the Image class with the specified image source set.
+     */
+    public static function from(string $imageSource): static
+    {
+        return new static($imageSource);
+    }
+
+    /**
      * Set the source of the image.
      *
      * This method sets the source of the image by checking if the GD extension

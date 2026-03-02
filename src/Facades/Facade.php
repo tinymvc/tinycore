@@ -3,6 +3,8 @@
 namespace Spark\Facades;
 
 use Spark\Foundation\Application;
+use Spark\Support\Traits\Macroable;
+use function in_array;
 
 /**
  * Class Facade
@@ -36,7 +38,10 @@ abstract class Facade
     {
         $instance = Application::$app->make(static::getFacadeAccessor());
 
-        if (method_exists($instance, $method) || $instance->hasMacro($method)) {
+        if (
+            method_exists($instance, $method) ||
+            (in_array(Macroable::class, class_uses($instance)) && $instance->hasMacro($method))
+        ) {
             return $instance->$method(...$args);
         }
 
