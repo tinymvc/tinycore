@@ -122,7 +122,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Get all pending requests.
      * 
-     * @return array<\Spark\Ping\Contracts\HttpRequestContract[]> Array of HttpPendingRequest objects
+     * @return array<string|int,\Spark\Ping\Contracts\HttpRequestContract> Array of HttpPendingRequest objects
      */
     public function getPendingRequests(): array
     {
@@ -140,7 +140,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Set the pending requests.
      * 
-     * @param array<\Spark\Ping\Contracts\HttpRequestContract[]> $requests Array of HttpPendingRequest objects
+     * @param array<string|int,\Spark\Ping\Contracts\HttpRequestContract> $requests Array of HttpPendingRequest objects
      */
     public function setPendingRequests(array $requests): void
     {
@@ -150,7 +150,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Execute all pending requests concurrently.
      * 
-     * @return array<\Spark\Ping\Contracts\HttpResponseContract[]> Array of HttpResponse objects
+     * @return array<string|int,\Spark\Ping\Contracts\HttpResponseContract> Array of HttpResponse objects
      * @throws \Spark\Ping\Exceptions\PingException
      */
     public function executePendingRequests(): array
@@ -161,8 +161,8 @@ class HttpPool implements HttpPoolContract
     /**
      * Execute all pending requests concurrently.
      * 
-     * @param array<\Spark\Ping\Contracts\HttpRequestContract[]> $requests Array of HttpPendingRequest objects
-     * @return array<\Spark\Ping\Contracts\HttpResponseContract[]> Array of HttpResponse objects
+     * @param array<string|int,\Spark\Ping\Contracts\HttpRequestContract> $requests Array of HttpPendingRequest objects
+     * @return array<string|int,\Spark\Ping\Contracts\HttpResponseContract> Array of HttpResponse objects
      * @throws \Spark\Ping\Exceptions\PingException
      */
     public function execute(array $requests): array

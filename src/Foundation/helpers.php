@@ -1203,14 +1203,14 @@ if (!function_exists('job')) {
      * @param array $parameters The parameters to be passed to the callback function. Default is an empty array.
      * @param null|string|Carbon $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
      * @param null|string $repeat The repeat interval for the job. Default is null (no repeat).
-     * @return Job The new Job instance.
+     * @return \Spark\Queue\Contracts\JobContract The new Job instance.
      */
     function job(
         string|array $callback,
         array $parameters = [],
         null|string|Carbon $scheduledTime = null,
         null|string $repeat = null,
-    ): Job {
+    ): \Spark\Queue\Contracts\JobContract {
         return new Job($callback, $parameters, $scheduledTime, $repeat);
     }
 }

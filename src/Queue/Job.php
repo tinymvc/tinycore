@@ -105,10 +105,10 @@ class Job implements JobContract
      * @param string $repeat
      *   The interval string for repeating the job.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function repeat(string $repeat): self
+    public function repeat(string $repeat): JobContract
     {
         $repeatSteps = [
             'daily' => '1 day',
@@ -131,10 +131,10 @@ class Job implements JobContract
      * @param int $minutes
      *   The number of minutes between each repetition.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function repeatEveryMinutes(int $minutes = 1): self
+    public function repeatEveryMinutes(int $minutes = 1): JobContract
     {
         $this->repeat = "$minutes minutes";
         return $this;
@@ -143,10 +143,10 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every hour.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function repeatHourly(): self
+    public function repeatHourly(): JobContract
     {
         $this->repeat = '1 hour';
         return $this;
@@ -155,10 +155,10 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every day.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function repeatDaily(): self
+    public function repeatDaily(): JobContract
     {
         $this->repeat = '1 day';
         return $this;
@@ -167,10 +167,10 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every week.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function repeatWeekly(): self
+    public function repeatWeekly(): JobContract
     {
         $this->repeat = '1 week';
         return $this;
@@ -179,10 +179,10 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every month.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function repeatMonthly(): self
+    public function repeatMonthly(): JobContract
     {
         $this->repeat = '1 month';
         return $this;
@@ -199,10 +199,10 @@ class Job implements JobContract
      *   The time at which the job should be scheduled. This can be a
      *   Carbon object or a string that can be parsed into a Carbon.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function schedule(string|Carbon $scheduledTime): self
+    public function schedule(string|Carbon $scheduledTime): JobContract
     {
         // Convert the string to a Carbon object if necessary.
         if (is_string($scheduledTime)) {
@@ -224,10 +224,10 @@ class Job implements JobContract
      * @param int $seconds
      *   The number of seconds to delay the job execution.
      *
-     * @return self
+     * @return \Spark\Queue\Contracts\JobContract
      *   Returns the current Job instance for method chaining.
      */
-    public function delay(int $seconds): self
+    public function delay(int $seconds): JobContract
     {
         $this->scheduledTime = Carbon::now()->addSeconds($seconds);
         return $this;

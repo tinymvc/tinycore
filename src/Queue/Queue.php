@@ -5,6 +5,7 @@ namespace Spark\Queue;
 use PDO;
 use RuntimeException;
 use Spark\Console\Prompt;
+use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueContract;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;
@@ -85,9 +86,9 @@ class Queue implements QueueContract
      *                         storage_dir('queue.log'). If a string is provided,
      *                         logs to that file. If false, logging is disabled.
      *
-     * @return $this The current instance of the queue.
+     * @return void
      */
-    public function logging(bool|string $log = true): self
+    public function logging(bool|string $log = true): void
     {
         // Set up logging based on the provided parameter.
         if ($log === true) {
@@ -108,17 +109,15 @@ class Queue implements QueueContract
                 );
             }
         }
-
-        return $this;
     }
 
     /**
      * Adds a job to the queue.
      *
-     * @param Job $job The job to be added.
+     * @param JobContract $job The job to be added.
      * @param string $queue The name of the queue to add the job to.
      */
-    public function push(Job $job, string $queue = 'default'): void
+    public function push(JobContract $job, string $queue = 'default'): void
     {
         $job = $this->serializeJob($job);
 
@@ -227,9 +226,9 @@ class Queue implements QueueContract
      *
      * @param array|string $queue The name(s) of the queue(s) to retrieve the job from.
      *
-     * @return false|Job The next job in the queue, or false if no job is available.
+     * @return false|\Spark\Queue\Contracts\JobContract The next job in the queue, or false if no job is available.
      */
-    private function getNextJob(array|string $queue = 'default'): false|Job
+    private function getNextJob(array|string $queue = 'default'): false|JobContract
     {
         try {
             $this->pdo->beginTransaction();
@@ -570,7 +569,7 @@ class Queue implements QueueContract
      *
      * @return int The number of stale jobs recovered.
      */
-    public function recoverStaleJobs(int $timeout = 3600): int
+    private function recoverStaleJobs(int $timeout = 3600): int
     {
         try {
             $staleTime = now()->subSeconds($timeout);
@@ -611,7 +610,7 @@ class Queue implements QueueContract
      * @param int $from The starting index for pagination.
      * @param int $to The ending index for pagination.
      *
-     * @return array<int, Job> The array of jobs in the queue.
+     * @return array<int,\Spark\Queue\Contracts\JobContract> The array of jobs in the queue.
      */
     public function getJobs(
         array|string|null $queue = null,
@@ -685,7 +684,7 @@ class Queue implements QueueContract
      * @param int $from The starting index for pagination.
      * @param int $to The ending index for pagination.
      *
-     * @return array<int, Job> The array of failed jobs in the queue.
+     * @return array<int,\Spark\Queue\Contracts\JobContract> The array of failed jobs in the queue.
      */
     public function getFailedJobs(int $from = 0, int $to = 500): array
     {
@@ -762,11 +761,11 @@ class Queue implements QueueContract
      * listeners are serialized into an array of arrays, where each inner array
      * contains the priority and callback of the event listener.
      *
-     * @param Job $job The Job object to be serialized.
+     * @param \Spark\Queue\Contracts\JobContract $job The Job object to be serialized.
      *
      * @return array The serialized Job object as an array.
      */
-    private function serializeJob(Job $job): array
+    private function serializeJob(JobContract $job): array
     {
         return [
             'callback' => $job->getCallback(), // Serialize the callback and save it.
@@ -788,9 +787,9 @@ class Queue implements QueueContract
      *
      * @param array $job The serialized Job object to be unserialized.
      *
-     * @return Job The unserialized Job object.
+     * @return \Spark\Queue\Contracts\JobContract The unserialized Job object.
      */
-    private function unserializeJob(array $job): Job
+    private function unserializeJob(array $job): JobContract
     {
         $payload = json_decode($job['payload'], true);
 

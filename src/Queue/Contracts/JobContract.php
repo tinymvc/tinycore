@@ -21,10 +21,33 @@ interface JobContract
      * @param string $repeat
      *     The repeat option.
      *
-     * @return self
+     * @return JobContract
      *     The job instance.
      */
-    public function repeat(string $repeat): self;
+    public function repeat(string $repeat): JobContract;
+
+    /**
+     * Sets the repeat option for the job to repeat every given number of minutes.
+     *
+     * @param int $minutes
+     *     The number of minutes between each repetition.
+     *
+     * @return JobContract
+     *     The job instance.
+     */
+    public function repeatEveryMinutes(int $minutes = 1): JobContract;
+
+    /** Repeat the job every hour */
+    public function repeatHourly(): JobContract;
+
+    /** Repeat the job every day */
+    public function repeatDaily(): JobContract;
+
+    /* Repeat the job every week */
+    public function repeatWeekly(): JobContract;
+
+    /* Repeat the job every month */
+    public function repeatMonthly(): JobContract;
 
     /**
      * Sets the schedule for the job.
@@ -36,10 +59,23 @@ interface JobContract
      * @param string|Carbon $scheduledTime
      *     The schedule for the job.
      *
-     * @return self
+     * @return JobContract
      *     The job instance.
      */
-    public function schedule(string|Carbon $scheduledTime): self;
+    public function schedule(string|Carbon $scheduledTime): JobContract;
+
+    /**
+     * Sets the delay for the job.
+     *
+     * The delay is the number of seconds to wait before executing the job.
+     *
+     * @param int $seconds
+     *     The delay in seconds.
+     *
+     * @return JobContract
+     *     The job instance.
+     */
+    public function delay(int $seconds): JobContract;
 
     /**
      * Handles the job.
@@ -70,4 +106,49 @@ interface JobContract
      * @return void
      */
     public function dispatch(string $name = 'default'): void;
+
+    /* Checks if the job is set to be repeated. */
+    public function isRepeated(): bool;
+
+    /**
+     * Gets the callback for the job.
+     * 
+     * The callback can be a string that represents a class method or an array that represents a callable.
+     * 
+     * @return string|array
+     */
+    public function getCallback(): string|array;
+
+    /** Gets the repeat option for the job. */
+    public function getRepeat(): null|string;
+
+    /**
+     * Get the additional parameters from database and return them as an array.
+     * @return array
+     */
+    public function getParameters(): array;
+
+    /**
+     * Gets the metadata for the job.
+     * 
+     * @param null|string $key
+     * @param mixed $default
+     * @return null|string|array
+     */
+    public function getMetadata(null|string $key = null, mixed $default = null): null|string|array;
+
+    /* Gets the display name for the job. */
+    public function getDisplayName(): string;
+
+    /* Checks if the job has failed. */
+    public function isFailed(): bool;
+
+    /* Gets the reason for the job failure. */
+    public function getReasonFailed(): string;
+
+    /* Gets the name of the queue to which the job belongs. */
+    public function getQueueName(): string;
+
+    /* Gets the unique identifier for the job. */
+    public function getId(): null|string;
 }
