@@ -130,17 +130,6 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function __construct(array|Request|Collection|Arrayable $data = [])
     {
-        $this->setData($data);
-    }
-
-    /**
-     * Sets the data array to be sanitized.
-     *
-     * @param array|Request|Collection|Arrayable $data Key-value data array to be set.
-     * @return self Returns the current instance for method chaining.
-     */
-    public function setData(array|Request|Collection|Arrayable $data): self
-    {
         // Convert to Collection if not already
         if ($data instanceof Request) {
             $data = $data->query->merge($data->post)->merge($data->files);
@@ -152,7 +141,6 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         }
 
         $this->data = $data;
-        return $this;
     }
 
     /**
