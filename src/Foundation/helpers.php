@@ -513,8 +513,8 @@ if (!function_exists('home_url')) {
      */
     function home_url(string $path = ''): string
     {
-        $rootUrl = config('root_url', request()->getRootUrl());
-        $url = rtrim($rootUrl . '/' . ltrim(str_replace('\\', '/', $path), '/'), '/');
+        $rootUrl = config('app.app_url', request()->getRootUrl());
+        $url = rtrim("$rootUrl/" . ltrim(str_replace('\\', '/', $path), '/'), '/');
 
         return $url; // Return the generated URL
     }
@@ -534,7 +534,7 @@ if (!function_exists('asset_url')) {
      */
     function asset_url(string $path = ''): string
     {
-        $path = config('asset_url') . ltrim($path, '/');
+        $path = config('app.asset_url') . ltrim($path, '/');
         return strpos($path, '/', 0) === 0 ? home_url($path) : $path;
     }
 }
@@ -571,7 +571,7 @@ if (!function_exists('media_url')) {
      */
     function media_url(string $path = ''): string
     {
-        $path = config('media_url') . ltrim($path, '/');
+        $path = config('app.media_url') . ltrim($path, '/');
         return strpos($path, '/', 0) === 0 ? home_url($path) : $path;
     }
 }
@@ -693,7 +693,7 @@ if (!function_exists('storage_dir')) {
      */
     function storage_dir(string $path = '/'): string
     {
-        return dir_path(config('storage_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('paths.storage_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -710,7 +710,7 @@ if (!function_exists('lang_dir')) {
      */
     function lang_dir(string $path = '/'): string
     {
-        return dir_path(config('lang_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('paths.lang_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -728,7 +728,7 @@ if (!function_exists('upload_dir')) {
      */
     function upload_dir(string $path = '/'): string
     {
-        return dir_path(config('upload_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('paths.upload_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -746,7 +746,7 @@ if (!function_exists('cache_dir')) {
      */
     function cache_dir(string $path = '/'): string
     {
-        return dir_path(config('cache_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('paths.cache_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -764,7 +764,7 @@ if (!function_exists('views_dir')) {
      */
     function views_dir(string $path = '/'): string
     {
-        return dir_path(config('views_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('paths.views_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -782,7 +782,7 @@ if (!function_exists('temp_dir')) {
      */
     function temp_dir(string $path = '/'): string
     {
-        return storage_dir('temp/' . ltrim($path, '/'));
+        return dir_path(config('paths.temp_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -884,12 +884,12 @@ if (!function_exists('config')) {
     {
         if (is_array($key)) {
             foreach ($key as $k => $v) {
-                app()->setEnv($k, $v);
+                app()->setConfig($k, $v);
             }
             return;
         }
 
-        return app()->getEnv($key, $default);
+        return app()->getConfig($key, $default);
     }
 }
 
@@ -908,7 +908,8 @@ if (!function_exists('env')) {
      */
     function env(string $key, $default = null)
     {
-        return app()->getEnv($key, $default);
+        $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
+        return $value !== false ? $value : $default;
     }
 }
 
@@ -925,7 +926,9 @@ if (!function_exists('envs')) {
     function envs(array $envs): void
     {
         foreach ($envs as $key => $value) {
-            app()->setEnv($key, $value);
+            $_ENV[$key] = $value;
+            $_SERVER[$key] = $value;
+            putenv("$key=$value");
         }
     }
 }

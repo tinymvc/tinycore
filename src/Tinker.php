@@ -1118,8 +1118,8 @@ class Tinker
         echo "\n" . $this->color("Application:", 'white') . "\n";
         echo "  Name: " . $this->color(config('app.name', 'TinyMVC App'), 'yellow') . "\n";
         echo "  Timezone: " . $this->color(config('app.timezone', 'UTC'), 'yellow') . "\n";
-        echo "  Debug: " . $this->color(config('debug', false) ? 'enabled' : 'disabled', 'yellow') . "\n";
-        echo "  Language: " . $this->color(config('lang', 'en'), 'yellow') . "\n";
+        echo "  Debug: " . $this->color(config('app.debug', false) ? 'enabled' : 'disabled', 'yellow') . "\n";
+        echo "  Language: " . $this->color(config('app.lang', 'en'), 'yellow') . "\n";
 
         // Database settings
         echo "\n" . $this->color("Database:", 'white') . "\n";
@@ -1148,10 +1148,10 @@ class Tinker
 
         // Paths
         echo "\n" . $this->color("Paths:", 'white') . "\n";
-        echo "  Storage: " . $this->color($this->removeRootDir(config('storage_dir', '/storage')), 'yellow') . "\n";
-        echo "  Cache: " . $this->color($this->removeRootDir(config('cache_dir', '/cache')), 'yellow') . "\n";
-        echo "  Uploads: " . $this->color($this->removeRootDir(config('upload_dir', '/uploads')), 'yellow') . "\n";
-        echo "  Views: " . $this->color($this->removeRootDir(config('views_dir', '/views')), 'yellow') . "\n";
+        echo "  Storage: " . $this->color($this->removeRootDir(config('paths.storage_dir', '/storage')), 'yellow') . "\n";
+        echo "  Cache: " . $this->color($this->removeRootDir(config('paths.cache_dir', '/cache')), 'yellow') . "\n";
+        echo "  Uploads: " . $this->color($this->removeRootDir(config('paths.upload_dir', '/uploads')), 'yellow') . "\n";
+        echo "  Views: " . $this->color($this->removeRootDir(config('paths.views_dir', '/views')), 'yellow') . "\n";
 
         // System info
         echo "\n" . $this->color("System:", 'white') . "\n";

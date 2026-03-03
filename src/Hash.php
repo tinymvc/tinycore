@@ -59,7 +59,7 @@ class Hash implements HashContract
      */
     public function __construct(private ?string $key = null)
     {
-        $key ??= config('app_key'); // Get the key from the environment if not provided, otherwise use the default key
+        $key ??= config('app.key'); // Get the key from the environment if not provided, otherwise use the default key
         if ($key === null) {
             throw new InvalidEncryptingKeyException('Encryption key not provided.');
         }

@@ -30,6 +30,8 @@ use Spark\Utils\Vite;
 use Spark\View\Blade;
 use Throwable;
 use function get_class;
+use function is_array;
+use function is_string;
 
 /**
  * The Application class is the main entry point to the framework.
@@ -46,6 +48,9 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
     /** @var Application Singleton instance of the application. */
     public static Application $app;
 
+    /** @var array Array to store configuration values. */
+    private array $config = [];
+
     /** @var array Array to store exception handlers. */
     private array $exceptions = [];
 
@@ -60,14 +65,19 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * and binding core services to the container.
      * 
      * @param string $path The path to the application.
-     * @param array  $env Environment variables.
      */
-    public function __construct(private string $path, private array $env = [])
+    public function __construct(private string $path)
     {
         // Set the application instance statically.
         self::$app = $this;
 
         Tracer::start(); // Initialize the tracer
+
+        // Load environment variables from .env file
+        \Spark\DotEnv::loadFrom(
+            envPath: dir_path($this->path . '/.env'),
+            compilePath: dir_path($this->path . '/bootstrap/cache/env.php')
+        );
 
         // Register core services for global use
         $this->singleton(Translator::class);
@@ -95,20 +105,16 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * Creates a new instance of the application.
      *
      * @param string $path The path to the root directory of the application.
-     * @param array $env An optional array of environment variables.
-     * @param array $providers An optional array of service provider classes to register.
+     * @param null|string|array $config An optional array of configuration values.
+     * @param null|array $providers An optional array of service provider classes to register.
      *
      * @return self A new instance of the application.
      */
-    public static function create(string $path, array $env = [], array $providers = []): self
+    public static function create(string $path, null|string|array $config = null, null|array $providers = null): self
     {
-        $app = new self($path, $env);
+        $app = new self($path);
 
-        foreach ($providers as $provider) {
-            $app->addServiceProvider(new $provider);
-        }
-
-        return $app;
+        return $app->withApp(config: $config, providers: $providers);
     }
 
     /**
@@ -122,56 +128,56 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
     }
 
     /**
-     * Retrieves an environment variable's value.
+     * Retrieves a configuration value.
      *
-     * @param string $key The name of the environment variable.
-     * @param mixed $default The default value to return if the environment variable is not set.
+     * @param string $key The name of the configuration value.
+     * @param mixed $default The default value to return if the configuration value is not set.
      * 
-     * @return mixed The value of the environment variable, or the default value if not set.
+     * @return mixed The value of the configuration value, or the default value if not set.
      */
-    public function getEnv(string $key, $default = null): mixed
+    public function getConfig(string $key, $default = null): mixed
     {
-        return data_get($this->env, $key, $default);
+        return data_get($this->config, $key, $default);
     }
 
     /**
-     * Sets the value of an environment variable.
+     * Sets the value of a configuration value.
      *
-     * This method allows updating or creating an environment variable
+     * This method allows updating or creating a configuration value
      * with the given key and value.
      *
-     * @param string $key The name of the environment variable to set.
-     * @param mixed $value The value to assign to the environment variable.
+     * @param string $key The name of the configuration value to set.
+     * @param mixed $value The value to assign to the configuration value.
      * @return void
      */
-    public function setEnv(string $key, mixed $value): void
+    public function setConfig(string $key, mixed $value): void
     {
-        data_set($this->env, $key, $value);
+        data_set($this->config, $key, $value);
     }
 
     /**
-     * Merges the provided environment variables with the existing ones.
+     * Merges the provided configuration values with the existing ones.
      *
-     * @param array $env An associative array of environment variables to merge.
+     * @param array $config An associative array of configuration values to merge.
      *
      * @return void
      */
-    public function mergeEnv(array $env): void
+    public function mergeConfig(array $config): void
     {
-        $this->env = [...$this->env, ...$env];
+        $this->config = [...$this->config, ...$config];
     }
 
     /**
      * Checks if the application is running in debug mode.
      *
-     * This method checks the 'debug' key in the environment variables
+     * This method checks the 'debug' key in the configuration values
      * to determine if the application is in debug mode.
      *
      * @return bool True if the application is in debug mode, false otherwise.
      */
     public function isDebugMode(): bool
     {
-        return (bool) ($this->env['debug'] ?? false);
+        return (bool) ($this->config['app']['debug'] ?? false);
     }
 
     /**
@@ -181,20 +187,25 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * allowing custom logic to be executed on the application's dependency
      * injection container.
      *
-     * @param null|array $env An array of environment variables to set.
+     * @param null|string|array $config An array of configuration values to set.
      * @param null|array $providers An array of service providers to register.
      * @param null|array $middlewares An array of middlewares to apply.
      * @param null|callable $then The callback to be applied to the container.
      * @return self
      */
     public function withApp(
-        null|array $env = null,
+        null|string|array $config = null,
         null|array $providers = null,
         null|array $middlewares = null,
         null|callable $then = null
     ): self {
 
-        $env && $this->mergeEnv($env);
+        $config && is_array($config) && $this->mergeConfig($config);
+
+        $config && is_string($config) && $this->mergeConfig($this->discoverConfig(
+            folder: $config,
+            cache: $this->path . '/bootstrap/cache/config.php'
+        ));
 
         $middlewares && $this->withMiddleware(register: $middlewares);
 
@@ -408,6 +419,34 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
     public function dispatch(string $event, mixed ...$args): void
     {
         $this->events()->dispatch($event, ...$args);
+    }
+
+    /**
+     * Discovers configuration files in a specified folder and caches them.
+     *
+     * This method checks if a cached configuration file exists. If it does, 
+     * it loads the configuration from the cache. Otherwise, it scans the 
+     * specified folder for PHP files, loads their contents as configuration, 
+     * and returns the combined configuration array.
+     *
+     * @param string $folder The path to the folder containing configuration files.
+     * @param string $cache The path to the cached configuration file.
+     * @return array The combined configuration array.
+     */
+    protected function discoverConfig(string $folder, string $cache): array
+    {
+        if (is_file($cache)) {
+            return require $cache;
+        }
+
+        $config = [];
+
+        foreach (glob("$folder/*.php") as $file) {
+            $key = basename($file, '.php');
+            $config[$key] = require $file;
+        }
+
+        return $config;
     }
 
     /**

@@ -326,7 +326,7 @@ class Auth implements AuthContract, ArrayAccess
             ...$payload
         ];
 
-        return JWT::encode($payload, env('app_key'));
+        return JWT::encode($payload, config('app.key'));
     }
 
     /**

@@ -531,8 +531,8 @@ class Blueprint implements BlueprintContract
         if ($grammar->isMySQL()) {
             $collation = sprintf(
                 " DEFAULT CHARSET=%s COLLATE=%s",
-                $this->charset ?? env('database.charset', 'utf8mb4'),
-                $this->collation ?? env('database.collation', 'utf8mb4_general_ci')
+                $this->charset ?? config('database.charset', 'utf8mb4'),
+                $this->collation ?? config('database.collation', 'utf8mb4_general_ci')
             );
         }
 

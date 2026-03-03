@@ -45,7 +45,7 @@ interface ApplicationContract
      *
      * @return mixed The value of the environment variable, or the default value if not set.
      */
-    public function getEnv(string $key, $default = null): mixed;
+    public function getConfig(string $key, $default = null): mixed;
 
     /**
      * Applies a callback to the application instance.
@@ -53,14 +53,14 @@ interface ApplicationContract
      * This method takes a callback function which receives the application
      * instance, allowing custom application logic to be executed.
      * 
-     * @param null|array $env An array of environment variables to set.
+     * @param null|string|array $config An array of configuration values to set.
      * @param null|array $providers An array of service providers to register.
      * @param null|array $middlewares An array of middlewares to apply.
      * @param null|callable $then The callback to be applied to the application.
      * @return self
      */
     public function withApp(
-        null|array $env = null,
+        null|string|array $config = null,
         null|array $providers = null,
         null|array $middlewares = null,
         null|callable $then = null
