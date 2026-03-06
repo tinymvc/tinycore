@@ -81,7 +81,7 @@ class Uploader implements UploaderUtilContract
         $this->compress = $compress;
         $this->driver = $driver;
 
-        $uploadDir ??= config('paths.upload_dir');
+        $uploadDir ??= config('app.upload_dir');
 
         if ($uploadTo) {
             $uploadDir = dir_path("$uploadDir/$uploadTo");

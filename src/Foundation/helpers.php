@@ -693,7 +693,7 @@ if (!function_exists('storage_dir')) {
      */
     function storage_dir(string $path = '/'): string
     {
-        return dir_path(config('paths.storage_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('app.storage_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -710,7 +710,7 @@ if (!function_exists('lang_dir')) {
      */
     function lang_dir(string $path = '/'): string
     {
-        return dir_path(config('paths.lang_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('app.lang_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -728,7 +728,7 @@ if (!function_exists('upload_dir')) {
      */
     function upload_dir(string $path = '/'): string
     {
-        return dir_path(config('paths.upload_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('app.upload_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -746,7 +746,7 @@ if (!function_exists('cache_dir')) {
      */
     function cache_dir(string $path = '/'): string
     {
-        return dir_path(config('paths.cache_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('app.cache_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -764,7 +764,7 @@ if (!function_exists('views_dir')) {
      */
     function views_dir(string $path = '/'): string
     {
-        return dir_path(config('paths.views_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('app.views_dir') . '/' . ltrim($path, '/'));
     }
 }
 
@@ -782,7 +782,7 @@ if (!function_exists('temp_dir')) {
      */
     function temp_dir(string $path = '/'): string
     {
-        return dir_path(config('paths.temp_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('app.temp_dir') . '/' . ltrim($path, '/'));
     }
 }
 

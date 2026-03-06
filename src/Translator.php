@@ -54,7 +54,7 @@ class Translator implements TranslatorContract
     {
         // Determine the default language file if none is provided
         if ($lang_file === null) {
-            $lang_file = sprintf('%s/%s.php', config('paths.lang_dir'), config('app.lang', 'en'));
+            $lang_file = sprintf('%s/%s.php', config('app.lang_dir'), config('app.lang', 'en'));
         }
 
         $this->addLanguageFile($lang_file);

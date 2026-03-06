@@ -582,7 +582,7 @@ class Auth implements AuthContract, ArrayAccess
             $token = $matches[1];
 
             try {
-                $payload = JWT::decode($token, env('app_key'));
+                $payload = JWT::decode($token, config('app.key'));
                 if (isset($payload, $payload->id, $payload->exp) && carbon($payload->exp)->isFuture()) {
                     return $payload->id;
                 }
