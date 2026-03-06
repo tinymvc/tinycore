@@ -391,19 +391,19 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /**
      * Checks if the current request method matches any of the specified methods.
      * 
-     * @param string|array $methods The method or array of methods to check against.
+     * @param string|array $method The method or array of methods to check against.
      * @return bool True if the current request method is in the specified methods, false otherwise.
      */
-    public function isMethod(string|array $methods): bool
+    public function isMethod(string|array $method): bool
     {
         // Flatten the methods array if a single array argument is provided
-        $methods = is_array($methods) ? $methods : func_get_args();
+        $method = is_array($method) ? $method : func_get_args();
 
         // Convert the methods to an array of uppercase strings
-        $methods = array_map('strtoupper', $methods);
+        $method = array_map('strtoupper', $method);
 
         // Check if the current request method is in the list of methods
-        return in_array($this->method, $methods);
+        return in_array($this->method, $method);
     }
 
     /**
@@ -1085,8 +1085,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function offsetExists($name): bool
     {
-        $val = $this->offsetGet($name);
-        return $val !== null && $val !== ''; // Check for non-null and non-empty values
+        return $this->offsetGet($name) !== null;
     }
 
     /**
@@ -1171,12 +1170,41 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * This method checks if the specified key exists in the request data
      * (query parameters, post parameters, file uploads, or route parameters).
      *
-     * @param string $key The key to check for existence.
+     * @param string|array $key The key to check for existence.
      * @return bool True if the key exists, false otherwise.
      */
-    public function has(string $key): bool
+    public function has(string|array $key): bool
     {
-        return $this->offsetExists($key);
+        $key = is_array($key) ? $key : func_get_args();
+
+        foreach ($key as $k) {
+            if (!$this->offsetExists($k)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Checks if a specific key exists and is not empty in the request.
+     * 
+     * This method checks if the specified key exists in the request data
+     * (query parameters, post parameters, file uploads, or route parameters)
+     * and that its value is not empty.
+     *
+     * @param string|array $key The key or array of keys to check for existence and non-emptiness.
+     * @return bool True if all keys exist and are not empty, false otherwise.
+     */
+    public function filled(string|array $key): bool
+    {
+        $key = is_array($key) ? $key : func_get_args();
+
+        foreach ($key as $k) {
+            if (empty($this->offsetGet($k))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -1204,13 +1232,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * This method checks if at least one of the provided keys exists in the
      * request data (query parameters, post parameters, file uploads, or route parameters).
      *
-     * @param string|array $keys The key or array of keys to check for existence.
+     * @param string|array $key The key or array of keys to check for existence.
      * @return bool True if any of the keys exist, false otherwise.
      */
-    public function hasAny(string|array $keys): bool
+    public function hasAny(string|array $key): bool
     {
-        foreach ((array) $keys as $key) {
-            if ($this->offsetExists($key)) {
+        $key = is_array($key) ? $key : func_get_args();
+
+        foreach ($key as $k) {
+            if ($this->offsetExists($k)) {
                 return true;
             }
         }
@@ -1223,13 +1253,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * This method checks if all of the provided keys exist in the
      * request data (query parameters, post parameters, file uploads, or route parameters).
      *
-     * @param string|array $keys The key or array of keys to check for existence.
+     * @param string|array $key The key or array of keys to check for existence.
      * @return bool True if all of the keys exist, false otherwise.
      */
-    public function hasAll(string|array $keys): bool
+    public function hasAll(string|array $key): bool
     {
-        foreach ((array) $keys as $key) {
-            if (!$this->offsetExists($key)) {
+        $key = is_array($key) ? $key : func_get_args();
+
+        foreach ($key as $k) {
+            if (!$this->offsetExists($k)) {
                 return false;
             }
         }
@@ -1251,9 +1283,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @return Input
      *   Returns the validated attributes as an Sanitizer instance.
      */
-    public function validate(array $rules): Input
+    public function validate(array $rules, null|array $attributes = null, null|array $messages = null): Input
     {
         $validator = new Validator(); // Get the validator instance
+
+        $attributes ??= $this->all(); // Get all input attributes if not provided
+
+        $messages && $validator->mergeErrorMessages($messages); // Override error messages if provided
 
         // If the request is precognitive and has the 'precognition-validate-only' header, 
         // filter the rules to only validate the specified fields
@@ -1265,7 +1301,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
                 ->all();
         }
 
-        if (!$validator->validate($rules, $this->all())) { // Validate the request
+        if (!$validator->validate($rules, $attributes)) { // Validate the request
             $errors = $validator->getErrors(); // Get the errors as an array
 
             // If the request wants a JSON response
@@ -1294,7 +1330,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
                 }
 
                 $resp->withErrors($errors) // Attach the error messages
-                    ->withInput($this->all(array_keys($rules))) // Preserve input values
+                    ->withInput($attributes) // Preserve input values
                     ->send(); // Redirect the user back to the previous page
             }
             exit; // Exit the script to prevent further execution

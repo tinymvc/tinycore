@@ -1388,12 +1388,17 @@ if (!function_exists('validator')) {
      * Validates the given data against a set of rules.
      *
      * @param string|array $rules An array of validation rules to apply.
-     * @param array|null $data An optional array of data to validate.
+     * @param array|null $attributes An optional array of data to validate.
+     * @param array|null $messages An optional array of custom error messages.
      * @return \Spark\Http\Validator Returns a validator object.
      */
-    function validator(string|array $rules, null|array $data = null): Validator
+    function validator(string|array $rules, null|array $attributes = null, null|array $messages = null): Validator
     {
-        return Validator::make($rules, $data);
+        $validator = Validator::make($rules, $attributes);
+
+        $messages && $validator->mergeErrorMessages($messages);
+
+        return $validator;
     }
 }
 

@@ -106,7 +106,7 @@ class Session implements SessionContract
      */
     public static function regenerate(bool $deleteOldSession = false): bool
     {
-        return session_regenerate_id($deleteOldSession);
+        return is_web() && session_regenerate_id($deleteOldSession);
     }
 
     /**
@@ -195,8 +195,6 @@ class Session implements SessionContract
      */
     public static function close(): void
     {
-        if (self::isStarted()) {
-            session_write_close();
-        }
+        self::isStarted() && session_write_close();
     }
 }

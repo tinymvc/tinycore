@@ -903,6 +903,16 @@ class Validator implements ValidatorContract
     }
 
     /**
+     * Merges custom error messages with existing ones.
+     *
+     * @param array $messages Associative array of rule names and their custom error messages to merge.
+     */
+    public static function mergeErrorMessages(array $messages): void
+    {
+        self::$errorMessages = [...self::$errorMessages, ...$messages];
+    }
+
+    /**
      * Sets a custom error message for a specific validation rule.
      *
      * @param string $rule Validation rule name.

@@ -58,6 +58,85 @@ class Middleware implements MiddlewareContract
     }
 
     /**
+     * Alias for register method
+     * 
+     * This provides a more intuitive way to register middlewares using an alias.
+     * It simply calls the register method internally.
+     * 
+     * @param string $alias The alias for the middleware.
+     * @param string|callable $middleware The middleware class or callable.
+     * 
+     * @return self
+     */
+    public function alias(string $alias, string|callable $middleware): self
+    {
+        return $this->register($alias, $middleware);
+    }
+
+    /**
+     * Check if a middleware alias is registered
+     * 
+     * This method checks if a middleware with the given alias exists in the registry.
+     * It returns true if the alias is registered, false otherwise.
+     * 
+     * @param string $alias The alias to check for.
+     * @return bool True if the alias is registered, false otherwise.
+     */
+    public function has(string $alias): bool
+    {
+        return isset($this->middlewares[$alias]);
+    }
+
+    /**
+     * Get the middleware class or callable by alias
+     * 
+     * This method retrieves the middleware associated with the given alias.
+     * If the alias is not registered, it throws a MiddlewareNotFoundExceptions.
+     * 
+     * @param string $alias The alias of the middleware to retrieve.
+     * @throws MiddlewareNotFoundExceptions If the middleware alias is not found.
+     * 
+     * @return string|callable The middleware class name or callable associated with the alias.
+     */
+    public function get(string $alias): string|callable
+    {
+        if (!$this->has($alias)) {
+            throw new MiddlewareNotFoundExceptions("Middleware with alias '{$alias}' not found.");
+        }
+        return $this->middlewares[$alias];
+    }
+
+    /**
+     * Remove a middleware alias from the registry
+     * 
+     * This method removes the middleware associated with the given alias from the registry.
+     * It returns the instance for method chaining.
+     * 
+     * @param string $alias The alias of the middleware to remove.
+     * @return self
+     */
+    public function remove(string $alias): self
+    {
+        unset($this->middlewares[$alias]);
+        return $this;
+    }
+
+    /**
+     * Clear all registered middlewares and the execution stack
+     * 
+     * This method removes all registered middlewares and clears the execution stack.
+     * It returns the instance for method chaining.
+     * 
+     * @return self
+     */
+    public function clear(): self
+    {
+        $this->middlewares = [];
+        $this->stack = [];
+        return $this;
+    }
+
+    /**
      * Register multiple middlewares at once
      * 
      * This method allows you to register multiple middlewares

@@ -1,0 +1,22 @@
+<?php
+
+namespace {{ namespace }};
+
+use Spark\Foundation\Http\FormRequest;
+
+class {{ class }} extends FormRequest
+{
+    public function authorize(): bool
+    {
+        // For simple apps, you might return true, but
+        // in a real app, you would add logic here.
+        return true; 
+    }
+
+    public function rules(): array
+    {
+        return [
+            // Define your validation rules here.
+        ];
+    }
+}

@@ -224,6 +224,33 @@ class MakeStubCommandsHandler
     }
 
     /**
+     * Create a form request stub.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     *
+     * @return void
+     */
+    public function makeFormRequest(array $args)
+    {
+        $this->askName($args, 'What is the name of the form request?');
+
+        $name = $this->resolveSuffix($args['_args'][0], 'Request');
+
+        StubCreation::create(
+            $name,
+            [
+                'stub' => __DIR__ . '/stubs/request.stub',
+                'destination' => 'app/Http/Requests/::subfolder:ucfirst/::name:ucfirst.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'App\Http\Requests::subfolder:namespace',
+                    '{{ class }}' => '::name:ucfirst',
+                ],
+            ]
+        );
+    }
+
+    /**
      * Create a job stub.
      *
      * @param array $args
