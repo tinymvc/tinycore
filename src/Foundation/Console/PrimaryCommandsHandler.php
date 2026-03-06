@@ -323,6 +323,54 @@ class PrimaryCommandsHandler
     }
 
     /**
+     * Clears the configuration cache.
+     *
+     * This method removes the cached configuration file, allowing the application
+     * to load the latest configuration settings from the config directory.
+     *
+     * @return void
+     */
+    public function clearConfigCache()
+    {
+        $cacheFile = root_dir('bootstrap/cache/config.php');
+
+        if (file_exists($cacheFile)) {
+            unlink($cacheFile);
+        }
+
+        Prompt::message("Configuration cache cleared.", "success");
+    }
+
+    /**
+     * Caches the configuration files.
+     *
+     * This method reads all the configuration files from the config directory,
+     * compiles them into a single array, and saves that array as a PHP file
+     * in the bootstrap/cache directory. This allows for faster loading of
+     * configuration settings in production environments.
+     *
+     * @return void
+     */
+    public function cacheConfig()
+    {
+        $config = [];
+        $discover = root_dir('config');
+        $cacheFile = root_dir('bootstrap/cache/config.php');
+
+        foreach (glob("$discover/*.php") as $file) {
+            $key = basename($file, '.php');
+            $config[$key] = require $file;
+        }
+
+        file_put_contents(
+            $cacheFile,
+            "<?php\n\nreturn " . var_export($config, true) . ";\n"
+        );
+
+        Prompt::message("Configuration cached successfully.", "success");
+    }
+
+    /**
      * Clears all cache files in the application.
      *
      * This method removes all cache files from the storage/cache directory,
