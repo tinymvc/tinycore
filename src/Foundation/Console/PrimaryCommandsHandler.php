@@ -418,7 +418,7 @@ class PrimaryCommandsHandler
      */
     public function generateAppKey()
     {
-        $envFile = root_dir('env.php');
+        $envFile = root_dir('.env');
 
         if (!is_writable($envFile) && !chmod($envFile, 0666)) {
             Prompt::message("<danger>Error</danger> Environment file is not writable.", "warning");
@@ -427,8 +427,8 @@ class PrimaryCommandsHandler
 
         $envFileContent = file_get_contents($envFile);
         $envFileContent = str_replace(
-            '{APP_KEY}',
-            bin2hex(random_bytes(16)),
+            'APP_KEY=',
+            'APP_KEY=' . bin2hex(random_bytes(16)),
             $envFileContent
         );
 

@@ -2,6 +2,8 @@
 
 namespace Spark;
 
+use function is_float;
+use function is_int;
 use function strlen;
 
 /**
@@ -61,7 +63,7 @@ class DotEnv
 
         file_put_contents(
             $this->compilePath,
-            '<?php return ' . var_export($env, true) . ';' . PHP_EOL
+            '<?php return ' . $this->export($env) . ';' . PHP_EOL
         );
 
         return $env;
@@ -88,14 +90,15 @@ class DotEnv
     }
 
     /**
-     * Parse the .env file into an associative array.
+     * Parse the .env file into an associative array with properly typed values.
      *
      * Supports:
      *  - comments (#)
      *  - empty lines
-     *  - quoted values (single & double)
+     *  - quoted values (single & double) — always treated as strings
      *  - inline comments (outside quotes)
      *  - nested variable interpolation: ${VAR}
+     *  - native type casting: true/false → bool, null → null, integers, floats
      */
     protected function parse(): array
     {
@@ -119,7 +122,7 @@ class DotEnv
             $key = trim($key);
             $value = trim($value);
 
-            // Strip surrounding quotes
+            // Quoted values are always kept as strings (no type casting)
             if ($this->isQuoted($value)) {
                 $quote = $value[0];
                 $value = substr($value, 1, -1);
@@ -132,18 +135,116 @@ class DotEnv
                         $value,
                     );
                 }
+
+                // Resolve ${VAR} inside quoted strings, but keep as string
+                $value = $this->resolveNestedVariables($value, $env);
+
             } else {
                 // Remove inline comments (not inside quotes)
                 $value = $this->stripInlineComment($value);
-            }
 
-            // Resolve nested ${VAR} references
-            $value = $this->resolveNestedVariables($value, $env);
+                // Resolve ${VAR} references before casting
+                $value = $this->resolveNestedVariables($value, $env);
+
+                // Cast to the appropriate native PHP type
+                $value = $this->castValue($value);
+            }
 
             $env[$key] = $value;
         }
 
         return $env;
+    }
+
+    /**
+     * Cast an unquoted string value to its appropriate native PHP type.
+     *
+     * Rules (in order):
+     *  - "true"          → (bool) true
+     *  - "false"         → (bool) false
+     *  - "null"          → null
+     *  - pure integer literal     → (int)
+     *  - pure float literal       → (float)
+     *  - everything else          → (string)
+     */
+    protected function castValue(string $value): mixed
+    {
+        $lower = strtolower($value);
+
+        if ($lower === 'true') {
+            return true;
+        }
+
+        if ($lower === 'false') {
+            return false;
+        }
+
+        if ($lower === 'null') {
+            return null;
+        }
+
+        // Integer: optional leading sign, digits only
+        if (preg_match('/^[+-]?\d+$/', $value)) {
+            return (int) $value;
+        }
+
+        // Float: optional leading sign, digits with a single decimal point or exponent
+        if (
+            preg_match('/^[+-]?(\d+\.\d*|\.\d+)([eE][+-]?\d+)?$/', $value)
+            || preg_match('/^[+-]?\d+[eE][+-]?\d+$/', $value)
+        ) {
+            return (float) $value;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Export the parsed environment array as a valid PHP literal,
+     * preserving native types (bool, null, int, float, string).
+     *
+     * Unlike var_export(), this produces a compact, human-readable format.
+     */
+    protected function export(array $env): string
+    {
+        $lines = [];
+
+        foreach ($env as $key => $value) {
+            $lines[] = '  ' . var_export($key, true) . ' => ' . $this->exportScalar($value);
+        }
+
+        return "array(\n" . implode(",\n", $lines) . ",\n)";
+    }
+
+    /**
+     * Render a single scalar value as a PHP literal.
+     */
+    protected function exportScalar(mixed $value): string
+    {
+        if ($value === null) {
+            return 'null';
+        }
+
+        if ($value === true) {
+            return 'true';
+        }
+
+        if ($value === false) {
+            return 'false';
+        }
+
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        if (is_float($value)) {
+            // Ensure the literal is always a valid PHP float (has decimal point or exponent)
+            $str = var_export($value, true);
+            return $str;
+        }
+
+        // String — use var_export for safe escaping
+        return var_export($value, true);
     }
 
     /**
@@ -181,7 +282,41 @@ class DotEnv
         return preg_replace_callback('/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', function (array $matches) use ($env) {
             $var = $matches[1];
 
-            return $env[$var] ?? $_ENV[$var] ?? $_SERVER[$var] ?? getenv($var) ?: $matches[0];
+            if (array_key_exists($var, $env)) {
+                return $this->scalarToString($env[$var]);
+            }
+
+            if (isset($_ENV[$var])) {
+                return $_ENV[$var];
+            }
+
+            if (isset($_SERVER[$var])) {
+                return $_SERVER[$var];
+            }
+
+            $envVal = getenv($var);
+
+            return $envVal !== false ? $envVal : $matches[0];
         }, $value);
+    }
+
+    /**
+     * Convert a typed scalar back to its string representation for interpolation.
+     */
+    protected function scalarToString(mixed $value): string
+    {
+        if ($value === true) {
+            return 'true';
+        }
+
+        if ($value === false) {
+            return 'false';
+        }
+
+        if ($value === null) {
+            return '';
+        }
+
+        return (string) $value;
     }
 }
