@@ -636,7 +636,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function checkId(): void
     {
-        unset($this->id); // Unset the ID property to ensure a fresh check
+        $this->id = 0; // Default to 0 (not logged in)
 
         if ($this->hasDriver()) {
             $this->id = $this->getDriver()->checkId();
