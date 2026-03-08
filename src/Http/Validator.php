@@ -88,7 +88,7 @@ class Validator implements ValidatorContract
             }
 
             // Check if field is not nullable
-            $is_not_nullable = !in_array('nullable', $fieldRules, true);
+            $is_not_nullable = $this->isNotNullable($fieldRules);
 
             // Check if field has numeric validation rules
             $is_numeric_field = $this->hasNumericValidation($fieldRules);
@@ -183,6 +183,27 @@ class Validator implements ValidatorContract
 
         // Return validated data or false if there are errors
         return empty($this->errors) ? $this->cleanData = new Input($validData) : false;
+    }
+
+    /**
+     * Check if field is not nullable based on its rules
+     * 
+     * A field is considered not nullable if it does not have the 'nullable' rule
+     * and does not have conditional required rules like 'required_if' or 'required_unless'.
+     * 
+     * @param array $rules Array of validation rules for a field
+     * @return bool True if field is not nullable, false otherwise
+     */
+    private function isNotNullable(array $rules): bool
+    {
+        if (
+            in_array('required_if', $rules, true)
+            || in_array('required_unless', $rules, true)
+        ) {
+            return false; // If field has conditional required rules, treat it as nullable for validation purposes
+        }
+
+        return !in_array('nullable', $rules, true);
     }
 
     /**
