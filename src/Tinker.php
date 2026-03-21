@@ -12,7 +12,7 @@ use Spark\Routing\Router;
 use Spark\Translator;
 use Spark\Utils\Cache;
 use Spark\Utils\FileManager;
-use Spark\Ping\Http;
+use Spark\Http\Client\Http;
 use Spark\Utils\Image;
 use Spark\Utils\Mail;
 use Throwable;

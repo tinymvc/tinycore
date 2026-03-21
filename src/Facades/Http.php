@@ -3,8 +3,8 @@
 namespace Spark\Facades;
 
 use Spark\Facades\Facade;
-use Spark\Ping\Contracts\HttpResponseContract as HttpResponse;
-use Spark\Ping\Http as BaseHttp;
+use Spark\Http\Client\Contracts\HttpResponseContract as HttpResponse;
+use Spark\Http\Client\Http as BaseHttp;
 
 /**
  * Class Http

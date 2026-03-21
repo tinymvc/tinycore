@@ -6,15 +6,12 @@ use Spark\Contracts\Http\InputContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Collection;
-use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
-use function array_slice;
 use function func_get_args;
 use function is_array;
 use function is_int;
 use function is_string;
 use function in_array;
-use function strval;
 
 /**
  * Class Sanitizer
@@ -22,99 +19,12 @@ use function strval;
  * Sanitizer class provides methods to sanitize and validate different data types.
  * It includes methods for emails, URLs, HTML, numbers, booleans, dates, and custom data arrays.
  * 
- * @method string after($field, $search)
- * @method string afterLast($field, $search)
- * @method string ascii($field, $language = 'en')
- * @method string transliterate($field, $unknown = '?', $strict = false)
- * @method string before($field, $search)
- * @method string beforeLast($field, $search)
- * @method string between($field, $from, $to)
- * @method string betweenFirst($field, $from, $to)
- * @method string camel($field)
- * @method string|false charAt($field, $index)
- * @method string chopStart($field, $needle)
- * @method string chopEnd($field, $needle)
- * @method bool contains($field, $needles, $ignoreCase = false)
- * @method bool containsAll($field, $needles, $ignoreCase = false)
- * @method bool doesntContain($field, $needles, $ignoreCase = false)
- * @method string convertCase($field, int $mode = MB_CASE_FOLD, ?string $encoding = 'UTF-8')
- * @method string deduplicate($field, $character = ' ')
- * @method bool endsWith($field, $needles)
- * @method string|null excerpt($field, $phrase = '', $options = [])
- * @method string finish($field, $cap)
- * @method string wrap($field, $before, $after = null)
- * @method string unwrap($field, $before, $after = null)
- * @method bool is($pattern, $field, $ignoreCase = false)
- * @method bool isAscii($field)
- * @method bool isJson($field)
- * @method bool isUrl($field, array $protocols = [])
- * @method bool isUuid($field, $version = null)
- * @method string kebab($field)
- * @method int length($field, $encoding = null)
- * @method string limit($field, $limit = 100, $end = '...', $preserveWords = false)
- * @method string lower($field)
- * @method string words($field, $words = 100, $end = '...')
- * @method string markdown($field, array $options = [], array $extensions = [])
- * @method string inlineMarkdown($field, array $options = [], array $extensions = [])
- * @method string mask($field, $character, $index, $length = null, $encoding = 'UTF-8')
- * @method string match($pattern, $field)
- * @method bool isMatch($pattern, $field)
- * @method \Spark\Support\Collection matchAll($pattern, $field)
- * @method string numbers($field)
- * @method string padBoth($field, $length, $pad = ' ')
- * @method string padLeft($field, $length, $pad = ' ')
- * @method string padRight($field, $length, $pad = ' ')
- * @method array parseCallback($field, $default = null)
- * @method string plural($field, $count = 2)
- * @method string pluralStudly($field, $count = 2)
- * @method string pluralPascal($field, $count = 2)
- * @method int|false position($field, $needle, $offset = 0, $encoding = null)
- * @method string repeat($field, $times)
- * @method string replaceArray($search, $replace, $field)
- * @method string|string[] replace($search, $replace, $field, $caseSensitive = true)
- * @method string replaceFirst($search, $replace, $field)
- * @method string replaceStart($search, $replace, $field)
- * @method string replaceLast($search, $replace, $field)
- * @method string replaceEnd($search, $replace, $field)
- * @method string|string[]|null replaceMatches($pattern, $replace, $field, $limit = -1)
- * @method string remove($search, $field, $caseSensitive = true)
- * @method string reverse($field)
- * @method string start($field, $prefix)
- * @method string upper($field)
- * @method string title($field)
- * @method string headline($field)
- * @method string apa($field)
- * @method string singular($field)
- * @method string slug($field, $separator = '-', $language = 'en', $dictionary = ['@' => 'at'])
- * @method string snake($field, $delimiter = '_')
- * @method string trim($field, $charlist = null)
- * @method string ltrim($field, $charlist = null)
- * @method string rtrim($field, $charlist = null)
- * @method string squish($field)
- * @method bool startsWith($field, $needles)
- * @method string studly($field)
- * @method string pascal($field)
- * @method string substr($field, $start, $length = null, $encoding = 'UTF-8')
- * @method int substrCount($field, $needle, $offset = 0, $length = null)
- * @method string|string[] substrReplace($field, $replace, $offset = 0, $length = null)
- * @method string swap(array $map, $field)
- * @method string take($field, int $limit)
- * @method string toBase64($field)
- * @method string|false fromBase64($field, $strict = false)
- * @method string lcfirst($field)
- * @method string ucfirst($field)
- * @method string[] ucsplit($field)
- * @method int wordCount($field, $characters = null)
- * @method string wordWrap($field, $characters = 75, $break = "\n", $cutLongWords = false)
- *
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAccess, \IteratorAggregate
 {
-    use Macroable {
-        __call as macroCall;
-    }
+    use Macroable;
 
     /**
      * The data array to be sanitized.
@@ -852,6 +762,20 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     }
 
     /**
+     * Converts the sanitizer data array to a Spark\Support\Stringable instance.
+     *
+     * @param string $key Key in the data array to convert to Stringable.
+     * @param string $default Default value if key is not found.
+     * @return \Spark\Support\Stringable The Stringable instance containing the sanitized string.
+     */
+    public function str(string $key, string $default = ''): \Spark\Support\Stringable
+    {
+        return new \Spark\Support\Stringable(
+            $this->data->get($key, $default)
+        );
+    }
+
+    /**
      * Converts the sanitizer data array to an associative array.
      *
      * @return array The sanitizer data array.
@@ -909,21 +833,5 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function __toString(): string
     {
         return $this->text($this->data->first(), true) ?? '';
-    }
-
-    /**
-     * Handles dynamic method calls to the query instance.
-     *
-     * @param string $name The method name.
-     * @param array $arguments The method arguments.
-     * @return mixed The result of the query method call.
-     */
-    public function __call($name, $arguments)
-    {
-        if (static::hasMacro($name)) {
-            return $this->macroCall($name, $arguments);
-        }
-
-        return Str::$name(strval($this->text($arguments[0])), ...array_slice($arguments, 1));
     }
 }

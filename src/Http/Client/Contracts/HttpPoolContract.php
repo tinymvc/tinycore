@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Ping\Contracts;
+namespace Spark\Http\Client\Contracts;
 
 /**
  * Interface HttpPoolContract
@@ -9,7 +9,7 @@ namespace Spark\Ping\Contracts;
  * This interface ensures that any implementation of an HTTP pool will have the necessary methods
  * for adding requests, executing them, and managing the pool of pending requests.
  * 
- * @package Spark\Ping\Contracts
+ * @package Spark\Http\Client\Contracts
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 interface HttpPoolContract
@@ -90,7 +90,7 @@ interface HttpPoolContract
      * Execute all pending requests concurrently.
      * 
      * @return array<HttpResponseContract[]> Array of HttpResponse objects
-     * @throws \Spark\Ping\Exceptions\HttpException
+     * @throws \Spark\Http\Client\Exceptions\HttpException
      */
     public function executePendingRequests(): array;
 
@@ -99,7 +99,7 @@ interface HttpPoolContract
      * 
      * @param array<HttpRequestContract[]> $requests Array of HttpPendingRequest objects
      * @return array<HttpResponseContract[]> Array of HttpResponse objects
-     * @throws \Spark\Ping\Exceptions\HttpException
+     * @throws \Spark\Http\Client\Exceptions\HttpException
      */
     public function execute(array $requests): array;
 }

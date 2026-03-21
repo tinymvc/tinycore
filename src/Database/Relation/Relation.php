@@ -152,6 +152,17 @@ abstract class Relation
     abstract public function getConfig(): array;
 
     /**
+     * Disable lazy loading for this relationship.
+     * 
+     * @return self
+     */
+    public function disableLazyLoading(): self
+    {
+        $this->lazy = false;
+        return $this;
+    }
+
+    /**
      * Proxy method calls to the underlying QueryBuilder.
      * 
      * @param string $method

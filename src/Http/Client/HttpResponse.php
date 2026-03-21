@@ -1,9 +1,9 @@
 <?php
 
-namespace Spark\Ping;
+namespace Spark\Http\Client;
 
 use Spark\Contracts\Support\Arrayable;
-use Spark\Ping\Contracts\HttpResponseContract;
+use Spark\Http\Client\Contracts\HttpResponseContract;
 
 /**
  * HttpResponse class provides a structured way to handle HTTP responses.

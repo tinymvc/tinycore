@@ -1731,13 +1731,23 @@ class QueryBuilder implements QueryBuilderContract
      * Get a single column's values from all matching rows.
      *
      * @param string $column The column name to retrieve.
+     * @param string|null $key Optional column name to use as keys in the returned array.
      * @return array
      */
-    public function pluck(string $column): array
+    public function pluck(string $column, ?string $key = null): array
     {
-        $results = $this->select($column)->all();
+        $fields = array_filter([$column, $key]);
+        $results = $this->select($fields)->all();
 
-        return array_map(fn($row) => is_object($row) ? $row->$column : $row[$column], $results);
+        if ($key === null) {
+            return array_map(fn($row) => is_object($row) ? $row->$column : $row[$column], $results);
+        }
+
+        return array_column(
+            array_map(fn($row) => is_object($row) ? [$row->$key => $row->$column] : [$row[$key] => $row[$column]], $results),
+            $column,
+            $key
+        );
     }
 
     /**
@@ -2267,10 +2277,13 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Retrieves the first result from the query.
      *
+     * @param null|string|array $fields Optional fields to select for the first result.
      * @return mixed
      */
-    public function first(): mixed
+    public function first(null|string|array $fields = null): mixed
     {
+        $fields && $this->select($fields);
+
         // Execute current select query by limiting to single record.
         $this->take(1)->executeSelectQuery();
 
@@ -2293,15 +2306,16 @@ class QueryBuilder implements QueryBuilderContract
      * Retrieves the first result or throws an exception if not found.
      *
      * @param mixed $where Optional WHERE clause to filter results.
+     * @param null|string|array $fields Optional fields to select for the first result.
      * @return mixed The first result object or throws NotFoundException.
      * @throws \Spark\Exceptions\NotFoundException If no results are found.
      */
-    public function firstOrFail($where = null): mixed
+    public function firstOrFail($where = null, $fields = null): mixed
     {
         $this->where($where);
 
         // Get the first result, or throw an exception if not found.
-        $result = $this->first();
+        $result = $this->first($fields);
 
         if ($result === false) {
             throw new NotFoundException('No results found for the query.');
@@ -2315,19 +2329,21 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return mixed
      */
-    public function last(): mixed
+    public function last(null|string|array $fields = null): mixed
     {
-        return $this->orderDesc()->first();
+        return $this->orderDesc()->first($fields);
     }
 
     /**
      * Sets the query to order results by the latest created_at timestamp.
      *
      * @param string $field The field to order by.
+     * @param null|string|array $fields Optional fields to select.
      * @return self
      */
-    public function latest(string $field = 'created_at'): self
+    public function latest(string $field = 'created_at', $fields = null): self
     {
+        $fields && $this->select($fields);
         return $this->orderDesc($this->withAlias($field));
     }
 
@@ -2335,10 +2351,13 @@ class QueryBuilder implements QueryBuilderContract
      * Sets the query to order results by the oldest created_at timestamp.
      * 
      * @param string $field The field to order by.
+     * @param null|string|array $fields Optional fields to select.
      * @return self
      */
-    public function oldest(string $field = 'created_at'): self
+    public function oldest(string $field = 'created_at', $fields = null): self
     {
+        $fields && $this->select($fields);
+
         return $this->orderAsc($this->withAlias($field));
     }
 
@@ -2395,10 +2414,13 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @param int $limit Number of items per page.
      * @param string $keyword URL query parameter name for pagination.
+     * @param null|string|array $fields Optional fields to select.
      * @return \Spark\Utils\Paginator
      */
-    public function paginate(int $limit = 10, string $keyword = 'page'): Paginator
+    public function paginate(int $limit = 10, string $keyword = 'page', $fields = null): Paginator
     {
+        $fields && $this->select($fields);
+
         // Select records & Create a paginator object.
         if (empty($this->query['select'])) {
             $this->select();

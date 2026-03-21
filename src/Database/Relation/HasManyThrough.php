@@ -100,6 +100,7 @@ class HasManyThrough extends Relation
      *     localKey: string|null,
      *     secondLocalKey: string|null,
      *     lazy: bool,
+     *     append: array,
      *     callback: Closure|null
      * }
      */
@@ -116,5 +117,17 @@ class HasManyThrough extends Relation
             'append' => $this->append,
             'callback' => $this->callback,
         ];
+    }
+
+    /**
+     * Add additional fields to be appended to the relationship.
+     * 
+     * @param array $fields The fields to append.
+     * @return self
+     */
+    public function withPivot(array $fields): self
+    {
+        $this->append = [...$this->append, ...$fields];
+        return $this;
     }
 }

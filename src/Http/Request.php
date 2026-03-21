@@ -432,7 +432,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isPrecognitive(): bool
     {
-        return $this->headers->hasAny('precognition', 'x-precognition');
+        return $this->headers->has('precognition');
     }
 
     /**
@@ -1293,10 +1293,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 
         // If the request is precognitive and has the 'precognition-validate-only' header, 
         // filter the rules to only validate the specified fields
-        if ($this->isPrecognitive() && $this->headers->hasAny('precognition-validate-only', 'x-precognition-validate-only')) {
+        if ($this->isPrecognitive() && $this->headers->has('precognition-validate-only')) {
             $rules = collect($rules)
                 ->only(
-                    explode(',', $this->headers->only('precognition-validate-only', 'x-precognition-validate-only')->first() ?: '')
+                    explode(',', $this->headers->get('precognition-validate-only', ''))
                 )
                 ->all();
         }
@@ -1342,9 +1342,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
                 ->noContent()
                 ->withHeaders([
                     'Precognition' => 'true',
-                    'X-Precognition' => 'true',
                     'Precognition-Success' => 'true',
-                    'X-Precognition-Success' => 'true',
                     'Vary' => 'Precognition',
                 ])
                 ->send();

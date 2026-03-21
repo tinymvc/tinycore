@@ -39,11 +39,12 @@ if (!function_exists('app')) {
      * This function returns the application instance, which is the top-level class
      * responsible for managing the application's lifecycle.
      *
-     * @param null|string $abstract [optional] The abstract name or class name of the service or value to retrieve.
-     *                          If not provided, the application instance is returned.
-     * @param array $parameters [optional] An array of parameters to pass when resolving the service or value.
+     * @template TClass of object
      *
-     * @return ($abstract is null ? Application : mixed) The application instance or the resolved instance of the specified class or interface.
+     * @param  string|class-string<TClass>|null  $abstract [optional] The abstract name or class name of the service or value to retrieve.
+     *                                                      If not provided, the application instance is returned.
+     * @param array $parameters [optional] An array of parameters to pass when resolving the service or value.
+     * @return ($abstract is class-string<TClass> ? TClass : ($abstract is null ? \Spark\Foundation\Application : mixed))
      */
     function app(null|string $abstract = null, array $parameters = []): mixed
     {
@@ -81,9 +82,10 @@ if (!function_exists('get')) {
      * This function resolves and returns the instance of the specified class or interface
      * abstract from the application's dependency injection container.
      * 
-     * @param string $abstract The class or interface name to resolve.
-     * 
-     * @return mixed The resolved instance of the specified class or interface.
+     * @template TClass of object
+     *
+     * @param  string|class-string<TClass> $abstract The abstract name or class name of the
+     * @return ($abstract is class-string<TClass> ? TClass : mixed)
      */
     function get(string $abstract)
     {
@@ -1772,7 +1774,7 @@ if (!function_exists('http')) {
      * @param array $params Optional. The query parameters for the request.
      * @param array $headers Optional. The headers for the request.
      * @param array $options Optional. Additional options for the HTTP request.
-     * @return ($url is null ? \Spark\Ping\Contracts\HttpContract : \Spark\Ping\Contracts\HttpResponseContract) The HTTP instance or the response from the request.
+     * @return ($url is null ? \Spark\Http\Client\Contracts\HttpContract : \Spark\Http\Client\Contracts\HttpResponseContract) The HTTP instance or the response from the request.
      */
     function http(
         string $method = 'GET',
@@ -1780,8 +1782,8 @@ if (!function_exists('http')) {
         array $params = [],
         array $headers = [],
         array $options = []
-    ): \Spark\Ping\Contracts\HttpContract|\Spark\Ping\Contracts\HttpResponseContract {
-        $http = \Spark\Ping\Http::make($method);
+    ): \Spark\Http\Client\Contracts\HttpContract|\Spark\Http\Client\Contracts\HttpResponseContract {
+        $http = \Spark\Http\Client\Http::make($method);
         $http->withHeaders($headers);
         $http->withOptions($options);
 

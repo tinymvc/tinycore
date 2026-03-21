@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Ping\Contracts;
+namespace Spark\Http\Client\Contracts;
 
 /**
  * HttpResponseContract defines the contract for handling HTTP responses.

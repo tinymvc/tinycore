@@ -1,10 +1,10 @@
 <?php
 
-namespace Spark\Ping;
+namespace Spark\Http\Client;
 
-use Spark\Ping\Contracts\HttpRequestContract;
-use Spark\Ping\Contracts\HttpResponseContract;
-use Spark\Ping\Exceptions\HttpException;
+use Spark\Http\Client\Contracts\HttpRequestContract;
+use Spark\Http\Client\Contracts\HttpResponseContract;
+use Spark\Http\Client\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
 use function in_array;
 use function is_array;
@@ -16,7 +16,7 @@ use function is_string;
  * 
  * Represents a pending HTTP request in the pool.
  * 
- * @package Spark\Ping
+ * @package Spark\Http\Client
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class HttpRequest implements HttpRequestContract
@@ -517,7 +517,7 @@ class HttpRequest implements HttpRequestContract
      * Build the cURL handle for this request.
      * 
      * @return resource|\CurlHandle The cURL handle
-     * @throws \Spark\Ping\Exceptions\HttpException
+     * @throws \Spark\Http\Client\Exceptions\HttpException
      */
     public function buildCurlHandle()
     {
@@ -576,8 +576,8 @@ class HttpRequest implements HttpRequestContract
     /**
      * Execute the HTTP request.
      * 
-     * @return \Spark\Ping\Contracts\HttpResponseContract
-     * @throws \Spark\Ping\Exceptions\HttpException
+     * @return \Spark\Http\Client\Contracts\HttpResponseContract
+     * @throws \Spark\Http\Client\Exceptions\HttpException
      */
     public function execute(): HttpResponseContract
     {

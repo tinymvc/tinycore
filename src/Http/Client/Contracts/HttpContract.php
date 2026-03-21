@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Ping\Contracts;
+namespace Spark\Http\Client\Contracts;
 
 /**
  * Interface defining the contract for the Http utility class.
