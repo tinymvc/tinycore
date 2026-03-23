@@ -211,6 +211,28 @@ class DB implements DBContract
     }
 
     /**
+     * Prepares and executes an SQL statement with optional parameters and options.
+     *
+     * @param string $statement The SQL statement to execute.
+     * @param array $options Options for statement preparation.
+     * @param array $params Parameters to bind to the SQL statement.
+     * @return bool True on success, false on failure.
+     */
+    public function statement(string $statement, array $options = [], array $params = []): bool
+    {
+        $started = microtime(true);
+        $startedMemory = memory_get_usage(true);
+
+        $result = $this->getPdo()
+            ->prepare($statement, $options)
+            ->execute($params);
+
+        $this->log($started, $statement, $startedMemory);
+
+        return $result;
+    }
+
+    /**
      * Prepares an SQL statement for execution with optional options.
      *
      * @param string $statement The SQL query to prepare.

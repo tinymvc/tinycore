@@ -6,7 +6,6 @@ use Closure;
 use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
-use Spark\Support\Str;
 use function func_get_args;
 use function in_array;
 use function is_array;
