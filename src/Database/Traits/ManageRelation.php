@@ -749,6 +749,21 @@ trait ManageRelation
                     ->whereRaw(
                         $this->wrapper->wrapTable($throughTable) . "." . $this->wrapper->wrapColumn($relationConfig['firstKey']) . " = " .
                         $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
+                    )
+                    ->unless(
+                        empty($relationConfig['wherePivot']),
+                        fn($q) => $q->where(
+                            array_map(
+                                fn($condition) =>
+                                is_array($condition) ? [
+                                    str_replace('t.', $this->wrapper->wrapTable($throughTable) . ".", $condition[0]),
+                                    $condition[1] ?? null,
+                                    $condition[2] ?? null,
+                                    $condition[3] ?? null,
+                                ] : str_replace('t.', $this->wrapper->wrapTable($throughTable) . ".", $condition),
+                                $relationConfig['wherePivot']
+                            )
+                        )
                     );
                 break;
 

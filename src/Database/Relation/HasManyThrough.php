@@ -5,6 +5,7 @@ namespace Spark\Database\Relation;
 use Closure;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
+use function is_array;
 
 /**
  * Class HasManyThrough
@@ -22,6 +23,9 @@ use Spark\Database\QueryBuilder;
  */
 class HasManyThrough extends Relation
 {
+    /** @var array Additional conditions for the pivot table in the relationship. */
+    protected array $wherePivot = [];
+
     /**
      * Create a new HasManyThrough relationship instance.
      * 
@@ -101,6 +105,7 @@ class HasManyThrough extends Relation
      *     secondLocalKey: string|null,
      *     lazy: bool,
      *     append: array,
+     *     wherePivot: array,
      *     callback: Closure|null
      * }
      */
@@ -115,8 +120,27 @@ class HasManyThrough extends Relation
             'secondLocalKey' => $this->secondLocalKey,
             'lazy' => $this->lazy,
             'append' => $this->append,
+            'wherePivot' => $this->buildPivotConditions(),
             'callback' => $this->callback,
         ];
+    }
+
+    /**
+     * Build the pivot conditions for the relationship.
+     * 
+     * @return array
+     */
+    private function buildPivotConditions(): array
+    {
+        return array_map(function ($condition) {
+            if (
+                is_array($condition) && isset($condition[0]) &&
+                !str_starts_with($condition[0], 't.')
+            ) {
+                $condition[0] = "t.$condition[0]";
+            }
+            return $condition;
+        }, $this->wherePivot);
     }
 
     /**
@@ -129,5 +153,32 @@ class HasManyThrough extends Relation
     {
         $this->append = [...$this->append, ...$fields];
         return $this;
+    }
+
+    /**
+     * Add additional constraints for the pivot table.
+     * 
+     * @param array|string $column The column name or an array of conditions.
+     * @param string|null $operator The operator for the condition (if $column is a string).
+     * @param mixed|null $value The value for the condition (if $column is a string).
+     * @return self
+     */
+    public function wherePivot(array|string $column, null|string $operator = null, $value = null, null|string $andOr = null): self
+    {
+        $this->wherePivot[] = compact('column', 'operator', 'value', 'andOr');
+        return $this;
+    }
+
+    /**
+     * Add an "OR" condition for the pivot table.
+     * 
+     * @param array|string $column The column name or an array of conditions.
+     * @param string|null $operator The operator for the condition (if $column is a string).
+     * @param mixed|null $value The value for the condition (if $column is a string).
+     * @return self
+     */
+    public function orWherePivot(array|string $column, null|string $operator = null, $value = null): self
+    {
+        return $this->wherePivot($column, $operator, $value, 'OR');
     }
 }

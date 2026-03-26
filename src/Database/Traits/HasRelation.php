@@ -899,7 +899,11 @@ trait HasRelation
             ->select($columns, "t.{$config['firstKey']}{$appendField}")
             ->from($relatedModel->getTable(), 'r')
             ->join($throughModel->getTable() . " as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
-            ->whereIn("t.{$config['firstKey']}", $localValues);
+            ->whereIn("t.{$config['firstKey']}", $localValues)
+            ->unless(
+                empty($config['wherePivot']),
+                fn($q) => $q->where($config['wherePivot'])
+            );
 
         $this->applyConstraints($query, $config, $constraints);
 
