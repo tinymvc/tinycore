@@ -428,11 +428,16 @@ class PrimaryCommandsHandler
         $envFileContent = file_get_contents($envFile);
         $envFileContent = str_replace(
             'APP_KEY=',
-            'APP_KEY=' . bin2hex(random_bytes(16)),
+            'APP_KEY=' . $appKey = bin2hex(random_bytes(16)),
             $envFileContent
         );
 
         file_put_contents($envFile, $envFileContent);
+
+        touch($envFile); // Update the file's modification time
+        unlink(root_dir('bootstrap/cache/env.php')); // Clear env cache to reflect new key
+
+        envs(['APP_KEY' => $appKey]); // Update the env variable in runtime
 
         Prompt::message("<info>Info</info> Application key has been updated.");
     }
