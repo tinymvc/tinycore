@@ -5,6 +5,7 @@ namespace Spark\Database\Relation;
 use Closure;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
+use Spark\Database\Traits\HasPivotTableForRelation;
 use function is_array;
 
 /**
@@ -19,6 +20,8 @@ use function is_array;
  */
 class BelongsToMany extends Relation
 {
+    use HasPivotTableForRelation;
+
     /**
      * Create a new BelongsToMany relationship instance.
      * 
@@ -29,7 +32,6 @@ class BelongsToMany extends Relation
      * @param string|null $parentKey The primary key in the current model that the foreign pivot key references.
      * @param string|null $relatedKey The primary key in the related model that the related pivot key references.
      * @param bool $lazy Whether to load the relationship lazily.
-     * @param array $append The additional fields to append to the relationship.
      * @param Closure|null $callback An optional callback to modify the query for the relationship.
      * @param Model|null $model The model instance that this relationship belongs to.
      */
@@ -41,7 +43,6 @@ class BelongsToMany extends Relation
         protected null|string $parentKey = null,
         protected null|string $relatedKey = null,
         protected bool $lazy = true,
-        protected array $append = [],
         protected null|Closure $callback = null,
         null|Model $model = null,
     ) {
@@ -91,6 +92,8 @@ class BelongsToMany extends Relation
      *     relatedPivotKey: string|null,
      *     parentKey: string|null,
      *     relatedKey: string|null,
+     *     pivotFields: null|string,
+     *     wherePivot: array,
      *     lazy: bool,
      *     callback: Closure|null
      * }
@@ -104,8 +107,9 @@ class BelongsToMany extends Relation
             'relatedPivotKey' => $this->relatedPivotKey,
             'parentKey' => $this->parentKey,
             'relatedKey' => $this->relatedKey,
+            'pivotFields' => $this->buildPivotFields(),
+            'wherePivot' => $this->buildPivotConditions(),
             'lazy' => $this->lazy,
-            'append' => $this->append,
             'callback' => $this->callback,
         ];
     }
@@ -113,11 +117,11 @@ class BelongsToMany extends Relation
     /**
      * Attach a model to the parent via the pivot table.
      * 
-     * @param mixed $id The ID(s) of the model(s) to attach.
-     * @param array $attributes Additional pivot table attributes.
+     * @param int|array $ids The ID(s) of the model(s) to attach. e.x, [4 => ['extra' => 'value'], 5 => []] or [4, 5]
+     * @param array $attributes Additional pivot table attributes. e.x, ['created_at' => now()]
      * @return void
      */
-    public function attach($ids, array $attributes = []): void
+    public function attach(int|array $ids, array $attributes = []): void
     {
         $parent = $this->getParentModel();
 
@@ -133,9 +137,18 @@ class BelongsToMany extends Relation
 
         $records = [];
 
-        foreach ((array) $ids as $relatedId) {
+        // Normalize the input
+        if (!is_array($ids)) {
+            $ids = [$ids => []];
+        } elseif (array_is_list($ids)) {
+            // If it's a sequential array, convert to associative with empty attributes
+            $ids = array_fill_keys($ids, []);
+        }
+
+        foreach ($ids as $relatedId => $attrs) {
             $records[] = [
                 ...$attributes,
+                ...$attrs,
                 $this->foreignPivotKey => $parentKeyValue,
                 $this->relatedPivotKey => $relatedId
             ];
@@ -151,10 +164,10 @@ class BelongsToMany extends Relation
     /**
      * Detach models from the parent via the pivot table.
      * 
-     * @param mixed $ids The ID(s) of the model(s) to detach. If null, detach all.
+     * @param null|int|array $ids The ID(s) of the model(s) to detach. If null, detach all.
      * @return int The number of rows affected.
      */
-    public function detach($ids = null): int
+    public function detach(null|int|array $ids = null): int
     {
         $parent = $this->getParentModel();
 
@@ -183,11 +196,12 @@ class BelongsToMany extends Relation
     /**
      * Sync the intermediate table with a list of IDs.
      * 
-     * @param array|int $ids The IDs to sync.
+     * @param int|array $ids The IDs to sync.
      * @param bool $detaching Whether to detach missing models.
+     * @param array $attributes Additional pivot table attributes for attached models.
      * @return array Array with 'attached', and 'detached' keys.
      */
-    public function sync($ids, bool $detaching = true): array
+    public function sync(int|array $ids, bool $detaching = true, array $attributes = []): array
     {
         $parent = $this->getParentModel();
 
@@ -219,6 +233,7 @@ class BelongsToMany extends Relation
             ->where($this->foreignPivotKey, $parentKeyValue)
             ->select($this->relatedPivotKey)
             ->fetchColumn()
+            ->map('intval')
             ->all();
 
         $syncIds = array_keys($ids);
@@ -228,15 +243,18 @@ class BelongsToMany extends Relation
             $detach = array_diff($currentIds, $syncIds);
             if (!empty($detach)) {
                 $this->detach($detach);
-                $changes['detached'] = $detach;
+                $changes['detached'] = array_values($detach);
             }
         }
 
         // Attach new models
         $attach = array_diff($syncIds, $currentIds);
         if (!empty($attach)) {
-            $this->attach($attach);
-            $changes['attached'] = $attach;
+            $this->attach(
+                array_intersect_key($ids, array_flip($attach)),
+                $attributes
+            );
+            $changes['attached'] = array_values($attach);
         }
 
         return $changes;
@@ -245,11 +263,11 @@ class BelongsToMany extends Relation
     /**
      * Toggle the attachment of models to the parent.
      * 
-     * @param mixed $ids The ID(s) to toggle.
+     * @param int|array $ids The ID(s) to toggle.
      * @param array $attributes Additional pivot table attributes.
      * @return array Array with 'attached' and 'detached' keys.
      */
-    public function toggle($ids, array $attributes = []): array
+    public function toggle(int|array $ids, array $attributes = []): array
     {
         $parent = $this->getParentModel();
 
@@ -265,31 +283,43 @@ class BelongsToMany extends Relation
 
         $changes = ['attached' => [], 'detached' => []];
 
-        $ids = is_array($ids) ? $ids : [$ids];
+        // Normalize the input
+        if (!is_array($ids)) {
+            $ids = [$ids => []];
+        } elseif (array_is_list($ids)) {
+            // If it's a sequential array, convert to associative with empty attributes
+            $ids = array_fill_keys($ids, []);
+        }
 
         /** @var \Spark\Database\QueryBuilder to insert into pivot table */
         $query = app(QueryBuilder::class);
 
+        $syncIds = array_keys($ids);
+
         // Get currently attached IDs
         $currentIds = $query->table($this->table)
             ->where($this->foreignPivotKey, $parentKeyValue)
-            ->whereIn($this->relatedPivotKey, $ids)
+            ->whereIn($this->relatedPivotKey, $syncIds)
             ->select($this->relatedPivotKey)
             ->fetchColumn()
+            ->map('intval')
             ->all();
 
         // Detach currently attached
-        $detach = array_intersect($ids, $currentIds);
+        $detach = array_intersect($syncIds, $currentIds);
         if (!empty($detach)) {
             $this->detach($detach);
-            $changes['detached'] = $detach;
+            $changes['detached'] = array_values($detach);
         }
 
         // Attach currently detached
-        $attach = array_diff($ids, $currentIds);
+        $attach = array_diff($syncIds, $currentIds);
         if (!empty($attach)) {
-            $this->attach($attach, $attributes);
-            $changes['attached'] = $attach;
+            $this->attach(
+                array_intersect_key($ids, array_flip($attach)),
+                $attributes
+            );
+            $changes['attached'] = array_values($attach);
         }
 
         return $changes;

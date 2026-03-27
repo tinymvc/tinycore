@@ -12,7 +12,6 @@ use Spark\Database\Relation\BelongsToMany;
 use Spark\Database\Relation\HasMany;
 use Spark\Database\Relation\HasManyThrough;
 use Spark\Database\Relation\HasOne;
-use Spark\Database\Relation\HasOneThrough;
 use Spark\Database\Relation\Relation;
 use Spark\Support\Str;
 use function array_key_exists;
@@ -230,7 +229,6 @@ trait HasRelation
      * @param string|null $parentKey The primary key in the current table
      * @param string|null $relatedKey The primary key in the related table
      * @param bool $lazy Whether to enable lazy loading
-     * @param array $append The additional fields to append to the relationship
      * @param Closure|null $callback Custom query callback
      * 
      * @return \Spark\Database\Relation\BelongsToMany
@@ -243,7 +241,6 @@ trait HasRelation
         string|null $parentKey = null,
         string|null $relatedKey = null,
         bool $lazy = true,
-        array $append = [],
         null|Closure $callback = null,
     ): BelongsToMany {
         $relatedModel = new $related;
@@ -263,7 +260,6 @@ trait HasRelation
             relatedKey: $relatedKey,
             lazy: $lazy,
             callback: $callback,
-            append: $append,
             model: $this
         );
     }
@@ -281,7 +277,6 @@ trait HasRelation
      * @param string|null $localKey Local key on this model
      * @param string|null $secondLocalKey Local key on the intermediate model
      * @param bool $lazy Whether to enable lazy loading
-     * @param array $append Additional fields to append to the relationship
      * @param Closure|null $callback Custom query callback
      * 
      * @return \Spark\Database\Relation\HasManyThrough
@@ -294,7 +289,6 @@ trait HasRelation
         string|null $localKey = null,
         string|null $secondLocalKey = null,
         bool $lazy = true,
-        array $append = [],
         null|Closure $callback = null
     ): HasManyThrough {
         $throughModel = new $through;
@@ -312,57 +306,6 @@ trait HasRelation
             localKey: $localKey,
             secondLocalKey: $secondLocalKey,
             lazy: $lazy,
-            callback: $callback,
-            append: $append,
-            model: $this
-        );
-    }
-
-    /**
-     * Define a has-one-through relationship.
-     * 
-     * This method allows you to define a has-one-through relationship,
-     * which is a relationship where you can access a related model through an intermediate model.
-     * 
-     * @param string $related The final related model
-     * @param string $through The intermediate model
-     * @param string|null $firstKey Foreign key on the intermediate table
-     * @param string|null $secondKey Foreign key on the final table
-     * @param string|null $localKey Local key on this model
-     * @param string|null $secondLocalKey Local key on the intermediate model
-     * @param bool $lazy Whether to enable lazy loading
-     * @param array $append Additional fields to append to the relationship
-     * @param Closure|null $callback Custom query callback
-     * 
-     * @return \Spark\Database\Relation\HasOneThrough
-     */
-    protected function hasOneThrough(
-        string $related,
-        string $through,
-        string|null $firstKey = null,
-        string|null $secondKey = null,
-        string|null $localKey = null,
-        string|null $secondLocalKey = null,
-        bool $lazy = true,
-        array $append = [],
-        null|Closure $callback = null
-    ): HasOneThrough {
-        $throughModel = new $through;
-
-        $firstKey ??= $this->getForeignKey();
-        $secondKey ??= $this->generateForeignKey($throughModel->getTable());
-        $localKey ??= $this->getPrimaryKey();
-        $secondLocalKey ??= $throughModel->getPrimaryKey();
-
-        return new HasOneThrough(
-            related: $related,
-            through: $through,
-            firstKey: $firstKey,
-            secondKey: $secondKey,
-            localKey: $localKey,
-            secondLocalKey: $secondLocalKey,
-            lazy: $lazy,
-            append: $append,
             callback: $callback,
             model: $this
         );
@@ -472,7 +415,7 @@ trait HasRelation
      * Execute a Relation instance and return appropriate results.
      * 
      * This method executes the relationship query and returns results in the appropriate format:
-     * - HasOne, BelongsTo, HasOneThrough: Returns single Model instance or null
+     * - HasOne, BelongsTo: Returns single Model instance or null
      * - HasMany, BelongsToMany, HasManyThrough: Returns Collection
      * 
      * @param Relation $relation The relation instance to execute
@@ -484,8 +427,7 @@ trait HasRelation
         // For hasOne and belongsTo, return single model or null
         if (
             $relation instanceof HasOne ||
-            $relation instanceof BelongsTo ||
-            $relation instanceof HasOneThrough
+            $relation instanceof BelongsTo
         ) {
             return $relation->first() ?: null;
         }
@@ -557,7 +499,6 @@ trait HasRelation
                         $relation instanceof BelongsTo => 'belongsTo',
                         $relation instanceof BelongsToMany => 'belongsToMany',
                         $relation instanceof HasManyThrough => 'hasManyThrough',
-                        $relation instanceof HasOneThrough => 'hasOneThrough',
                         default => throw new InvalidOrmException("Invalid relationship instance: " . get_class($relation))
                     }
                 ];
@@ -595,7 +536,7 @@ trait HasRelation
             'hasMany' => $this->loadHasMany($models, $config, $name, $constraints),
             'belongsTo' => $this->loadBelongsTo($models, $config, $name, $constraints),
             'belongsToMany' => $this->loadBelongsToMany($models, $config, $name, $constraints),
-            'hasManyThrough', 'hasOneThrough' => $this->loadHasThrough($models, $config, $name, $constraints),
+            'hasManyThrough' => $this->loadHasThrough($models, $config, $name, $constraints),
             default => throw new InvalidOrmException("Invalid relationship type: {$config['type']}")
         };
     }
@@ -826,10 +767,7 @@ trait HasRelation
             return $this->initializeRelation($models, $name, []);
         }
 
-        $appendField = join(
-            ', ',
-            array_map(fn($field) => "p.{$field}", $config['append'] ?? [])
-        );
+        $appendField = $config['pivotFields'] ?? '';
         $appendField = !empty($appendField) ? ", {$appendField}" : '';
 
         $columns = join(
@@ -838,10 +776,14 @@ trait HasRelation
         );
 
         $query = $relatedModel->query()
-            ->select($columns, "p.{$config['foreignPivotKey']}, p.{$config['relatedPivotKey']}{$appendField}")
+            ->select($columns, "pv.{$config['foreignPivotKey']}, pv.{$config['relatedPivotKey']}{$appendField}")
             ->from($relatedModel->getTable(), 'r')
-            ->join($config['table'] . ' as p', "p.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
-            ->whereIn("p.{$config['foreignPivotKey']}", $parentValues);
+            ->join($config['table'] . ' as pv', "pv.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
+            ->whereIn("pv.{$config['foreignPivotKey']}", $parentValues)
+            ->unless(
+                empty($config['wherePivot'] ??= []),
+                fn($q) => $q->where($config['wherePivot'])
+            );
 
         $this->applyConstraints($query, $config, $constraints);
 
@@ -858,7 +800,7 @@ trait HasRelation
     /**
      * Load hasThrough relationship
      * 
-     * This method loads both hasOneThrough and hasManyThrough relationships for the given models.
+     * This method loads hasManyThrough relationships for the given models.
      * It retrieves the related models through an intermediate model,
      * and matches them with the original models.
      * 
@@ -878,16 +820,11 @@ trait HasRelation
             ->filter()
             ->all();
 
-        $isOne = $config['type'] === 'hasOneThrough';
-
         if (empty($localValues)) {
-            return $this->initializeRelation($models, $name, $isOne ? null : []);
+            return $this->initializeRelation($models, $name, []);
         }
 
-        $appendField = join(
-            ', ',
-            array_map(fn($field) => "t.{$field}", $config['append'] ?? [])
-        );
+        $appendField = $config['pivotFields'] ?? '';
         $appendField = !empty($appendField) ? ", {$appendField}" : '';
 
         $columns = join(
@@ -896,12 +833,12 @@ trait HasRelation
         );
 
         $query = $relatedModel->query()
-            ->select($columns, "t.{$config['firstKey']}{$appendField}")
+            ->select($columns, "pv.{$config['firstKey']}{$appendField}")
             ->from($relatedModel->getTable(), 'r')
-            ->join($throughModel->getTable() . " as t", "t.{$config['secondLocalKey']} = r.{$config['secondKey']}")
-            ->whereIn("t.{$config['firstKey']}", $localValues)
+            ->join($throughModel->getTable() . " as pv", "pv.{$config['secondLocalKey']} = r.{$config['secondKey']}")
+            ->whereIn("pv.{$config['firstKey']}", $localValues)
             ->unless(
-                empty($config['wherePivot']),
+                empty($config['wherePivot'] ??= []),
                 fn($q) => $q->where($config['wherePivot'])
             );
 
@@ -912,13 +849,9 @@ trait HasRelation
             $query->with(...$config['nested']);
         }
 
-        if ($isOne) {
-            $query->take(1);
-        }
-
         $results = $query->all();
 
-        return $this->matchHasThrough($models, $results, $config, $name, $isOne);
+        return $this->matchHasThrough($models, $results, $config, $name);
     }
 
     /**
@@ -1023,37 +956,27 @@ trait HasRelation
     /**
      * Match hasThrough relationships.
      * 
-     * This method matches the results of both hasOneThrough or hasManyThrough
+     * This method matches the results of hasManyThrough
      * relationship query with the original models.
      * 
      * @param array $models
      * @param array $results
      * @param array $config
      * @param string $name
-     * @param bool $isOne
      * @return array
      */
-    private function matchHasThrough(array $models, array $results, array $config, string $name, bool $isOne): array
+    private function matchHasThrough(array $models, array $results, array $config, string $name): array
     {
         foreach ($models as $model) {
-            $related = $isOne ? null : [];
+            $related = [];
 
             foreach ($results as $result) {
                 if ($result->{$config['firstKey']} == $model->{$config['localKey']}) {
-                    if ($isOne) {
-                        $related = $result;
-                        break; // Only get the first match for hasOne
-                    } else {
-                        $related[] = $result;
-                    }
+                    $related[] = $result;
                 }
             }
 
-            if (!$isOne) {
-                $related = collect($related);
-            }
-
-            $model->setRelation($name, $related);
+            $model->setRelation($name, collect($related));
         }
 
         return $models;

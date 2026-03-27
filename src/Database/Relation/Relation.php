@@ -104,6 +104,13 @@ abstract class Relation
     protected null|QueryBuilder $query = null;
 
     /**
+     * Whether to load the relationship lazily.
+     *
+     * @var bool
+     */
+    protected bool $lazy = true;
+
+    /**
      * Create a new Relation instance.
      * 
      * @param Model|null $model The model instance that this relationship belongs to.
@@ -154,11 +161,12 @@ abstract class Relation
     /**
      * Disable lazy loading for this relationship.
      * 
+     * @param bool $mode Whether to disable lazy loading (true to disable, false to enable).
      * @return self
      */
-    public function disableLazyLoading(): self
+    public function disableLazyLoading(bool $mode = true): self
     {
-        $this->lazy = false;
+        $this->lazy = !$mode;
         return $this;
     }
 

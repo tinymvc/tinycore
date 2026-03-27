@@ -493,12 +493,16 @@ class QueryBuilder implements QueryBuilderContract
                     )
                 );
             } else {
-                if (is_string($values[0])) {
+                if (isset($values[0]) && is_string($values[0])) {
                     return $this->where($values[0], $values[1] ?? null, $values[2] ?? null, $andOr, $not);
                 }
 
                 foreach ($values as $value) {
-                    $this->where($value[0], $value[1] ?? null, $value[2] ?? null, $andOr, $not);
+                    if (isset($value[0]) && is_string($value[0])) {
+                        $this->where($value[0], $value[1] ?? null, $value[2] ?? null, $andOr, $not);
+                    } else {
+                        $this->where($value, null, null, $andOr, $not);
+                    }
                 }
 
                 return $this; // Return early as where clauses are already added.
@@ -508,7 +512,11 @@ class QueryBuilder implements QueryBuilderContract
         // List of where clauses.
         elseif (is_array($column) && array_is_list($column) && $operator === null && $value === null) {
             foreach ($column as $item) {
-                $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $andOr, $not);
+                if (isset($item[0]) && is_string($item[0])) {
+                    $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $andOr, $not);
+                } else {
+                    $this->where($item, null, null, $andOr, $not);
+                }
             }
         }
         // Single String where clause.
