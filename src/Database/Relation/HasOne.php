@@ -2,11 +2,6 @@
 
 namespace Spark\Database\Relation;
 
-use Closure;
-use Spark\Database\Model;
-use Spark\Database\QueryBuilder;
-use Spark\Database\Traits\CreateDeleteForHasRelation;
-
 /**
  * Class HasOne
  * 
@@ -18,75 +13,9 @@ use Spark\Database\Traits\CreateDeleteForHasRelation;
  * 
  * @package Spark\Database\Relation
  */
-class HasOne extends Relation
+class HasOne extends HasMany
 {
-    use CreateDeleteForHasRelation;
-
-    /**
-     * Create a new HasOne relationship instance.
-     * 
-     * @param string $related The related model class name.
-     * @param string|null $foreignKey The foreign key in the related model that references the current model.
-     * @param string|null $localKey The primary key in the current model that the foreign key references.
-     * @param bool $lazy Whether to load the relationship lazily.
-     * @param Closure|null $callback An optional callback to modify the query for the relationship.
-     * @param Model|null $model The model instance that this relationship belongs to.
-     */
-    public function __construct(
-        protected string $related,
-        protected null|string $foreignKey = null,
-        protected null|string $localKey = null,
-        protected bool $lazy = true,
-        protected null|Closure $callback = null,
-        null|Model $model = null
-    ) {
-        parent::__construct($model);
-    }
-
-    /**
-     * Build the query for this relationship.
-     * 
-     * @return QueryBuilder
-     */
-    protected function buildQuery(): QueryBuilder
-    {
-        /** @var Model $relatedInstance */
-        $relatedInstance = new ($this->related)();
-        $query = $relatedInstance::query();
-
-        // Add relationship constraint
-        if ($this->model) {
-            $localValue = $this->model->{$this->localKey};
-            $query->where($this->foreignKey, '=', $localValue);
-        }
-
-        // Apply custom callback if provided
-        if ($this->callback) {
-            ($this->callback)($query);
-        }
-
-        return $query;
-    }
-
-    /**
-     * Get the configuration for the HasOne relationship.
-     * 
-     * @return array{
-     *     related: string,
-     *     foreignKey: string|null,
-     *     localKey: string|null,
-     *     lazy: bool,
-     *     callback: Closure|null
-     * }
-     */
-    public function getConfig(): array
-    {
-        return [
-            'related' => $this->related,
-            'foreignKey' => $this->foreignKey,
-            'localKey' => $this->localKey,
-            'lazy' => $this->lazy,
-            'callback' => $this->callback,
-        ];
-    }
+    // No additional functionality is needed for HasOne, as it inherits
+    // all necessary behavior from HasMany. The only difference is that
+    // HasOne will return a single instance of the related model instead of a collection.
 }
