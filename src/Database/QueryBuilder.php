@@ -1693,7 +1693,8 @@ class QueryBuilder implements QueryBuilderContract
         }
         // Convert array of fields to a comma-separated string if necessary
         if (is_array($fields)) {
-            $fields = implode(',', $fields);
+            $fields = array_filter(array_map('trim', $fields)); // Trim whitespace and remove empty values
+            $fields = implode(',', array_unique($fields)); // Remove duplicates and join with commas
         }
 
         // Remove any leading "SELECT " from the fields string

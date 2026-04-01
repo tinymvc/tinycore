@@ -6,6 +6,8 @@ use Closure;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Traits\HasPivotTableForRelation;
+use function Spark\Database\Traits\map_pivot_conditions;
+use function Spark\Database\Traits\map_pivot_fields;
 
 /**
  * Class HasManyThrough
@@ -68,6 +70,17 @@ class HasManyThrough extends Relation
 
         $query = $relatedInstance::query();
 
+        // Append Pivot Fields
+        $pivotFields = map_pivot_fields($this->buildPivotFields(), $throughInstance->getTable());
+
+        $query->select([
+            $relatedInstance->getTable() . ".*",
+            $throughInstance->getTable() . '.' . $this->firstKey,
+            $pivotFields,
+        ]);
+
+        $query->from($relatedInstance->getTable());
+
         // Join the through table
         $query->join(
             $throughInstance->getTable(),
@@ -80,6 +93,14 @@ class HasManyThrough extends Relation
         if ($this->model) {
             $localValue = $this->model->{$this->localKey};
             $query->where($throughInstance->getTable() . '.' . $this->firstKey, '=', $localValue);
+        }
+
+        // Append Pivot Conditions
+        $wherePivot = $this->buildPivotConditions();
+        if (!empty($wherePivot)) {
+            $query->where(
+                map_pivot_conditions($wherePivot, $throughInstance->getTable())
+            );
         }
 
         // Apply custom callback if provided

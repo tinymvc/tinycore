@@ -767,22 +767,31 @@ trait HasRelation
             return $this->initializeRelation($models, $name, []);
         }
 
-        $appendField = $config['pivotFields'] ?? '';
-        $appendField = !empty($appendField) ? ", {$appendField}" : '';
-
-        $columns = join(
-            ', ',
-            array_map(fn($col) => "r.{$col}", $config['columns'] ?? ['*'])
+        $columns = array_map(
+            fn($col) => $relatedModel->getTable() . "." . $col,
+            (array) ($config['columns'] ??= ['*'])
         );
 
         $query = $relatedModel->query()
-            ->select($columns, "pv.{$config['foreignPivotKey']}, pv.{$config['relatedPivotKey']}{$appendField}")
-            ->from($relatedModel->getTable(), 'r')
-            ->join($config['table'] . ' as pv', "pv.{$config['relatedPivotKey']} = r.{$config['relatedKey']}")
-            ->whereIn("pv.{$config['foreignPivotKey']}", $parentValues)
+            ->select([
+                ...$columns,
+                $config['table'] . "." . $config['foreignPivotKey'],
+                $config['table'] . "." . $config['relatedPivotKey'],
+                map_pivot_fields($config['pivotFields'] ?? null, $config['table'])
+            ])
+            ->from($relatedModel->getTable())
+            ->join(
+                $config['table'],
+                $config['table'] . "." . $config['relatedPivotKey'],
+                '=',
+                $relatedModel->getTable() . '.' . $config['relatedKey']
+            )
+            ->whereIn($config['table'] . "." . $config['foreignPivotKey'], $parentValues)
             ->unless(
                 empty($config['wherePivot'] ??= []),
-                fn($q) => $q->where($config['wherePivot'])
+                fn($q) => $q->where(
+                    map_pivot_conditions($config['wherePivot'], $config['table'])
+                )
             );
 
         $this->applyConstraints($query, $config, $constraints);
@@ -824,22 +833,30 @@ trait HasRelation
             return $this->initializeRelation($models, $name, []);
         }
 
-        $appendField = $config['pivotFields'] ?? '';
-        $appendField = !empty($appendField) ? ", {$appendField}" : '';
-
-        $columns = join(
-            ', ',
-            array_map(fn($col) => "r.{$col}", $config['columns'] ?? ['*'])
+        $columns = array_map(
+            fn($col) => $relatedModel->getTable() . "." . $col,
+            (array) ($config['columns'] ??= ['*'])
         );
 
         $query = $relatedModel->query()
-            ->select($columns, "pv.{$config['firstKey']}{$appendField}")
-            ->from($relatedModel->getTable(), 'r')
-            ->join($throughModel->getTable() . " as pv", "pv.{$config['secondLocalKey']} = r.{$config['secondKey']}")
-            ->whereIn("pv.{$config['firstKey']}", $localValues)
+            ->select(
+                ...$columns,
+                $throughModel->getTable() . "." . $config['firstKey'],
+                map_pivot_fields($config['pivotFields'] ?? null, $throughModel->getTable())
+            )
+            ->from($relatedModel->getTable())
+            ->join(
+                $throughModel->getTable(),
+                $throughModel->getTable() . "." . $config['secondLocalKey'],
+                "=",
+                $relatedModel->getTable() . '.' . $config['secondKey']
+            )
+            ->whereIn($throughModel->getTable() . "." . $config['firstKey'], $localValues)
             ->unless(
                 empty($config['wherePivot'] ??= []),
-                fn($q) => $q->where($config['wherePivot'])
+                fn($q) => $q->where(
+                    map_pivot_conditions($config['wherePivot'], $throughModel->getTable())
+                )
             );
 
         $this->applyConstraints($query, $config, $constraints);

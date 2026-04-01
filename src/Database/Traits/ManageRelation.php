@@ -6,11 +6,11 @@ use Closure;
 use Spark\Database\Exceptions\InvalidOrmException;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
-use function count;
 use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_string;
+use function Spark\Database\Traits\map_pivot_conditions;
 
 /**
  * ManageRelation Trait
@@ -744,7 +744,7 @@ trait ManageRelation
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
                         fn($q) => $q->where(
-                            $this->mapPivotConditions($relationConfig['wherePivot'], $relationConfig['table'])
+                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($relationConfig['table']))
                         )
                     );
                 break;
@@ -768,7 +768,7 @@ trait ManageRelation
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
                         fn($q) => $q->where(
-                            $this->mapPivotConditions($relationConfig['wherePivot'], $throughTable)
+                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($throughTable))
                         )
                     );
                 break;
@@ -783,59 +783,6 @@ trait ManageRelation
 
         // Get the built SQL from the query
         return $this->getSubquerySQL($query);
-    }
-
-    /**
-     * Map pivot conditions for belongsToMany and hasManyThrough relationships.
-     * 
-     * This method takes the pivot conditions defined in the relationship configuration
-     * and maps them to the correct table aliases for use in the subquery.
-     * It supports both simple string conditions and more complex array conditions.
-     * 
-     * @param array $condition The pivot conditions to map
-     * @param string $pivotTable The name of the pivot table to use for aliasing
-     * @return array The mapped pivot conditions
-     */
-    private function mapPivotConditions(array $condition, string $pivotTable): array
-    {
-        $mapped = [];
-
-        $replace = fn($value) => str_ireplace(
-            'pv.',
-            $this->wrapper->wrapTable($pivotTable) . ".",
-            $value
-        );
-
-        foreach ($condition as $item) {
-            if (
-                is_array($item) && array_is_list($item) && count($item) >= 3 &&
-                isset($item[0]) && is_string($item[0])
-            ) {
-                $mapped[] = [
-                    $replace($item[0]),
-                    $item[1] ?? null,
-                    $item[2] ?? null,
-                    $item[3] ?? null,
-                ];
-            } elseif (
-                is_array($item) && isset($item[0]) && is_array($item[0]) &&
-                !array_is_list($item[0])
-            ) {
-                $mapped[] = [
-                    collect($item[0])->mapWithKeys(
-                        fn($value, $key) => [$replace($key) => $value]
-                    )->all(),
-                    $item[1] ?? null,
-                    $item[2] ?? null,
-                    $item[3] ?? null,
-                ];
-            } elseif (is_string($item)) {
-                $mapped[] = $replace($item);
-            } else {
-                throw new InvalidOrmException("Invalid pivot condition format: " . json_encode($item));
-            }
-        }
-        return $mapped;
     }
 
     /**

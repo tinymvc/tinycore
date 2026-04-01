@@ -7,6 +7,8 @@ use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Traits\HasPivotTableForRelation;
 use function is_array;
+use function Spark\Database\Traits\map_pivot_conditions;
+use function Spark\Database\Traits\map_pivot_fields;
 
 /**
  * Class BelongsToMany
@@ -60,6 +62,18 @@ class BelongsToMany extends Relation
         $relatedInstance = new ($this->related)();
         $query = $relatedInstance::query();
 
+        // Append Pivot Fields
+        $pivotFields = map_pivot_fields($this->buildPivotFields(), $this->table);
+
+        $query->select([
+            $relatedInstance->getTable() . ".*",
+            $this->table . '.' . $this->foreignPivotKey,
+            $this->table . '.' . $this->relatedPivotKey,
+            $pivotFields,
+        ]);
+
+        $query->from($relatedInstance->getTable());
+
         // Join the pivot table
         $query->join(
             $this->table,
@@ -72,6 +86,14 @@ class BelongsToMany extends Relation
         if ($this->model) {
             $parentKeyValue = $this->model->{$this->parentKey};
             $query->where($this->table . '.' . $this->foreignPivotKey, '=', $parentKeyValue);
+        }
+
+        // Append Pivot Conditions
+        $wherePivot = $this->buildPivotConditions();
+        if (!empty($wherePivot)) {
+            $query->where(
+                map_pivot_conditions($wherePivot, $this->table)
+            );
         }
 
         // Apply custom callback if provided

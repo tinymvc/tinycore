@@ -1,7 +1,9 @@
 <?php
 namespace Spark\Database\Traits;
 
+use function count;
 use function is_array;
+use function is_string;
 use function sprintf;
 
 /**
@@ -149,4 +151,72 @@ trait HasPivotTableForRelation
         $this->wherePivot[] = sprintf('pv.%s IS NOT NULL', $column);
         return $this;
     }
+}
+
+/**
+ * Map pivot conditions by replacing 'pv.' with the actual pivot table name.
+ * 
+ * @param array $condition The array of conditions to be mapped.
+ * @param string $pivotTable The name of the pivot table to replace 'pv.' with.
+ * @return array The mapped conditions with 'pv.' replaced by the pivot table name.
+ * @throws \Spark\Database\Exceptions\InvalidOrmException If the condition format is invalid.
+ */
+function map_pivot_conditions(array $condition, string $pivotTable): array
+{
+    $mapped = [];
+
+    $replace = fn($value) => str_ireplace('pv.', "$pivotTable.", $value);
+
+    foreach ($condition as $item) {
+        if (
+            is_array($item) && array_is_list($item) && count($item) >= 3 &&
+            isset($item[0]) && is_string($item[0])
+        ) {
+            $mapped[] = [
+                $replace($item[0]),
+                $item[1] ?? null,
+                $item[2] ?? null,
+                $item[3] ?? null,
+            ];
+        } elseif (
+            is_array($item) && isset($item[0]) && is_array($item[0]) &&
+            !array_is_list($item[0])
+        ) {
+            $mapped[] = [
+                collect($item[0])->mapWithKeys(
+                    fn($value, $key) => [$replace($key) => $value]
+                )->all(),
+                $item[1] ?? null,
+                $item[2] ?? null,
+                $item[3] ?? null,
+            ];
+        } elseif (is_string($item)) {
+            $mapped[] = $replace($item);
+        } else {
+            throw new \Spark\Database\Exceptions\InvalidOrmException("Invalid pivot condition format: " . json_encode($item));
+        }
+    }
+    return $mapped;
+}
+
+/**
+ * Map pivot fields by replacing 'pv.' with the actual pivot table name.
+ * 
+ * @param array|string $fields The fields to be mapped, either as an array or a comma-separated string.
+ * @param string $pivotTable The name of the pivot table to replace 'pv.' with.
+ * @return array|string The mapped fields with 'pv.' replaced by the pivot table name, in the same format as the input.
+ */
+function map_pivot_fields(array|string|null $fields, string $pivotTable): array|string
+{
+    if ($fields === null) {
+        return ''; // Return an empty string if no fields are defined
+    }
+
+    $replace = fn(string $field) => str_ireplace('pv.', "$pivotTable.", $field);
+
+    if (is_array($fields)) {
+        return array_map($replace, array_filter($fields));
+    }
+
+    return $replace($fields);
 }
