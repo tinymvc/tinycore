@@ -84,9 +84,9 @@ class HasManyThrough extends Relation
         // Join the through table
         $query->join(
             $throughInstance->getTable(),
-            $relatedInstance->getTable() . '.' . $this->secondLocalKey,
+            $throughInstance->getTable() . '.' . $this->secondLocalKey,
             '=',
-            $throughInstance->getTable() . '.' . $this->secondKey
+            $relatedInstance->getTable() . '.' . $this->secondKey
         );
 
         // Add relationship constraint
