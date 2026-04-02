@@ -744,7 +744,7 @@ trait ManageRelation
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
                         fn($q) => $q->where(
-                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($relationConfig['table']))
+                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($relationConfig['table']), $this->wrapper->wrapTable($relatedTable))
                         )
                     );
                 break;
@@ -768,7 +768,7 @@ trait ManageRelation
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
                         fn($q) => $q->where(
-                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($throughTable))
+                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($throughTable), $this->wrapper->wrapTable($relatedTable))
                         )
                     );
                 break;

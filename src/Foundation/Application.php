@@ -6,7 +6,7 @@ use Spark\Console\Commands;
 use Spark\Console\Console;
 use Spark\Contracts\ApplicationContract;
 use Spark\Database\DB;
-use Spark\EventDispatcher;
+use Spark\Events;
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\NotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
@@ -87,7 +87,7 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
         $this->singleton(Queue::class);
         $this->singleton(Router::class);
         $this->singleton(Middleware::class);
-        $this->singleton(EventDispatcher::class);
+        $this->singleton(Events::class);
 
         // Bind core services to the container for Http Client
         if (is_web()) {
@@ -332,8 +332,8 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
         null|array $listeners = null,
         null|callable $then = null
     ): self {
-        /** @var EventDispatcher $event */
-        $event = $this->get(EventDispatcher::class);
+        /** @var Events $event */
+        $event = $this->get(Events::class);
 
         $listeners && $event->subscribe($listeners);
 
@@ -399,11 +399,11 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
      * The event dispatcher is responsible for managing and dispatching events
      * throughout the application.
      *
-     * @return EventDispatcher The event dispatcher instance.
+     * @return Events The event dispatcher instance.
      */
-    public function events(): EventDispatcher
+    public function events(): Events
     {
-        return $this->get(EventDispatcher::class);
+        return $this->get(Events::class);
     }
 
     /**

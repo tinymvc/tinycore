@@ -721,7 +721,7 @@ trait HasRelation
                 ...$columns,
                 $config['table'] . "." . $config['foreignPivotKey'],
                 $config['table'] . "." . $config['relatedPivotKey'],
-                map_pivot_fields($config['pivotFields'] ?? null, $config['table'])
+                map_pivot_fields($config['pivotFields'] ?? null, $config['table'], $relatedModel->getTable())
             ])
             ->from($relatedModel->getTable())
             ->join(
@@ -734,7 +734,7 @@ trait HasRelation
             ->unless(
                 empty($config['wherePivot'] ??= []),
                 fn($q) => $q->where(
-                    map_pivot_conditions($config['wherePivot'], $config['table'])
+                    map_pivot_conditions($config['wherePivot'], $config['table'], $relatedModel->getTable())
                 )
             );
 
@@ -786,7 +786,7 @@ trait HasRelation
             ->select(
                 ...$columns,
                 $throughModel->getTable() . "." . $config['firstKey'],
-                map_pivot_fields($config['pivotFields'] ?? null, $throughModel->getTable())
+                map_pivot_fields($config['pivotFields'] ?? null, $throughModel->getTable(), $relatedModel->getTable())
             )
             ->from($relatedModel->getTable())
             ->join(
@@ -799,7 +799,7 @@ trait HasRelation
             ->unless(
                 empty($config['wherePivot'] ??= []),
                 fn($q) => $q->where(
-                    map_pivot_conditions($config['wherePivot'], $throughModel->getTable())
+                    map_pivot_conditions($config['wherePivot'], $throughModel->getTable(), $relatedModel->getTable())
                 )
             );
 

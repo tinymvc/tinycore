@@ -15,7 +15,7 @@ use function count;
  *
  * @package Spark\Utils
  */
-class EventDispatcher implements EventDispatcherContract
+class Events implements EventDispatcherContract
 {
     use Macroable;
 

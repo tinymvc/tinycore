@@ -46,7 +46,7 @@ class PrimaryCommandsHandler
         Prompt::message("Press <bold>Ctrl+C</bold> to stop the server.", "warning");
 
         // Simple foreground execution
-        passthru("php -S localhost:{$port} -t public");
+        passthru("php -S localhost:$port -t public");
     }
 
     /**

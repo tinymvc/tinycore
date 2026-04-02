@@ -71,7 +71,7 @@ class HasManyThrough extends Relation
         $query = $relatedInstance::query();
 
         // Append Pivot Fields
-        $pivotFields = map_pivot_fields($this->buildPivotFields(), $throughInstance->getTable());
+        $pivotFields = map_pivot_fields($this->buildPivotFields(), $throughInstance->getTable(), $relatedInstance->getTable());
 
         $query->select([
             $relatedInstance->getTable() . ".*",
@@ -99,7 +99,7 @@ class HasManyThrough extends Relation
         $wherePivot = $this->buildPivotConditions();
         if (!empty($wherePivot)) {
             $query->where(
-                map_pivot_conditions($wherePivot, $throughInstance->getTable())
+                map_pivot_conditions($wherePivot, $throughInstance->getTable(), $relatedInstance->getTable())
             );
         }
 

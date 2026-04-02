@@ -2,7 +2,7 @@
 
 namespace Spark\Facades;
 
-use Spark\EventDispatcher;
+use Spark\Events;
 
 /**
  * Facade Event
@@ -34,6 +34,6 @@ class Event extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return EventDispatcher::class;
+        return Events::class;
     }
 }

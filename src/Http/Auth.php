@@ -70,6 +70,7 @@ class Auth implements AuthContract, ArrayAccess
             'cookie_expire' => '6 months',
             'jwt_expire' => '6 months',
             'channels' => ['session', 'jwt', 'basic'],
+            'validate_jwt_hash' => false,
             'use_remember_token' => false,
             'driver' => null,
             ...$config
@@ -126,6 +127,19 @@ class Auth implements AuthContract, ArrayAccess
             }
 
             if (isset($user, $user->id)) {
+                // If JWT authentication is enabled and JWT hash validation is configured, validate the JWT hash
+                if (
+                    in_array('jwt', $this->config['channels']) &&
+                    isset($this->config['__jwt_hash']) && $this->config['validate_jwt_hash']
+                ) {
+                    $jwtHash = $this->makeJwtHash($user);
+                    if ($jwtHash !== $this->config['__jwt_hash']) {
+                        $this->user = false; // Set user to false to indicate invalid JWT hash
+                        $this->logout(); // Logout if JWT hash does not match
+                        return null; // Return null if JWT validation fails
+                    }
+                }
+
                 $this->user = $user; // Set the user property if a valid user is found
             } else {
                 $this->logout(); // Logout if the user is not found in the database
@@ -133,7 +147,7 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         // Return the currently logged in user
-        return $this->user ??= null;
+        return ($this->user ??= null) ?: null;
     }
 
     /**
@@ -319,9 +333,11 @@ class Auth implements AuthContract, ArrayAccess
         $expire = $this->config['jwt_expire'] ?? '6 months';
 
         $payload = [
-            'id' => $user->id,
-            'email' => $user->email ?? null,
-            'username' => $user->username ?? null,
+            'sub' => $user->id,
+            'jti' => $this->makeJwtHash($user), // Generate a unique hash for the JWT token
+            'prv' => sha1($this->model),
+            'iss' => request()->getUrl(),
+            'iat' => time(),
             'exp' => strtotime("+$expire"),
             ...$payload
         ];
@@ -583,8 +599,11 @@ class Auth implements AuthContract, ArrayAccess
 
             try {
                 $payload = JWT::decode($token, config('app.key'));
-                if (isset($payload, $payload->id, $payload->exp) && carbon($payload->exp)->isFuture()) {
-                    return $payload->id;
+                if ($this->validateJwt($payload)) {
+                    if (isset($this->config['validate_jwt_hash']) && $this->config['validate_jwt_hash']) {
+                        $this->config['__jwt_hash'] = $payload->jti ?? null; // Store the JWT hash for later validation
+                    }
+                    return intval($payload->sub); // Return user ID from JWT payload if valid
                 }
             } catch (Throwable $e) {
                 // Ignore decryption errors
@@ -592,6 +611,48 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         return null;
+    }
+
+    /**
+     * Validates the JWT payload to ensure it contains the necessary claims and is not expired.
+     *
+     * This method checks that the JWT payload contains the required claims (sub, iat, exp, iss, prv)
+     * and that the token is not expired. It also verifies that the 'prv' claim matches a hash of the user model.
+     *
+     * @param mixed $payload The decoded JWT payload to validate.
+     * @return bool True if the JWT payload is valid, false otherwise.
+     */
+    protected function validateJwt(mixed $payload): bool
+    {
+        if (
+            isset($payload, $payload->sub, $payload->iat, $payload->exp, $payload->iss, $payload->prv) &&
+            carbon($payload->iat)->isPast() && carbon($payload->exp)->isFuture() &&
+            intval($payload->sub) > 0 && $payload->prv === sha1($this->model) &&
+            url($payload->iss)->matches(request()->getRootUrl())
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Generates a unique hash for the JWT token based on the user's ID, email, and password.
+     *
+     * This method creates a hash using the user's ID, email, and password to provide an additional
+     * layer of security for the JWT token. The hash is included in the JWT payload and can be used
+     * to validate that the token has not been tampered with.
+     *
+     * @param Model $user The user model for which to generate the JWT hash.
+     * @return string The generated JWT hash as a string.
+     */
+    protected function makeJwtHash(Model $user): string
+    {
+        return md5(json_encode([
+            'id' => $user->id ?? 0,
+            'email' => $user->email ?? null,
+            'password' => $user->password ?? null,
+        ]));
     }
 
     /**

@@ -158,14 +158,15 @@ trait HasPivotTableForRelation
  * 
  * @param array $condition The array of conditions to be mapped.
  * @param string $pivotTable The name of the pivot table to replace 'pv.' with.
+ * @param string $relatedTable The name of the related table to replace 'rt.' with.
  * @return array The mapped conditions with 'pv.' replaced by the pivot table name.
  * @throws \Spark\Database\Exceptions\InvalidOrmException If the condition format is invalid.
  */
-function map_pivot_conditions(array $condition, string $pivotTable): array
+function map_pivot_conditions(array $condition, string $pivotTable, string $relatedTable): array
 {
     $mapped = [];
 
-    $replace = fn($value) => str_ireplace('pv.', "$pivotTable.", $value);
+    $replace = fn($value) => str_ireplace(['pv.', 'rt.'], ["$pivotTable.", "$relatedTable."], $value);
 
     foreach ($condition as $item) {
         if (
@@ -204,15 +205,16 @@ function map_pivot_conditions(array $condition, string $pivotTable): array
  * 
  * @param array|string $fields The fields to be mapped, either as an array or a comma-separated string.
  * @param string $pivotTable The name of the pivot table to replace 'pv.' with.
+ * @param string $relatedTable The name of the related table to replace 'rt.' with.
  * @return array|string The mapped fields with 'pv.' replaced by the pivot table name, in the same format as the input.
  */
-function map_pivot_fields(array|string|null $fields, string $pivotTable): array|string
+function map_pivot_fields(array|string|null $fields, string $pivotTable, string $relatedTable): array|string
 {
     if ($fields === null) {
         return ''; // Return an empty string if no fields are defined
     }
 
-    $replace = fn(string $field) => str_ireplace('pv.', "$pivotTable.", $field);
+    $replace = fn(string $field) => str_ireplace(['pv.', 'rt.'], ["$pivotTable.", "$relatedTable."], $field);
 
     if (is_array($fields)) {
         return array_map($replace, array_filter($fields));

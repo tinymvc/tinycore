@@ -63,7 +63,7 @@ class BelongsToMany extends Relation
         $query = $relatedInstance::query();
 
         // Append Pivot Fields
-        $pivotFields = map_pivot_fields($this->buildPivotFields(), $this->table);
+        $pivotFields = map_pivot_fields($this->buildPivotFields(), $this->table, $relatedInstance->getTable());
 
         $query->select([
             $relatedInstance->getTable() . ".*",
@@ -92,7 +92,7 @@ class BelongsToMany extends Relation
         $wherePivot = $this->buildPivotConditions();
         if (!empty($wherePivot)) {
             $query->where(
-                map_pivot_conditions($wherePivot, $this->table)
+                map_pivot_conditions($wherePivot, $this->table, $relatedInstance->getTable())
             );
         }
 

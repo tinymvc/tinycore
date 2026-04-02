@@ -6,7 +6,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
-use Spark\EventDispatcher;
+use Spark\Events;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Pipeline;
@@ -1169,12 +1169,12 @@ if (!function_exists('event')) {
      *
      * @param array|string $eventName The event name(s) or listeners to be registered.
      * @param mixed ...$args Additional arguments to pass when dispatching an event.
-     * @return EventDispatcher The event dispatcher instance.
+     * @return Events The event dispatcher instance.
      */
-    function event(null|array|string $eventName = null, ...$args): EventDispatcher
+    function event(null|array|string $eventName = null, ...$args): Events
     {
-        /** @var \Spark\EventDispatcher $event */
-        $event = get(EventDispatcher::class);
+        /** @var \Spark\Events $event */
+        $event = get(Events::class);
 
         // If an array of events is provided with no additional arguments, add listeners.
         if (is_array($eventName) && empty($args)) {
