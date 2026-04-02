@@ -15,7 +15,6 @@ namespace Spark\Database\Relation;
  */
 class HasOne extends HasMany
 {
-    // No additional functionality is needed for HasOne, as it inherits
-    // all necessary behavior from HasMany. The only difference is that
-    // HasOne will return a single instance of the related model instead of a collection.
+    // No additional properties or methods are needed for HasOne,
+    // as it inherits all necessary functionality from HasMany.
 }

@@ -364,51 +364,33 @@ trait HasRelation
             return $this->relations[$name];
         }
 
-        // Check if a relationship method exists
-        if (method_exists($this, $name)) {
+        try {
+            if (!method_exists($this, $name)) {
+                throw new UndefinedOrmException("Undefined relationship: {$name} in " . static::class);
+            }
+
             $relation = $this->$name();
 
             // If it's a Relation instance, check lazy loading and execute
             if ($relation instanceof Relation) {
-                $config = $relation->getConfig();
-
                 // Check if lazy loading is disabled
-                if (isset($config['lazy']) && $config['lazy'] === false) {
+                if ($relation->isLazyLoadingDisabled()) {
                     throw new OrmDisabledLazyLoadingException(
                         "Lazy loading is disabled for relationship '{$name}' in " . static::class
                     );
                 }
 
                 // Execute the relation query and cache results
-                $results = $this->executeRelation($relation, $name);
+                $results = $this->executeRelation($relation);
                 $this->setRelation($name, $results);
                 return $results;
             }
 
             return $relation;
-        }
-
-        // Fallback to old eager loading logic for compatibility
-        // This handles cases where getRelationshipConfig might be overridden
-        try {
-            $relationConfig = $this->getRelationshipConfig($name);
         } catch (UndefinedOrmException $e) {
             // If the relationship is not defined, return null
             return null;
         }
-
-        if ($relationConfig) {
-            if (isset($relationConfig['lazy']) && !$relationConfig['lazy']) {
-                throw new OrmDisabledLazyLoadingException(
-                    "Lazy loading is disabled for relationship '{$name}' in " . static::class
-                );
-            }
-
-            $this->loadRelation([$this], $relationConfig, $name);
-            return $this->relations[$name] ?? null;
-        }
-
-        return null;
     }
 
     /**
@@ -419,10 +401,9 @@ trait HasRelation
      * - HasMany, BelongsToMany, HasManyThrough: Returns Collection
      * 
      * @param Relation $relation The relation instance to execute
-     * @param string $name The relationship name (for debugging)
      * @return mixed Single Model, Collection, or null
      */
-    protected function executeRelation(Relation $relation, string $name)
+    protected function executeRelation(Relation $relation)
     {
         // For hasOne and belongsTo, return single model or null
         if (
@@ -532,8 +513,8 @@ trait HasRelation
         }
 
         return match ($config['type']) {
-            'hasOne' => $this->loadHasOne($models, $config, $name, $constraints),
-            'hasMany' => $this->loadHasMany($models, $config, $name, $constraints),
+            'hasOne' => $this->loadHasModels($models, $config, $name, $constraints, 'one'),
+            'hasMany' => $this->loadHasModels($models, $config, $name, $constraints, 'many'),
             'belongsTo' => $this->loadBelongsTo($models, $config, $name, $constraints),
             'belongsToMany' => $this->loadBelongsToMany($models, $config, $name, $constraints),
             'hasManyThrough' => $this->loadHasThrough($models, $config, $name, $constraints),
@@ -632,44 +613,6 @@ trait HasRelation
     }
 
     /**
-     * Load hasOne relationship.
-     * 
-     * This method loads a hasOne relationship for the given models.
-     * It retrieves the related models based on the foreign key and local key,
-     * and matches them with the original models.
-     * 
-     * @param array $models
-     * @param array $config
-     * @param string $name
-     * @param Closure|null $constraints
-     * @return array
-     */
-    private function loadHasOne(array $models, array $config, string $name, null|Closure $constraints = null): array
-    {
-        $relatedModel = new $config['related'];
-        $localValues = collect($models)->pluck($config['localKey'])->unique()->filter()->all();
-
-        if (empty($localValues)) {
-            return $this->initializeRelation($models, $name, null);
-        }
-
-        $query = $relatedModel->query()
-            ->select($config['columns'] ?? '*')
-            ->whereIn($config['foreignKey'], $localValues);
-
-        $this->applyConstraints($query, $config, $constraints);
-
-        // Apply nested relationships if any
-        if (!empty($config['nested'])) {
-            $query->with(...$config['nested']);
-        }
-
-        $results = $query->all();
-
-        return $this->matchModels($models, $results, $config, $name, 'one');
-    }
-
-    /**
      * Load hasMany relationship.
      * 
      * This method loads a hasMany relationship for the given models.
@@ -680,15 +623,16 @@ trait HasRelation
      * @param array $config
      * @param string $name
      * @param Closure|null $constraints
+     * @param string $type 'one' or 'many' to indicate relationship type
      * @return array
      */
-    private function loadHasMany(array $models, array $config, string $name, null|Closure $constraints = null): array
+    private function loadHasModels(array $models, array $config, string $name, null|Closure $constraints = null, string $type = 'many'): array
     {
         $relatedModel = new $config['related'];
         $localValues = collect($models)->pluck($config['localKey'])->unique()->filter()->all();
 
         if (empty($localValues)) {
-            return $this->initializeRelation($models, $name, []);
+            return $this->initializeRelation($models, $name, $type === 'one' ? null : []);
         }
 
         $query = $relatedModel->query()
@@ -704,7 +648,7 @@ trait HasRelation
 
         $results = $query->all();
 
-        return $this->matchModels($models, $results, $config, $name, 'many');
+        return $this->matchModels($models, $results, $config, $name, $type);
     }
 
     /**

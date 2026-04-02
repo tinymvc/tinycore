@@ -143,7 +143,7 @@ abstract class Relation
      * 
      * @return QueryBuilder
      */
-    public function getQuery(): QueryBuilder
+    public function query(): QueryBuilder
     {
         return $this->query ??= $this->buildQuery();
     }
@@ -171,6 +171,16 @@ abstract class Relation
     }
 
     /**
+     * Check if lazy loading is disabled for this relationship.
+     * 
+     * @return bool True if lazy loading is disabled, false otherwise.
+     */
+    public function isLazyLoadingDisabled(): bool
+    {
+        return !$this->lazy;
+    }
+
+    /**
      * Proxy method calls to the underlying QueryBuilder.
      * 
      * @param string $method
@@ -179,7 +189,7 @@ abstract class Relation
      */
     public function __call(string $method, array $parameters)
     {
-        $result = $this->getQuery()->$method(...$parameters);
+        $result = $this->query()->$method(...$parameters);
 
         // Return $this for fluent interface if QueryBuilder returned itself
         if ($result instanceof QueryBuilder) {
