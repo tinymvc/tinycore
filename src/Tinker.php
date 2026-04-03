@@ -195,26 +195,35 @@ class Tinker
             return;
         }
 
-        $files = glob("$modelsPath/*.php");
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($modelsPath, \FilesystemIterator::SKIP_DOTS)
+        );
 
-        if (empty($files)) {
-            return;
-        }
+        $aliases = []; // Keep track of simple class name aliases to avoid collisions
 
-        foreach ($files as $file) {
-            $name = basename($file, '.php');
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $relativePath = substr($file->getPathname(), strlen($modelsPath) + 1);
+            $relativeClass = str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $relativePath);
+            $parts = explode('\\', $relativeClass);
+            $name = end($parts);
 
             // Skip base Model class and any other non-model files
             if (in_array($name, ['Model', 'Cast', 'Casts'])) {
                 continue;
             }
 
-            $fullClass = "App\\Models\\$name";
+            $fullClass = "App\\Models\\$relativeClass";
 
             // Check if class exists and create alias
             if (class_exists($fullClass)) {
-                if (!class_exists($name, false)) {
+                // Keep simple aliases, but avoid collisions when two subfolders share a class name
+                if (!class_exists($name, false) && !isset($aliases[$name])) {
                     class_alias($fullClass, $name);
+                    $aliases[$name] = true;
                 }
             }
         }
@@ -960,21 +969,42 @@ class Tinker
             return;
         }
 
-        $files = glob("$modelsPath/*.php");
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($modelsPath, \FilesystemIterator::SKIP_DOTS)
+        );
 
-        if (empty($files)) {
-            echo "  No models found\n\n";
-            return;
-        }
+        $models = [];
 
-        foreach ($files as $file) {
-            $name = basename($file, '.php');
+        foreach ($iterator as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $relativePath = substr($file->getPathname(), strlen($modelsPath) + 1);
+            $relativeClass = str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $relativePath);
+            $parts = explode('\\', $relativeClass);
+            $name = end($parts);
 
             if (in_array($name, ['Model', 'Cast', 'Casts'])) {
                 continue;
             }
 
-            $class = "App\\Models\\$name";
+            $models[] = [
+                'name' => $name,
+                'class' => "App\\Models\\$relativeClass",
+            ];
+        }
+
+        if (empty($models)) {
+            echo "  No models found\n\n";
+            return;
+        }
+
+        usort($models, static fn(array $a, array $b): int => strcmp($a['class'], $b['class']));
+
+        foreach ($models as $model) {
+            $name = $model['name'];
+            $class = $model['class'];
             echo "  " . $this->color($name, 'yellow') . $this->color(" (alias for $class)", 'gray') . "\n";
 
             // Try to get table info

@@ -188,6 +188,41 @@ class Mail extends PHPMailer implements MailUtilContract
     }
 
     /**
+     * Add a custom header to the email.
+     *
+     * This method takes a header name and value, and adds the custom header to the email.
+     * The method returns the instance of the class for method chaining.
+     *
+     * @param string $name The name of the header.
+     * @param string $value The value of the header.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function withHeader(string $name, string $value): self
+    {
+        $this->addCustomHeader($name, $value);
+        return $this;
+    }
+
+    /**
+     * Add multiple custom headers to the email.
+     *
+     * This method takes an associative array of header names and values, and adds the custom headers to the email.
+     * The method returns the instance of the class for method chaining.
+     *
+     * @param array $headers An associative array of header names and values.
+     *
+     * @return self Returns the instance of the class for method chaining.
+     */
+    public function withHeaders(array $headers): self
+    {
+        foreach ($headers as $name => $value) {
+            $this->addCustomHeader($name, $value);
+        }
+        return $this;
+    }
+
+    /**
      * Set the email body content directly.
      *
      * This method allows you to set the email body content directly.

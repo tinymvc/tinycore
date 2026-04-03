@@ -30,7 +30,7 @@ use function is_string;
  *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Container implements ContainerContract
+class Container implements ContainerContract, \ArrayAccess
 {
     use Macroable;
 
@@ -574,6 +574,51 @@ class Container implements ContainerContract
         $this->aliases = [];
         $this->contextualBindings = [];
         $this->buildStack = [];
+    }
+
+    /**
+     * Checks if a variable exists in the container.
+     *
+     * @param mixed $offset The name of the variable to check.
+     * @return bool True if the variable exists, false otherwise.
+     */
+    public function offsetExists(mixed $offset): bool
+    {
+        return $this->has($offset);
+    }
+
+    /**
+     * Gets a variable from the container.
+     *
+     * @param mixed $offset The name of the variable to get.
+     * @return mixed The value of the variable, or null if not set.
+     */
+    public function offsetGet(mixed $offset): mixed
+    {
+        return $this->get($offset);
+    }
+
+    /**
+     * Sets a variable in the container.
+     *
+     * @param mixed $offset The name of the variable to set.
+     * @param mixed $value The value to set the variable to.
+     * @return void
+     */
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        $this->singleton($offset, $value);
+    }
+
+    /**
+     * Unsets a variable in the container.
+     *
+     * @param mixed $offset The name of the variable to unset.
+     * @return void
+     */
+    public function offsetUnset(mixed $offset): void
+    {
+        $this->forget($offset);
     }
 
     /**

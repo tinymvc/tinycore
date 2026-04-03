@@ -3,6 +3,7 @@
 namespace Spark\Foundation\Console;
 
 use Spark\Console\Commands;
+use Spark\Console\Process;
 use Spark\Console\Prompt;
 use Spark\Queue\Queue;
 use Spark\Routing\Router;
@@ -38,15 +39,23 @@ class PrimaryCommandsHandler
 
         Prompt::message(
             sprintf(
-                "<info>Info</info> Server running on <bold>[http://localhost:%s]</bold> at <bold>%s</bold>.",
-                $port,
-                date('Y-m-d H:i:s')
+                "<info>Info</info> Server running on: <bold>http://localhost:%s</bold>",
+                $port
             )
         );
-        Prompt::message("Press <bold>Ctrl+C</bold> to stop the server.", "warning");
 
-        // Simple foreground execution
-        passthru("php -S localhost:$port -t public");
+        Prompt::message(
+            sprintf('Press <bold>%s+C</bold> to stop the server.', windows_os() ? 'Ctrl' : 'Cmd'),
+            "warning"
+        );
+        Prompt::newline();
+
+        // Use the current PHP binary to avoid shell wrapper quirks on Windows.
+        Process::command([PHP_BINARY, '-S', "localhost:$port", '-t', 'public'])
+            ->path(root_dir())
+            ->forever()
+            ->tty()
+            ->execute();
     }
 
     /**

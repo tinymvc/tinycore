@@ -41,7 +41,7 @@ use function is_string;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Application extends \Spark\Container implements ApplicationContract, \ArrayAccess
+class Application extends \Spark\Container implements ApplicationContract
 {
     use Macroable;
 
@@ -53,9 +53,6 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
 
     /** @var array Array to store exception handlers. */
     private array $exceptions = [];
-
-    /** @var array Array to store application variables. */
-    private array $vars = [];
 
     /**
      * Application constructor.
@@ -508,99 +505,5 @@ class Application extends \Spark\Container implements ApplicationContract, \Arra
 
         $console = $this->get(Console::class);
         $console->run();
-    }
-
-    /**
-     * Magic method to check if a variable is set in the application.
-     *
-     * @param mixed $name The name of the variable to check.
-     * @return bool True if the variable is set, false otherwise.
-     */
-    public function __isset(mixed $name): bool
-    {
-        return isset($this->vars[$name]);
-    }
-
-    /**
-     * Magic method to get a variable from the application.
-     *
-     * @param mixed $name The name of the variable to get.
-     * @return mixed The value of the variable, or null if not set.
-     */
-    public function __get(mixed $name): mixed
-    {
-        return $this->vars[$name] ?? null;
-    }
-
-    /**
-     * Magic method to set a variable in the application.
-     *
-     * @param mixed $name The name of the variable to set.
-     * @param mixed $value The value to set the variable to.
-     * @return void
-     */
-    public function __set(mixed $name, mixed $value): void
-    {
-        $this->vars[$name] = $value;
-    }
-
-    /**
-     * Magic method to unset a variable in the application.
-     *
-     * @param mixed $name The name of the variable to unset.
-     * @return void
-     */
-    public function __unset(mixed $name): void
-    {
-        unset($this->vars[$name]);
-    }
-
-    /**
-     * Checks if a variable exists in the application.
-     *
-     * @param mixed $offset The name of the variable to check.
-     * @return bool True if the variable exists, false otherwise.
-     */
-    public function offsetExists(mixed $offset): bool
-    {
-        return isset($this->vars[$offset]);
-    }
-
-    /**
-     * Gets a variable from the application.
-     *
-     * @param mixed $offset The name of the variable to get.
-     * @return mixed The value of the variable, or null if not set.
-     */
-    public function offsetGet(mixed $offset): mixed
-    {
-        return $this->vars[$offset] ?? null;
-    }
-
-    /**
-     * Sets a variable in the application.
-     *
-     * @param mixed $offset The name of the variable to set.
-     * @param mixed $value The value to set the variable to.
-     * @return void
-     */
-    public function offsetSet(mixed $offset, mixed $value): void
-    {
-        if ($offset === null) {
-            $this->vars[] = $value;
-        } else {
-            $this->vars[$offset] = $value;
-        }
-    }
-
-    /**
-     * Unsets a variable in the application.
-     *
-     * @param mixed $offset The name of the variable to unset.
-     * @return void
-     */
-    public function offsetUnset(mixed $offset): void
-    {
-        unset($this->vars[$offset]);
     }
 }

@@ -8,195 +8,111 @@ use function is_array;
 use function is_resource;
 
 /**
- * A simple process execution class that allows you to run shell commands with various options.
- * It provides methods to set the working directory, timeout, environment variables, input, and TTY mode.
- * It also captures the output, error output, exit code, and execution time of the process.
- * 
+ * A simple process execution utility for running shell commands with real-time output capture,
+ * environment variable support, timeouts, and TTY mode.
+ *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Process implements \Stringable
 {
-    /** @var string The command to execute */
-    protected string $command;
-
-    /** @var string|null The working directory for the process */
-    protected ?string $workingDirectory = null;
-
-    /** @var int|null The timeout for the process in seconds (null for no timeout) */
+    // ── Configuration ───────────────────────────────────
+    protected string|array $command;
+    protected ?string $cwd = null;
     protected ?int $timeout = 60;
-
-    /** @var array The environment variables to set for the process */
     protected array $env = [];
-
-    /** @var string|null The input to pass to the process */
     protected ?string $input = null;
-
-    /** @var bool Whether to run the process in TTY mode */
     protected bool $tty = false;
 
-    /** @var int|null The exit code of the process (null if not executed yet) */
     protected ?int $exitCode = null;
-
-    /** @var string The standard output of the process */
     protected string $output = '';
-
-    /** @var string The error output of the process */
     protected string $errorOutput = '';
+    protected float $executionTime = 0.0;
 
-    /** @var float The execution time of the process in seconds */
-    protected float $executionTime = 0;
-
-    /** 
-     * Create a new Process instance.
-     *
-     * @param string $command The command to execute
-     * @param string|null $workingDirectory The working directory for the process
-     * @param int|null $timeout The timeout for the process in seconds (null for no timeout)
-     */
-    public function __construct(string $command, ?string $workingDirectory = null, ?int $timeout = 60)
+    public function __construct(string|array $command, ?string $cwd = null, ?int $timeout = 60)
     {
         $this->command = $command;
-        $this->workingDirectory = $workingDirectory;
+        $this->cwd = $cwd;
         $this->timeout = $timeout;
     }
 
-    /** 
-     * Run a command and return the Process instance.
-     *
-     * @param string|array $command The command to execute (string or array of arguments)
-     * @param string|null $workingDirectory The working directory for the process
-     * @param int|null $timeout The timeout for the process in seconds (null for no timeout)
-     * @return static The Process instance after execution
-     */
-    public static function run(string|array $command, ?string $workingDirectory = null, ?int $timeout = 60): static
-    {
-        $command = is_array($command) ? implode(
-            ' ',
-            array_map('escapeshellarg', $command)
-        ) : $command;
+    // ── Factories ─────────────────────────────────────────────────────────────
 
-        $process = new static($command, $workingDirectory, $timeout);
-        $process->execute();
-
-        return $process;
-    }
-
-    /** 
-     * Create a new Process instance with the given command.
-     *
-     * @param string|array $command The command to execute (string or array of arguments)
-     * @return static The Process instance
-     */
     public static function command(string|array $command): static
     {
-        $command = is_array($command) ? implode(
-            ' ',
-            array_map('escapeshellarg', $command)
-        ) : $command;
-
         return new static($command);
     }
 
-    /** 
-     * Set the working directory for the process.
-     *
-     * @param string $workingDirectory The working directory to set
-     * @return static The Process instance
-     */
-    public function path(string $workingDirectory): static
+    public static function run(string|array $command, ?string $cwd = null, ?int $timeout = 60): static
     {
-        $this->workingDirectory = $workingDirectory;
+        return static::command($command)->path($cwd)->timeout($timeout)->execute();
+    }
+
+    // ── Builder ───────────────────────────────────────────────────────────────
+
+    public function path(?string $cwd): static
+    {
+        $this->cwd = $cwd;
         return $this;
     }
 
-    /** 
-     * Set the timeout for the process.
-     *
-     * @param int $timeout The timeout in seconds
-     * @return static The Process instance
-     */
-    public function timeout(int $timeout): static
+    public function timeout(?int $seconds): static
     {
-        $this->timeout = $timeout;
+        $this->timeout = $seconds;
         return $this;
     }
 
-    /** 
-     * Set the process to run indefinitely (no timeout).
-     *
-     * @return static The Process instance
-     */
     public function forever(): static
     {
         $this->timeout = null;
         return $this;
     }
 
-    /** 
-     * Set environment variables for the process.
-     *
-     * @param array $env An associative array of environment variables to set
-     * @return static The Process instance
-     */
     public function env(array $env): static
     {
         $this->env = [...$this->env, ...$env];
         return $this;
     }
 
-    /** 
-     * Set the input to pass to the process.
-     *
-     * @param string $input The input string to pass to the process
-     * @return static The Process instance
-     */
-    public function input(string $input): static
+    public function input(string $data): static
     {
-        $this->input = $input;
+        $this->input = $data;
         return $this;
     }
 
-    /** 
-     * Set whether to run the process in TTY mode.
-     *
-     * @param bool $tty Whether to enable TTY mode (default: true)
-     * @return static The Process instance
-     */
     public function tty(bool $tty = true): static
     {
         $this->tty = $tty;
         return $this;
     }
 
-    /** 
-     * Execute the process and capture the output, error output, exit code, and execution time.
-     *
-     * @return static The Process instance after execution
-     * @throws ProcessFailedException If the process fails to start
-     * @throws ProcessTimedOutException If the process exceeds the specified timeout
+    // ── Execution ─────────────────────────────────────────────────────────────
+
+    /**
+     * @throws ProcessFailedException
+     * @throws ProcessTimedOutException
      */
     public function execute(): static
     {
-        $startTime = microtime(true);
+        return $this->tty ? $this->executeTty() : $this->executePiped();
+    }
 
-        $descriptors = [
-            0 => ['pipe', 'r'],
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-
+    private function executePiped(): static
+    {
+        $start = microtime(true);
         $env = empty($this->env) ? null : [...$_ENV, ...$this->env];
+        $options = $this->procOptions();
 
         $process = proc_open(
             $this->command,
-            $descriptors,
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
             $pipes,
-            $this->workingDirectory,
-            $env
+            $this->cwd,
+            $env,
+            $options
         );
 
         if (!is_resource($process)) {
-            throw new ProcessFailedException('Failed to start process.');
+            throw new ProcessFailedException("Failed to start: {$this->stringifyCommand()}");
         }
 
         if ($this->input !== null) {
@@ -206,160 +122,181 @@ class Process implements \Stringable
 
         stream_set_blocking($pipes[1], false);
         stream_set_blocking($pipes[2], false);
+        stream_set_read_buffer($pipes[1], 0);
+        stream_set_read_buffer($pipes[2], 0);
 
-        $output = '';
-        $errorOutput = '';
-        $timeoutReached = false;
+        $out = '';
+        $err = '';
+        $timedOut = false;
 
         while (true) {
-            $status = proc_get_status($process);
-
-            if ($this->timeout !== null && (microtime(true) - $startTime) > $this->timeout) {
-                proc_terminate($process);
-                $timeoutReached = true;
+            if ($this->timeout !== null && (microtime(true) - $start) > $this->timeout) {
+                $this->terminate($process);
+                $timedOut = true;
                 break;
             }
 
-            $output .= stream_get_contents($pipes[1]);
-            $errorOutput .= stream_get_contents($pipes[2]);
+            foreach ([$pipes[1], $pipes[2]] as $stream) {
+                $chunk = @fread($stream, 65_536);
+                if ($chunk !== '' && $chunk !== false) {
+                    $stream === $pipes[1] ? $out .= $chunk : $err .= $chunk;
+                }
+            }
 
-            if (!$status['running']) {
+            $running = proc_get_status($process)['running'];
+            if (!$running && feof($pipes[1]) && feof($pipes[2])) {
                 break;
             }
 
-            usleep(10000);
+            usleep(20_000);
         }
 
-        $output .= stream_get_contents($pipes[1]);
-        $errorOutput .= stream_get_contents($pipes[2]);
+        // Final drain
+        $out .= stream_get_contents($pipes[1]);
+        $err .= stream_get_contents($pipes[2]);
 
         fclose($pipes[1]);
         fclose($pipes[2]);
 
         $this->exitCode = proc_close($process);
-        $this->output = $output;
-        $this->errorOutput = $errorOutput;
-        $this->executionTime = microtime(true) - $startTime;
+        $this->output = $out;
+        $this->errorOutput = $err;
+        $this->executionTime = microtime(true) - $start;
 
-        if ($timeoutReached) {
-            throw new ProcessTimedOutException("Process exceeded timeout of {$this->timeout} seconds.");
-        }
-
-        return $this;
-    }
-
-    /** 
-     * Throw an exception if the process failed.
-     *
-     * @return static The Process instance
-     * @throws ProcessFailedException If the process failed (non-zero exit code)
-     */
-    public function throw(): static
-    {
-        if ($this->failed()) {
-            throw new ProcessFailedException(
-                "Process failed with exit code {$this->exitCode}.\n\nOutput:\n{$this->output}\n\nError:\n{$this->errorOutput}"
+        if ($timedOut) {
+            throw new ProcessTimedOutException(
+                "Process timed out after {$this->timeout}s: {$this->stringifyCommand()}"
             );
         }
 
         return $this;
     }
 
-    /** 
-     * Check if the process was successful (exit code 0).
-     *
-     * @return bool True if the process was successful, false otherwise
-     */
+    private function executeTty(): static
+    {
+        $start = microtime(true);
+        $env = empty($this->env) ? null : [...$_ENV, ...$this->env];
+        $pipes = [];
+        $options = $this->procOptions();
+
+        $process = proc_open(
+            $this->command,
+            [STDIN, STDOUT, STDERR],
+            $pipes,
+            $this->cwd,
+            $env,
+            $options
+        );
+
+        if (!is_resource($process)) {
+            throw new ProcessFailedException("Failed to start: {$this->stringifyCommand()}");
+        }
+
+        while (proc_get_status($process)['running']) {
+            if ($this->timeout !== null && (microtime(true) - $start) > $this->timeout) {
+                $this->terminate($process);
+                throw new ProcessTimedOutException(
+                    "Process timed out after {$this->timeout}s: {$this->stringifyCommand()}"
+                );
+            }
+            usleep(10_000);
+        }
+
+        $this->exitCode = proc_close($process);
+        $this->executionTime = microtime(true) - $start;
+
+        return $this;
+    }
+
+    private function terminate($process): void
+    {
+        $signalTerm = \defined('SIGTERM') ? \constant('SIGTERM') : 15;
+        $signalKill = \defined('SIGKILL') ? \constant('SIGKILL') : 9;
+
+        proc_terminate($process, $signalTerm);
+        usleep(200_000);
+        if (proc_get_status($process)['running']) {
+            proc_terminate($process, $signalKill);
+        }
+    }
+
+    private function procOptions(): array
+    {
+        if (!windows_os()) {
+            return [];
+        }
+
+        $options = [];
+
+        if (!is_array($this->command)) {
+            $options['bypass_shell'] = true;
+        }
+
+        return $options;
+    }
+
+    private function stringifyCommand(): string
+    {
+        if (is_array($this->command)) {
+            return implode(' ', array_map('escapeshellarg', $this->command));
+        }
+
+        return $this->command;
+    }
+
+    // ── Assertions ────────────────────────────────────────────────────────────
+
+    /** @throws ProcessFailedException */
+    public function throw(): static
+    {
+        if ($this->failed()) {
+            throw new ProcessFailedException(
+                "Process failed (exit {$this->exitCode}): {$this->stringifyCommand()}"
+                . ($this->output ? "\n\n[stdout]\n{$this->output}" : '')
+                . ($this->errorOutput ? "\n\n[stderr]\n{$this->errorOutput}" : '')
+            );
+        }
+
+        return $this;
+    }
+
+    // ── Accessors ─────────────────────────────────────────────────────────────
+
     public function successful(): bool
     {
         return $this->exitCode === 0;
     }
 
-    /** 
-     * Check if the process failed (non-zero exit code).
-     *
-     * @return bool True if the process failed, false otherwise
-     */
     public function failed(): bool
     {
         return !$this->successful();
     }
 
-    /** 
-     * Get the standard output of the process.
-     *
-     * @return string The trimmed standard output
-     */
     public function output(): string
     {
         return trim($this->output);
     }
 
-    /** 
-     * Get the error output of the process.
-     *
-     * @return string The trimmed error output
-     */
     public function errorOutput(): string
     {
         return trim($this->errorOutput);
     }
 
-    /** 
-     * Get the exit code of the process.
-     *
-     * @return int|null The exit code, or null if the process has not been executed
-     */
     public function exitCode(): ?int
     {
         return $this->exitCode;
     }
 
-    /** 
-     * Get the latest standard output of the process.
-     *
-     * @return string The trimmed latest standard output
-     */
-    public function latestOutput(): string
-    {
-        return $this->output();
-    }
-
-    /** 
-     * Get the latest error output of the process.
-     *
-     * @return string The trimmed latest error output
-     */
-    public function latestErrorOutput(): string
-    {
-        return $this->errorOutput();
-    }
-
-    /** 
-     * Get the execution time of the process in seconds.
-     *
-     * @return float The execution time in seconds
-     */
     public function executionTime(): float
     {
         return $this->executionTime;
     }
 
-    /** 
-     * Get the command that was executed.
-     *
-     * @return string The command string
-     */
     public function getCommand(): string
     {
-        return $this->command;
+        return $this->stringifyCommand();
     }
 
-    /** 
-     * Get the working directory for the process.
-     *
-     * @return string|null The working directory, or null if not set
-     */
     public function __toString(): string
     {
         return $this->output();

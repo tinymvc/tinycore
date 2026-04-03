@@ -681,6 +681,24 @@ if (!function_exists('resource_dir')) {
     }
 }
 
+if (!function_exists('app_dir')) {
+    /**
+     * Get the application directory path with an optional appended path.
+     *
+     * This function returns the application's app directory path, optionally
+     * appending a specified sub-path to it. The resulting path is normalized
+     * with a single trailing slash.
+     *
+     * @param string $path The sub-path to append to the application directory path. Default is '/'.
+     *
+     * @return string The full path to the application directory, including the appended sub-path.
+     */
+    function app_dir(string $path = '/'): string
+    {
+        return root_dir('app/' . ltrim($path, '/'));
+    }
+}
+
 if (!function_exists('storage_dir')) {
     /**
      * Get the application storage directory path with an optional appended path.
