@@ -783,11 +783,11 @@ trait HasRelation
         );
 
         $query = $relatedModel->query()
-            ->select(
+            ->select([
                 ...$columns,
                 $throughModel->getTable() . "." . $config['firstKey'],
                 map_pivot_fields($config['pivotFields'] ?? null, $throughModel->getTable(), $relatedModel->getTable())
-            )
+            ])
             ->from($relatedModel->getTable())
             ->join(
                 $throughModel->getTable(),
