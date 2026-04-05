@@ -934,8 +934,8 @@ class BladeCompiler implements BladeCompilerContract
             'style' => "echo \$this->compileAttributes(['style' => %s]);",
             'class' => "echo \$this->compileAttributes(['class' => %s]);",
             'attributes' => "echo \$this->compileAttributes(%s);",
-            'errors' => "if(errors()->any() && errors()->has('%s')): foreach(errors()->get('%s') as \$message):",
-            'error' => "if(errors()->any() && errors()->has('%s')): \$message = errors()->first('%s');",
+            'errors' => "if(errors()->any() && errors()->has(%s)): foreach(errors()->get(%s) as \$message):",
+            'error' => "if(errors()->any() && errors()->has(%s)): \$message = errors()->first(%s);",
         ];
 
         $singleLineDirectives = [
