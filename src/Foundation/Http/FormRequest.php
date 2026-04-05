@@ -1,6 +1,6 @@
 <?php
 
-namespace Sparks\Foundation\Http;
+namespace Spark\Foundation\Http;
 
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Http\Request;
