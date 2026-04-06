@@ -109,9 +109,15 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      *
      * @return array|null The JSON-decoded response body or null if decoding failed.
      */
-    public function json(): array
+    public function json(?string $key = null, $default = null): array
     {
-        return $this->json ??= json_decode((string) $this->body, true) ?? [];
+        $json = $this->json ??= json_decode((string) $this->body, true) ?? [];
+
+        if ($key === null) {
+            return $json;
+        }
+
+        return data_get($json, $key, $default);
     }
 
     /**
