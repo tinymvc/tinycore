@@ -784,42 +784,114 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileIncludes(string $template): string
     {
-        // Compile @includeWhen directive
-        $template = preg_replace_callback(
-            '/@includeWhen\(\s*(.+?)\s*,\s*(.+?)(?:\s*,\s*(.+?))?\s*\)/s',
-            function ($matches) {
-                $condition = $matches[1];
-                $viewExpr = $matches[2];
-                $dataExpr = isset($matches[3]) && trim($matches[3]) !== '' ? $matches[3] : '[]';
-
+        $directives = [
+            'includeWhen' => function (string $expression): string {
+                $args = $this->splitDirectiveArguments($expression, 3);
+                $condition = $args[0] ?? 'false';
+                $viewExpr = $args[1] ?? "''";
+                $dataExpr = $args[2] ?? '[]';
                 return "<?php if ({$condition}): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
             },
-            $template
-        );
-
-        // Compile @includeIf directive
-        $template = preg_replace_callback(
-            '/@includeIf\(\s*(.+?)(?:\s*,\s*(.+?))?\s*\)/s',
-            function ($matches) {
-                $viewExpr = $matches[1];
-                $dataExpr = isset($matches[2]) && trim($matches[2]) !== '' ? $matches[2] : '[]';
-
+            'includeIf' => function (string $expression): string {
+                $args = $this->splitDirectiveArguments($expression, 2);
+                $viewExpr = $args[0] ?? "''";
+                $dataExpr = $args[1] ?? '[]';
                 return "<?php if (\$this->templateExists({$viewExpr})): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
             },
-            $template
-        );
-
-        // Compile @include directive
-        return preg_replace_callback(
-            '/@include\(\s*(.+?)(?:\s*,\s*(.+?))?\s*\)/s',
-            function ($matches) {
-                $viewExpr = $matches[1];
-                $dataExpr = isset($matches[2]) && trim($matches[2]) !== '' ? $matches[2] : '[]';
-
+            'include' => function (string $expression): string {
+                $args = $this->splitDirectiveArguments($expression, 2);
+                $viewExpr = $args[0] ?? "''";
+                $dataExpr = $args[1] ?? '[]';
                 return "<?= \$this->include({$viewExpr}, {$dataExpr}); ?>";
             },
-            $template
-        );
+        ];
+
+        foreach ($directives as $directive => $handler) {
+            $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
+            $offset = 0;
+
+            while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                $matchStart = $matches[0][1];
+                $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+
+                $expression = $this->extractBalancedExpression($template, $parenStart);
+
+                if ($expression === false) {
+                    throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
+                }
+
+                $replacement = $handler(trim($expression));
+                $directiveLength = ($parenStart - $matchStart) + strlen($expression) + 2;
+                $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
+                $offset = $matchStart + strlen($replacement);
+            }
+        }
+
+        return $template;
+    }
+
+    /**
+     * Split top-level directive arguments respecting nested parentheses and quotes.
+     */
+    private function splitDirectiveArguments(string $expression, int $limit = PHP_INT_MAX): array
+    {
+        $args = [];
+        $depth = 0;
+        $inStr = false;
+        $strChar = null;
+        $escaped = false;
+        $current = '';
+        $length = strlen($expression);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $expression[$i];
+
+            if ($escaped) {
+                $current .= $char;
+                $escaped = false;
+                continue;
+            }
+
+            if ($char === '\\') {
+                $current .= $char;
+                $escaped = true;
+                continue;
+            }
+
+            if (!$inStr && ($char === '"' || $char === "'")) {
+                $inStr = true;
+                $strChar = $char;
+                $current .= $char;
+                continue;
+            }
+
+            if ($inStr && $char === $strChar) {
+                $inStr = false;
+                $strChar = null;
+                $current .= $char;
+                continue;
+            }
+
+            if (!$inStr) {
+                if (in_array($char, ['(', '[', '{'])) {
+                    $depth++;
+                } elseif (in_array($char, [')', ']', '}'])) {
+                    $depth--;
+                } elseif ($char === ',' && $depth === 0 && count($args) < $limit - 1) {
+                    $args[] = trim($current);
+                    $current = '';
+                    continue;
+                }
+            }
+
+            $current .= $char;
+        }
+
+        if ($current !== '' || !empty($args)) {
+            $args[] = trim($current);
+        }
+
+        return $args;
     }
 
     /**
