@@ -144,6 +144,40 @@ class Queue implements QueueContract
     }
 
     /**
+     * Adds a job to the queue only if an identical job does not already exist.
+     *
+     * This method checks if a job with the same callback and parameters already
+     * exists in the specified queue. If such a job exists, it will not add the
+     * new job to prevent duplicates. If no such job exists, it will add the new
+     * job to the queue.
+     *
+     * @param JobContract $job The job to be added.
+     * @param string $queue The name of the queue to add the job to.
+     *
+     * @return void
+     */
+    public function pushOnce(JobContract $job, string $queue = 'default'): void
+    {
+        $payload = json_encode([
+            'callback' => $job->getCallback(),
+            'parameters' => $job->getParameters(),
+        ]);
+
+        $repeatCondition = $job->isRepeated() ? "= :repeat" : "IS NULL";
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM jobs WHERE payload = :payload AND queue = :queue AND repeat $repeatCondition"
+        );
+        $stmt->execute([
+            ':payload' => $payload,
+            ':queue' => $queue,
+            ':repeat' => $job->getRepeat()
+        ]);
+        $count = $stmt->fetchColumn();
+
+        $count === 0 && $this->push($job, $queue);
+    }
+
+    /**
      * Clears all jobs from the queue.
      *
      * This method will remove all jobs from the queue and mark the queue as changed.

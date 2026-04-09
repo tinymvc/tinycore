@@ -23,6 +23,14 @@ interface QueueContract
      */
     public function push(JobContract $job, string $queue = 'default'): void;
 
+    /**
+     * Adds a job to the queue only if it does not already exist.
+     *
+     * @param JobContract $job The job to be added.
+     * @param string $queue The name of the queue to add the job to.
+     * @return void
+     */
+    public function pushOnce(JobContract $job, string $queue = 'default'): void;
 
     /**
      * Enables or disables logging for the queue.
