@@ -107,6 +107,9 @@ interface JobContract
      */
     public function dispatch(string $name = 'default'): void;
 
+    /* Dispatches the job only if it is not already scheduled or dispatched. */
+    public function dispatchOnce(string $name = 'default'): void;
+
     /* Checks if the job is set to be repeated. */
     public function isRepeated(): bool;
 

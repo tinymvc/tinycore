@@ -1250,6 +1250,7 @@ if (!function_exists('dispatch')) {
      * @param null|string|Carbon $scheduledTime The time when the job is scheduled to run. Default is null (run immediately).
      * @param null|string $repeat The repeat interval for the job. Default is null (no repeat).
      * @param string $queue The name of the queue to dispatch the job to. Default is 'default'.
+     * @param bool $once Whether to dispatch the job only once. Default is false.
      * @return void
      */
     function dispatch(
@@ -1258,12 +1259,17 @@ if (!function_exists('dispatch')) {
         null|string|Carbon $scheduledTime = null,
         null|string $repeat = null,
         string $queue = 'default',
+        bool $once = false,
     ): void {
         // Create a new job instance.
         $job = job($callback, $parameters, $scheduledTime, $repeat);
 
         // Dispatch the job to the queue.
-        $job->dispatch($queue);
+        if ($once) {
+            $job->dispatchOnce($queue);
+        } else {
+            $job->dispatch($queue);
+        }
     }
 }
 
@@ -1521,15 +1527,15 @@ if (!function_exists('mailer')) {
      * This function sends an email using the Mail utility class. The parameters
      * are passed directly to the Mail utility class methods.
      *
-     * @param null|string|array $to The recipient of the email
-     * @param null|string $subject The subject of the email
-     * @param null|string $content The content of the email
-     * @param null|bool $isHtml Whether the content is HTML or plain text
-     * @param null|string $template The template to use for the email
-     * @param null|array $body The context to pass to the template
-     * @param null|string|array $form The email address of the sender
-     * @param null|string|array $reply The email address of the reply to
-     * @param array $config Additional configuration options for the Mail utility class
+     * @param null|string|array $to The recipient(s) of the email.
+     * @param null|string $subject The subject of the email.
+     * @param null|string $body The body content of the email.
+     * @param null|bool $isHtml Whether the email content is HTML or plain text.
+     * @param null|string $template The template to use for the email body.
+     * @param null|array $context The context data to pass to the template.
+     * @param null|string|array $from The sender(s) of the email.
+     * @param null|string|array $reply The reply-to address(es) for the email.
+     * @param array $config Additional configuration options for the Mail instance.
      * @return Mail The instance of the Mail utility class
      */
     function mailer(null|string|array $to = null, ?string $subject = null, ?string $body = null, ?bool $isHtml = null, ?string $template = null, ?array $context = null, null|string|array $from = null, null|string|array $reply = null, array $config = []): Mail
@@ -1566,9 +1572,9 @@ if (!function_exists('mailer')) {
             $mailer->to(...array_values((array) $to));
         }
 
-        if (isset($form)) {
+        if (isset($from)) {
             // Set the email address of the sender
-            $mailer->from(...array_values((array) $form));
+            $mailer->from(...array_values((array) $from));
         }
 
         if (isset($reply)) {

@@ -375,6 +375,23 @@ class Job implements JobContract
     }
 
     /**
+     * Dispatches the job to the queue only if it has not been dispatched before.
+     *
+     * This method will add the job to the queue only if it has not been dispatched before.
+     * It is typically used when you want to ensure that a job is only executed once, even
+     * if multiple attempts are made to dispatch it.
+     *
+     * @param string $queue The name of the queue to which the job should be dispatched.
+     * @return void
+     */
+    public function dispatchOnce(string $queue = 'default'): void
+    {
+        /** @var \Spark\Queue\Queue $queueInstance The queue instance */
+        $queueInstance = Application::$app->get(Queue::class);
+        $queueInstance->pushOnce($this, $queue);
+    }
+
+    /**
      * Get a display name for the job.
      *
      * This method returns a human-readable name for the job,
