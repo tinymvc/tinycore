@@ -359,6 +359,32 @@ class Application extends \Spark\Container implements ApplicationContract
     }
 
     /**
+     * Configures the application's queue system.
+     *
+     * This method allows you to set up the queue system by providing an array of jobs to be queued,
+     * a logging option, and an optional callback for additional configuration.
+     *
+     * @param null|array $jobs An array of jobs to be added to the queue.
+     * @param bool|string $log A boolean or string indicating whether to log queue activity, or the log file path.
+     * @param null|callable $then An optional callback for additional configuration of the queue.
+     * @return self
+     */
+    public function withQueue(null|array $jobs = null, bool|string $log = true, null|callable $then = null): self
+    {
+        $this->singleton(Queue::class, function () use ($jobs, $log, $then) {
+            $queue = new Queue($log);
+
+            $jobs && array_map($queue->pushOnce(...), $jobs);
+
+            $then && $then($queue);
+
+            return $queue;
+        });
+
+        return $this;
+    }
+
+    /**
      * Registers an event listener for a specific event.
      *
      * This method allows you to register a listener callback for a specific
