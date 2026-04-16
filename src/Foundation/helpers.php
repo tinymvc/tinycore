@@ -1909,11 +1909,12 @@ if (!function_exists('now')) {
      * This function returns the current date and time as a DateTime object,
      * which can be used for various date and time operations.
      *
+     * @param string|null $timezone An optional timezone identifier to set the timezone for the DateTime object. If null, the default timezone will be used.
      * @return \Spark\Utils\Carbon The current date and time.
      */
-    function now(): Carbon
+    function now($timezone = null): Carbon
     {
-        return Carbon::now();
+        return Carbon::now($timezone);
     }
 }
 

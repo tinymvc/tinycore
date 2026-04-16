@@ -366,6 +366,11 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         // Apply events for before save and encode array into json string. 
         $data = $this->castDataForStorage($this->getFillableData());
 
+        // Apply timestamp casting if the model uses HasTimestamp trait and timestamps are defined.
+        if (method_exists($this, 'getCastedTimestampsForStorage')) {
+            $data = [...$data, ...$this->getCastedTimestampsForStorage()];
+        }
+
         // Initialize default status variables.
         $updatedStatus = false;
         $createdId = 0;
