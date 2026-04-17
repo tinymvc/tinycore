@@ -128,6 +128,15 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         __callStatic as staticMacroCall;
     }
 
+    /** Indicates whether the model should automatically manage timestamps. */
+    protected const bool USE_TIMESTAMPS = false;
+
+    /** The name of the "created at" column. */
+    protected const ?string CREATED_AT = 'created_at';
+
+    /** The name of the "updated at" column. */
+    protected const ?string UPDATED_AT = 'updated_at';
+
     /**
      * @var string The table name associated with this model.
      */
@@ -367,7 +376,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $data = $this->castDataForStorage($this->getFillableData());
 
         // Apply timestamp casting if the model uses HasTimestamp trait and timestamps are defined.
-        if (method_exists($this, 'getCastedTimestampsForStorage')) {
+        if (static::USE_TIMESTAMPS) {
             $data = [...$data, ...$this->getCastedTimestampsForStorage()];
         }
 
@@ -1418,5 +1427,31 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 'removed' => true,
             ];
         }
+    }
+
+    /**
+     * Prepare the timestamp attributes for storage when saving the model.
+     *
+     * @return array An array containing the casted timestamps for storage.
+     */
+    protected function getCastedTimestampsForStorage(): array
+    {
+        $timestamps = array_filter([static::CREATED_AT, static::UPDATED_AT]);
+
+        $castedTimestamps = [];
+
+        if (in_array(static::CREATED_AT, $timestamps)) {
+            $castedTimestamps[static::CREATED_AT] = $this->attributes[static::CREATED_AT] ??= date('Y-m-d H:i:s');
+        }
+
+        if (in_array(static::UPDATED_AT, $timestamps)) {
+            if ($this->isDirty()) {
+                unset($this->attributes[static::UPDATED_AT]);
+            }
+
+            $castedTimestamps[static::UPDATED_AT] = $this->attributes[static::UPDATED_AT] ??= date('Y-m-d H:i:s');
+        }
+
+        return $castedTimestamps;
     }
 }
