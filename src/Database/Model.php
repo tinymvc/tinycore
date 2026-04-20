@@ -129,13 +129,13 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /** Indicates whether the model should automatically manage timestamps. */
-    protected const bool USE_TIMESTAMPS = false;
+    protected const USE_TIMESTAMPS = false;
 
     /** The name of the "created at" column. */
-    protected const ?string CREATED_AT = 'created_at';
+    protected const CREATED_AT = 'created_at';
 
     /** The name of the "updated at" column. */
-    protected const ?string UPDATED_AT = 'updated_at';
+    protected const UPDATED_AT = 'updated_at';
 
     /**
      * @var string The table name associated with this model.
