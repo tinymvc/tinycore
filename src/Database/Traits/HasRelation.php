@@ -357,7 +357,7 @@ trait HasRelation
      * @return mixed
      * @throws OrmDisabledLazyLoadingException If lazy loading is disabled for this relation
      */
-    public function getRelationshipAttribute(string $name)
+    public function getRelation(string $name)
     {
         // Return cached relation if already loaded
         if ($this->relationLoaded($name)) {
@@ -430,20 +430,27 @@ trait HasRelation
     {
         $relations = is_array($relations) ? $relations : func_get_args();
         foreach ($relations as $relation) {
-            $this->getRelationshipAttribute($relation);
+            $this->getRelation($relation);
         }
     }
 
     /**
      * Check if a relationship exists and has data.
      * 
-     * @param string $name
+     * @param array|string $names
      * @return bool
      */
-    public function relationshipExists(string $name): bool
+    public function relationExists(array|string $names): bool
     {
-        $relation = $this->getRelationshipAttribute($name);
-        return !blank($relation);
+        $names = is_array($names) ? $names : func_get_args();
+        foreach ($names as $name) {
+            $relation = $this->getRelation($name);
+            if (blank($relation)) {
+                return false; // If any relation is blank (null, empty collection, etc.), return false
+            }
+        }
+
+        return true;
     }
 
     /**

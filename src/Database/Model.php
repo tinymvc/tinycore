@@ -767,7 +767,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function offsetExists(mixed $offset): bool
     {
-        return isset($this->attributes[$offset]) || $this->relationshipExists($offset);
+        return isset($this->attributes[$offset]) || $this->relationExists($offset);
     }
 
     /**
@@ -784,7 +784,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         // Get raw value
-        return $this->attributes[$offset] ?? $this->getRelationshipAttribute($offset);
+        return $this->attributes[$offset] ?? $this->getRelation($offset);
     }
 
     /**
@@ -874,7 +874,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         if ($this->hasAccessor($rootKey)) {
             $rootValue = $this->getAttributeValue($rootKey, $this->attributes[$rootKey] ?? null);
         } elseif ($this->relationLoaded($rootKey)) {
-            $rootValue = $this->getRelationshipAttribute($rootKey);
+            $rootValue = $this->getRelation($rootKey);
         }
 
         if ($rootValue) {
