@@ -869,8 +869,8 @@ if (!function_exists('dd')) {
     {
         // show the file and line number
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1);
-        $file = $trace[0]['file']; // Get the file name
-        $line = $trace[0]['line']; // Get the line number
+        $file = $trace[0]['file'] ?? ''; // Get the file name
+        $line = $trace[0]['line'] ?? ''; // Get the line number
 
         // Make the file path relative to the root directory
         $file = str_replace(root_dir(), '@', $file);

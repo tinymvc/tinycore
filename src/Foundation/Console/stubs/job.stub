@@ -2,7 +2,7 @@
 
 namespace {{ namespace }};
 
-use Queue\Contracts\JobInterface;
+use Spark\Queue\Contracts\JobInterface;
 
 class {{ class }} implements JobInterface
 {

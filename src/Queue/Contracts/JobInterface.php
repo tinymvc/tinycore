@@ -1,6 +1,6 @@
 <?php
 
-namespace Queue\Contracts;
+namespace Spark\Queue\Contracts;
 
 interface JobInterface
 {
