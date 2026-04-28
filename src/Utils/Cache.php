@@ -484,16 +484,17 @@ class Cache implements CacheUtilContract, \ArrayAccess
      *
      * @param string $key The cache key.
      * @param callable $callback Callback to generate value if not cached.
+     * @param null|string $expire Expiration time.
      * @return mixed
      */
-    public function remember(string $key, callable $callback): mixed
+    public function remember(string $key, callable $callback, null|string $expire = null): mixed
     {
-        if ($this->has($key)) {
+        if ($this->has($key, $expire !== null)) {
             return $this->retrieve($key);
         }
 
         $value = $callback($this);
-        $this->store($key, $value);
+        $this->store($key, $value, $expire);
         return $value;
     }
 

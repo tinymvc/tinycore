@@ -30,7 +30,7 @@ class Tracer implements TracerUtilContract
      * This ensures that errors and exceptions are logged and handled consistently.
      * 
      * @param string|null $logFile The path to the error log file. 
-     *      Defaults to storage_dir('error.log').
+     *      Defaults to storage_dir('logs/spark.log').
      * 
      * @return void
      */
@@ -40,7 +40,7 @@ class Tracer implements TracerUtilContract
         self::$instance = $this;
 
         // Set default error log file if not provided
-        $this->logFile ??= storage_dir('logs/error.log');
+        $this->logFile ??= storage_dir('logs/spark.log');
 
         // Enable error reporting
         error_reporting(E_ALL);

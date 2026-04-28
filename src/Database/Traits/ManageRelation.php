@@ -164,6 +164,8 @@ trait ManageRelation
      */
     public function has(string $relation, string $operator = '>=', int $count = 1, string $boolean = 'AND', ?Closure $callback = null): QueryBuilder
     {
+        [$relation, $callback, $operator, $count] = $this->normalizeHasRelation($relation, $callback, $operator, $count);
+
         $model = $this->getRelatedModel();
         $relationConfig = $model->getRelationshipConfig($relation);
 
@@ -278,6 +280,18 @@ trait ManageRelation
         if ($value === null) {
             $value = $operator;
             $operator = '=';
+        }
+
+        if (str_contains($relation, '.')) {
+            [$baseRelation, $nestedRelation] = explode('.', $relation, 2);
+
+            return $this->whereHas(
+                $baseRelation,
+                fn($query) => $query->whereRelation($nestedRelation, $column, $operator, $value),
+                '>=',
+                1,
+                $boolean
+            );
         }
 
         return $this->whereHas($relation, fn($query) => $query->where($this->addRelatedTablePrefix($relation, $column), $operator, $value), '>=', 1, $boolean);
@@ -539,11 +553,15 @@ trait ManageRelation
             $alias = trim($alias);
         }
 
+        $aliasBase = $relation;
+
+        [$relation, $callback] = $this->normalizeAggregateRelation($relation, $callback);
+
         $model = $this->getRelatedModel();
         $relationConfig = $model->getRelationshipConfig($relation);
 
         // Create alias based on function type
-        $alias ??= str($relation . "_$function")->snake();
+        $alias ??= str($aliasBase . "_$function")->snake();
 
         // Build the subquery with the specified aggregate function
         $this->addAggregateSubquery($relationConfig, $relation, $alias, $function, $column, $callback);
@@ -852,6 +870,52 @@ trait ManageRelation
 
         $this->bindings = [...$this->bindings, ...$subquery['bindings']];
         $this->parameters = [...$this->parameters, ...$subquery['parameters']];
+    }
+
+    /**
+     * Normalize nested relations for whereHas/has (e.g., author.meta).
+     *
+     * @param string $relation
+     * @param Closure|null $callback
+     * @param string $operator
+     * @param int $count
+     * @return array{0:string,1:Closure|null,2:string,3:int}
+     */
+    private function normalizeHasRelation(string $relation, ?Closure $callback, string $operator, int $count): array
+    {
+        if (!str_contains($relation, '.')) {
+            return [$relation, $callback, $operator, $count];
+        }
+
+        [$baseRelation, $nestedRelation] = explode('.', $relation, 2);
+
+        $nestedCallback = function (QueryBuilder $query) use ($nestedRelation, $callback, $operator, $count): void {
+            $query->whereHas($nestedRelation, $callback, $operator, $count);
+        };
+
+        return [$baseRelation, $nestedCallback, '>=', 1];
+    }
+
+    /**
+     * Normalize nested relations for withAggregate/withCount (e.g., comments.author).
+     *
+     * @param string $relation
+     * @param Closure|null $callback
+     * @return array{0:string,1:Closure|null}
+     */
+    private function normalizeAggregateRelation(string $relation, ?Closure $callback): array
+    {
+        if (!str_contains($relation, '.')) {
+            return [$relation, $callback];
+        }
+
+        [$baseRelation, $nestedRelation] = explode('.', $relation, 2);
+
+        $nestedCallback = function (QueryBuilder $query) use ($nestedRelation, $callback): void {
+            $query->whereHas($nestedRelation, $callback, '>=', 1);
+        };
+
+        return [$baseRelation, $nestedCallback];
     }
 
     /**
