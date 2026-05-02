@@ -6,6 +6,7 @@ use PDO;
 use PDOStatement;
 use Spark\Database\Contracts\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function func_get_args;
 use function in_array;
@@ -60,7 +61,7 @@ use function sprintf;
  */
 class DB implements DBContract
 {
-    use Macroable {
+    use Conditionable, Macroable {
         __call as macroCall;
         __callStatic as macroCallStatic;
     }

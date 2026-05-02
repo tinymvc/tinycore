@@ -5,9 +5,13 @@ namespace Spark\Http;
 use Closure;
 use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
 use function is_array;
+use function is_float;
+use function is_int;
+use function is_object;
 use function is_string;
 use function strlen;
 
@@ -21,7 +25,7 @@ use function strlen;
  */
 class Response implements ResponseContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * This property holds the URL to which the user will be redirected.
@@ -422,6 +426,132 @@ class Response implements ResponseContract
         }
 
         echo $this->content; // send output to client.
+    }
+
+    /**
+     * Sends the HTTP response to the client immediately and continues execution
+     * for background/heavy processing after the connection is closed.
+     *
+     * Supports:
+     * - JSON (array/object data)
+     * - Plain text / HTML (string data)
+     * - Empty responses (e.g., 204 No Content)
+     * - Custom response headers
+     * - Output buffering states (with or without active buffers)
+     * - PHP-FPM (fastcgi_finish_request), LiteSpeed, and standard PHP environments
+     *
+     * @param int|string|array $data    Response body. Array/int → JSON. String → plain text or HTML.
+     * @param array            $headers Associative or indexed headers to send.
+     *                                  e.g. ['Content-Type: text/plain', 'X-My-Header: value']
+     *                                  or   ['Content-Type' => 'text/plain', 'X-My-Header' => 'value']
+     * @param int              $status  HTTP status code (default: 200).
+     *
+     * @return void
+     */
+    public function sendAndContinue(int|string|array $data = '', array $headers = [], int $status = 200): void
+    {
+        // ── Clean ALL existing output buffers ────────────────────────────────
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        // ── Status line ──────────────────────────────────────────────────────
+        http_response_code($status);
+
+        // ── Connection / encoding headers (must come before Content-Type) ────
+        header('Content-Encoding: none');
+        header('Connection: close');
+
+        // ── Resolve body and default Content-Type ────────────────────────────
+        $body = '';
+        $contentType = null;
+
+        if ($data !== '' && $data !== [] && $data !== null) {
+            if (is_array($data) || is_object($data)) {
+                // Arrays and objects → JSON
+                $encoded = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                $body = $encoded;
+                $contentType = 'application/json; charset=UTF-8';
+            } elseif (is_int($data) || is_float($data)) {
+                // Scalar numerics → JSON scalar
+                $body = json_encode($data);
+                $contentType = 'application/json; charset=UTF-8';
+            } else {
+                // String: detect HTML vs plain text
+                $trimmed = ltrim((string) $data);
+                $body = (string) $data;
+                $contentType = (stripos($trimmed, '<') === 0)
+                    ? 'text/html; charset=UTF-8'
+                    : 'text/plain; charset=UTF-8';
+            }
+        }
+
+        // ── Apply custom headers (allow caller to override Content-Type) ──────
+        foreach ($headers as $key => $value) {
+            if (is_int($key)) {
+                // Indexed: 'Content-Type: application/json'
+                $raw = trim((string) $value);
+                if ($raw !== '') {
+                    // Track if caller explicitly sets Content-Type
+                    if (stripos($raw, 'content-type') === 0) {
+                        $contentType = null; // Caller owns it; we'll send their header
+                    }
+                    header($raw, true);
+                }
+            } else {
+                // Associative: ['Content-Type' => 'application/json']
+                $name = trim((string) $key);
+                $val = trim((string) $value);
+                if ($name !== '') {
+                    if (strcasecmp($name, 'content-type') === 0) {
+                        $contentType = null; // Caller owns it
+                    }
+                    header("$name: $val", true);
+                }
+            }
+        }
+
+        // ── Send resolved Content-Type (if not overridden by caller) ─────────
+        if ($contentType !== null && $body !== '') {
+            header("Content-Type: {$contentType}", true);
+        }
+
+        // ── Buffer body → measure exact byte length → send Content-Length ────
+        ignore_user_abort(true);
+        ob_start();
+
+        if ($body !== '') {
+            echo $body;
+        }
+
+        $length = ob_get_length();
+
+        // Only send Content-Length for non-chunked, non-streaming responses
+        if ($length !== false) {
+            header("Content-Length: $length", true);
+        }
+
+        // ── Flush everything to the client ───────────────────────────────────
+        ob_end_flush();   // moves OB → system buffer
+        flush();          // pushes system buffer → client
+
+        // ── Close session so it doesn't block background work ────────────────
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        // ── Terminate connection at the SAPI level ───────────────────────────
+        // PHP-FPM — most reliable; client connection closes here
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+            return;
+        }
+
+        // LiteSpeed Web Server
+        if (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+            return;
+        }
     }
 
     /**

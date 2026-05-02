@@ -5,6 +5,7 @@ namespace Spark\Queue;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Foundation\Application;
 use Spark\Queue\Exceptions\FailedToResolveJobError;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Carbon;
 use function get_class;
@@ -23,7 +24,7 @@ use function is_string;
  */
 class Job implements JobContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * Constructor.

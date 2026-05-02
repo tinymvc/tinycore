@@ -5,6 +5,7 @@ namespace Spark\Utils;
 use PHPMailer\PHPMailer\PHPMailer;
 use Spark\Contracts\Utils\MailUtilContract;
 use Spark\Facades\Blade;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function sprintf;
 
@@ -19,7 +20,7 @@ use function sprintf;
  */
 class Mail extends PHPMailer implements MailUtilContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /** @var string The log file path. */
     private string $logFile;

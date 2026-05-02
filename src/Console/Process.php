@@ -4,6 +4,8 @@ namespace Spark\Console;
 
 use Spark\Console\Exceptions\ProcessFailedException;
 use Spark\Console\Exceptions\ProcessTimedOutException;
+use Spark\Support\Traits\Conditionable;
+use Spark\Support\Traits\Macroable;
 use function is_array;
 use function is_resource;
 
@@ -15,6 +17,8 @@ use function is_resource;
  */
 class Process implements \Stringable
 {
+    use Macroable, Conditionable;
+
     // ── Configuration ───────────────────────────────────
     protected string|array $command;
     protected ?string $cwd = null;

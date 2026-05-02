@@ -6,6 +6,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_slice;
 use function is_array;
@@ -21,7 +22,7 @@ use function sprintf;
  */
 class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringable, Jsonable, \JsonSerializable, \ArrayAccess, \IteratorAggregate
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /** @var int $pages Total number of pages. */
     private int $pages = 0;

@@ -10,6 +10,7 @@ use Spark\Http\Response;
 use Spark\Routing\Contracts\RouterContract;
 use Spark\Routing\Exceptions\InvalidNamedRouteException;
 use Spark\Routing\Exceptions\RouteNotFoundException;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
 use function in_array;
@@ -26,7 +27,7 @@ use function sprintf;
  */
 class Router implements RouterContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * @var array $groupStack

@@ -7,6 +7,8 @@ use DateTimeZone;
 use InvalidArgumentException;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
+use Spark\Support\Traits\Conditionable;
+use Spark\Support\Traits\Macroable;
 use function is_string;
 use function sprintf;
 
@@ -21,6 +23,8 @@ use function sprintf;
  */
 class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
 {
+    use Macroable, Conditionable;
+
     /** @var DateTime */
     private DateTime $dateTime;
 

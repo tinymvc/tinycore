@@ -6,6 +6,7 @@ use PDO;
 use PDOStatement;
 use Spark\Contracts\Utils\CacheUtilContract;
 use Spark\Exceptions\Utils\CacheUtilException;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
 use function func_get_args;
@@ -23,7 +24,7 @@ use function sprintf;
  */
 class Cache implements CacheUtilContract, \ArrayAccess
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /** @var PDO The PDO connection instance */
     private PDO $pdo;

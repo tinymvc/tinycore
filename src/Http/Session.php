@@ -3,6 +3,7 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\SessionContract;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 
 /**
@@ -16,7 +17,7 @@ use Spark\Support\Traits\Macroable;
  */
 class Session implements SessionContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * Constructor for the session class.

@@ -4,6 +4,7 @@ namespace Spark;
 
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function array_slice;
@@ -21,7 +22,7 @@ use function is_array;
  */
 class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stringable
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /** @var array Parsed URL components */
     private array $components = [];

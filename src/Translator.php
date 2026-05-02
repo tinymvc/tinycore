@@ -3,6 +3,7 @@
 namespace Spark;
 
 use Spark\Contracts\TranslatorContract;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 
 use function count;
@@ -20,7 +21,7 @@ use function sprintf;
  */
 class Translator implements TranslatorContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * Holds translated texts.

@@ -3,6 +3,7 @@
 namespace Spark\Console;
 
 use Spark\Console\Contracts\CommandsContract;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function func_get_args;
 use function is_array;
@@ -20,7 +21,7 @@ use function strlen;
  */
 class Commands implements CommandsContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /** @param array<string, bool> The commands are disabled to run */
     private static array $disabledCommands = [];

@@ -5,6 +5,7 @@ namespace Spark;
 use Spark\Contracts\EventDispatcherContract;
 use Spark\Exceptions\InvalidEventCallbackException;
 use Spark\Foundation\Application;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
 
@@ -17,7 +18,7 @@ use function count;
  */
 class Events implements EventDispatcherContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * Flag to halt event propagation.

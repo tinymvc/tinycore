@@ -45,7 +45,7 @@ interface RequestContract
      * @param ?string $default The default value to return if the key does not exist.
      * @return ?string The value associated with the given key, or the default value if the key does not exist.
      */
-    public function getRouteParam(string $key, ?string $default = null): ?string;
+    public function route(string $key, ?string $default = null): ?string;
 
     /**
      * Retrieves a query parameter value by key.

@@ -6,6 +6,7 @@ use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Support\Collection;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function count;
@@ -28,7 +29,7 @@ use function is_string;
  */
 class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * HTTP request method (e.g., GET, POST).
@@ -311,7 +312,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * @return ?string The value associated with the given key, or the default value if the key does not exist.
      */
-    public function getRouteParam(string $key, ?string $default = null): ?string
+    public function route(string $key, ?string $default = null): ?string
     {
         return $this->routeParams[$key] ?? $default;
     }
@@ -1117,7 +1118,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $this->hasQuery($name) => $this->query($name),
             $this->hasPost($name) => $this->post($name),
             $this->hasFile($name) => $this->file($name),
-            $this->hasRouteParam($name) => $this->getRouteParam($name),
+            $this->hasRouteParam($name) => $this->route($name),
             default => null
         };
     }

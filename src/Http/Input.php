@@ -6,6 +6,7 @@ use Spark\Contracts\Http\InputContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Collection;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function func_get_args;
 use function is_array;
@@ -24,7 +25,7 @@ use function in_array;
  */
 class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAccess, \IteratorAggregate
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * The data array to be sanitized.

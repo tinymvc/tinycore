@@ -4,6 +4,8 @@ namespace Spark\Routing;
 
 use Spark\Foundation\Application;
 use Spark\Routing\Contracts\RouteContract;
+use Spark\Support\Traits\Conditionable;
+use Spark\Support\Traits\Macroable;
 
 /**
  * Class Route
@@ -16,6 +18,8 @@ use Spark\Routing\Contracts\RouteContract;
  */
 class Route implements RouteContract
 {
+    use Macroable, Conditionable;
+
     /**
      * Route constructor.
      *

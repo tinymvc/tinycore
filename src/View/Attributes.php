@@ -6,6 +6,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
 use Spark\Support\Arr;
 use Spark\Support\Str;
+use Spark\Support\Traits\Conditionable;
 use Spark\View\Contracts\AttributesContract;
 use function array_key_exists;
 use function func_get_args;
@@ -36,6 +37,8 @@ use function sprintf;
  */
 class Attributes implements AttributesContract, Arrayable, Htmlable, \Stringable, \ArrayAccess, \IteratorAggregate
 {
+    use Conditionable;
+
     /**
      * The raw array of attributes.
      */

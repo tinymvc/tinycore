@@ -5,6 +5,7 @@ namespace Spark\Http;
 use Spark\Contracts\Http\GateContract;
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Foundation\Application;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function is_string;
 
@@ -18,7 +19,7 @@ use function is_string;
  */
 class Gate implements GateContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * Array of callbacks to run before an ability check.

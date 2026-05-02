@@ -9,6 +9,7 @@ use Spark\Contracts\Support\Jsonable;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Traits\HasRelation;
 use Spark\Support\Str;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function array_slice;
@@ -123,7 +124,7 @@ use function sprintf;
  */
 abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess, \IteratorAggregate
 {
-    use HasRelation, Castable, Macroable {
+    use HasRelation, Castable, Conditionable, Macroable {
         __call as macroCall;
         __callStatic as staticMacroCall;
     }

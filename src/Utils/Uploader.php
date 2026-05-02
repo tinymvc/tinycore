@@ -6,6 +6,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\UploaderUtilContract;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Exceptions\Utils\UploaderUtilException;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
 use function in_array;
@@ -24,7 +25,7 @@ use function sprintf;
  */
 class Uploader implements UploaderUtilContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /** @var string Upload directory path. */
     public string $uploadDir;

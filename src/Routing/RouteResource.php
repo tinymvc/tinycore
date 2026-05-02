@@ -4,6 +4,8 @@ namespace Spark\Routing;
 
 use Spark\Foundation\Application;
 use Spark\Routing\Contracts\RouteResourceContract;
+use Spark\Support\Traits\Conditionable;
+use Spark\Support\Traits\Macroable;
 use function func_get_args;
 use function is_array;
 
@@ -17,6 +19,8 @@ use function is_array;
  */
 class RouteResource implements RouteResourceContract
 {
+    use Macroable, Conditionable;
+
     /**
      * RouteResource constructor.
      *

@@ -14,6 +14,7 @@ use Spark\Exceptions\Container\ClassDoesNotExistsException;
 use Spark\Exceptions\Container\FailedToResolveParameterException;
 use Spark\Exceptions\Container\InvalidAliasException;
 use Spark\Exceptions\Container\MethodDoesNotExistsException;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function count;
@@ -32,7 +33,7 @@ use function is_string;
  */
 class Container implements ContainerContract, \ArrayAccess
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * Registered bindings.

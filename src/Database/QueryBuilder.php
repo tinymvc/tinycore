@@ -13,6 +13,7 @@ use Spark\Database\Schema\Wrapper;
 use Spark\Database\Traits\ManageRelation;
 use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Paginator;
 use function func_get_args;
@@ -84,7 +85,7 @@ use function sprintf;
  */
 class QueryBuilder implements QueryBuilderContract
 {
-    use ManageRelation, Macroable {
+    use ManageRelation, Conditionable, Macroable {
         __call as macroCall;
     }
 
@@ -556,38 +557,6 @@ class QueryBuilder implements QueryBuilderContract
             $this->bindings = [...$this->bindings, ...$args];
         } else {
             $this->param($args);
-        }
-
-        return $this;
-    }
-
-    /**
-     * Conditionally execute a callback.
-     *
-     * @param mixed $value
-     * @param callable $callback
-     * @return self
-     */
-    public function when(mixed $value, callable $callback): self
-    {
-        if ($value) {
-            $callback($this);
-        }
-
-        return $this;
-    }
-
-    /**
-     * Conditionally execute a callback when value is falsy.
-     *
-     * @param mixed $value
-     * @param callable $callback
-     * @return self
-     */
-    public function unless(mixed $value, callable $callback): self
-    {
-        if (!$value) {
-            $callback($this);
         }
 
         return $this;

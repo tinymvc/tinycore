@@ -5,6 +5,7 @@ namespace Spark\View;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Http\Session;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\View\BladeCompiler;
 use Spark\View\Contracts\BladeCompilerContract;
@@ -22,7 +23,7 @@ use function is_array;
  */
 class Blade implements BladeContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     /**
      * Path to the directory containing template files

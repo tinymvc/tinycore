@@ -362,8 +362,8 @@ class Queue implements QueueContract
                 continue;
             }
 
-            $jobId = $job->getMetadata()['id'];
-            $attempts = $job->getMetadata()['attempts'];
+            $jobId = $job->getId();
+            $attempts = $job->getMetadata('attempts', 0);
 
             $this->message(
                 sprintf(
