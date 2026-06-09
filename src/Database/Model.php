@@ -480,6 +480,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             elseif ($value instanceof \Spark\Utils\Carbon) {
                 $data[$key] = $value->toDateTimeString();
             }
+            // Handle DateTimeInterface Object into string
+            elseif ($value instanceof \DateTimeInterface) {
+                $data[$key] = $value->format('Y-m-d H:i:s');
+            }
             // Handle URL Object into string
             elseif ($value instanceof \Spark\Url) {
                 $data[$key] = $value->getUrl();
@@ -1442,7 +1446,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $castedTimestamps = [];
 
         if (in_array(static::CREATED_AT, $timestamps)) {
-            $castedTimestamps[static::CREATED_AT] = $this->attributes[static::CREATED_AT] ??= date('Y-m-d H:i:s');
+            $castedTimestamps[static::CREATED_AT] = $this->attributes[static::CREATED_AT] ??= now()->toDateTimeString();
         }
 
         if (in_array(static::UPDATED_AT, $timestamps)) {
@@ -1450,7 +1454,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 unset($this->attributes[static::UPDATED_AT]);
             }
 
-            $castedTimestamps[static::UPDATED_AT] = $this->attributes[static::UPDATED_AT] ??= date('Y-m-d H:i:s');
+            $castedTimestamps[static::UPDATED_AT] = $this->attributes[static::UPDATED_AT] ??= now()->toDateTimeString();
         }
 
         return $castedTimestamps;

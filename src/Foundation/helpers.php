@@ -1909,10 +1909,10 @@ if (!function_exists('now')) {
      * This function returns the current date and time as a DateTime object,
      * which can be used for various date and time operations.
      *
-     * @param string|null $timezone An optional timezone identifier to set the timezone for the DateTime object. If null, the default timezone will be used.
+     * @param DateTimeZone|string|null $timezone An optional timezone identifier to set the timezone for the DateTime object. If null, the default timezone will be used.
      * @return \Spark\Utils\Carbon The current date and time.
      */
-    function now($timezone = null): Carbon
+    function now(DateTimeZone|string|null $timezone = null): Carbon
     {
         return Carbon::now($timezone);
     }
@@ -1926,16 +1926,13 @@ if (!function_exists('carbon')) {
      * a Unix timestamp (as an integer or string). It returns a Carbon DateTime
      * instance initialized with the provided datetime.
      *
-     * @param int|string $time The datetime string or Unix timestamp to convert.
-     * @param DateTimeZone|null $timezone An optional DateTimeZone instance to set the timezone for the Carbon instance.
+     * @param Carbon|DateTimeInterface|int|string $time The datetime string or Unix timestamp to convert.
+     * @param DateTimeZone|string|null $timezone An optional timezone identifier or DateTimeZone instance to set the timezone for the Carbon instance.
      * @return \Spark\Utils\Carbon A Carbon DateTime instance representing the provided datetime.
      */
-    function carbon(int|string $time = 'now', ?DateTimeZone $timezone = null): Carbon
+    function carbon(Carbon|DateTimeInterface|int|string $time = 'now', DateTimeZone|string|null $timezone = null): Carbon
     {
-        return new Carbon(
-            is_numeric($time) ? "@$time" : $time,
-            $timezone
-        );
+        return Carbon::parse($time, $timezone);
     }
 }
 

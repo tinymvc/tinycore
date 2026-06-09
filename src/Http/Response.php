@@ -204,7 +204,7 @@ class Response implements ResponseContract
         $this->setStatusCode($statusCode);
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         $this->setContent(
-            json_encode($this->toPureArray($data), $flags, $depth)
+            json_encode($this->castDataForApiResponse($data), $flags, $depth)
         );
         return $this;
     }
@@ -413,7 +413,7 @@ class Response implements ResponseContract
         if (is_array($this->content) || $this->content instanceof Arrayable) {
             $this->setHeader('Content-Type', 'application/json; charset=utf-8');
             $this->setContent(
-                json_encode($this->toPureArray($this->content), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                json_encode($this->castDataForApiResponse($this->content), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             );
         } elseif (!is_string($this->content)) {
             $this->setContent((string) $this->content); // Ensure content is a string
@@ -560,18 +560,24 @@ class Response implements ResponseContract
      * @param  mixed  $data  An Arrayable, an array of mixed values, or any other value.
      * @return mixed         A pure array if input was Arrayable/array; otherwise the original value.
      */
-    private function toPureArray(mixed $data): mixed
+    private function castDataForApiResponse(mixed $data): mixed
     {
         // If it's a Stringable or specific object, cast to string
-        if (
-            $data instanceof \Spark\Url ||
-            $data instanceof \Spark\Utils\Carbon
-        ) {
-            return (string) $data;
+        if ($data instanceof \Spark\Url) {
+            return $data->getUrl();
+        }
+
+        // return UTC string for Carbon instances
+        if ($data instanceof \Spark\Utils\Carbon) {
+            return $data->toISOUtcString();
+        }
+
+        if ($data instanceof \DateTimeInterface) {
+            return $data->format(\DateTimeInterface::ATOM);
         }
 
         if ($data instanceof Closure) {
-            return $this->toPureArray($data()); // Call the closure and return its result
+            return $this->castDataForApiResponse($data()); // Call the closure and return its result
         }
 
         // If it's an object that knows how to cast itself to array, do it and recurse
@@ -581,7 +587,7 @@ class Response implements ResponseContract
 
         // If it's an array, recurse into each element
         if (is_array($data)) {
-            return array_map($this->toPureArray(...), $data);
+            return array_map($this->castDataForApiResponse(...), $data);
         }
 
         // Otherwise return as-is (string/int/etc)

@@ -3,6 +3,7 @@
 namespace Spark\Utils;
 
 use DateTime;
+use DateTimeInterface;
 use DateTimeZone;
 use InvalidArgumentException;
 use Spark\Contracts\Support\Arrayable;
@@ -31,24 +32,58 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     /** @var string|null */
     private static ?string $defaultTimezone = null;
 
+    /** ISO 8601 format with microseconds and UTC timezone */
+    public const ISO8601_UTC = 'Y-m-d\\TH:i:s.u\\Z';
+
     /**
      * Constructor to create a new DateTime instance
      *
-     * @param string $time The time string to parse, defaults to 'now'
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param Carbon|DateTimeInterface|int|string $time The time string to parse, defaults to 'now'
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      */
-    public function __construct(string $time = 'now', ?DateTimeZone $timezone = null)
+    public function __construct(Carbon|DateTimeInterface|int|string $time = 'now', DateTimeZone|string|null $timezone = null)
     {
-        $this->dateTime = new DateTime($time, $timezone ?? $this->getDefaultTimezone());
+        if ($timezone && is_string($timezone)) {
+            $timezone = new DateTimeZone($timezone);
+        }
+
+        $timezone ??= self::getDefaultTimezone();
+
+        if ($time instanceof Carbon) {
+            $this->dateTime = clone $time->dateTime;
+            return;
+        }
+
+        if ($time instanceof DateTimeInterface) {
+            $this->dateTime = new DateTime($time->format('Y-m-d H:i:s'), $time->getTimezone());
+            return;
+        }
+
+        if (is_numeric($time)) {
+            $time = "@$time";
+        }
+
+        $this->dateTime = new DateTime($time, $timezone);
+    }
+
+    /**
+     * Create a new Carbon instance from a DateTimeInterface instance
+     * 
+     * @param DateTimeInterface $dateTime The DateTimeInterface instance to create the Carbon instance from
+     * @return self A new Carbon instance representing the same date and time as the provided DateTimeInterface
+     */
+    public static function instance(DateTimeInterface $dateTime): self
+    {
+        return new self($dateTime);
     }
 
     /**
      * Create a new DateTime instance for the current time
      * 
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function now(?DateTimeZone $timezone = null): self
+    public static function now(DateTimeZone|string|null $timezone = null): self
     {
         return new self('now', $timezone);
     }
@@ -56,10 +91,10 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     /**
      * Create a new DateTime instance for today at midnight
      * 
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function today(?DateTimeZone $timezone = null): self
+    public static function today(DateTimeZone|string|null $timezone = null): self
     {
         return new self('today', $timezone);
     }
@@ -67,10 +102,10 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     /**
      * Create a new DateTime instance for tomorrow at midnight
      * 
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function tomorrow(?DateTimeZone $timezone = null): self
+    public static function tomorrow(DateTimeZone|string|null $timezone = null): self
     {
         return new self('tomorrow', $timezone);
     }
@@ -78,10 +113,10 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     /**
      * Create a new DateTime instance for yesterday at midnight
      * 
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function yesterday(?DateTimeZone $timezone = null): self
+    public static function yesterday(DateTimeZone|string|null $timezone = null): self
     {
         return new self('yesterday', $timezone);
     }
@@ -91,12 +126,18 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      * 
      * @param string $format The format to use for parsing the datetime string
      * @param string $datetime The datetime string to parse
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function createFromFormat(string $format, string $datetime, ?DateTimeZone $timezone = null): self
+    public static function createFromFormat(string $format, string $datetime, DateTimeZone|string|null $timezone = null): self
     {
-        $dt = DateTime::createFromFormat($format, $datetime, $timezone ?? static::getDefaultTimezone());
+        if ($timezone && is_string($timezone)) {
+            $timezone = new DateTimeZone($timezone);
+        }
+
+        $timezone ??= static::getDefaultTimezone();
+
+        $dt = DateTime::createFromFormat($format, $datetime, $timezone);
         if ($dt === false) {
             throw new InvalidArgumentException("Could not parse datetime: {$datetime} with format: {$format}");
         }
@@ -110,27 +151,22 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      * Create DateTime from timestamp
      * 
      * @param int $timestamp The Unix timestamp to create the DateTime from
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function createFromTimestamp(int $timestamp, ?DateTimeZone $timezone = null): self
+    public static function createFromTimestamp(int $timestamp, DateTimeZone|string|null $timezone = null): self
     {
-        $instance = new self();
-        $instance->dateTime = new DateTime("@$timestamp");
-        if ($timezone) {
-            $instance->dateTime->setTimezone($timezone);
-        }
-        return $instance;
+        return new self("@$timestamp", $timezone);
     }
 
     /**
      * Parse a datetime string
      * 
-     * @param string $datetime The datetime string to parse
-     * @param DateTimeZone|null $timezone The timezone to use, defaults to the default timezone
+     * @param Carbon|DateTimeInterface|int|string $datetime The datetime string to parse
+     * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function parse(string $datetime, ?DateTimeZone $timezone = null): self
+    public static function parse(Carbon|DateTimeInterface|int|string $datetime, DateTimeZone|string|null $timezone = null): self
     {
         return new self($datetime, $timezone);
     }
@@ -236,7 +272,27 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function toISOString(): string
     {
-        return $this->format(\DateTimeInterface::ATOM);
+        return $this->format(DateTimeInterface::ATOM);
+    }
+
+    /**
+     * Get the date and time as a string in ISO 8601 format with microseconds and UTC timezone
+     * 
+     * @return string The formatted date and time string in ISO 8601 format with microseconds and UTC timezone
+     */
+    public function toISOUtcString(): string
+    {
+        return $this->utc()->format(self::ISO8601_UTC);
+    }
+
+    /**
+     * Get the date and time as a string in RFC 3339 format
+     * 
+     * @return string The formatted date and time string in RFC 3339 format
+     */
+    public function toRfc3339String(): string
+    {
+        return $this->format(DateTimeInterface::RFC3339);
     }
 
     /**
@@ -954,6 +1010,18 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         }
         $new->dateTime->setTimezone($timezone);
         return $new;
+    }
+
+    /**
+     * Convert the DateTime instance to UTC timezone
+     * 
+     * This method returns a new DateTime instance with the timezone set to UTC.
+     * 
+     * @return self A new DateTime instance with UTC timezone
+     */
+    public function utc(): self
+    {
+        return $this->setTimezone('UTC');
     }
 
     /**

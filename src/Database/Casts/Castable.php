@@ -8,6 +8,7 @@ use Spark\Database\Contracts\CastsAttributes;
 use Spark\Facades\Hash;
 use Spark\Support\Collection;
 use Spark\Utils\Carbon;
+use function in_array;
 use function is_array;
 use function is_bool;
 use function is_string;
@@ -228,7 +229,7 @@ trait Castable
             return null;
         }
 
-        return carbon($value);
+        return Carbon::parse($value);
     }
 
     /**
@@ -247,8 +248,12 @@ trait Castable
             return $value->toDateTimeString();
         }
 
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->toDateTimeString();
+        }
+
         if (is_string($value)) {
-            $date = carbon($value);
+            $date = Carbon::parse($value);
             return $date->toDateTimeString();
         }
 
