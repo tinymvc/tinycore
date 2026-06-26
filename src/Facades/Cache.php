@@ -28,7 +28,7 @@ use Spark\Utils\Cache as BaseCache;
  * @method static int|false increment(string $key, int $amount = 1)
  * @method static int|false decrement(string $key, int $amount = 1)
  * @method static bool add(string $key, mixed $value, null|string $expire = null)
- * @method static mixed remember(string $key, callable $callback)
+ * @method static mixed remember(string $key, callable $callback, null|string $expire = null)
  * @method static mixed pull(string $key, mixed $default = null)
  * @method static array stats()
  * @method static null|int ttl(string $key)
