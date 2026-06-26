@@ -369,7 +369,7 @@ class Application extends \Spark\Container implements ApplicationContract
      * @param null|callable $then An optional callback for additional configuration of the queue.
      * @return self
      */
-    public function withQueue(null|array $jobs = null, bool|string $log = true, null|callable $then = null): self
+    public function withQueue(null|array $jobs = null, bool|string $log = false, null|callable $then = null): self
     {
         $this->singleton(Queue::class, function () use ($jobs, $log, $then) {
             $queue = new Queue($log);
@@ -485,6 +485,11 @@ class Application extends \Spark\Container implements ApplicationContract
     {
         $this->isDebugMode() && event('app:booting');
         try {
+
+            date_default_timezone_set(
+                timezoneId: $this->getConfig('app.timezone', 'UTC')
+            );
+
             $this->bootServiceProviders();
 
             $this->isDebugMode() && event('app:booted');

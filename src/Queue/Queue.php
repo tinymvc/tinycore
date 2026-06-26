@@ -53,7 +53,7 @@ class Queue implements QueueContract
      *                         storage_dir('logs/queue.log'). If a string is provided,
      *                        logs to that file. If false, logging is disabled.
      */
-    public function __construct(bool|string $log = true)
+    public function __construct(bool|string $log = false)
     {
         try {
             $this->pdo = new PDO('sqlite:' . storage_dir('queue/jobs.db')); // Initialize SQLite database.
@@ -863,13 +863,6 @@ class Queue implements QueueContract
     {
         if (empty($this->log)) {
             return; // If logging is disabled, do nothing.
-        }
-
-        $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
-
-        // Check if log file exists and its size and rotate if it exceeds the max size.
-        if (is_file($this->log) && filesize($this->log) >= $maxFileSize) {
-            rename($this->log, $this->log . '.' . date('Y-m-d_H-i-s'));
         }
 
         $logEntry = sprintf(

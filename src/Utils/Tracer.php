@@ -190,15 +190,8 @@ class Tracer implements TracerUtilContract
      */
     public function log(string $message): void
     {
-        $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
-
         if (!is_writable(dirname($this->logFile))) {
             return; // Skip logging if the directory is not writable
-        }
-
-        // Check if log file exists and its size and rotate if it exceeds the max size.
-        if (is_file($this->logFile) && filesize($this->logFile) >= $maxFileSize) {
-            rename($this->logFile, $this->logFile . '.' . date('Y-m-d_H-i-s'));
         }
 
         $time = date('Y-m-d H:i:s'); // Current timestamp

@@ -22,8 +22,10 @@ class Mail extends PHPMailer implements MailUtilContract
 {
     use Macroable, Conditionable;
 
-    /** @var string The log file path. */
-    private string $logFile;
+    /**
+     * @var array Configuration options for the mailer instance.
+     */
+    private array $config = [];
 
     /**
      * Construct a new instance of the Mail utility class.
@@ -36,13 +38,15 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function __construct(array $config = [])
     {
-        $this->logFile = $config['log_file'] ?? storage_dir('logs/mail.log');
-
         // Merge mail config with env config
         $config = [
+            'log_file' => storage_dir('logs/mail.log'),
+            'logging' => false,
             ...config('mail', []),
             ...$config
         ];
+
+        $this->config = $config; // Store the configuration for later use
 
         // Set from configuration
         if (isset($config['from']['address'])) {
@@ -75,28 +79,20 @@ class Mail extends PHPMailer implements MailUtilContract
     }
 
     /**
-     * Disable email logging.
-     *
-     * This method disables the logging of sent emails.
-     *
-     * @return self Returns the instance of the class for method chaining.
+     * Enable or disable logging of email sending status.
+     * 
+     * This method allows you to enable or disable logging of email sending status.
+     * When logging is enabled, the status of each email sent will be logged to a specified log file.
+     * 
+     * @param bool $enabled Whether to enable or disable logging (default: true).
+     * @param string|null $file The path to the log file (default: null).
      */
-    public function disableLogging(): self
+    public function logging(bool $enabled = true, ?string $file = null): self
     {
-        $this->config['logging'] = false;
-        return $this;
-    }
-
-    /**
-     * Enable email logging.
-     *
-     * This method enables the logging of sent emails.
-     *
-     * @return self Returns the instance of the class for method chaining.
-     */
-    public function enableLogging(): self
-    {
-        $this->config['logging'] = true;
+        if ($file) {
+            $this->config['log_file'] = $file;
+        }
+        $this->config['logging'] = $enabled;
         return $this;
     }
 
@@ -372,7 +368,14 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function send(): bool
     {
-        $this->logEmailSent($status = parent::send());
+        try {
+            $status = parent::send();
+            $message = $status ? 'Email sent successfully.' : ($this->ErrorInfo ?: 'Email sending failed.');
+            $this->logEmailStatus($status ? 'Sent' : 'Failed', $message);
+        } catch (\Throwable $e) {
+            $this->logEmailStatus('Error', $e->getMessage());
+        }
+
         return $status;
     }
 
@@ -417,35 +420,37 @@ class Mail extends PHPMailer implements MailUtilContract
      * whether it was successful or not, the recipient addresses, the subject,
      * and the duration of the operation.
      *
-     * @param bool $status The status of the email sending operation (true for success, false for failure).
+     * @param string $status The status of the email sending operation (e.g., 'Sent', 'Failed').
+     * @param string $message The message to log.
      */
-    private function logEmailSent(bool $status): void
+    private function logEmailStatus(string $status, string $message): void
     {
-        if (!($this->config['logging'] ?? true)) {
+        if (!($this->config['logging'] ?? true) || empty($this->config['log_file'])) {
             return; // Logging is disabled
         }
 
-        $maxFileSize = 5 * 1024 * 1024; // 5 MB in bytes
-
-        // Check if log file exists and its size and rotate if it exceeds the max size.
-        if (is_file($this->logFile) && filesize($this->logFile) >= $maxFileSize) {
-            rename($this->logFile, $this->logFile . '.' . date('Y-m-d_H-i-s'));
-        }
-
-        $logEntry = sprintf(
-            "[%s] Email to: %s | Subject: %s | Status: %s\n",
-            date('Y-m-d H:i:s'),
-            implode(
-                ', ',
-                array_map(
-                    fn($addr) => sprintf('%s <%s>', $addr[1] ?? 'Unknown', $addr[0]),
-                    $this->getToAddresses()
-                )
-            ),
-            $this->Subject,
-            $status ? 'Sent' : 'Failed'
+        $fmAddr = fn($addrs) => array_map(
+            fn($addr) => sprintf('%s <%s>', $addr[1] ?: 'Unknown', $addr[0]),
+            $addrs
         );
 
-        file_put_contents($this->logFile, $logEntry, FILE_APPEND | LOCK_EX);
+        $context = json_encode([
+            'to' => $fmAddr($this->getToAddresses()),
+            'cc' => $fmAddr($this->getCcAddresses()),
+            'bcc' => $fmAddr($this->getBccAddresses()),
+            'reply_to' => $fmAddr($this->getReplyToAddresses()),
+            'from' => $fmAddr([$this->From, $this->FromName]),
+            'attachments' => array_map(fn($att) => [
+                'path' => $att[0],
+                'filename' => $att[1] ?? basename($att[0]),
+                'type' => $att[4] ?? 'application/octet-stream',
+            ], $this->getAttachments()),
+            'subject' => $this->Subject,
+            'body' => $this->Body,
+        ]);
+
+        $logEntry = sprintf("[%s] status.%s %s %s\n", date('Y-m-d H:i:s'), $status, $message, $context);
+
+        file_put_contents($this->config['log_file'], $logEntry, FILE_APPEND | LOCK_EX);
     }
 }
