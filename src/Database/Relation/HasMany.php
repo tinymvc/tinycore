@@ -104,7 +104,7 @@ class HasMany extends Relation
         // Get the foreign key value from the parent model
         $foreignKeyValue = $parent->{$this->localKey};
 
-        if (empty($foreignKeyValue)) {
+        if ($this->missingKey($foreignKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before creating related models.");
         }
 
@@ -135,7 +135,7 @@ class HasMany extends Relation
         // Get the foreign key value from the parent model
         $foreignKeyValue = $parent->{$this->localKey};
 
-        if (empty($foreignKeyValue)) {
+        if ($this->missingKey($foreignKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before creating related models.");
         }
 
@@ -167,7 +167,7 @@ class HasMany extends Relation
         // Get the foreign key value from the parent model
         $foreignKeyValue = $parent->{$this->localKey};
 
-        if (empty($foreignKeyValue)) {
+        if ($this->missingKey($foreignKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before creating related models.");
         }
 
@@ -195,7 +195,7 @@ class HasMany extends Relation
         // Get the foreign key value from the parent model
         $foreignKeyValue = $parent->{$this->localKey};
 
-        if (empty($foreignKeyValue)) {
+        if ($this->missingKey($foreignKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before creating related models.");
         }
 
@@ -225,7 +225,7 @@ class HasMany extends Relation
         // Get the foreign key value from the parent model
         $foreignKeyValue = $parent->{$this->localKey};
 
-        if (empty($foreignKeyValue)) {
+        if ($this->missingKey($foreignKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before deleting related models.");
         }
 
@@ -263,5 +263,46 @@ class HasMany extends Relation
     public function deleteById(int $id): int
     {
         return $this->deleteWhere($id);
+    }
+
+    /**
+     * Save an existing related model through this relationship.
+     *
+     * @param Model $model
+     * @return Model
+     */
+    public function save(Model $model): Model
+    {
+        $parent = $this->getParentModel();
+
+        if (!$parent) {
+            throw new \RuntimeException('Cannot save related model without a parent model instance.');
+        }
+
+        $foreignKeyValue = $parent->{$this->localKey};
+
+        if ($this->missingKey($foreignKeyValue)) {
+            throw new \RuntimeException("Parent model's {$this->localKey} must be set before saving related models.");
+        }
+
+        $model->{$this->foreignKey} = $foreignKeyValue;
+        $model->save();
+
+        return $model;
+    }
+
+    /**
+     * Save many existing related models through this relationship.
+     *
+     * @param array $models
+     * @return array
+     */
+    public function saveMany(array $models): array
+    {
+        foreach ($models as $model) {
+            $this->save($model);
+        }
+
+        return $models;
     }
 }

@@ -78,7 +78,7 @@ use Spark\Database\QueryBuilder;
  * @method mixed last()
  * @method false|Model find($value)
  * @method Model findOrFail($value)
- * @method bool destroy($value)
+ * @method int destroy($value)
  * @method array all()
  * @method \Spark\Support\Collection get()
  * @method array raw(string $sql, array $bindings = [])
@@ -146,6 +146,17 @@ abstract class Relation
     public function query(): QueryBuilder
     {
         return $this->query ??= $this->buildQuery();
+    }
+
+    /**
+     * Determine if a relationship key is missing.
+     *
+     * @param mixed $value
+     * @return bool
+     */
+    protected function missingKey(mixed $value): bool
+    {
+        return $value === null || $value === '';
     }
 
     /**

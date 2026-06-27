@@ -26,6 +26,15 @@ interface GrammarContract
     public function compileIndex(string $table, array $index): string;
 
     /**
+     * Compile a primary key definition.
+     *
+     * @param string $table The table name.
+     * @param array $primary The primary key definition.
+     * @return string The SQL code for the primary key.
+     */
+    public function compilePrimaryKey(string $table, array $primary): string;
+
+    /**
      * Compile a foreign key constraint.
      *
      * This method is used to generate the SQL code to create a foreign key constraint on a table.
@@ -33,7 +42,7 @@ interface GrammarContract
      * @param ForeignKeyConstraint $foreignKey The foreign key constraint.
      * @return string The SQL code to create the foreign key constraint.
      */
-    public function compileForeignKey(ForeignKeyConstraint $foreignKey): string;
+    public function compileForeignKey(ForeignKeyConstraint $foreignKey, ?string $table = null): string;
 
     /**
      * Map a column modifier to a database-specific clause.

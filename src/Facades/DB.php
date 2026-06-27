@@ -26,7 +26,7 @@ use function func_get_args;
  * @method static bool isDriver(string $driver)
  * @method static mixed getConfig(string $key, $default = null)
  * @method static bool|int exec(string $statement)
- * @method static bool statement(string $statement, array $options = [], array $params = [])
+ * @method static bool statement(string $statement, array $params = [], array $options = [])
  *  
  * @package Spark\Http
  * 

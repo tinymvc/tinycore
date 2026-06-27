@@ -343,10 +343,10 @@ class QueryBuilder implements QueryBuilderContract
         // Normalize data to always be an array of records
         $data = !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
 
-        $fields = array_keys($data[0]);
+        $fields = $this->getInsertFields($data);
 
         // Generate the SQL statement
-        $sql = $this->compileInsert($data, $config);
+        $sql = $this->compileInsert($data, $config, $fields);
 
         // Prepare the statement
         $statement = $this->database->prepare($sql);
@@ -364,7 +364,7 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->log($started, $startedMemory, $sql, $data);
 
-        return $this->database->getPdo()->lastInsertId();
+        return (int) $this->database->getPdo()->lastInsertId();
     }
 
     /**
@@ -394,7 +394,7 @@ class QueryBuilder implements QueryBuilderContract
         if (!isset($config['update'])) {
             // Extract all fields except those are in $config['conflict'].
             $fields = array_filter(
-                array_keys($data[0]),
+                $this->getInsertFields($data),
                 fn($field) => !in_array($field, $config['conflict'])
             );
 
@@ -424,38 +424,60 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @return self
      */
-    public function where(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null, null|string $andOr = null, bool $not = false): self
+    public function where(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null, null|string $andOr = null, bool $not = false): self
     {
         if ($column instanceof Arrayable) {
             $column = $column->toArray();
         }
 
-        if (empty($column)) {
+        $argumentCount = func_num_args();
+
+        if ($column === null || $column === '' || $column === []) {
             return $this;
         } elseif ($column instanceof Closure) {
             return $this->grouped($column);
         }
 
-        $andOr ??= 'AND';
+        $hasExplicitBoolean = $andOr !== null;
+        $andOr = $this->normalizeBoolean($andOr ?? 'AND');
 
         // Holds a conditional clause for database.
         $command = '';
 
-        if (is_string($column) && is_string($operator)) {
+        if (is_string($column) && ($operator !== null || $value !== null || ($argumentCount === 2 && !$hasExplicitBoolean))) {
             // Create a where clause from column, operator, and value.
             // for example: "title like :title"
-            if ($value === null) {
+            if ($argumentCount === 2) {
                 $value = $operator;
                 $operator = '=';
             }
 
+            $operator = strtoupper((string) ($operator ?? '='));
+
+            if ($value === null && in_array($operator, ['=', 'IS'], true)) {
+                return $this->whereNull($column, false, $andOr);
+            }
+
+            if ($value === null && in_array($operator, ['!=', '<>', 'IS NOT', 'NOT'], true)) {
+                return $this->whereNull($column, true, $andOr);
+            }
+
+            if (is_array($value) && in_array($operator, ['IN', 'NOT IN'], true)) {
+                return $this->whereInValues($column, $value, $andOr, $operator === 'NOT IN' || $not);
+            }
+
             $columnPlaceholder = $this->getWhereSqlColumn($column);
-            $command = sprintf(
-                "%s %s %s :%s",
-                $andOr,
+            $comparison = sprintf(
+                "%s %s :%s",
                 $this->wrapper->wrapColumn($column),
                 $operator,
                 $columnPlaceholder
+            );
+
+            $command = sprintf(
+                "%s %s",
+                $andOr,
+                $not ? "NOT ($comparison)" : $comparison
             );
 
             $this->bindings[$columnPlaceholder] = $value;
@@ -476,17 +498,22 @@ class QueryBuilder implements QueryBuilderContract
                             function ($attr, $value) use ($not) {
 
                                 $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
-                                $this->bindings[$columnPlaceholder] = $value; // Bind the value to the placeholder.
-            
-                                return $this->wrapper->wrapColumn($attr) . (is_array($value) ?
-                                    // Create a where clause to match IN(), Ex: "id IN(:id_0, :id_1, :id_2, :id_3)" .
-                                    sprintf(
-                                        ($not ? ' NOT' : '') . " IN (%s)",
-                                        join(",", array_map(fn($index) => ":{$columnPlaceholder}_$index", array_keys($value)))
-                                    )
+                                if ($value === null) {
+                                    return $this->wrapper->wrapColumn($attr) . ' IS ' . ($not ? 'NOT ' : '') . 'NULL';
+                                }
+
+                                if (!is_array($value)) {
+                                    $this->bindings[$columnPlaceholder] = $value; // Bind the value to the placeholder.
+                                }
+
+                                if (is_array($value) && !empty($value)) {
+                                    $this->bindings[$columnPlaceholder] = array_values($value);
+                                }
+
+                                return is_array($value) ?
+                                    $this->compileWhereIn($attr, $value, $columnPlaceholder, $not)
                                     // Create a where close to match is equal, Ex. "id = :id_0"
-                                    : ($not ? ' !=' : ' =') . " :" . $columnPlaceholder
-                                );
+                                    : $this->wrapper->wrapColumn($attr) . ($not ? ' !=' : ' =') . " :" . $columnPlaceholder;
                             },
                             $keys,
                             $values
@@ -495,12 +522,12 @@ class QueryBuilder implements QueryBuilderContract
                 );
             } else {
                 if (isset($values[0]) && is_string($values[0])) {
-                    return $this->where($values[0], $values[1] ?? null, $values[2] ?? null, $andOr, $not);
+                    return $this->where($values[0], $values[1] ?? null, $values[2] ?? null, $values[3] ?? $andOr, $not);
                 }
 
                 foreach ($values as $value) {
                     if (isset($value[0]) && is_string($value[0])) {
-                        $this->where($value[0], $value[1] ?? null, $value[2] ?? null, $andOr, $not);
+                        $this->where($value[0], $value[1] ?? null, $value[2] ?? null, $value[3] ?? $andOr, $not);
                     } else {
                         $this->where($value, null, null, $andOr, $not);
                     }
@@ -514,7 +541,9 @@ class QueryBuilder implements QueryBuilderContract
         elseif (is_array($column) && array_is_list($column) && $operator === null && $value === null) {
             foreach ($column as $item) {
                 if (isset($item[0]) && is_string($item[0])) {
-                    $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $andOr, $not);
+                    $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $item[3] ?? $andOr, $not);
+                } elseif (isset($item[0]) && is_array($item[0])) {
+                    $this->where($item[0], null, null, $item[3] ?? $andOr, $not);
                 } else {
                     $this->where($item, null, null, $andOr, $not);
                 }
@@ -530,14 +559,14 @@ class QueryBuilder implements QueryBuilderContract
 
         // Grouped where clauses.
         if ($this->where['grouped']) {
-            $command = "$andOr (" . ltrim($command, $andOr);
+            $command = "$andOr (" . $this->stripBooleanPrefix($command, $andOr);
             $this->where['grouped'] = false;
         }
 
         // Register the where clause into current query builder.
         $this->where['sql'] .= sprintf(
             ' %s ',
-            empty($this->where['sql']) ? ltrim($command, "$andOr ") : $command
+            empty($this->where['sql']) ? $this->stripBooleanPrefix($command, $andOr) : $command
         );
 
         // Returns the current instance for method chaining.
@@ -575,6 +604,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND'): self
     {
+        $andOr = $this->normalizeBoolean($andOr);
+
         $this->where['sql'] .= sprintf(
             ' %s (%s)',
             !empty($this->where['sql']) ? $andOr : '',
@@ -614,8 +645,12 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhere(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null): self
+    public function orWhere(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null): self
     {
+        if (func_num_args() === 2) {
+            return $this->where($column, '=', $operator, 'OR');
+        }
+
         return $this->where($column, $operator, $value, 'OR');
     }
 
@@ -633,8 +668,12 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function notWhere(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null): self
+    public function notWhere(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null): self
     {
+        if (func_num_args() === 2) {
+            return $this->where($column, '=', $operator, 'AND', true);
+        }
+
         return $this->where($column, $operator, $value, 'AND', true);
     }
 
@@ -652,8 +691,12 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orNotWhere(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null): self
+    public function orNotWhere(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null): self
     {
+        if (func_num_args() === 2) {
+            return $this->where($column, '=', $operator, 'OR', true);
+        }
+
         return $this->where($column, $operator, $value, 'OR', true);
     }
 
@@ -667,11 +710,11 @@ class QueryBuilder implements QueryBuilderContract
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNull(string $field, bool $not = false): self
+    public function whereNull(string $field, bool $not = false, string $andOr = 'AND'): self
     {
         $field = $this->wrapper->wrapColumn($field) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
 
-        return $this->where($field);
+        return $this->where($field, andOr: $andOr);
     }
 
     /**
@@ -688,6 +731,28 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Adds an OR WHERE condition that the given column is null.
+     *
+     * @param string $field
+     * @return self
+     */
+    public function orWhereNull(string $field): self
+    {
+        return $this->whereNull($field, false, 'OR');
+    }
+
+    /**
+     * Adds an OR WHERE condition that the given column is not null.
+     *
+     * @param string $field
+     * @return self
+     */
+    public function orWhereNotNull(string $field): self
+    {
+        return $this->whereNull($field, true, 'OR');
+    }
+
+    /**
      * Add a WHERE condition that the given column is in the given array of values.
      *
      * @param string $column
@@ -699,7 +764,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function whereIn(string $column, array $values): self
     {
-        return $this->where([$column => $values]);
+        return $this->whereInValues($column, $values);
     }
 
     /**
@@ -714,7 +779,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function whereNotIn(string $column, array $values): self
     {
-        return $this->where([$column => $values], not: true);
+        return $this->whereInValues($column, $values, not: true);
     }
 
     /**
@@ -729,7 +794,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function orWhereIn(string $column, array $values): self
     {
-        return $this->where([$column => $values], andOr: 'OR');
+        return $this->whereInValues($column, $values, 'OR');
     }
 
     /**
@@ -744,7 +809,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function orWhereNotIn(string $column, array $values): self
     {
-        return $this->where([$column => $values], andOr: 'OR ', not: true);
+        return $this->whereInValues($column, $values, 'OR', true);
     }
 
     /**
@@ -821,6 +886,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function findInSet(string $field, mixed $key, string $type = '', string $andOr = 'AND'): self
     {
+        $type = $this->normalizeOperatorPrefix($type);
+
         // Get the SQL column placeholder for binding.
         $columnPlaceholder = $this->getWhereSqlColumn($field);
 
@@ -903,6 +970,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function findInJson(string $field, string $key, mixed $value, string $type = '', string $andOr = 'AND'): self
     {
+        $type = $this->normalizeOperatorPrefix($type);
+
         // Get the SQL column placeholder for binding.
         $columnPlaceholder = $this->getWhereSqlColumn("{$field}_{$key}");
 
@@ -1055,6 +1124,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function between(string $field, mixed $value1, mixed $value2, string $type = '', string $andOr = 'AND'): self
     {
+        $type = $this->normalizeOperatorPrefix($type);
+
         $columnPlaceholder1 = $this->getWhereSqlColumn("{$field}1");
         $columnPlaceholder2 = $this->getWhereSqlColumn("{$field}2");
 
@@ -1065,6 +1136,20 @@ class QueryBuilder implements QueryBuilderContract
         $this->bindings[$columnPlaceholder2] = $value2;
 
         return $this->where($where, andOr: $andOr);
+    }
+
+    /**
+     * Laravel-style alias for adding a BETWEEN condition.
+     *
+     * @param string $field
+     * @param array $values
+     * @param string $andOr
+     * @param bool $not
+     * @return self
+     */
+    public function whereBetween(string $field, array $values, string $andOr = 'AND', bool $not = false): self
+    {
+        return $this->between($field, $values[0] ?? null, $values[1] ?? null, $not ? 'NOT ' : '', $andOr);
     }
 
     /**
@@ -1085,6 +1170,18 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Laravel-style alias for adding a NOT BETWEEN condition.
+     *
+     * @param string $field
+     * @param array $values
+     * @return self
+     */
+    public function whereNotBetween(string $field, array $values): self
+    {
+        return $this->whereBetween($field, $values, not: true);
+    }
+
+    /**
      * Add an OR WHERE condition that checks if the field is between two values.
      *
      * @param string $field
@@ -1099,6 +1196,18 @@ class QueryBuilder implements QueryBuilderContract
     public function orBetween(string $field, mixed $value1, mixed $value2): self
     {
         return $this->between($field, $value1, $value2, '', 'OR');
+    }
+
+    /**
+     * Laravel-style alias for adding an OR BETWEEN condition.
+     *
+     * @param string $field
+     * @param array $values
+     * @return self
+     */
+    public function orWhereBetween(string $field, array $values): self
+    {
+        return $this->whereBetween($field, $values, 'OR');
     }
 
     /**
@@ -1119,6 +1228,18 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Laravel-style alias for adding an OR NOT BETWEEN condition.
+     *
+     * @param string $field
+     * @param array $values
+     * @return self
+     */
+    public function orWhereNotBetween(string $field, array $values): self
+    {
+        return $this->whereBetween($field, $values, 'OR', true);
+    }
+
+    /**
      * Add a WHERE condition using the LIKE operator.
      *
      * @param string $field
@@ -1134,6 +1255,8 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function like(string $field, mixed $data, string $type = '', string $andOr = 'AND'): self
     {
+        $type = $this->normalizeOperatorPrefix($type);
+
         $columnPlaceholder = $this->getWhereSqlColumn($field);
         $where = $this->wrapper->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
 
@@ -1450,6 +1573,10 @@ class QueryBuilder implements QueryBuilderContract
             $data = $data->toArray();
         }
 
+        if (empty($data)) {
+            return 0;
+        }
+
         // Apply related model condition if necessary
         if ($this->isUsingModel()) {
             $this->getModelBeingUsed()->fill($data);
@@ -1461,27 +1588,18 @@ class QueryBuilder implements QueryBuilderContract
 
         // Abort if no WHERE condition is set to avoid accidental updates on all records
         if (!$this->hasWhere()) {
-            return false;
+            return 0;
         }
 
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
-        $table = $this->prefix . $this->table;
+        $table = $this->getTableName();
 
         // Prepare the SQL update statement
-        $sql = sprintf(
-            "UPDATE $table SET %s %s",
-            implode(
-                ', ',
-                array_map(
-                    fn($attr) => $this->wrapper->wrapColumn($attr) . " = :$attr",
-                    array_keys($data)
-                )
-            ),
-            $this->getWhereSql()
-        );
+        $setBindings = [];
+        $sql = sprintf("UPDATE $table SET %s %s", $this->compileUpdateSet($data, $setBindings), $this->getWhereSql());
         $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
@@ -1489,8 +1607,8 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         // Bind the values for update
-        foreach ($data as $key => $val) {
-            $statement->bindValue(":$key", $val, $this->getParameterType($val));
+        foreach ($setBindings as $placeholder => $val) {
+            $statement->bindValue(":$placeholder", $val, $this->getParameterType($val));
         }
 
         // Bind the WHERE clause parameters
@@ -1537,14 +1655,14 @@ class QueryBuilder implements QueryBuilderContract
 
         // Abort if no WHERE condition is set to avoid accidental deletion of all records
         if (!$this->hasWhere()) {
-            return false;
+            return 0;
         }
 
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
-        $table = $this->prefix . $this->table;
+        $table = $this->getTableName();
 
         // Prepare the SQL delete statement
         $sql = "DELETE FROM $table {$this->getWhereSql()}";
@@ -1592,8 +1710,8 @@ class QueryBuilder implements QueryBuilderContract
         $startedMemory = memory_get_usage(true);
 
         // Prepare the table name
-        $table = $this->prefix . $this->table;
-        $sql = "TRUNCATE TABLE $table";
+        $table = $this->getTableName();
+        $sql = $this->database->isSQLite() ? "DELETE FROM $table" : "TRUNCATE TABLE $table";
 
         // Prepare the SQL truncate statement
         $statement = $this->database->prepare($sql);
@@ -1609,7 +1727,20 @@ class QueryBuilder implements QueryBuilderContract
 
         $this->log($started, $startedMemory, $sql, []);
 
-        return $statement->rowCount();
+        $count = $statement->rowCount();
+
+        if ($this->database->isSQLite()) {
+            try {
+                $this->database->statement(
+                    'DELETE FROM sqlite_sequence WHERE name = :table',
+                    ['table' => $this->prefix . $this->table]
+                );
+            } catch (\Throwable) {
+                // sqlite_sequence exists only after an AUTOINCREMENT table has been created.
+            }
+        }
+
+        return $count;
     }
 
     /**
@@ -1635,7 +1766,7 @@ class QueryBuilder implements QueryBuilderContract
             if (is_int($key)) {
                 $statement->bindValue($key + 1, $value, $this->getParameterType($value));
             } else {
-                $statement->bindValue($key, $value, $this->getParameterType($value));
+                $statement->bindValue($this->normalizeNamedBinding($key), $value, $this->getParameterType($value));
             }
         }
 
@@ -1696,7 +1827,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function value(string $column): mixed
     {
-        $result = $this->first();
+        $result = $this->first($column);
 
         if ($result === false) {
             return null;
@@ -1721,11 +1852,13 @@ class QueryBuilder implements QueryBuilderContract
             return array_map(fn($row) => is_object($row) ? $row->$column : $row[$column], $results);
         }
 
-        return array_column(
-            array_map(fn($row) => is_object($row) ? [$row->$key => $row->$column] : [$row[$key] => $row[$column]], $results),
-            $column,
-            $key
-        );
+        $values = [];
+        foreach ($results as $row) {
+            $itemKey = is_object($row) ? $row->$key : $row[$key];
+            $values[$itemKey] = is_object($row) ? $row->$column : $row[$column];
+        }
+
+        return $values;
     }
 
     /**
@@ -2479,7 +2612,7 @@ class QueryBuilder implements QueryBuilderContract
         $this->log($started, $startedMemory, $sql, []);
 
         // Returns number of found rows.
-        return $statement->fetch(PDO::FETCH_COLUMN);
+        return (int) $statement->fetch(PDO::FETCH_COLUMN);
     }
 
     /**
@@ -2516,7 +2649,11 @@ class QueryBuilder implements QueryBuilderContract
     public function updateOrInsert(array $attributes, array $values = []): int|bool
     {
         // Check if record exists
-        if ($this->where($attributes)->exists()) {
+        if ((clone $this)->where($attributes)->exists()) {
+            if ($values === []) {
+                return true;
+            }
+
             // Update existing record
             return $this->where($attributes)->update($values);
         } else {
@@ -2579,11 +2716,11 @@ class QueryBuilder implements QueryBuilderContract
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} + :increment "
             . $this->getWhereSql();
 
-        $result = $this->raw($sql, $bindings);
+        $result = $this->executeAffectingStatement($sql, $bindings);
 
         $this->log($started, $startedMemory, $sql, $bindings);
 
-        return $result !== false;
+        return $result > 0;
     }
 
     /**
@@ -2606,11 +2743,11 @@ class QueryBuilder implements QueryBuilderContract
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} - :decrement "
             . $this->getWhereSql();
 
-        $result = $this->raw($sql, $bindings);
+        $result = $this->executeAffectingStatement($sql, $bindings);
 
         $this->log($started, $startedMemory, $sql, $bindings);
 
-        return $result !== false;
+        return $result > 0;
     }
 
     /**
@@ -2814,6 +2951,97 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Add a WHERE IN/NOT IN clause and handle empty values safely.
+     *
+     * @param string $column
+     * @param array $values
+     * @param string $andOr
+     * @param bool $not
+     * @return self
+     */
+    private function whereInValues(string $column, array $values, string $andOr = 'AND', bool $not = false): self
+    {
+        $andOr = $this->normalizeBoolean($andOr);
+        $placeholder = $this->getWhereSqlColumn($column);
+        $command = $this->compileWhereIn($column, $values, $placeholder, $not);
+
+        if (!empty($values)) {
+            $this->bindings[$placeholder] = array_values($values);
+        }
+
+        $this->where['sql'] .= sprintf(
+            ' %s ',
+            empty($this->where['sql']) ? $this->stripBooleanPrefix($command, $andOr) : "$andOr $command"
+        );
+
+        return $this;
+    }
+
+    /**
+     * Compile a WHERE IN condition.
+     *
+     * @param string $column
+     * @param array $values
+     * @param string $placeholder
+     * @param bool $not
+     * @return string
+     */
+    private function compileWhereIn(string $column, array $values, string $placeholder, bool $not = false): string
+    {
+        if (empty($values)) {
+            return $not ? '1 = 1' : '0 = 1';
+        }
+
+        $parameters = join(
+            ',',
+            array_map(fn($index) => ":{$placeholder}_$index", array_keys(array_values($values)))
+        );
+
+        return sprintf(
+            '%s %sIN (%s)',
+            $this->wrapper->wrapColumn($column),
+            $not ? 'NOT ' : '',
+            $parameters
+        );
+    }
+
+    /**
+     * Normalize a boolean connector for SQL clauses.
+     *
+     * @param string $boolean
+     * @return string
+     */
+    private function normalizeBoolean(string $boolean): string
+    {
+        return strtoupper(trim($boolean)) === 'OR' ? 'OR' : 'AND';
+    }
+
+    /**
+     * Normalize optional SQL operator prefixes such as NOT.
+     *
+     * @param string $prefix
+     * @return string
+     */
+    private function normalizeOperatorPrefix(string $prefix): string
+    {
+        $prefix = trim($prefix);
+
+        return $prefix === '' ? '' : "$prefix ";
+    }
+
+    /**
+     * Remove the leading boolean connector from a generated condition.
+     *
+     * @param string $sql
+     * @param string $boolean
+     * @return string
+     */
+    private function stripBooleanPrefix(string $sql, string $boolean): string
+    {
+        return preg_replace('/^\s*' . preg_quote($boolean, '/') . '\s+/i', '', $sql) ?? $sql;
+    }
+
+    /**
      * Get the Where SQL column name.
      * This method ensures that the column name is unique by appending an index if necessary.
      *
@@ -2823,7 +3051,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function getWhereSqlColumn(string $column): string
     {
-        $column = str_replace('.', '', $column);
+        $column = $this->makeParameterName($column);
 
         $index = 0;
         $x_column = $column;
@@ -2833,6 +3061,31 @@ class QueryBuilder implements QueryBuilderContract
         } while (isset($this->bindings[$x_column]));
 
         return $x_column;
+    }
+
+    /**
+     * Create a safe placeholder name from a column or binding key.
+     *
+     * @param string $name
+     * @return string
+     */
+    private function makeParameterName(string $name): string
+    {
+        $name = preg_replace('/[^A-Za-z0-9_]/', '_', $name);
+        $name = trim($name, '_');
+
+        return $name !== '' ? $name : 'value';
+    }
+
+    /**
+     * Normalize named PDO bindings to the ":name" form.
+     *
+     * @param string $key
+     * @return string
+     */
+    private function normalizeNamedBinding(string $key): string
+    {
+        return str_starts_with($key, ':') ? $key : ":$key";
     }
 
     /**
@@ -2853,7 +3106,7 @@ class QueryBuilder implements QueryBuilderContract
              * Create a placeholder of the parameter exactly added into the where clause.
              * Ex. "id = :id", ==> :id is the parameter.
              */
-            $param = ':' . str_replace('.', '', $param);
+            $param = $this->normalizeNamedBinding(str_replace('.', '', $param));
 
             if (is_array($value)) {
                 // binds clause values from a array condition, Ex. "id IN(1, 2, 3, 4)".
@@ -2899,15 +3152,67 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Compile the SET clause for an update query with isolated placeholders.
+     *
+     * @param array $data
+     * @param array $bindings
+     * @return string
+     */
+    private function compileUpdateSet(array $data, array &$bindings): string
+    {
+        $sets = [];
+
+        foreach ($data as $column => $value) {
+            $placeholder = $this->makeParameterName("set_$column");
+            $sets[] = $this->wrapper->wrapColumn($column) . " = :$placeholder";
+            $bindings[$placeholder] = $value;
+        }
+
+        return implode(', ', $sets);
+    }
+
+    /**
+     * Execute an INSERT/UPDATE/DELETE style statement and return affected rows.
+     *
+     * @param string $sql
+     * @param array $bindings
+     * @return int
+     */
+    private function executeAffectingStatement(string $sql, array $bindings = []): int
+    {
+        $statement = $this->database->prepare($sql);
+
+        if ($statement === false) {
+            throw new QueryBuilderException('Failed to prepare statement');
+        }
+
+        foreach ($bindings as $key => $value) {
+            if (is_int($key)) {
+                $statement->bindValue($key + 1, $value, $this->getParameterType($value));
+            } else {
+                $statement->bindValue($this->normalizeNamedBinding($key), $value, $this->getParameterType($value));
+            }
+        }
+
+        if ($statement->execute() === false) {
+            throw new QueryBuilderException('Failed to execute statement');
+        }
+
+        $this->resetWhere();
+
+        return $statement->rowCount();
+    }
+
+    /**
      * Compiles the INSERT SQL statement based on configuration.
      *
      * @param array $data The data to be inserted.
      * @param array $config The configuration array.
      * @return string The compiled INSERT SQL statement.
      */
-    private function compileInsert(array $data, array $config): string
+    private function compileInsert(array $data, array $config, array $fields): string
     {
-        $table = $this->prefix . $this->table;
+        $table = $this->getTableName();
 
         // Base command (INSERT/REPLACE)
         $command = $this->getInsertCommand($config);
@@ -2916,12 +3221,10 @@ class QueryBuilder implements QueryBuilderContract
         $ignore = $this->getIgnoreModifier($config);
 
         // Columns
-        $columns = $this->wrapper->columnize(
-            array_keys($data[0]) // Get keys from first record
-        );
+        $columns = $this->wrapper->columnize($fields);
 
         // Values placeholders
-        $values = $this->createPlaceholder($data);
+        $values = $this->createPlaceholder($data, $fields);
 
         // ON CONFLICT/DUPLICATE KEY UPDATE clause
         $conflict = $this->compileConflictClause($config);
@@ -2973,13 +3276,30 @@ class QueryBuilder implements QueryBuilderContract
      * @param array $data The data to be inserted.
      * @return string The placeholder string.
      */
-    private function createPlaceholder(array $data): string
+    private function createPlaceholder(array $data, array $fields): string
     {
         $placeholders = [];
         foreach ($data as $serial => $row) {
-            $placeholders[] = '(' . implode(',', array_map(fn($column) => ':' . $column . '_' . $serial, array_keys($row))) . ')';
+            $placeholders[] = '(' . implode(',', array_map(fn($column) => ':' . $column . '_' . $serial, $fields)) . ')';
         }
         return implode(',', $placeholders);
+    }
+
+    /**
+     * Get the normalized column list for one or more inserted rows.
+     *
+     * @param array $data
+     * @return array
+     */
+    private function getInsertFields(array $data): array
+    {
+        $fields = [];
+
+        foreach ($data as $row) {
+            $fields = [...$fields, ...array_keys($row)];
+        }
+
+        return array_values(array_unique($fields));
     }
 
     /**

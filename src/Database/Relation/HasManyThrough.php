@@ -98,8 +98,10 @@ class HasManyThrough extends Relation
         // Append Pivot Conditions
         $wherePivot = $this->buildPivotConditions();
         if (!empty($wherePivot)) {
-            $query->where(
-                map_pivot_conditions($wherePivot, $throughInstance->getTable(), $relatedInstance->getTable())
+            $query->grouped(
+                fn($q) => $q->where(
+                    map_pivot_conditions($wherePivot, $throughInstance->getTable(), $relatedInstance->getTable())
+                )
             );
         }
 

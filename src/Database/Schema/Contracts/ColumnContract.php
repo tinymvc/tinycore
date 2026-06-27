@@ -14,7 +14,7 @@ interface ColumnContract
      *
      * @return self
      */
-    public function nullable(): self;
+    public function nullable(bool $value = true): self;
 
     /**
      * Set a default value for the column.

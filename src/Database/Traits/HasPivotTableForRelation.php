@@ -2,6 +2,8 @@
 namespace Spark\Database\Traits;
 
 use function count;
+use function func_get_args;
+use function func_num_args;
 use function is_array;
 use function is_string;
 use function sprintf;
@@ -55,10 +57,20 @@ trait HasPivotTableForRelation
         return array_map(function ($condition) {
             if (
                 is_array($condition) && isset($condition[0]) &&
+                is_string($condition[0]) &&
                 !str_starts_with($condition[0], 'pv.')
             ) {
                 $condition[0] = "pv.$condition[0]";
+            } elseif (
+                is_array($condition) && isset($condition[0]) &&
+                is_array($condition[0]) &&
+                !array_is_list($condition[0])
+            ) {
+                $condition[0] = collect($condition[0])->mapWithKeys(
+                    fn($value, $key) => [str_starts_with($key, 'pv.') ? $key : "pv.$key" => $value]
+                )->all();
             }
+
             return $condition;
         }, $this->wherePivot);
     }
@@ -69,8 +81,9 @@ trait HasPivotTableForRelation
      * @param array $fields The fields to append.
      * @return self
      */
-    public function withPivot(array $fields): self
+    public function withPivot(array|string $fields): self
     {
+        $fields = is_array($fields) ? $fields : func_get_args();
         $this->pivotFields = [...$this->pivotFields, ...$fields];
         return $this;
     }
@@ -79,13 +92,40 @@ trait HasPivotTableForRelation
      * Add additional constraints for the pivot table.
      * 
      * @param array|string $column The column name or an array of conditions.
-     * @param string|null $operator The operator for the condition (if $column is a string).
+     * @param mixed|null $operator The operator for the condition (if $column is a string).
      * @param mixed|null $value The value for the condition (if $column is a string).
      * @return self
      */
-    public function wherePivot(array|string $column, null|string $operator = null, $value = null, null|string $andOr = null): self
+    public function wherePivot(array|string $column, mixed $operator = null, $value = null, null|string $andOr = null): self
     {
-        $this->wherePivot[] = compact('column', 'operator', 'value', 'andOr');
+        if (is_array($column)) {
+            if (array_is_list($column)) {
+                foreach ($column as $condition) {
+                    if (is_array($condition) && isset($condition[0]) && is_string($condition[0])) {
+                        $this->wherePivot[] = [
+                            $condition[0],
+                            $condition[1] ?? null,
+                            $condition[2] ?? null,
+                            $condition[3] ?? $andOr,
+                        ];
+                    } elseif (is_array($condition) && !array_is_list($condition)) {
+                        $this->wherePivot[] = [$condition, null, null, $andOr];
+                    }
+                }
+
+                return $this;
+            }
+
+            $this->wherePivot[] = [$column, null, null, $andOr];
+            return $this;
+        }
+
+        if (func_num_args() === 2 || (func_num_args() === 4 && $value === null && $operator !== null)) {
+            $value = $operator;
+            $operator = '=';
+        }
+
+        $this->wherePivot[] = [$column, $operator, $value, $andOr];
         return $this;
     }
 
@@ -97,8 +137,12 @@ trait HasPivotTableForRelation
      * @param mixed|null $value The value for the condition (if $column is a string).
      * @return self
      */
-    public function orWherePivot(array|string $column, null|string $operator = null, $value = null): self
+    public function orWherePivot(array|string $column, mixed $operator = null, $value = null): self
     {
+        if (func_num_args() === 2) {
+            return $this->wherePivot($column, $operator, null, 'OR');
+        }
+
         return $this->wherePivot($column, $operator, $value, 'OR');
     }
 

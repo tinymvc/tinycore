@@ -40,6 +40,71 @@ interface SchemaContract
     public static function dropIfExists(string $table): void;
 
     /**
+     * Rename a table.
+     *
+     * @param string $from The current table name.
+     * @param string $to The new table name.
+     * @return void
+     */
+    public static function rename(string $from, string $to): void;
+
+    /**
+     * Determine if a table exists.
+     *
+     * @param string $table The table name.
+     * @return bool
+     */
+    public static function hasTable(string $table): bool;
+
+    /**
+     * Determine if a table has a column.
+     *
+     * @param string $table The table name.
+     * @param string $column The column name.
+     * @return bool
+     */
+    public static function hasColumn(string $table, string $column): bool;
+
+    /**
+     * Determine if a table has all given columns.
+     *
+     * @param string $table The table name.
+     * @param array $columns The column names.
+     * @return bool
+     */
+    public static function hasColumns(string $table, array $columns): bool;
+
+    /**
+     * Get the column listing for a table.
+     *
+     * @param string $table The table name.
+     * @return array
+     */
+    public static function getColumnListing(string $table): array;
+
+    /**
+     * Enable foreign key constraints.
+     *
+     * @return bool
+     */
+    public static function enableForeignKeyConstraints(): bool;
+
+    /**
+     * Disable foreign key constraints.
+     *
+     * @return bool
+     */
+    public static function disableForeignKeyConstraints(): bool;
+
+    /**
+     * Run a callback with foreign key constraints disabled.
+     *
+     * @param Closure $callback
+     * @return mixed
+     */
+    public static function withoutForeignKeyConstraints(Closure $callback): mixed;
+
+    /**
      * Retrieves the database grammar instance.
      *
      * This method returns the existing Grammar instance if available, or

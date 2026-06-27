@@ -17,6 +17,7 @@ use Spark\Support\Str;
 use function array_key_exists;
 use function func_get_args;
 use function get_class;
+use function in_array;
 use function is_array;
 use function is_string;
 
@@ -562,7 +563,7 @@ trait HasRelation
             $type = $model->get($typeColumn);
             $id = $model->get($idColumn);
 
-            if ($type && $id) {
+            if (!$this->isMissingRelationKey($type) && !$this->isMissingRelationKey($id)) {
                 if (!isset($modelsByType[$type])) {
                     $modelsByType[$type] = [];
                 }
@@ -577,13 +578,15 @@ trait HasRelation
             }
 
             // Resolve the morph model class
-            $morphClass = $this->resolveMorphClass($type);
+            $morphClass = $this->resolveMorphClass($type, $morphMap[$type]);
             if (!$morphClass) {
                 continue;
             }
 
             // Get nested relations for this morph type
-            $relations = $morphMap[$type];
+            $relations = is_array($morphMap[$type]) && isset($morphMap[$type]['relations'])
+                ? $morphMap[$type]['relations']
+                : (is_string($morphMap[$type]) && class_exists($morphMap[$type]) ? [] : $morphMap[$type]);
             $relations = is_string($relations) ? [$relations] : $relations;
 
             // Extract unique IDs
@@ -636,14 +639,16 @@ trait HasRelation
     private function loadHasModels(array $models, array $config, string $name, null|Closure $constraints = null, string $type = 'many'): array
     {
         $relatedModel = new $config['related'];
-        $localValues = collect($models)->pluck($config['localKey'])->unique()->filter()->all();
+        $localValues = $this->filledRelationKeys(collect($models)->pluck($config['localKey'])->all());
 
         if (empty($localValues)) {
             return $this->initializeRelation($models, $name, $type === 'one' ? null : []);
         }
 
+        $columns = $this->ensureColumns($config['columns'] ?? '*', [$config['foreignKey']]);
+
         $query = $relatedModel->query()
-            ->select($config['columns'] ?? '*')
+            ->select($columns)
             ->whereIn($config['foreignKey'], $localValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -674,14 +679,16 @@ trait HasRelation
     private function loadBelongsTo(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
-        $foreignValues = collect($models)->pluck($config['foreignKey'])->unique()->filter()->all();
+        $foreignValues = $this->filledRelationKeys(collect($models)->pluck($config['foreignKey'])->all());
 
         if (empty($foreignValues)) {
             return $this->initializeRelation($models, $name, null);
         }
 
+        $columns = $this->ensureColumns($config['columns'] ?? '*', [$config['ownerKey']]);
+
         $query = $relatedModel->query()
-            ->select($config['columns'] ?? '*')
+            ->select($columns)
             ->whereIn($config['ownerKey'], $foreignValues);
 
         $this->applyConstraints($query, $config, $constraints);
@@ -712,7 +719,7 @@ trait HasRelation
     private function loadBelongsToMany(array $models, array $config, string $name, null|Closure $constraints = null): array
     {
         $relatedModel = new $config['related'];
-        $parentValues = collect($models)->pluck($config['parentKey'])->unique()->filter()->all();
+        $parentValues = $this->filledRelationKeys(collect($models)->pluck($config['parentKey'])->all());
 
         if (empty($parentValues)) {
             return $this->initializeRelation($models, $name, []);
@@ -740,8 +747,10 @@ trait HasRelation
             ->whereIn($config['table'] . "." . $config['foreignPivotKey'], $parentValues)
             ->unless(
                 empty($config['wherePivot'] ??= []),
-                fn($q) => $q->where(
-                    map_pivot_conditions($config['wherePivot'], $config['table'], $relatedModel->getTable())
+                fn($q) => $q->grouped(
+                    fn($subQuery) => $subQuery->where(
+                        map_pivot_conditions($config['wherePivot'], $config['table'], $relatedModel->getTable())
+                    )
                 )
             );
 
@@ -774,11 +783,7 @@ trait HasRelation
     {
         $relatedModel = new $config['related'];
         $throughModel = new $config['through'];
-        $localValues = collect($models)
-            ->pluck($config['localKey'])
-            ->unique()
-            ->filter()
-            ->all();
+        $localValues = $this->filledRelationKeys(collect($models)->pluck($config['localKey'])->all());
 
         if (empty($localValues)) {
             return $this->initializeRelation($models, $name, []);
@@ -805,8 +810,10 @@ trait HasRelation
             ->whereIn($throughModel->getTable() . "." . $config['firstKey'], $localValues)
             ->unless(
                 empty($config['wherePivot'] ??= []),
-                fn($q) => $q->where(
-                    map_pivot_conditions($config['wherePivot'], $throughModel->getTable(), $relatedModel->getTable())
+                fn($q) => $q->grouped(
+                    fn($subQuery) => $subQuery->where(
+                        map_pivot_conditions($config['wherePivot'], $throughModel->getTable(), $relatedModel->getTable())
+                    )
                 )
             );
 
@@ -1043,8 +1050,16 @@ trait HasRelation
      * @param string $type The morph type
      * @return string|null The resolved class name
      */
-    private function resolveMorphClass(string $type): string|null
+    private function resolveMorphClass(string $type, mixed $mapValue = null): string|null
     {
+        if (is_string($mapValue) && class_exists($mapValue)) {
+            return $mapValue;
+        }
+
+        if (is_array($mapValue) && isset($mapValue['class']) && class_exists($mapValue['class'])) {
+            return $mapValue['class'];
+        }
+
         // If already a valid class name, return it
         if (class_exists($type)) {
             return $type;
@@ -1060,5 +1075,55 @@ trait HasRelation
         }
 
         return null;
+    }
+
+    /**
+     * Get unique relationship keys while preserving valid falsy keys like 0.
+     *
+     * @param array $values
+     * @return array
+     */
+    private function filledRelationKeys(array $values): array
+    {
+        return array_values(array_unique(array_filter(
+            $values,
+            fn($value) => !$this->isMissingRelationKey($value)
+        )));
+    }
+
+    /**
+     * Determine if a relationship key is genuinely missing.
+     *
+     * @param mixed $value
+     * @return bool
+     */
+    private function isMissingRelationKey(mixed $value): bool
+    {
+        return $value === null || $value === '';
+    }
+
+    /**
+     * Ensure selected eager-load columns include keys required for matching.
+     *
+     * @param array|string $columns
+     * @param array $required
+     * @return array|string
+     */
+    private function ensureColumns(array|string $columns, array $required): array|string
+    {
+        if ($columns === '*') {
+            return $columns;
+        }
+
+        $columns = is_array($columns) ? $columns : explode(',', $columns);
+        $columns = array_values(array_filter(array_map('trim', $columns)));
+
+        foreach ($required as $column) {
+            if (!in_array($column, $columns, true)) {
+                $columns[] = $column;
+            }
+        }
+
+        return $columns;
     }
 }

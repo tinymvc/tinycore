@@ -91,8 +91,10 @@ class BelongsToMany extends Relation
         // Append Pivot Conditions
         $wherePivot = $this->buildPivotConditions();
         if (!empty($wherePivot)) {
-            $query->where(
-                map_pivot_conditions($wherePivot, $this->table, $relatedInstance->getTable())
+            $query->grouped(
+                fn($q) => $q->where(
+                    map_pivot_conditions($wherePivot, $this->table, $relatedInstance->getTable())
+                )
             );
         }
 
@@ -153,7 +155,7 @@ class BelongsToMany extends Relation
 
         $parentKeyValue = $parent->{$this->parentKey};
 
-        if (empty($parentKeyValue)) {
+        if ($this->missingKey($parentKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before attaching related models.");
         }
 
@@ -178,7 +180,7 @@ class BelongsToMany extends Relation
 
         if (!empty($records)) {
             /** @var \Spark\Database\QueryBuilder to insert into pivot table */
-            $query = app(QueryBuilder::class);
+            $query = $this->newPivotQuery();
             $query->table($this->table)->insert($records);
         }
     }
@@ -199,12 +201,12 @@ class BelongsToMany extends Relation
 
         $parentKeyValue = $parent->{$this->parentKey};
 
-        if (empty($parentKeyValue)) {
+        if ($this->missingKey($parentKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before detaching related models.");
         }
 
         /** @var \Spark\Database\QueryBuilder to insert into pivot table */
-        $query = app(QueryBuilder::class);
+        $query = $this->newPivotQuery();
         $query->table($this->table)
             ->where($this->foreignPivotKey, $parentKeyValue);
 
@@ -233,7 +235,7 @@ class BelongsToMany extends Relation
 
         $parentKeyValue = $parent->{$this->parentKey};
 
-        if (empty($parentKeyValue)) {
+        if ($this->missingKey($parentKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before syncing related models.");
         }
 
@@ -248,7 +250,7 @@ class BelongsToMany extends Relation
         }
 
         /** @var \Spark\Database\QueryBuilder to insert into pivot table */
-        $query = app(QueryBuilder::class);
+        $query = $this->newPivotQuery();
 
         // Get currently attached IDs
         $currentIds = $query->table($this->table)
@@ -283,6 +285,18 @@ class BelongsToMany extends Relation
     }
 
     /**
+     * Sync without detaching existing related models.
+     *
+     * @param int|array $ids
+     * @param array $attributes
+     * @return array
+     */
+    public function syncWithoutDetaching(int|array $ids, array $attributes = []): array
+    {
+        return $this->sync($ids, false, $attributes);
+    }
+
+    /**
      * Toggle the attachment of models to the parent.
      * 
      * @param int|array $ids The ID(s) to toggle.
@@ -299,7 +313,7 @@ class BelongsToMany extends Relation
 
         $parentKeyValue = $parent->{$this->parentKey};
 
-        if (empty($parentKeyValue)) {
+        if ($this->missingKey($parentKeyValue)) {
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before toggling related models.");
         }
 
@@ -314,7 +328,7 @@ class BelongsToMany extends Relation
         }
 
         /** @var \Spark\Database\QueryBuilder to insert into pivot table */
-        $query = app(QueryBuilder::class);
+        $query = $this->newPivotQuery();
 
         $syncIds = array_keys($ids);
 
@@ -345,5 +359,43 @@ class BelongsToMany extends Relation
         }
 
         return $changes;
+    }
+
+    /**
+     * Update attributes on an existing pivot row.
+     *
+     * @param int|string $id
+     * @param array $attributes
+     * @return int
+     */
+    public function updateExistingPivot(int|string $id, array $attributes): int
+    {
+        $parent = $this->getParentModel();
+
+        if (!$parent) {
+            throw new \RuntimeException('Cannot update pivot without a parent model instance.');
+        }
+
+        $parentKeyValue = $parent->{$this->parentKey};
+
+        if ($this->missingKey($parentKeyValue)) {
+            throw new \RuntimeException("Parent model's {$this->parentKey} must be set before updating pivot records.");
+        }
+
+        return $this->newPivotQuery()
+            ->table($this->table)
+            ->where($this->foreignPivotKey, $parentKeyValue)
+            ->where($this->relatedPivotKey, $id)
+            ->update($attributes);
+    }
+
+    /**
+     * Create a clean query builder for the pivot table.
+     *
+     * @return QueryBuilder
+     */
+    protected function newPivotQuery(): QueryBuilder
+    {
+        return new QueryBuilder($this->query()->getDB());
     }
 }

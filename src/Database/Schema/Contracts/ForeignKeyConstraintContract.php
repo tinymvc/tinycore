@@ -18,6 +18,14 @@ interface ForeignKeyConstraintContract
     public function constrained(?string $table = null): self;
 
     /**
+     * Set the constraint name.
+     *
+     * @param string $name
+     * @return static
+     */
+    public function name(string $name): self;
+
+    /**
      * Set the columns that the foreign key references.
      *
      * @param string|array $columns

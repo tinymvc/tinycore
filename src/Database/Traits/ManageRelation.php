@@ -138,9 +138,9 @@ trait ManageRelation
      * Deletes the model from the database by its primary key value.
      *
      * @param string|int|array $value The unique identifier(s) of the model(s) to delete.
-     * @return bool True if deletion was successful, false otherwise.
+     * @return int Number of deleted rows.
      */
-    public function destroy(string|int|array $value): bool
+    public function destroy(string|int|array $value): int
     {
         $model = $this->getRelatedModel();
         $deleted = $this->delete([$model->getPrimaryKey() => $value]);
@@ -561,7 +561,7 @@ trait ManageRelation
         $relationConfig = $model->getRelationshipConfig($relation);
 
         // Create alias based on function type
-        $alias ??= str($aliasBase . "_$function")->snake();
+        $alias ??= (string) str($aliasBase . "_$function")->snake();
 
         // Build the subquery with the specified aggregate function
         $this->addAggregateSubquery($relationConfig, $relation, $alias, $function, $column, $callback);
@@ -761,8 +761,10 @@ trait ManageRelation
                     )
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
-                        fn($q) => $q->where(
-                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($relationConfig['table']), $this->wrapper->wrapTable($relatedTable))
+                        fn($q) => $q->grouped(
+                            fn($subQuery) => $subQuery->where(
+                                map_pivot_conditions($relationConfig['wherePivot'], $relationConfig['table'], $relatedTable)
+                            )
                         )
                     );
                 break;
@@ -785,8 +787,10 @@ trait ManageRelation
                     )
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
-                        fn($q) => $q->where(
-                            map_pivot_conditions($relationConfig['wherePivot'], $this->wrapper->wrapTable($throughTable), $this->wrapper->wrapTable($relatedTable))
+                        fn($q) => $q->grouped(
+                            fn($subQuery) => $subQuery->where(
+                                map_pivot_conditions($relationConfig['wherePivot'], $throughTable, $relatedTable)
+                            )
                         )
                     );
                 break;
@@ -866,7 +870,7 @@ trait ManageRelation
 
         // Modify the select to include the aggregate subquery
         $currentSelect = $this->query['select'] ?: '*';
-        $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) as {$alias}";
+        $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) AS {$this->wrapper->wrapColumn($alias)}";
 
         $this->bindings = [...$this->bindings, ...$subquery['bindings']];
         $this->parameters = [...$this->parameters, ...$subquery['parameters']];

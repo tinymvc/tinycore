@@ -40,7 +40,7 @@ interface QueryBuilderContract
      * @param null|string $type The type of the value given.
      * @return QueryBuilderContract Returns the query builder instance.
      */
-    public function where(null|string|array|Arrayable|Closure $column = null, null|string $operator = null, $value = null, null|string $type = null): self;
+    public function where(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null, null|string $type = null): self;
 
     /**
      * Update data in the database.

@@ -127,21 +127,46 @@ class Grammar implements GrammarContract
     {
         $map = match ($type) {
             // Mapping of general types to specific SQL types per driver.
-            'id' => ['mysql' => 'INT AUTO_INCREMENT', 'sqlite' => 'INTEGER', 'pgsql' => 'SERIAL'],
+            'id' => [
+                'mysql' => 'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                'pgsql' => 'BIGSERIAL PRIMARY KEY'
+            ],
+            'increments' => [
+                'mysql' => 'INT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                'pgsql' => 'SERIAL PRIMARY KEY'
+            ],
+            'tinyIncrements' => [
+                'mysql' => 'TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                'pgsql' => 'SMALLSERIAL PRIMARY KEY'
+            ],
+            'smallIncrements' => [
+                'mysql' => 'SMALLINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                'pgsql' => 'SMALLSERIAL PRIMARY KEY'
+            ],
             'string' => [
                 'mysql' => "VARCHAR({$parameters['length']})",
                 'sqlite' => 'TEXT COLLATE NOCASE',
                 'pgsql' => "VARCHAR({$parameters['length']})"
             ],
             'integer' => ['mysql' => 'INT', 'sqlite' => 'INTEGER', 'pgsql' => 'INTEGER'],
+            'smallInteger' => ['mysql' => 'SMALLINT', 'sqlite' => 'INTEGER', 'pgsql' => 'SMALLINT'],
+            'mediumInteger' => ['mysql' => 'MEDIUMINT', 'sqlite' => 'INTEGER', 'pgsql' => 'INTEGER'],
             'tinyInteger' => ['mysql' => 'TINYINT', 'sqlite' => 'INTEGER', 'pgsql' => 'SMALLINT'],
             'text' => ['mysql' => 'TEXT', 'sqlite' => 'TEXT COLLATE NOCASE', 'pgsql' => 'TEXT'],
-            'timestamp' => ['mysql' => 'TIMESTAMP', 'sqlite' => 'DATETIME', 'pgsql' => 'TIMESTAMP'],
+            'timestamp' => [
+                'mysql' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0),
+                'sqlite' => 'DATETIME',
+                'pgsql' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0),
+            ],
             'boolean' => ['mysql' => 'TINYINT(1)', 'sqlite' => 'INTEGER', 'pgsql' => 'BOOLEAN'],
             'bigIncrements' => [
-                'mysql' => 'BIGINT UNSIGNED AUTO_INCREMENT',
+                'mysql' => 'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
                 'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
-                'pgsql' => 'BIGSERIAL'
+                'pgsql' => 'BIGSERIAL PRIMARY KEY'
             ],
             'bigInteger' => ['mysql' => 'BIGINT', 'sqlite' => 'INTEGER', 'pgsql' => 'BIGINT'],
             'decimal' => [
@@ -150,11 +175,15 @@ class Grammar implements GrammarContract
                 'pgsql' => "DECIMAL({$parameters['precision']}, {$parameters['scale']})"
             ],
             'double' => [
-                'mysql' => "DOUBLE({$parameters['precision']}, {$parameters['scale']})",
+                'mysql' => $this->compileFloatingType('DOUBLE', $parameters),
                 'sqlite' => 'REAL',
                 'pgsql' => 'DOUBLE PRECISION'
             ],
-            'float' => ['mysql' => "FLOAT({$parameters['precision']})", 'sqlite' => 'REAL', 'pgsql' => 'REAL'],
+            'float' => [
+                'mysql' => $this->compileFloatingType('FLOAT', $parameters),
+                'sqlite' => 'REAL',
+                'pgsql' => 'REAL'
+            ],
             'char' => ['mysql' => "CHAR({$parameters['length']})", 'sqlite' => 'TEXT', 'pgsql' => "CHAR({$parameters['length']})"],
             'enum' => [
                 'mysql' => 'ENUM(' . $this->wrapper->quoteEnumValues($parameters['allowed']) . ')',
@@ -167,14 +196,14 @@ class Grammar implements GrammarContract
             'json' => ['mysql' => 'JSON', 'sqlite' => 'TEXT', 'pgsql' => 'JSON'],
             'date' => ['mysql' => 'DATE', 'sqlite' => 'TEXT', 'pgsql' => 'DATE'],
             'dateTime' => [
-                'mysql' => "DATETIME(" . ($parameters['precision'] ?? 0) . ")",
+                'mysql' => $this->compileTypeWithOptionalPrecision('DATETIME', $parameters['precision'] ?? 0),
                 'sqlite' => 'TEXT',
-                'pgsql' => 'TIMESTAMP' . (isset($parameters['precision']) ? "({$parameters['precision']})" : '')
+                'pgsql' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0)
             ],
             'time' => [
-                'mysql' => "TIME({$parameters['precision']})",
+                'mysql' => $this->compileTypeWithOptionalPrecision('TIME', $parameters['precision'] ?? 0),
                 'sqlite' => 'TEXT',
-                'pgsql' => 'TIME' . ($parameters['precision'] ? "({$parameters['precision']})" : '')
+                'pgsql' => $this->compileTypeWithOptionalPrecision('TIME', $parameters['precision'] ?? 0)
             ],
             'binary' => ['mysql' => 'BLOB', 'sqlite' => 'BLOB', 'pgsql' => 'BYTEA'],
             'uuid' => ['mysql' => 'CHAR(36)', 'sqlite' => 'TEXT', 'pgsql' => 'UUID'],
@@ -204,10 +233,10 @@ class Grammar implements GrammarContract
                     default => ''
                 },
             'default' => match (true) {
-                    is_string($value) => "DEFAULT '$value'",
-                    is_bool($value) && $this->isPostgreSQL() => "DEFAULT " . ($value ? 'TRUE' : 'FALSE'),
-                    is_bool($value) => "DEFAULT " . ($value ? 1 : 0),
-                    default => "DEFAULT $value"
+                    $value === null => 'DEFAULT NULL',
+                    is_bool($value) && $this->isPostgreSQL() => 'DEFAULT ' . ($value ? 'TRUE' : 'FALSE'),
+                    is_bool($value) => 'DEFAULT ' . ($value ? 1 : 0),
+                    default => 'DEFAULT ' . $this->quoteLiteral($value)
                 },
             'after' => $this->isMySQL() ? "AFTER " . $this->wrapper->wrapColumn($value) : '',
             'charset' => $this->isMySQL() ? "CHARACTER SET $value" : '',
@@ -225,7 +254,7 @@ class Grammar implements GrammarContract
      * @param ForeignKeyConstraint $fk The foreign key constraint object.
      * @return string The SQL for the foreign key constraint.
      */
-    public function compileForeignKey(ForeignKeyConstraint $fk): string
+    public function compileForeignKey(ForeignKeyConstraint $fk, ?string $table = null): string
     {
         // Validate required parameters
         if (!isset($fk->onTable, $fk->columns, $fk->references)) {
@@ -236,11 +265,8 @@ class Grammar implements GrammarContract
 
         $sql = '';
 
-        // MySQL/PostgreSQL: Use named constraints
-        if (!$this->isMySQL()) {
-            $constraintName = "fk_{$fk->onTable}_" . implode('_', $fk->columns);
-            $sql .= 'CONSTRAINT ' . $this->wrapper->wrap($constraintName) . ' ';
-        }
+        $constraintName = $fk->name ?? $this->makeForeignKeyName($table ?? $fk->onTable, $fk->columns);
+        $sql .= 'CONSTRAINT ' . $this->wrapper->wrap($constraintName) . ' ';
 
         $sql .= 'FOREIGN KEY (' . $this->wrapper->columnize($fk->columns) . ') ';
         $sql .= 'REFERENCES ' . $this->wrapper->wrapTable($fk->onTable);
@@ -275,17 +301,24 @@ class Grammar implements GrammarContract
      */
     public function compileIndex(string $table, array $index): string
     {
-        $type = strtoupper($index['type']);
+        $type = strtolower($index['type']);
         $columns = $this->wrapper->columnize($index['columns']);
-        $indexName = $this->generateIndexName($table, $index);
-        $typePrefix = $type === 'UNIQUE' ? 'UNIQUE ' : '';
+        $indexName = $this->resolveIndexName($table, $index);
 
         // Database-specific syntax adjustments
-        return match ($this->driver) {
-            'pgsql' => "CREATE {$typePrefix}INDEX {$this->wrapper->wrap($indexName)} ON "
+        return match (true) {
+            $type === 'unique' => "CREATE UNIQUE INDEX {$this->wrapper->wrap($indexName)} ON "
+            . $this->wrapper->wrapTable($table) . " ({$columns});",
+            $type === 'fulltext' && $this->isMySQL() => "CREATE FULLTEXT INDEX {$this->wrapper->wrap($indexName)} ON "
+            . $this->wrapper->wrapTable($table) . " ({$columns});",
+            $type === 'spatial' && $this->isMySQL() => "CREATE SPATIAL INDEX {$this->wrapper->wrap($indexName)} ON "
+            . $this->wrapper->wrapTable($table) . " ({$columns});",
+            $type === 'spatial' && $this->isPostgreSQL() => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
+            . $this->wrapper->wrapTable($table) . " USING gist ({$columns});",
+            $this->isPostgreSQL() => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
             . $this->wrapper->wrapTable($table) . " USING btree ({$columns});",
-            default => "CREATE {$typePrefix}INDEX {$this->wrapper->wrap($indexName)} ON "
-            . $this->wrapper->wrapTable($table) . " ({$columns});"
+            default => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
+            . $this->wrapper->wrapTable($table) . " ({$columns});",
         };
     }
 
@@ -322,7 +355,7 @@ class Grammar implements GrammarContract
             );
         }
 
-        $constraintName = "fk_{$fk->onTable}_" . implode('_', $fk->columns);
+        $constraintName = $fk->name ?? $this->makeForeignKeyName($table, $fk->columns);
         $sql = "ALTER TABLE " . $this->wrapper->wrapTable($table) . " ADD CONSTRAINT ";
         $sql .= $this->wrapper->wrap($constraintName) . ' ';
         $sql .= 'FOREIGN KEY (' . $this->wrapper->columnize($fk->columns) . ') ';
@@ -351,10 +384,47 @@ class Grammar implements GrammarContract
     {
         return match ($drop['type']) {
             'column' => $this->compileDropColumn($table, $drop['names']),
-            'index', 'unique' => $this->compileDropIndex($table, $drop),
+            'primary' => $this->compileDropPrimaryKey($table, $drop),
+            'index', 'unique', 'fulltext', 'spatial' => $this->compileDropIndex($table, $drop),
             'foreign' => $this->compileDropForeign($table, $drop),
             default => '',
         };
+    }
+
+    /**
+     * Compile a primary key definition.
+     *
+     * @param string $table
+     * @param array $primary
+     * @return string
+     */
+    public function compilePrimaryKey(string $table, array $primary): string
+    {
+        $sql = '';
+
+        if (!empty($primary['name'])) {
+            $sql .= 'CONSTRAINT ' . $this->wrapper->wrap($primary['name']) . ' ';
+        }
+
+        return $sql . 'PRIMARY KEY (' . $this->wrapper->columnize($primary['columns']) . ')';
+    }
+
+    /**
+     * Compile an ALTER TABLE ADD PRIMARY KEY statement.
+     *
+     * @param string $table
+     * @param array $primary
+     * @return string
+     */
+    public function compileAddPrimaryKey(string $table, array $primary): string
+    {
+        if ($this->isSQLite()) {
+            throw new SqliteAlterFailedException('SQLite does not support adding primary keys to existing tables');
+        }
+
+        $constraint = $this->compilePrimaryKey($table, $primary);
+
+        return "ALTER TABLE {$this->wrapper->wrapTable($table)} ADD {$constraint}";
     }
 
     /**
@@ -368,11 +438,6 @@ class Grammar implements GrammarContract
      */
     public function compileDropColumn(string $table, array $columns): string
     {
-        // SQLite doesn't support DROP COLUMN
-        if ($this->isSQLite()) {
-            throw new SqliteAlterFailedException('SQLite does not support dropping columns');
-        }
-
         return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
             implode(', ', array_map(fn($col) => "DROP COLUMN {$this->wrapper->wrapColumn($col)}", $columns));
     }
@@ -386,10 +451,32 @@ class Grammar implements GrammarContract
      */
     public function compileDropIndex(string $table, array $index): string
     {
-        $indexName = $this->generateIndexName($table, ['type' => $index['type'], 'columns' => $index['columns']]);
+        $indexName = $this->resolveIndexName($table, $index);
 
-        return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
-            "DROP INDEX {$this->wrapper->wrap($indexName)}";
+        return match ($this->driver) {
+            'mysql' => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP INDEX {$this->wrapper->wrap($indexName)}",
+            default => "DROP INDEX {$this->wrapper->wrap($indexName)}",
+        };
+    }
+
+    /**
+     * Compile a DROP PRIMARY KEY statement.
+     *
+     * @param string $table
+     * @param array $primary
+     * @return string
+     */
+    public function compileDropPrimaryKey(string $table, array $primary): string
+    {
+        if ($this->isSQLite()) {
+            throw new SqliteAlterFailedException('SQLite does not support dropping primary keys');
+        }
+
+        return match ($this->driver) {
+            'mysql' => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP PRIMARY KEY",
+            default => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP CONSTRAINT "
+                . $this->wrapper->wrap($primary['name'] ?? "{$table}_pkey"),
+        };
     }
 
     /**
@@ -406,10 +493,12 @@ class Grammar implements GrammarContract
             throw new SqliteAlterFailedException('SQLite does not support foreign key operations');
         }
 
-        $constraintName = "fk_{$fk['table']}_" . implode('_', $fk['columns']);
+        $constraintName = $fk['name'] ?? $this->makeForeignKeyName($table, $fk['columns']);
 
-        return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
-            "DROP CONSTRAINT {$this->wrapper->wrap($constraintName)}";
+        return "ALTER TABLE {$this->wrapper->wrapTable($table)} " . match ($this->driver) {
+            'mysql' => "DROP FOREIGN KEY {$this->wrapper->wrap($constraintName)}",
+            default => "DROP CONSTRAINT {$this->wrapper->wrap($constraintName)}",
+        };
     }
 
     /**
@@ -431,12 +520,89 @@ class Grammar implements GrammarContract
      */
     public function compileRenameColumn(string $table, string $from, string $to): string
     {
-        if ($this->isSQLite()) {
-            throw new SqliteAlterFailedException('SQLite requires special handling for column renames');
-        }
-
         return "ALTER TABLE {$this->wrapper->wrapTable($table)} " .
             "RENAME COLUMN {$this->wrapper->wrapColumn($from)} TO {$this->wrapper->wrapColumn($to)}";
+    }
+
+    /**
+     * Compile a floating point type with optional precision and scale.
+     *
+     * @param string $type
+     * @param array $parameters
+     * @return string
+     */
+    private function compileFloatingType(string $type, array $parameters): string
+    {
+        if (($parameters['precision'] ?? null) === null) {
+            return $type;
+        }
+
+        if (($parameters['scale'] ?? null) === null) {
+            return sprintf('%s(%d)', $type, $parameters['precision']);
+        }
+
+        return sprintf('%s(%d, %d)', $type, $parameters['precision'], $parameters['scale']);
+    }
+
+    /**
+     * Compile a type with optional precision.
+     *
+     * @param string $type
+     * @param int|null $precision
+     * @return string
+     */
+    private function compileTypeWithOptionalPrecision(string $type, ?int $precision): string
+    {
+        return $precision ? sprintf('%s(%d)', $type, $precision) : $type;
+    }
+
+    /**
+     * Quote a literal for schema default clauses.
+     *
+     * @param mixed $value
+     * @return string
+     */
+    private function quoteLiteral(mixed $value): string
+    {
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        if (is_array($value)) {
+            $value = json_encode($value);
+        }
+
+        return "'" . str_replace("'", "''", (string) $value) . "'";
+    }
+
+    /**
+     * Generate a conventional foreign key name.
+     *
+     * @param string $table
+     * @param array $columns
+     * @return string
+     */
+    private function makeForeignKeyName(string $table, array $columns): string
+    {
+        return $this->limitIdentifier($this->sanitizeIdentifierPart(
+            "{$table}_" . implode('_', $columns) . '_foreign'
+        ));
+    }
+
+    /**
+     * Resolve an explicit or generated index name.
+     *
+     * @param string $table
+     * @param array $index
+     * @return string
+     */
+    private function resolveIndexName(string $table, array $index): string
+    {
+        if (!empty($index['name'])) {
+            return $this->limitIdentifier($this->sanitizeIdentifierPart($index['name']));
+        }
+
+        return $this->generateIndexName($table, $index);
     }
 
     /**
@@ -457,9 +623,32 @@ class Grammar implements GrammarContract
         };
 
         $columnPart = implode('_', $index['columns']);
-        $name = "$prefix$columnPart";
+        $name = $this->sanitizeIdentifierPart("$prefix$columnPart");
 
         // Trim to database length limits
+        return $this->limitIdentifier($name);
+    }
+
+    /**
+     * Normalize generated identifier pieces.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function sanitizeIdentifierPart(string $value): string
+    {
+        $value = preg_replace('/[^\w]+/', '_', $value);
+        return trim($value, '_');
+    }
+
+    /**
+     * Limit generated identifiers to the current driver's max length.
+     *
+     * @param string $name
+     * @return string
+     */
+    private function limitIdentifier(string $name): string
+    {
         return substr($name, 0, match ($this->driver) {
             'mysql' => 64,
             'pgsql' => 63,

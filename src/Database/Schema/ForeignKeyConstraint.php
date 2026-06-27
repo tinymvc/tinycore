@@ -53,18 +53,34 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
     public string $onUpdate;
 
     /**
+     * The explicit constraint name.
+     *
+     * @var string|null
+     */
+    public ?string $name = null;
+
+    /**
      * Create a new foreign key constraint.
      *
      * @param  string|array  $columns
      * @return void
      */
-    public function __construct(string|array $columns)
+    public function __construct(string|array $columns, ?string $name = null)
     {
         $this->columns = (array) $columns;
+        $this->name = $name;
+    }
 
-        if (Schema::getGrammar()->isSQLite()) {
-            Schema::execute('PRAGMA foreign_keys = ON;');
-        }
+    /**
+     * Set the constraint name.
+     *
+     * @param string $name
+     * @return $this
+     */
+    public function name(string $name): self
+    {
+        $this->name = $name;
+        return $this;
     }
 
     /**

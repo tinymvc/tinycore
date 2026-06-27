@@ -36,14 +36,14 @@ use function sprintf;
  * @method QueryBuilder unless(mixed $value, callable $callback)
  * @method QueryBuilder column(string $column)
  * @method QueryBuilder from(string $table, ?string $alias = null)
- * @method QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
+ * @method QueryBuilder where(null|string|array|Closure $column = null, mixed $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
  * @method QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND')
  * @method QueryBuilder selectRaw(string $sql, array $bindings = [])
  * @method QueryBuilder whereIn(string $column, array $values)
  * @method array raw(string $sql, array $bindings = [])
  * 
  * @method static array raw(string $sql, array $bindings = [])
- * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
+ * @method static QueryBuilder where(null|string|array|Closure $column = null, mixed $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
  * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND')
  * @method static QueryBuilder whereIn(string $column, array $values)
  * @method static QueryBuilder when(mixed $value, callable $callback)
@@ -215,11 +215,11 @@ class DB implements DBContract
      * Prepares and executes an SQL statement with optional parameters and options.
      *
      * @param string $statement The SQL statement to execute.
-     * @param array $options Options for statement preparation.
      * @param array $params Parameters to bind to the SQL statement.
+     * @param array $options Options for statement preparation.
      * @return bool True on success, false on failure.
      */
-    public function statement(string $statement, array $options = [], array $params = []): bool
+    public function statement(string $statement, array $params = [], array $options = []): bool
     {
         $started = microtime(true);
         $startedMemory = memory_get_usage(true);
@@ -287,17 +287,40 @@ class DB implements DBContract
                 'column',
                 'from',
                 'where',
+                'orWhere',
+                'notWhere',
+                'orNotWhere',
                 'whereRaw',
+                'orWhereRaw',
                 'selectRaw',
                 'whereIn',
+                'whereNotIn',
+                'orWhereIn',
+                'orWhereNotIn',
+                'whereNull',
+                'whereNotNull',
+                'orWhereNull',
+                'orWhereNotNull',
+                'whereBetween',
+                'whereNotBetween',
+                'orWhereBetween',
+                'orWhereNotBetween',
+                'between',
+                'notBetween',
+                'orBetween',
+                'orNotBetween',
+                'like',
+                'notLike',
+                'orLike',
+                'orNotLike',
                 'max',
                 'min',
                 'sum',
                 'avg',
                 'raw'
-            ])
+            ], true)
         ) {
-            $query = app(QueryBuilder::class);
+            $query = new QueryBuilder($this);
             return $query->$name(...$args);
         }
 
@@ -389,7 +412,7 @@ class DB implements DBContract
     {
         return match ($this->getDriver()) {
             // create a sqlite data source name, sqlite.db filepath.
-            'sqlite' => sprintf('sqlite:%s', $this->config['file']),
+            'sqlite' => sprintf('sqlite:%s', $this->config['database'] ?? $this->config['path'] ?? $this->config['file'] ?? ':memory:'),
 
             /** create a server side data source name.
              * 

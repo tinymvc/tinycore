@@ -22,6 +22,14 @@ interface BlueprintContract
     public function id(string $name = 'id'): Column;
 
     /**
+     * Add an auto-incrementing integer primary key.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function increments(string $name): Column;
+
+    /**
      * Add a 'string' column to the blueprint.
      *
      * @param string $name The name of the column.
@@ -39,6 +47,30 @@ interface BlueprintContract
      * @return Column
      */
     public function integer(string $name): Column;
+
+    /**
+     * Add an unsigned integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function unsignedInteger(string $name): Column;
+
+    /**
+     * Add a small integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function smallInteger(string $name): Column;
+
+    /**
+     * Add a medium integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function mediumInteger(string $name): Column;
 
     /**
      * Add a 'text' column to the blueprint.
@@ -63,7 +95,7 @@ interface BlueprintContract
      *
      * @return Column
      */
-    public function timestamp(string $name): Column;
+    public function timestamp(string $name, int $precision = 0): Column;
 
     /**
      * Add a 'boolean' column to the blueprint.
@@ -84,6 +116,14 @@ interface BlueprintContract
     public function foreignId(string $name): ForeignKeyConstraint;
 
     /**
+     * Add a nullable 'foreignId' column to the blueprint.
+     *
+     * @param string $name The name of the column.
+     * @return ForeignKeyConstraint
+     */
+    public function nullableForeignId(string $name): ForeignKeyConstraint;
+
+    /**
      * Add a 'foreign' column to the blueprint.
      *
      * @param array|string $columns The column(s) to constrain.
@@ -91,7 +131,7 @@ interface BlueprintContract
      *
      * @return ForeignKeyConstraint
      */
-    public function foreign(array|string $columns, ?string $table = null): ForeignKeyConstraint;
+    public function foreign(array|string $columns, ?string $name = null): ForeignKeyConstraint;
 
     /**
      * Add a constrained 'foreign' column to the blueprint.
@@ -113,6 +153,30 @@ interface BlueprintContract
      * @return Column
      */
     public function decimal(string $name, int $precision = 8, int $scale = 2): Column;
+
+    /**
+     * Add a 'bigIncrements' column to the blueprint.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function bigIncrements(string $name = 'id'): Column;
+
+    /**
+     * Add a 'bigInteger' column to the blueprint.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function bigInteger(string $name): Column;
+
+    /**
+     * Add an unsigned big integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function unsignedBigInteger(string $name): Column;
 
     /**
      * Add a 'double' column to the blueprint.
@@ -191,7 +255,7 @@ interface BlueprintContract
      *
      * @return void
      */
-    public function primary($columns): void;
+    public function primary($columns, ?string $name = null): void;
 
     /**
      * Add a 'unique' index to the blueprint.
@@ -200,7 +264,7 @@ interface BlueprintContract
      *
      * @return void
      */
-    public function unique(string|array $columns): void;
+    public function unique(string|array $columns, ?string $name = null): void;
 
     /**
      * Add an 'index' to the blueprint.
@@ -209,7 +273,57 @@ interface BlueprintContract
      *
      * @return void
      */
-    public function index(string|array $columns): void;
+    public function index(string|array $columns, ?string $name = null): void;
+
+    /**
+     * Add a full text index to the blueprint.
+     *
+     * @param string|array $columns The columns to be indexed.
+     * @return void
+     */
+    public function fullText(string|array $columns, ?string $name = null): void;
+
+    /**
+     * Add a spatial index to the blueprint.
+     *
+     * @param string|array $columns The columns to be indexed.
+     * @param string|null $name The index name.
+     * @return void
+     */
+    public function spatialIndex(string|array $columns, ?string $name = null): void;
+
+    /**
+     * Drop an index from the blueprint.
+     *
+     * @param string|array $index The index name or columns.
+     * @return self
+     */
+    public function dropIndex(string|array $index): self;
+
+    /**
+     * Drop a unique index from the blueprint.
+     *
+     * @param string|array $index The index name or columns.
+     * @return self
+     */
+    public function dropUnique(string|array $index): self;
+
+    /**
+     * Drop a foreign key from the blueprint.
+     *
+     * @param string|array $index The foreign key name or columns.
+     * @return self
+     */
+    public function dropForeign(string|array $index): self;
+
+    /**
+     * Set the MySQL storage engine for the table.
+     *
+     * @param string $engine The engine name.
+     * @return self
+     */
+    public function engine(string $engine): self;
+
     /**
      * Compile the blueprint into a SQL statement.
      *
@@ -218,9 +332,23 @@ interface BlueprintContract
     public function compileCreate(): string;
 
     /**
+     * Compile the blueprint into SQL statements.
+     *
+     * @return array
+     */
+    public function compileCreateStatements(): array;
+
+    /**
      * Compile the blueprint into an ALTER TABLE statement.
      *
      * @return string
      */
     public function compileAlter(): string;
+
+    /**
+     * Compile the blueprint into ALTER TABLE SQL statements.
+     *
+     * @return array
+     */
+    public function compileAlterStatements(): array;
 }

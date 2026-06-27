@@ -7,6 +7,7 @@ use PDO;
 use Spark\Database\DB;
 use Spark\Database\Schema\Contracts\SchemaContract;
 use Spark\Support\Traits\Macroable;
+use function in_array;
 
 /**
  * Class Schema
@@ -37,9 +38,7 @@ class Schema implements SchemaContract
         $blueprint = new Blueprint($table);
         $callback($blueprint);
 
-        $sql = $blueprint->compileCreate();
-
-        self::execute($sql);
+        self::execute($blueprint->compileCreateStatements());
     }
 
     /**
@@ -72,9 +71,7 @@ class Schema implements SchemaContract
         $blueprint = new Blueprint($table);
         $callback($blueprint);
 
-        $sql = $blueprint->compileAlter();
-
-        self::execute($sql);
+        self::execute($blueprint->compileAlterStatements());
     }
 
     /**
@@ -100,6 +97,143 @@ class Schema implements SchemaContract
     }
 
     /**
+     * Rename a table.
+     *
+     * @param string $from The current table name.
+     * @param string $to The new table name.
+     * @return void
+     */
+    public static function rename(string $from, string $to): void
+    {
+        $wrapper = self::getGrammar()->getWrapper();
+
+        self::execute(sprintf(
+            'ALTER TABLE %s RENAME TO %s',
+            $wrapper->wrapTable($from),
+            $wrapper->wrapTable($to)
+        ));
+    }
+
+    /**
+     * Determine if a table exists.
+     *
+     * @param string $table The table name.
+     * @return bool
+     */
+    public static function hasTable(string $table): bool
+    {
+        $grammar = self::getGrammar();
+        $pdo = self::getConnection();
+
+        $sql = match ($grammar->getDriver()) {
+            'sqlite' => "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            'pgsql' => "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
+            default => "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
+        };
+
+        $statement = $pdo->prepare($sql);
+        $statement->execute([$table]);
+
+        return (bool) $statement->fetchColumn();
+    }
+
+    /**
+     * Determine if a table contains a column.
+     *
+     * @param string $table The table name.
+     * @param string $column The column name.
+     * @return bool
+     */
+    public static function hasColumn(string $table, string $column): bool
+    {
+        return in_array($column, self::getColumnListing($table), true);
+    }
+
+    /**
+     * Determine if a table contains all of the given columns.
+     *
+     * @param string $table The table name.
+     * @param array $columns The column names.
+     * @return bool
+     */
+    public static function hasColumns(string $table, array $columns): bool
+    {
+        $existing = self::getColumnListing($table);
+
+        foreach ($columns as $column) {
+            if (!in_array($column, $existing, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Get the column listing for a table.
+     *
+     * @param string $table The table name.
+     * @return array
+     */
+    public static function getColumnListing(string $table): array
+    {
+        $grammar = self::getGrammar();
+        $pdo = self::getConnection();
+
+        if ($grammar->isSQLite()) {
+            $statement = $pdo->query('PRAGMA table_info(' . $grammar->getWrapper()->wrapTable($table) . ')');
+            return array_column($statement->fetchAll(PDO::FETCH_ASSOC), 'name');
+        }
+
+        $sql = match ($grammar->getDriver()) {
+            'pgsql' => "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? ORDER BY ordinal_position",
+            default => "SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? ORDER BY ordinal_position",
+        };
+
+        $statement = $pdo->prepare($sql);
+        $statement->execute([$table]);
+
+        return $statement->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /**
+     * Enable foreign key constraints.
+     *
+     * @return bool
+     */
+    public static function enableForeignKeyConstraints(): bool
+    {
+        return self::setForeignKeyConstraints(true);
+    }
+
+    /**
+     * Disable foreign key constraints.
+     *
+     * @return bool
+     */
+    public static function disableForeignKeyConstraints(): bool
+    {
+        return self::setForeignKeyConstraints(false);
+    }
+
+    /**
+     * Run a callback with foreign key constraints disabled.
+     *
+     * @param Closure $callback
+     * @return mixed
+     */
+    public static function withoutForeignKeyConstraints(Closure $callback): mixed
+    {
+        self::disableForeignKeyConstraints();
+
+        try {
+            return $callback();
+        } finally {
+            self::enableForeignKeyConstraints();
+        }
+    }
+
+    /**
      * Executes a raw SQL statement against the database.
      *
      * This method runs the given SQL command using the current PDO connection.
@@ -107,10 +241,19 @@ class Schema implements SchemaContract
      *
      * @param string $sql The raw SQL statement to execute.
      */
-    public static function execute(string $sql): void
+    public static function execute(string|array $sql): void
     {
         $pdo = self::getConnection();
-        $pdo->exec($sql);
+
+        foreach ((array) $sql as $statement) {
+            $statement = trim($statement);
+
+            if ($statement === '') {
+                continue;
+            }
+
+            $pdo->exec($statement);
+        }
     }
 
     /**
@@ -141,5 +284,24 @@ class Schema implements SchemaContract
         return self::$grammar ??= new Grammar(
             self::getConnection()->getAttribute(PDO::ATTR_DRIVER_NAME)
         );
+    }
+
+    /**
+     * Toggle foreign key constraints for the current connection.
+     *
+     * @param bool $enabled
+     * @return bool
+     */
+    private static function setForeignKeyConstraints(bool $enabled): bool
+    {
+        $grammar = self::getGrammar();
+
+        $sql = match ($grammar->getDriver()) {
+            'sqlite' => 'PRAGMA foreign_keys = ' . ($enabled ? 'ON' : 'OFF'),
+            'pgsql' => 'SET CONSTRAINTS ALL ' . ($enabled ? 'IMMEDIATE' : 'DEFERRED'),
+            default => 'SET FOREIGN_KEY_CHECKS=' . ($enabled ? '1' : '0'),
+        };
+
+        return self::getConnection()->exec($sql) !== false;
     }
 }

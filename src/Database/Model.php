@@ -101,7 +101,7 @@ use function sprintf;
  * @method static mixed last($fields = null)
  * @method static false|Model find($value)
  * @method static Model findOrFail($value)
- * @method static bool destroy($value)
+ * @method static int destroy($value)
  * @method static array all($fields = null)
  * @method static array raw(string $sql, array $bindings = [])
  * @method static array pluck(string $column, ?string $key = null)
@@ -279,7 +279,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         $where = array_intersect_key($data, array_flip($uniqueBy));
-        $model = self::query()->where($where)->first();
+        $model = static::query()->where($where)->first();
         $data = array_merge($data, !is_array($values) ? $values->toArray() : $values);
 
         if ($model) {
@@ -303,7 +303,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public static function firstOrCreate(array|Arrayable $attributes, array|Arrayable $values = []): static
     {
-        $model = self::query()->where($attributes)->first();
+        $model = static::query()->where($attributes)->first();
 
         if ($model) {
             return $model;
@@ -314,7 +314,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             !is_array($values) ? $values->toArray() : $values
         );
 
-        return self::create($attributes);
+        return static::create($attributes);
     }
 
     /**
@@ -326,7 +326,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public static function firstOrNew(array|Arrayable $attributes, array|Arrayable $values = []): static
     {
-        $model = self::query()->where($attributes)->first();
+        $model = static::query()->where($attributes)->first();
 
         if ($model) {
             return $model;
@@ -488,6 +488,16 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             elseif ($value instanceof \Spark\Url) {
                 $data[$key] = $value->getUrl();
             }
+            // Handle array-like values into JSON strings.
+            elseif ($value instanceof Arrayable) {
+                $data[$key] = json_encode($value->toArray());
+            }
+            elseif ($value instanceof Jsonable) {
+                $data[$key] = $value->toJson();
+            }
+            elseif (is_array($value)) {
+                $data[$key] = json_encode($value);
+            }
             // Handle Scalar values
             elseif ($value === null || is_int($value) || is_bool($value)) {
                 $data[$key] = $value;
@@ -540,7 +550,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function hasPrimaryValue(): bool
     {
-        return !empty($this->primaryValue());
+        $value = $this->primaryValue();
+
+        return $value !== null && $value !== '';
     }
 
     /**
@@ -868,7 +880,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function get(string $name, $default = null): mixed
     {
         if (!str_contains($name, '.')) {
-            return $this->offsetGet($name) ?: $default;
+            return $this->offsetGet($name) ?? $default;
         }
 
         $segments = explode('.', $name);
@@ -882,11 +894,11 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $rootValue = $this->getRelation($rootKey);
         }
 
-        if ($rootValue) {
-            return data_get(array_filter($rootValue), $path, $default);
+        if ($rootValue !== null) {
+            return data_get($rootValue, $path, $default);
         }
 
-        return data_get(array_filter($this->attributes), $name, $default);
+        return data_get($this->attributes, $name, $default);
     }
 
     /**
@@ -1018,6 +1030,17 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         // If the model is dirty, it must have changes and the current 
         // hash should differ from the original hash.
         return $dirty && !$this->wasUpdated() && $currentHash !== $originalHash;
+    }
+
+    /**
+     * Check if the model or a specific field has no unsaved changes.
+     *
+     * @param string|null $field
+     * @return bool
+     */
+    public function isClean(null|string $field = null): bool
+    {
+        return !$this->isDirty($field);
     }
 
     /**
@@ -1312,7 +1335,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return static::staticMacroCall($name, $arguments);
         }
 
-        return self::query()->$name(...$arguments);
+        return static::query()->$name(...$arguments);
     }
 
     /**
@@ -1370,8 +1393,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         if ($this->hasPrimaryValue() && isset($this->tracking['__hash'])) {
             // Track the specific nested path that was changed
             $currentValue = data_get($this->attributes, $path);
-            if ($currentValue !== $value) {
-                return; // No change, so no need to track
+            if ($currentValue === $value) {
+                return; // No change, so no need to track or write.
             }
 
             // Extract the root key (e.g., 'meta' from 'meta.country')

@@ -52,6 +52,11 @@ class Blueprint implements BlueprintContract
     private array $renames = [];
 
     /**
+     * @var string|null The storage engine for MySQL tables.
+     */
+    private ?string $engine = null;
+
+    /**
      * @var string The character set for the blueprint.
      */
     private string $charset;
@@ -78,7 +83,18 @@ class Blueprint implements BlueprintContract
      */
     public function id(string $name = 'id'): Column
     {
-        return $this->addColumn('id', $name);
+        return $this->bigIncrements($name);
+    }
+
+    /**
+     * Add an auto-incrementing integer primary key.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function increments(string $name): Column
+    {
+        return $this->addColumn('increments', $name);
     }
 
     /**
@@ -105,6 +121,61 @@ class Blueprint implements BlueprintContract
     }
 
     /**
+     * Add an unsigned integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function unsignedInteger(string $name): Column
+    {
+        return $this->integer($name)->unsigned();
+    }
+
+    /**
+     * Add a small integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function smallInteger(string $name): Column
+    {
+        return $this->addColumn('smallInteger', $name);
+    }
+
+    /**
+     * Add an unsigned small integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function unsignedSmallInteger(string $name): Column
+    {
+        return $this->smallInteger($name)->unsigned();
+    }
+
+    /**
+     * Add a medium integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function mediumInteger(string $name): Column
+    {
+        return $this->addColumn('mediumInteger', $name);
+    }
+
+    /**
+     * Add an unsigned medium integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function unsignedMediumInteger(string $name): Column
+    {
+        return $this->mediumInteger($name)->unsigned();
+    }
+
+    /**
      * Add a 'tinyInteger' column to the blueprint.
      *
      * @param string $name The name of the column.
@@ -113,6 +184,39 @@ class Blueprint implements BlueprintContract
     public function tinyInteger(string $name): Column
     {
         return $this->addColumn('tinyInteger', $name);
+    }
+
+    /**
+     * Add an unsigned tiny integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function unsignedTinyInteger(string $name): Column
+    {
+        return $this->tinyInteger($name)->unsigned();
+    }
+
+    /**
+     * Add an auto-incrementing tiny integer primary key.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function tinyIncrements(string $name): Column
+    {
+        return $this->addColumn('tinyIncrements', $name);
+    }
+
+    /**
+     * Add an auto-incrementing small integer primary key.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function smallIncrements(string $name): Column
+    {
+        return $this->addColumn('smallIncrements', $name);
     }
 
     /**
@@ -143,9 +247,21 @@ class Blueprint implements BlueprintContract
      * @param string $name The name of the column.
      * @return Column
      */
-    public function timestamp(string $name): Column
+    public function timestamp(string $name, int $precision = 0): Column
     {
-        return $this->addColumn('timestamp', $name);
+        return $this->addColumn('timestamp', $name, compact('precision'));
+    }
+
+    /**
+     * Add a nullable timestamp column for soft deletes.
+     *
+     * @param string $name The name of the column.
+     * @param int $precision The precision of the timestamp.
+     * @return Column
+     */
+    public function nullableTimestamp(string $name, int $precision = 0): Column
+    {
+        return $this->timestamp($name, $precision)->nullable();
     }
 
     /**
@@ -167,7 +283,7 @@ class Blueprint implements BlueprintContract
      */
     public function foreignId(string $name): ForeignKeyConstraint
     {
-        $this->integer($name)->required();
+        $this->unsignedBigInteger($name)->required();
         return $this->foreign($name);
     }
 
@@ -179,7 +295,7 @@ class Blueprint implements BlueprintContract
      */
     public function nullableForeignId(string $name): ForeignKeyConstraint
     {
-        $this->integer($name)->nullable();
+        $this->unsignedBigInteger($name)->nullable();
         return $this->foreign($name);
     }
 
@@ -190,13 +306,9 @@ class Blueprint implements BlueprintContract
      * @param string|null $table The name of the table.
      * @return ForeignKeyConstraint
      */
-    public function foreign(array|string $columns, ?string $table = null): ForeignKeyConstraint
+    public function foreign(array|string $columns, ?string $name = null): ForeignKeyConstraint
     {
-        $constraint = new ForeignKeyConstraint($columns);
-
-        if ($table) {
-            $constraint->on($table);
-        }
+        $constraint = new ForeignKeyConstraint($columns, $name);
 
         $this->foreignKeys[] = $constraint;
         return $constraint;
@@ -222,10 +334,7 @@ class Blueprint implements BlueprintContract
      */
     public function bigIncrements(string $name = 'id'): Column
     {
-        $column = $this->addColumn('bigIncrements', $name);
-        $this->primary($name);
-
-        return $column;
+        return $this->addColumn('bigIncrements', $name);
     }
 
     /**
@@ -237,6 +346,17 @@ class Blueprint implements BlueprintContract
     public function bigInteger(string $name): Column
     {
         return $this->addColumn('bigInteger', $name);
+    }
+
+    /**
+     * Add an unsigned big integer column.
+     *
+     * @param string $name The name of the column.
+     * @return Column
+     */
+    public function unsignedBigInteger(string $name): Column
+    {
+        return $this->bigInteger($name)->unsigned();
     }
 
     /**
@@ -276,17 +396,6 @@ class Blueprint implements BlueprintContract
     public function float(string $name, ?int $precision = null, ?int $scale = null): Column
     {
         return $this->addColumn('float', $name, compact('precision', 'scale'));
-    }
-
-    /**
-     * Add an 'unsignedBigInteger' column to the blueprint.
-     *
-     * @param string $name The name of the column.
-     * @return Column
-     */
-    public function unsignedBigInteger(string $name): Column
-    {
-        return $this->bigInteger($name)->unsigned();
     }
 
     /**
@@ -449,9 +558,9 @@ class Blueprint implements BlueprintContract
      * @param string|array $columns The column(s) to set as primary key.
      * @return void
      */
-    public function primary($columns): void
+    public function primary($columns, ?string $name = null): void
     {
-        $this->primaryKeys[] = (array) $columns;
+        $this->primaryKeys[] = ['columns' => (array) $columns, 'name' => $name];
     }
 
     /**
@@ -460,10 +569,11 @@ class Blueprint implements BlueprintContract
      * @param string|array $columns The column(s) to set as unique index.
      * @return void
      */
-    public function unique(string|array $columns): void
+    public function unique(string|array $columns, ?string $name = null): void
     {
         $columns = is_array($columns) ? $columns : func_get_args();
-        $this->indexes[] = ['type' => 'unique', 'columns' => $columns];
+        $name = is_array($columns) ? $name : ($columns[1] ?? null);
+        $this->indexes[] = ['type' => 'unique', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
     }
 
     /**
@@ -472,10 +582,49 @@ class Blueprint implements BlueprintContract
      * @param string|array $columns The column(s) to set as index.
      * @return void
      */
-    public function index(string|array $columns): void
+    public function index(string|array $columns, ?string $name = null): void
     {
         $columns = is_array($columns) ? $columns : func_get_args();
-        $this->indexes[] = ['type' => 'index', 'columns' => $columns];
+        $name = is_array($columns) ? $name : ($columns[1] ?? null);
+        $this->indexes[] = ['type' => 'index', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
+    }
+
+    /**
+     * Add a full text index to the blueprint.
+     *
+     * @param string|array $columns The column(s) to set as full text index.
+     * @return void
+     */
+    public function fullText(string|array $columns, ?string $name = null): void
+    {
+        $columns = is_array($columns) ? $columns : func_get_args();
+        $name = is_array($columns) ? $name : ($columns[1] ?? null);
+        $this->indexes[] = ['type' => 'fulltext', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
+    }
+
+    /**
+     * Add a spatial index to the blueprint.
+     *
+     * @param string|array $columns The column(s) to set as spatial index.
+     * @return void
+     */
+    public function spatialIndex(string|array $columns, ?string $name = null): void
+    {
+        $columns = is_array($columns) ? $columns : func_get_args();
+        $name = is_array($columns) ? $name : ($columns[1] ?? null);
+        $this->indexes[] = ['type' => 'spatial', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
+    }
+
+    /**
+     * Set the storage engine for MySQL tables.
+     *
+     * @param string $engine The storage engine to use.
+     * @return self
+     */
+    public function engine(string $engine): self
+    {
+        $this->engine = $engine;
+        return $this;
     }
 
     /**
@@ -509,6 +658,16 @@ class Blueprint implements BlueprintContract
      */
     public function compileCreate(): string
     {
+        return implode("\n", $this->compileCreateStatements());
+    }
+
+    /**
+     * Compile the blueprint into SQL statements.
+     *
+     * @return array
+     */
+    public function compileCreateStatements(): array
+    {
         $grammar = Schema::getGrammar();
         $elements = [];
 
@@ -519,25 +678,26 @@ class Blueprint implements BlueprintContract
 
         // Add primary keys
         foreach ($this->primaryKeys as $primaryKey) {
-            $elements[] = 'PRIMARY KEY (' . $grammar->getWrapper()->columnize($primaryKey) . ')';
+            $elements[] = $grammar->compilePrimaryKey($this->table, $primaryKey);
         }
 
         // Add foreign keys
         foreach ($this->foreignKeys as $foreignKey) {
-            $elements[] = $grammar->compileForeignKey($foreignKey);
+            $elements[] = $grammar->compileForeignKey($foreignKey, $this->table);
         }
 
-        $collation = '';
+        $options = '';
         if ($grammar->isMySQL()) {
-            $collation = sprintf(
-                " DEFAULT CHARSET=%s COLLATE=%s",
+            $options = sprintf(
+                "%s DEFAULT CHARSET=%s COLLATE=%s",
+                $this->engine ? " ENGINE={$this->engine}" : '',
                 $this->charset ?? config('database.charset', 'utf8mb4'),
                 $this->collation ?? config('database.collation', 'utf8mb4_general_ci')
             );
         }
 
         $statements = [
-            "CREATE TABLE " . $grammar->getWrapper()->wrapTable($this->table) . " (\n" . implode(",\n", $elements) . "\n)$collation;"
+            "CREATE TABLE " . $grammar->getWrapper()->wrapTable($this->table) . " (\n" . implode(",\n", $elements) . "\n)$options"
         ];
 
         // Add secondary indexes
@@ -545,7 +705,7 @@ class Blueprint implements BlueprintContract
             $statements[] = $grammar->compileIndex($this->table, $index);
         }
 
-        return implode("\n", $statements);
+        return $statements;
     }
 
     /**
@@ -568,11 +728,11 @@ class Blueprint implements BlueprintContract
      * @param string|null $type The type of index to drop.
      * @return self
      */
-    public function dropIndex($columns, ?string $type = null): self
+    public function dropIndex($index, ?string $type = null): self
     {
         $type ??= 'index';
 
-        $this->drops[] = ['type' => $type, 'columns' => (array) $columns];
+        $this->drops[] = ['type' => $type, ...$this->normalizeDropIndex($index)];
         return $this;
     }
 
@@ -582,9 +742,43 @@ class Blueprint implements BlueprintContract
      * @param string|array $columns The name(s) of the unique index(es) to drop.
      * @return self
      */
-    public function dropUnique($columns): self
+    public function dropUnique($index): self
     {
-        return $this->dropIndex($columns, 'unique');
+        return $this->dropIndex($index, 'unique');
+    }
+
+    /**
+     * Drop a primary key from the blueprint.
+     *
+     * @param string|array|null $index The primary key name or columns.
+     * @return self
+     */
+    public function dropPrimary(string|array|null $index = null): self
+    {
+        $this->drops[] = ['type' => 'primary', ...($index === null ? ['columns' => [], 'name' => null] : $this->normalizeDropIndex($index))];
+        return $this;
+    }
+
+    /**
+     * Drop a full text index from the blueprint.
+     *
+     * @param string|array $index The index name or columns.
+     * @return self
+     */
+    public function dropFullText(string|array $index): self
+    {
+        return $this->dropIndex($index, 'fulltext');
+    }
+
+    /**
+     * Drop a spatial index from the blueprint.
+     *
+     * @param string|array $index The index name or columns.
+     * @return self
+     */
+    public function dropSpatialIndex(string|array $index): self
+    {
+        return $this->dropIndex($index, 'spatial');
     }
 
     /**
@@ -594,9 +788,9 @@ class Blueprint implements BlueprintContract
      * @param string $onTable The name of the table that has the foreign key constraint.
      * @return self
      */
-    public function dropForeign($columns, $onTable): self
+    public function dropForeign($index): self
     {
-        $this->drops[] = ['type' => 'foreign', 'table' => $onTable, 'columns' => (array) $columns];
+        $this->drops[] = ['type' => 'foreign', ...$this->normalizeDropIndex($index)];
         return $this;
     }
 
@@ -620,6 +814,16 @@ class Blueprint implements BlueprintContract
      */
     public function compileAlter(): string
     {
+        return implode(";\n", $this->compileAlterStatements());
+    }
+
+    /**
+     * Compile the blueprint into ALTER TABLE SQL statements.
+     *
+     * @return array
+     */
+    public function compileAlterStatements(): array
+    {
         $grammar = Schema::getGrammar();
         $statements = [];
 
@@ -630,6 +834,10 @@ class Blueprint implements BlueprintContract
         // Add indexes
         foreach ($this->indexes as $index) {
             $statements[] = $grammar->compileIndex($this->table, $index);
+        }
+
+        foreach ($this->primaryKeys as $primaryKey) {
+            $statements[] = $grammar->compileAddPrimaryKey($this->table, $primaryKey);
         }
 
         // Add foreign keys
@@ -646,12 +854,10 @@ class Blueprint implements BlueprintContract
         }
 
         // Remove trailing semicolons from statements to ensure proper concatenation
-        $statements = array_map(
+        return array_filter(array_map(
             fn($stmt) => rtrim($stmt, ';'),
             $statements
-        );
-
-        return implode(";\n", $statements);
+        ));
     }
 
     /**
@@ -667,10 +873,36 @@ class Blueprint implements BlueprintContract
         $column = new Column($name, $type, $parameters);
         $this->columns[] = $column;
 
-        if ($type === 'id') {
-            $this->primary($name);
+        return $column;
+    }
+
+    /**
+     * Normalize columns from Laravel-style variadic calls.
+     *
+     * @param array $columns
+     * @return array
+     */
+    private function normalizeColumns(array $columns): array
+    {
+        if (isset($columns[1]) && is_string($columns[1])) {
+            return [$columns[0]];
         }
 
-        return $column;
+        return $columns;
+    }
+
+    /**
+     * Normalize drop index input into columns or an explicit name.
+     *
+     * @param string|array $index
+     * @return array
+     */
+    private function normalizeDropIndex(string|array $index): array
+    {
+        if (is_array($index)) {
+            return ['columns' => $index, 'name' => null];
+        }
+
+        return ['columns' => [], 'name' => $index];
     }
 }

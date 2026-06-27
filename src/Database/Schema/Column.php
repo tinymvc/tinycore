@@ -39,9 +39,9 @@ class Column implements ColumnContract
      *
      * @return self
      */
-    public function nullable(): self
+    public function nullable(bool $value = true): self
     {
-        $this->modifiers[] = 'nullable';
+        $this->modifiers[] = $value ? 'nullable' : 'required';
         return $this;
     }
 
@@ -64,9 +64,9 @@ class Column implements ColumnContract
      *
      * @return self
      */
-    public function required(): self
+    public function required(bool $value = true): self
     {
-        $this->modifiers[] = 'required';
+        $this->modifiers[] = $value ? 'required' : 'nullable';
         return $this;
     }
 
@@ -193,9 +193,13 @@ class Column implements ColumnContract
         foreach ($this->modifiers as $modifier) {
             if (is_array($modifier)) {
                 $key = key($modifier);
-                $sql[] = $grammar->mapModifier($key, $modifier[$key]);
+                $mapped = $grammar->mapModifier($key, $modifier[$key]);
             } else {
-                $sql[] = $grammar->mapModifier($modifier);
+                $mapped = $grammar->mapModifier($modifier);
+            }
+
+            if ($mapped !== '') {
+                $sql[] = $mapped;
             }
         }
 

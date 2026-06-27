@@ -408,7 +408,7 @@ trait Castable
      */
     protected function getCustomCastInstance(string $key): CastsAttributes
     {
-        if ($this->isCustomCast($key)) {
+        if (!$this->isCustomCast($key)) {
             throw new \InvalidArgumentException("No custom cast defined for attribute: {$key}");
         }
 
