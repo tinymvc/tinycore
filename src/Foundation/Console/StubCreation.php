@@ -8,6 +8,7 @@ use Spark\Support\Pluralizer;
 use Spark\Support\Str;
 use Spark\Utils\FileManager;
 use function is_array;
+use function is_string;
 
 /**
  * Class StubCreation
@@ -34,14 +35,24 @@ class StubCreation
      */
     public static function create(string $name, array $stubConfig): void
     {
+        if (!isset($stubConfig['stub'], $stubConfig['destination'])) {
+            throw new RuntimeException('Invalid stub configuration: stub and destination are required');
+        }
+
         // Load the stub file contents
-        $stub = FileManager::get($stubConfig['stub']);
+        $stub = FileManager::get((string) $stubConfig['stub']);
+        if ($stub === false) {
+            throw new RuntimeException("Unable to read stub file: {$stubConfig['stub']}");
+        }
 
         // Perform replacements in the stub content
         $stub = self::replacement($name, $stub, $stubConfig['replacements'] ?? []);
 
         // Determine the destination path and replace placeholders
-        $destination = root_dir(self::replacement($name, $stubConfig['destination']));
+        $destination = root_dir(self::replacement($name, (string) $stubConfig['destination']));
+        if (!is_string($destination) || $destination === '') {
+            throw new RuntimeException('Invalid stub destination generated');
+        }
 
         // Check if the file already exists and prompt for override confirmation
         if (FileManager::isFile($destination)) {
@@ -55,7 +66,10 @@ class StubCreation
         }
 
         // Create directory if it doesn't exist
-        FileManager::ensureDirectoryWritable(dirname($destination));
+        $directory = dirname($destination);
+        if ($directory !== '' && $directory !== '.') {
+            FileManager::ensureDirectoryWritable($directory);
+        }
 
         // Write the stub content to the destination file
         if (FileManager::put($destination, $stub)) {
@@ -147,12 +161,15 @@ class StubCreation
         $contents = FileManager::get($destination);
 
         // Find the array start
-        if (!preg_match('/return\s*(\[.*\]);/sU', $contents, $matches)) {
+        if ($contents === false || !preg_match('/return\s*(\[.*\]);/sU', $contents, $matches)) {
             throw new RuntimeException("Could not find return array in {$destination}");
         }
 
         $arrayContent = rtrim($matches[1]);
         $arrayContent = preg_replace('/\]\s*$/', '', $arrayContent); // remove closing bracket
+        if (!is_string($arrayContent)) {
+            throw new RuntimeException("Unable to parse return array in {$destination}");
+        }
 
         // Add new array element to the end
         if ($key !== null) {
@@ -165,7 +182,12 @@ class StubCreation
 
         // Replace in original contents
         $newContents = preg_replace('/return\s*\[.*\];/sU', "return {$arrayContent};", $contents);
+        if ($newContents === null || $newContents === $contents) {
+            throw new RuntimeException("Unable to update return array in {$destination}");
+        }
 
-        FileManager::put($destination, $newContents);
+        if (FileManager::put($destination, $newContents) === false) {
+            throw new RuntimeException("Unable to write updated array in {$destination}");
+        }
     }
 }

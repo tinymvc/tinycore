@@ -105,6 +105,9 @@ class Process implements \Stringable
         $start = microtime(true);
         $env = empty($this->env) ? null : [...$_ENV, ...$this->env];
         $options = $this->procOptions();
+        $pipes = [];
+        $process = null;
+        $timedOut = false;
 
         $process = proc_open(
             $this->command,
@@ -120,52 +123,62 @@ class Process implements \Stringable
         }
 
         if ($this->input !== null) {
-            fwrite($pipes[0], $this->input);
+            @fwrite($pipes[0], $this->input);
         }
         fclose($pipes[0]);
 
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-        stream_set_read_buffer($pipes[1], 0);
-        stream_set_read_buffer($pipes[2], 0);
+        @stream_set_blocking($pipes[1], false);
+        @stream_set_blocking($pipes[2], false);
+        @stream_set_read_buffer($pipes[1], 0);
+        @stream_set_read_buffer($pipes[2], 0);
 
         $out = '';
         $err = '';
-        $timedOut = false;
-
-        while (true) {
-            if ($this->timeout !== null && (microtime(true) - $start) > $this->timeout) {
-                $this->terminate($process);
-                $timedOut = true;
-                break;
-            }
-
-            foreach ([$pipes[1], $pipes[2]] as $stream) {
-                $chunk = @fread($stream, 65_536);
-                if ($chunk !== '' && $chunk !== false) {
-                    $stream === $pipes[1] ? $out .= $chunk : $err .= $chunk;
+        try {
+            while (true) {
+                if ($this->timeout !== null && (microtime(true) - $start) > $this->timeout) {
+                    $this->terminate($process);
+                    $timedOut = true;
+                    break;
                 }
+
+                foreach ([$pipes[1], $pipes[2]] as $stream) {
+                    $chunk = @fread($stream, 65_536);
+                    if ($chunk !== '' && $chunk !== false) {
+                        $stream === $pipes[1] ? $out .= $chunk : $err .= $chunk;
+                    }
+                }
+
+                $status = proc_get_status($process);
+                if (($status['running'] ?? false) === false && feof($pipes[1]) && feof($pipes[2])) {
+                    break;
+                }
+
+                usleep(20_000);
             }
 
-            $running = proc_get_status($process)['running'];
-            if (!$running && feof($pipes[1]) && feof($pipes[2])) {
-                break;
+            // Final drain
+            $out .= (string) stream_get_contents($pipes[1]);
+            $err .= (string) stream_get_contents($pipes[2]);
+        } finally {
+            $this->closePipe($pipes[0] ?? null);
+            $this->closePipe($pipes[1] ?? null);
+            $this->closePipe($pipes[2] ?? null);
+
+            if (is_resource($process)) {
+                $status = proc_get_status($process);
+                if ($status !== false && ($status['running'] ?? false)) {
+                    $this->terminate($process);
+                }
+
+                $this->exitCode = proc_close($process);
             }
 
-            usleep(20_000);
+            $this->executionTime = microtime(true) - $start;
         }
 
-        // Final drain
-        $out .= stream_get_contents($pipes[1]);
-        $err .= stream_get_contents($pipes[2]);
-
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-
-        $this->exitCode = proc_close($process);
         $this->output = $out;
         $this->errorOutput = $err;
-        $this->executionTime = microtime(true) - $start;
 
         if ($timedOut) {
             throw new ProcessTimedOutException(
@@ -182,6 +195,7 @@ class Process implements \Stringable
         $env = empty($this->env) ? null : [...$_ENV, ...$this->env];
         $pipes = [];
         $options = $this->procOptions();
+        $process = null;
 
         $process = proc_open(
             $this->command,
@@ -196,18 +210,44 @@ class Process implements \Stringable
             throw new ProcessFailedException("Failed to start: {$this->stringifyCommand()}");
         }
 
-        while (proc_get_status($process)['running']) {
-            if ($this->timeout !== null && (microtime(true) - $start) > $this->timeout) {
-                $this->terminate($process);
-                throw new ProcessTimedOutException(
-                    "Process timed out after {$this->timeout}s: {$this->stringifyCommand()}"
-                );
+        $timedOut = false;
+        try {
+            while (true) {
+                $status = proc_get_status($process);
+                if (($status['running'] ?? false) === false) {
+                    break;
+                }
+
+                if ($this->timeout !== null && (microtime(true) - $start) > $this->timeout) {
+                    $this->terminate($process);
+                    $timedOut = true;
+                    break;
+                }
+
+                usleep(10_000);
             }
-            usleep(10_000);
+        } finally {
+            $this->closePipe($pipes[0] ?? null);
+            $this->closePipe($pipes[1] ?? null);
+            $this->closePipe($pipes[2] ?? null);
+
+            if (is_resource($process)) {
+                $status = proc_get_status($process);
+                if ($status !== false && ($status['running'] ?? false)) {
+                    $this->terminate($process);
+                }
+
+                $this->exitCode = proc_close($process);
+            }
+
+            $this->executionTime = microtime(true) - $start;
         }
 
-        $this->exitCode = proc_close($process);
-        $this->executionTime = microtime(true) - $start;
+        if ($timedOut) {
+            throw new ProcessTimedOutException(
+                "Process timed out after {$this->timeout}s: {$this->stringifyCommand()}"
+            );
+        }
 
         return $this;
     }
@@ -221,6 +261,13 @@ class Process implements \Stringable
         usleep(200_000);
         if (proc_get_status($process)['running']) {
             proc_terminate($process, $signalKill);
+        }
+    }
+
+    private function closePipe(mixed $pipe): void
+    {
+        if (is_resource($pipe)) {
+            @fclose($pipe);
         }
     }
 

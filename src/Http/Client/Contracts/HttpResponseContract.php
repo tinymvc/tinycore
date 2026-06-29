@@ -60,9 +60,11 @@ interface HttpResponseContract
     /**
      * Get the JSON-decoded response body.
      *
-     * @return array The JSON-decoded response body.
+     * @param string|null $key Optional dot-notated key.
+     * @param mixed $default Optional default for missing key.
+     * @return mixed The JSON-decoded response body or a nested value.
      */
-    public function json(): array;
+    public function json(?string $key = null, mixed $default = null): mixed;
 
     /**
      * Get the response body as a string.

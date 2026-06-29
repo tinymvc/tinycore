@@ -61,7 +61,7 @@ class Validator implements ValidatorContract
     {
         $validator = new static();
         if ($rules !== null) {
-            $inputData = $data ?: request()->all();
+            $inputData = $data === null ? request()->all() : $data;
             $validator->validate($rules, $inputData);
         }
         return $validator;
@@ -79,24 +79,35 @@ class Validator implements ValidatorContract
     public function validate(array $rules, array $inputData): bool|Input
     {
         $validData = [];
+        $this->errors = [];
+
         foreach ($rules as $field => $fieldRules) {
+            $fieldRules = $this->normalizeFieldRules($fieldRules);
             $value = $inputData[$field] ?? null;
+            $fieldExists = array_key_exists($field, $inputData);
             $valid = true;
 
-            if (is_string($fieldRules)) {
-                $fieldRules = array_map('trim', explode('|', $fieldRules));
+            if (empty($fieldRules)) {
+                $validData[$field] = $value;
+                continue;
             }
-
-            // Check if field is not nullable
-            $is_not_nullable = $this->isNotNullable($fieldRules);
 
             // Check if field has numeric validation rules
             $is_numeric_field = $this->hasNumericValidation($fieldRules);
 
             // Loop through field rules
             foreach ($fieldRules as $rule) {
+                if (!is_string($rule)) {
+                    continue;
+                }
+
+                $rule = strtolower(trim($rule));
+                if ($rule === '') {
+                    continue;
+                }
+
                 // Parse rule name and parameters
-                $ruleName = $rule;
+                $ruleName = strtolower($rule);
                 $ruleParams = [];
                 if (str_contains($rule, ':')) {
                     [$ruleName, $ruleParams] = array_map('trim', explode(':', $rule, 2));
@@ -106,66 +117,82 @@ class Validator implements ValidatorContract
                 // Check if value is valid
                 $has_valid_value = $this->hasValidValue($value, $is_numeric_field);
 
+                // If the value is absent/empty and this rule is not one of the rules that should
+                // run on empty values, skip validation (Laravel-like behavior).
+                $canRunOnEmpty = in_array($ruleName, [
+                    'required',
+                    'required_if',
+                    'required_unless',
+                    'present',
+                    'filled',
+                    'prohibited',
+                    'nullable'
+                ], true);
+
+                if (!$has_valid_value && !$canRunOnEmpty) {
+                    continue;
+                }
+
                 // Apply validation rule
                 $valid = match ($ruleName) {
                     'required' => $has_valid_value,
                     'required_if' => $this->validateRequiredIf($ruleParams, $inputData, $has_valid_value),
                     'required_unless' => $this->validateRequiredUnless($ruleParams, $inputData, $has_valid_value),
-                    'email', 'mail' => ($has_valid_value || $is_not_nullable) ? filter_var($value, FILTER_VALIDATE_EMAIL) !== false : true,
-                    'url', 'link' => ($has_valid_value || $is_not_nullable) ? filter_var($value, FILTER_VALIDATE_URL) !== false : true,
-                    'number', 'numeric', 'int', 'integer' => ($has_valid_value || $is_not_nullable) ? is_numeric($value) : true,
-                    'array', 'list' => ($has_valid_value || $is_not_nullable) ? is_array($value) : true,
-                    'text', 'char', 'string' => ($has_valid_value || $is_not_nullable) ? is_string($value) : true,
-                    'min', 'minimum' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? $this->compareMin($value, $ruleParams[0], $is_numeric_field) : true,
-                    'max', 'maximum' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? $this->compareMax($value, $ruleParams[0], $is_numeric_field) : true,
-                    'length', 'size' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? $this->compareSize($value, $ruleParams[0], $is_numeric_field) : true,
-                    'equal', 'same', 'same_as' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? $this->validateEqual($value, $inputData[$ruleParams[0]] ?? null) : true,
-                    'confirmed' => ($has_valid_value || $is_not_nullable) ? $value == ($inputData["{$field}_confirmation"] ?? null) : true,
-                    'in' => ($has_valid_value || $is_not_nullable) ? $this->validateIn($value, $ruleParams) : true,
-                    'not_in' => ($has_valid_value || $is_not_nullable) ? !$this->validateIn($value, $ruleParams) : true,
-                    'regex' => ($has_valid_value || $is_not_nullable) ? $this->validateRegex($value, $ruleParams) : true,
-                    'unique' => ($has_valid_value || $is_not_nullable) ? $this->validateUnique($value, $ruleParams, $field) : true,
-                    'exists' => ($has_valid_value || $is_not_nullable) ? $this->validateExists($value, $ruleParams, $field) : true,
-                    'not_exists' => ($has_valid_value || $is_not_nullable) ? $this->validateNotExists($value, $ruleParams, $field) : true,
-                    'boolean', 'bool' => ($has_valid_value || $is_not_nullable) ? in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false', 'TRUE', 'FALSE', 'on', 'off', 'yes', 'no', 'YES', 'NO'], true) : true,
-                    'float', 'decimal' => ($has_valid_value || $is_not_nullable) ? (is_numeric($value) && (str_contains((string) $value, '.') || str_contains((string) $value, 'e') || str_contains((string) $value, 'E'))) : true,
-                    'alpha' => ($has_valid_value || $is_not_nullable) ? preg_match('/^[\pL]+$/u', $value) : true,
-                    'alpha_num', 'alphanumeric' => ($has_valid_value || $is_not_nullable) ? preg_match('/^[\pL\pN]+$/u', $value) : true,
-                    'alpha_dash' => ($has_valid_value || $is_not_nullable) ? preg_match('/^[a-zA-Z0-9_-]+$/', $value) : true,
-                    'digits' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) == (int) $ruleParams[0] : true,
-                    'digits_between' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0], $ruleParams[1]) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] && strlen((string) $value) <= (int) $ruleParams[1] : true,
-                    'min_digits' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] : true,
-                    'max_digits' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) <= (int) $ruleParams[0] : true,
-                    'date' => ($has_valid_value || $is_not_nullable) ? $this->validateDate($value) : true,
-                    'date_format' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? $this->validateDateFormat($value, $ruleParams[0]) : true,
-                    'before' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? $this->validateBefore($value, $ruleParams[0]) : true,
-                    'after' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? $this->validateAfter($value, $ruleParams[0]) : true,
-                    'between' => ($has_valid_value || $is_not_nullable) ? $this->validateBetween($value, $ruleParams, $is_numeric_field) : true,
-                    'json' => ($has_valid_value || $is_not_nullable) ? json_decode($value) !== null && json_last_error() === JSON_ERROR_NONE : true,
-                    'ip' => ($has_valid_value || $is_not_nullable) ? filter_var($value, FILTER_VALIDATE_IP) !== false : true,
-                    'ipv4' => ($has_valid_value || $is_not_nullable) ? filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false : true,
-                    'ipv6' => ($has_valid_value || $is_not_nullable) ? filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false : true,
-                    'mac_address' => ($has_valid_value || $is_not_nullable) ? filter_var($value, FILTER_VALIDATE_MAC) !== false : true,
-                    'uuid' => ($has_valid_value || $is_not_nullable) ? preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $value) : true,
-                    'lowercase' => ($has_valid_value || $is_not_nullable) ? (is_string($value) && $value === strtolower($value)) : true,
-                    'uppercase' => ($has_valid_value || $is_not_nullable) ? (is_string($value) && $value === strtoupper($value)) : true,
-                    'starts_with' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && str_starts_with((string) $value, $ruleParams[0])) : true,
-                    'ends_with' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && str_ends_with((string) $value, $ruleParams[0])) : true,
-                    'contains' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && str_contains((string) $value, $ruleParams[0])) : true,
-                    'not_contains' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? (isset($ruleParams[0]) && $ruleParams[0] !== '' && !str_contains((string) $value, $ruleParams[0])) : true,
+                    'email', 'mail' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
+                    'url', 'link' => filter_var($value, FILTER_VALIDATE_URL) !== false,
+                    'number', 'numeric', 'int', 'integer' => is_numeric($value),
+                    'array', 'list' => is_array($value),
+                    'text', 'char', 'string' => is_string($value),
+                    'min', 'minimum' => isset($ruleParams[0]) ? $this->compareMin($value, $ruleParams[0], $is_numeric_field) : true,
+                    'max', 'maximum' => isset($ruleParams[0]) ? $this->compareMax($value, $ruleParams[0], $is_numeric_field) : true,
+                    'length', 'size' => isset($ruleParams[0]) ? $this->compareSize($value, $ruleParams[0], $is_numeric_field) : true,
+                    'equal', 'same', 'same_as' => isset($ruleParams[0]) ? $this->validateEqual($value, $inputData[$ruleParams[0]] ?? null) : true,
+                    'confirmed' => $value == ($inputData["{$field}_confirmation"] ?? null),
+                    'in' => $this->validateIn($value, $ruleParams),
+                    'not_in' => !$this->validateIn($value, $ruleParams),
+                    'regex' => $this->validateRegex($value, $ruleParams),
+                    'unique' => $this->validateUnique($value, $ruleParams, $field),
+                    'exists' => $this->validateExists($value, $ruleParams, $field),
+                    'not_exists' => $this->validateNotExists($value, $ruleParams, $field),
+                    'boolean', 'bool' => in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false', 'TRUE', 'FALSE', 'on', 'off', 'yes', 'no', 'YES', 'NO'], true),
+                    'float', 'decimal' => is_numeric($value),
+                    'alpha' => is_string($value) && preg_match('/^[\pL]+$/u', $value) === 1,
+                    'alpha_num', 'alphanumeric' => is_string($value) && preg_match('/^[\pL\pN]+$/u', $value) === 1,
+                    'alpha_dash' => is_string($value) && preg_match('/^[a-zA-Z0-9_-]+$/', $value) === 1,
+                    'digits' => isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) == (int) $ruleParams[0] : true,
+                    'digits_between' => isset($ruleParams[0], $ruleParams[1]) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] && strlen((string) $value) <= (int) $ruleParams[1] : true,
+                    'min_digits' => isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] : true,
+                    'max_digits' => isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) <= (int) $ruleParams[0] : true,
+                    'date' => $this->validateDate($value),
+                    'date_format' => isset($ruleParams[0]) ? $this->validateDateFormat((string) $value, $ruleParams[0]) : true,
+                    'before' => isset($ruleParams[0]) ? $this->validateBefore($value, $ruleParams[0]) : true,
+                    'after' => isset($ruleParams[0]) ? $this->validateAfter($value, $ruleParams[0]) : true,
+                    'between' => $this->validateBetween($value, $ruleParams, $is_numeric_field),
+                    'json' => $this->isValidJson($value),
+                    'ip' => filter_var($value, FILTER_VALIDATE_IP) !== false,
+                    'ipv4' => filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false,
+                    'ipv6' => filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false,
+                    'mac_address' => filter_var($value, FILTER_VALIDATE_MAC) !== false,
+                    'uuid' => is_string($value) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $value) === 1,
+                    'lowercase' => is_string($value) && $value === strtolower($value),
+                    'uppercase' => is_string($value) && $value === strtoupper($value),
+                    'starts_with' => isset($ruleParams[0]) && $ruleParams[0] !== '' && str_starts_with((string) $value, $ruleParams[0]),
+                    'ends_with' => isset($ruleParams[0]) && $ruleParams[0] !== '' && str_ends_with((string) $value, $ruleParams[0]),
+                    'contains' => isset($ruleParams[0]) && $ruleParams[0] !== '' && str_contains((string) $value, $ruleParams[0]),
+                    'not_contains' => isset($ruleParams[0]) && $ruleParams[0] !== '' && !str_contains((string) $value, $ruleParams[0]),
                     'nullable' => true, // Always passes, allows null values
                     'present' => array_key_exists($field, $inputData), // Field must be present but can be empty
-                    'filled' => $has_valid_value, // Field must be present and not empty if present
-                    'accepted' => in_array(strtolower((string) $value), ['1', 'true', 'on', 'yes'], true) || in_array($value, [true, 1], true),
-                    'declined' => in_array(strtolower((string) $value), ['0', 'false', 'off', 'no'], true) || in_array($value, [false, 0], true),
-                    'prohibited' => !$has_valid_value, // Field must be empty or not present
-                    'file' => ($has_valid_value || $is_not_nullable) ? (is_array($value) && isset($value['tmp_name']) && is_uploaded_file($value['tmp_name'])) : true,
-                    'image' => ($has_valid_value || $is_not_nullable) ? $this->validateImage($value) : true,
-                    'mimes' => ($has_valid_value || $is_not_nullable) ? $this->validateMimes($value, $ruleParams) : true,
-                    'min_value' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? is_numeric($value) && (float) $value >= (float) $ruleParams[0] : true,
-                    'max_value' => ($has_valid_value || $is_not_nullable) && isset($ruleParams[0]) ? is_numeric($value) && (float) $value <= (float) $ruleParams[0] : true,
+                    'filled' => $fieldExists ? $has_valid_value : true, // Field must be present and not empty if present
+                    'accepted' => $fieldExists ? $this->validateAccepted($value) : true,
+                    'declined' => $fieldExists ? $this->validateDeclined($value) : true,
+                    'prohibited' => !$fieldExists, // Field must be absent
+                    'file' => is_array($value) && $this->isUploadedFile($value),
+                    'image' => $this->validateImage($value),
+                    'mimes' => $this->validateMimes($value, $ruleParams),
+                    'min_value' => isset($ruleParams[0]) ? is_numeric($value) && (float) $value >= (float) $ruleParams[0] : true,
+                    'max_value' => isset($ruleParams[0]) ? is_numeric($value) && (float) $value <= (float) $ruleParams[0] : true,
                     'distinct' => $this->validateDistinct($value),
-                    'password' => ($has_valid_value || $is_not_nullable) ? $this->validatePassword($value, $ruleParams) : true,
+                    'password' => is_scalar($value) && $this->validatePassword((string) $value, $ruleParams),
                     default => true // Default to true if rule is not recognized
                 };
 
@@ -176,7 +203,7 @@ class Validator implements ValidatorContract
             }
 
             // Store valid data if field passed all rules
-            if ($valid) {
+            if ($valid && array_key_exists($field, $inputData)) {
                 $validData[$field] = $value;
             }
         }
@@ -186,24 +213,35 @@ class Validator implements ValidatorContract
     }
 
     /**
-     * Check if field is not nullable based on its rules
-     * 
-     * A field is considered not nullable if it does not have the 'nullable' rule
-     * and does not have conditional required rules like 'required_if' or 'required_unless'.
-     * 
-     * @param array $rules Array of validation rules for a field
-     * @return bool True if field is not nullable, false otherwise
+     * Normalize validation rules into an array.
+     *
+     * @param mixed $fieldRules
+     * @return array
      */
-    private function isNotNullable(array $rules): bool
+    private function normalizeFieldRules(mixed $fieldRules): array
     {
-        if (
-            in_array('required_if', $rules, true)
-            || in_array('required_unless', $rules, true)
-        ) {
-            return false; // If field has conditional required rules, treat it as nullable for validation purposes
+        if (is_string($fieldRules)) {
+            return array_values(array_filter(array_map('trim', explode('|', $fieldRules)), fn($rule) => $rule !== ''));
         }
 
-        return !in_array('nullable', $rules, true);
+        if (!is_array($fieldRules)) {
+            return [];
+        }
+
+        $rules = [];
+
+        foreach ($fieldRules as $rule) {
+            if (!is_scalar($rule)) {
+                continue;
+            }
+
+            $rule = trim((string) $rule);
+            if ($rule !== '') {
+                $rules[] = $rule;
+            }
+        }
+
+        return $rules;
     }
 
     /**
@@ -291,6 +329,18 @@ class Validator implements ValidatorContract
             return false;
         }
 
+        if (is_bool($value)) {
+            return true;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return true;
+        }
+
+        if (is_string($value)) {
+            return trim($value) !== '';
+        }
+
         if (is_array($value)) {
             return !empty($value);
         }
@@ -299,15 +349,7 @@ class Validator implements ValidatorContract
             return is_numeric($value);
         }
 
-        if (is_string($value)) {
-            return $value !== '';
-        }
-
-        if (is_bool($value)) {
-            return true; // Both true and false are valid values
-        }
-
-        return true; // For other types, consider them valid if not null
+        return false;
     }
 
     /**
@@ -321,7 +363,11 @@ class Validator implements ValidatorContract
         $numericRules = ['number', 'numeric', 'int', 'integer', 'float', 'decimal'];
 
         foreach ($rules as $rule) {
-            $ruleName = explode(':', $rule)[0];
+            if (!is_string($rule) || trim($rule) === '') {
+                continue;
+            }
+
+            $ruleName = strtolower(explode(':', $rule, 2)[0]);
             if (in_array($ruleName, $numericRules, true)) {
                 return true;
             }
@@ -375,11 +421,12 @@ class Validator implements ValidatorContract
      */
     private function validateRegex($value, array $params): bool
     {
-        if (empty($params[0])) {
+        if (empty($params[0]) || !is_scalar($value)) {
             return false; // No pattern provided
         }
 
-        $pattern = $params[0];
+        $pattern = (string) $params[0];
+        $value = (string) $value;
 
         // Validate that pattern is a valid regex
         if (@preg_match($pattern, '') === false) {
@@ -535,6 +582,10 @@ class Validator implements ValidatorContract
      */
     private function validateDate($value): bool
     {
+        if ($value instanceof \DateTimeInterface) {
+            return true;
+        }
+
         if (!is_string($value)) {
             return false;
         }
@@ -562,8 +613,8 @@ class Validator implements ValidatorContract
             return false;
         }
 
-        $valueTimestamp = strtotime($value);
-        $beforeTimestamp = strtotime($beforeDate);
+        $valueTimestamp = $this->getDateTimestamp($value);
+        $beforeTimestamp = $this->getDateTimestamp($beforeDate);
 
         if ($valueTimestamp === false || $beforeTimestamp === false) {
             return false;
@@ -585,14 +636,28 @@ class Validator implements ValidatorContract
             return false;
         }
 
-        $valueTimestamp = strtotime($value);
-        $afterTimestamp = strtotime($afterDate);
+        $valueTimestamp = $this->getDateTimestamp($value);
+        $afterTimestamp = $this->getDateTimestamp($afterDate);
 
         if ($valueTimestamp === false || $afterTimestamp === false) {
             return false;
         }
 
         return $valueTimestamp > $afterTimestamp;
+    }
+
+    private function getDateTimestamp($value): false|int
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->getTimestamp();
+        }
+
+        if (!is_string($value)) {
+            return false;
+        }
+
+        $timestamp = strtotime($value);
+        return $timestamp === false ? false : (int) $timestamp;
     }
 
     /** 
@@ -687,6 +752,22 @@ class Validator implements ValidatorContract
     }
 
     /**
+     * Validate JSON value.
+     *
+     * @param mixed $value
+     * @return bool
+     */
+    private function isValidJson($value): bool
+    {
+        if (!is_string($value)) {
+            return false;
+        }
+
+        json_decode($value, true);
+        return json_last_error() === JSON_ERROR_NONE;
+    }
+
+    /**
      * Validate image file
      * 
      * Validates if a file is a valid image by checking its MIME type.
@@ -696,12 +777,7 @@ class Validator implements ValidatorContract
      */
     private function validateImage($file): bool
     {
-        if (!is_array($file) || !isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
-            return false;
-        }
-
-        // Check if file exists and is readable
-        if (!file_exists($file['tmp_name']) || !is_readable($file['tmp_name'])) {
+        if (!is_array($file) || !$this->isUploadedFile($file)) {
             return false;
         }
 
@@ -735,30 +811,75 @@ class Validator implements ValidatorContract
      */
     private function validateMimes($file, array $allowedMimes): bool
     {
-        if (!is_array($file) || !isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+        if (!is_array($file) || !$this->isUploadedFile($file)) {
             return false;
         }
 
-        // Check if file exists
-        if (!file_exists($file['tmp_name']) || !is_readable($file['tmp_name'])) {
+        // Check if file has an allowed type list.
+        if (empty($allowedMimes)) {
             return false;
         }
 
-        // Get MIME type using finfo
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $tmpPath = $file['tmp_name'];
+        if (!is_string($tmpPath)) {
+            return false;
+        }
+
+        $normalizedAllowedMimes = array_values(array_unique(array_filter(array_map(static function ($mime) {
+            $normalized = strtolower((string) trim((string) ltrim((string) $mime, '.')));
+
+            return $normalized !== '' ? $normalized : null;
+        }, $allowedMimes))));
+        if (empty($normalizedAllowedMimes)) {
+            return false;
+        }
+
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
         if ($finfo === false) {
             return false;
         }
 
-        $mimeType = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo); // Close the resource to prevent leak
+        try {
+            $mimeType = $finfo->file($tmpPath);
+        } finally {
+            $finfo->close();
+        }
 
         if ($mimeType === false) {
             return false;
         }
 
-        return in_array($mimeType, $allowedMimes, true) ||
-            in_array(substr($mimeType, strpos($mimeType, '/') + 1), $allowedMimes, true);
+        $mimeType = strtolower((string) $mimeType);
+        $slashPosition = strpos($mimeType, '/');
+        $extension = $slashPosition === false ? '' : strtolower((string) substr($mimeType, $slashPosition + 1));
+
+        return in_array($mimeType, $normalizedAllowedMimes, true)
+            || in_array($extension, $normalizedAllowedMimes, true);
+    }
+
+    /**
+     * Checks whether a file array references a readable file path.
+     *
+     * @param array $file
+     * @return bool
+     */
+    private function isUploadedFile(array $file): bool
+    {
+        $tmpPath = $file['tmp_name'] ?? null;
+
+        if (!is_string($tmpPath) || $tmpPath === '') {
+            return false;
+        }
+
+        if (!file_exists($tmpPath) || !is_readable($tmpPath)) {
+            return false;
+        }
+
+        if (array_key_exists('error', $file) && is_int($file['error'])) {
+            return $file['error'] === UPLOAD_ERR_OK;
+        }
+
+        return true;
     }
 
     /**
@@ -910,7 +1031,56 @@ class Validator implements ValidatorContract
      */
     public function getFirstError(): ?string
     {
-        return !empty($this->errors) ? (array_values(array_values($this->errors)[0] ?? [])[0] ?? null) : null;
+        if (empty($this->errors)) {
+            return null;
+        }
+
+        $first = $this->errors[array_key_first($this->errors)] ?? null;
+        if (!is_array($first)) {
+            return is_string($first) ? $first : null;
+        }
+
+        foreach ($first as $error) {
+            if (is_string($error)) {
+                return $error;
+            }
+        }
+
+        return null;
+    }
+
+    private function validateAccepted(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value === true;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (int) $value === 1;
+        }
+
+        if (is_string($value)) {
+            return in_array(strtolower($value), ['1', 'true', 'on', 'yes'], true);
+        }
+
+        return false;
+    }
+
+    private function validateDeclined(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value === false;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (int) $value === 0;
+        }
+
+        if (is_string($value)) {
+            return in_array(strtolower($value), ['0', 'false', 'off', 'no'], true);
+        }
+
+        return false;
     }
 
     /**
@@ -958,7 +1128,7 @@ class Validator implements ValidatorContract
 
         if (
             in_array($rule, ['min', 'minimum', 'max', 'maximum', 'length', 'size']) &&
-            is_array($value) && isset($value['tmp_name']) && is_uploaded_file($value['tmp_name'])
+            is_array($value) && $this->isUploadedFile($value)
         ) {
             $this->errors[$field][] = match ($rule) {
                 'min', 'minimum' => __($this->getErrorMessagePlaceholder('file_min', $field, 'The %s file must be at least %s KB.'), [$prettyField, $params[0] ?? 0]),

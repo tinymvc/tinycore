@@ -10,6 +10,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use function is_float;
 use function is_string;
 use function sprintf;
 
@@ -38,32 +39,54 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     /**
      * Constructor to create a new DateTime instance
      *
-     * @param Carbon|DateTimeInterface|int|string $time The time string to parse, defaults to 'now'
+     * @param Carbon|DateTimeInterface|float|int|string $time The time string to parse, defaults to 'now'
      * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      */
-    public function __construct(Carbon|DateTimeInterface|int|string $time = 'now', DateTimeZone|string|null $timezone = null)
+    public function __construct(Carbon|DateTimeInterface|float|int|string $time = 'now', DateTimeZone|string|null $timezone = null)
     {
-        if ($timezone && is_string($timezone)) {
-            $timezone = new DateTimeZone($timezone);
-        }
-
-        $timezone ??= self::getDefaultTimezone();
+        $timezoneObject = $timezone !== null ? self::resolveTimezone($timezone) : null;
 
         if ($time instanceof Carbon) {
             $this->dateTime = clone $time->dateTime;
+            if ($timezoneObject !== null) {
+                $this->dateTime->setTimezone($timezoneObject);
+            }
             return;
         }
 
         if ($time instanceof DateTimeInterface) {
-            $this->dateTime = new DateTime($time->format('Y-m-d H:i:s'), $time->getTimezone());
+            $dateTime = DateTime::createFromInterface($time);
+            if (!$dateTime) {
+                throw new InvalidArgumentException('Unable to parse DateTimeInterface instance.');
+            }
+            if ($timezoneObject !== null) {
+                $dateTime->setTimezone($timezoneObject);
+            }
+            $this->dateTime = $dateTime;
             return;
         }
 
         if (is_numeric($time)) {
-            $time = "@$time";
+            $timezoneObject ??= self::getDefaultTimezone();
+
+            if (is_float($time) || (is_string($time) && (str_contains($time, '.') || str_contains(strtolower($time), 'e')))) {
+                $normalized = sprintf('%.6F', (float) $time);
+                $dateTime = DateTime::createFromFormat('U.u', $normalized, $timezoneObject);
+
+                if (!$dateTime) {
+                    throw new InvalidArgumentException("Unable to parse unix timestamp: $time");
+                }
+
+                $this->dateTime = $dateTime;
+                return;
+            }
+
+            $this->dateTime = new DateTime("@$time");
+            $this->dateTime->setTimezone($timezoneObject);
+            return;
         }
 
-        $this->dateTime = new DateTime($time, $timezone);
+        $this->dateTime = new DateTime($time, $timezoneObject ?? self::getDefaultTimezone());
     }
 
     /**
@@ -131,15 +154,21 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public static function createFromFormat(string $format, string $datetime, DateTimeZone|string|null $timezone = null): self
     {
-        if ($timezone && is_string($timezone)) {
-            $timezone = new DateTimeZone($timezone);
-        }
-
         $timezone ??= static::getDefaultTimezone();
+        $timezone = static::resolveTimezone($timezone);
 
         $dt = DateTime::createFromFormat($format, $datetime, $timezone);
         if ($dt === false) {
-            throw new InvalidArgumentException("Could not parse datetime: {$datetime} with format: {$format}");
+            $errors = DateTime::getLastErrors();
+            $details = [];
+            if (!empty($errors['errors'])) {
+                $details = $errors['errors'];
+            }
+            throw new InvalidArgumentException(
+                "Could not parse datetime: $datetime with format: $format" .
+                (!empty($details) ? ' -> ' . implode(' | ', $details) : ''
+                )
+            );
         }
 
         $instance = new self();
@@ -156,18 +185,27 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public static function createFromTimestamp(int $timestamp, DateTimeZone|string|null $timezone = null): self
     {
-        return new self("@$timestamp", $timezone);
+        $instance = new self("@$timestamp");
+        if ($timezone !== null) {
+            $instance = $instance->setTimezone(self::resolveTimezone($timezone));
+        }
+
+        return $instance;
     }
 
     /**
      * Parse a datetime string
      * 
-     * @param Carbon|DateTimeInterface|int|string $datetime The datetime string to parse
+     * @param Carbon|DateTimeInterface|float|int|string|null $datetime The datetime value to parse
      * @param DateTimeZone|string|null $timezone The timezone to use, defaults to the default timezone
      * @return self
      */
-    public static function parse(Carbon|DateTimeInterface|int|string $datetime, DateTimeZone|string|null $timezone = null): self
+    public static function parse(Carbon|DateTimeInterface|float|int|string|null $datetime, DateTimeZone|string|null $timezone = null): self
     {
+        if ($datetime === null) {
+            return self::now($timezone);
+        }
+
         return new self($datetime, $timezone);
     }
 
@@ -180,9 +218,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public static function setDefaultTimezone(string|DateTimeZone $timezone): void
     {
-        if (is_string($timezone)) {
-            $timezone = new DateTimeZone($timezone);
-        }
+        $timezone = self::resolveTimezone($timezone);
         self::$defaultTimezone = $timezone->getName();
     }
 
@@ -201,8 +237,10 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         $minute = $array['minute'] ?? 0;
         $second = $array['second'] ?? 0;
         $timezone = $array['timezone'] ?? null;
-        if ($timezone) {
-            $timezone = new DateTimeZone($timezone);
+        $timezone = is_string($timezone) || $timezone instanceof DateTimeZone ? self::resolveTimezone($timezone) : $timezone;
+
+        if ($timezone === null) {
+            $timezone = self::getDefaultTimezone();
         }
 
         return new self(
@@ -222,6 +260,28 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     private static function getDefaultTimezone(): DateTimeZone
     {
         return new DateTimeZone(self::$defaultTimezone ?? date_default_timezone_get());
+    }
+
+    /**
+     * Resolve and validate a timezone value.
+     *
+     * @param DateTimeZone|string $timezone
+     * @return DateTimeZone
+     * @throws InvalidArgumentException
+     */
+    private static function resolveTimezone(DateTimeZone|string $timezone): DateTimeZone
+    {
+        if (is_string($timezone)) {
+            try {
+                return new DateTimeZone($timezone);
+            } catch (\Exception $exception) {
+                throw new InvalidArgumentException(
+                    "Invalid timezone identifier: $timezone"
+                );
+            }
+        }
+
+        return $timezone;
     }
 
     /**
@@ -377,6 +437,16 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     public function getTimestamp(): int
     {
         return $this->dateTime->getTimestamp();
+    }
+
+    /**
+     * Get a precise Unix timestamp including microseconds.
+     *
+     * @return float
+     */
+    public function getPreciseTimestamp(): float
+    {
+        return (float) $this->dateTime->format('U.u');
     }
 
     /**
@@ -760,7 +830,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function isFuture(): bool
     {
-        return $this->getTimestamp() > time();
+        return $this->gt(self::now($this->getTimezone()));
     }
 
     /**
@@ -770,7 +840,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function isPast(): bool
     {
-        return $this->getTimestamp() < time();
+        return $this->lt(self::now($this->getTimezone()));
     }
 
     /**
@@ -835,7 +905,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function isAfter(self $other): bool
     {
-        return $this->getTimestamp() > $other->getTimestamp();
+        return $this->compare($other) > 0;
     }
 
     /**
@@ -846,7 +916,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function isBefore(self $other): bool
     {
-        return $this->getTimestamp() < $other->getTimestamp();
+        return $this->compare($other) < 0;
     }
 
     /**
@@ -857,7 +927,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function equals(self $other): bool
     {
-        return $this->getTimestamp() === $other->getTimestamp();
+        return $this->compare($other) === 0;
     }
 
     /**
@@ -1005,9 +1075,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     public function setTimezone(string|DateTimeZone $timezone): self
     {
         $new = clone $this;
-        if (is_string($timezone)) {
-            $timezone = new DateTimeZone($timezone);
-        }
+        $timezone = self::resolveTimezone($timezone);
         $new->dateTime->setTimezone($timezone);
         return $new;
     }
@@ -1037,22 +1105,33 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     /** Comparison methods */
     public function lt(self $other): bool
     {
-        return $this->getTimestamp() < $other->getTimestamp();
+        return $this->compare($other) < 0;
     }
 
     public function gt(self $other): bool
     {
-        return $this->getTimestamp() > $other->getTimestamp();
+        return $this->compare($other) > 0;
     }
 
     public function lte(self $other): bool
     {
-        return $this->getTimestamp() <= $other->getTimestamp();
+        return $this->compare($other) <= 0;
     }
 
     public function gte(self $other): bool
     {
-        return $this->getTimestamp() >= $other->getTimestamp();
+        return $this->compare($other) >= 0;
+    }
+
+    /**
+     * Compare two Carbon instances.
+     *
+     * @param self $other
+     * @return int Returns -1, 0, or 1.
+     */
+    private function compare(self $other): int
+    {
+        return $this->dateTime <=> $other->dateTime;
     }
 
     /**
@@ -1077,6 +1156,61 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     public function __toString(): string
     {
         return $this->toDateTimeString();
+    }
+
+    /**
+     * Access commonly used properties dynamically, similar to Carbon.
+     *
+     * @param string $name
+     * @return mixed
+     */
+    public function __get(string $name): mixed
+    {
+        return match ($name) {
+            'timestamp' => $this->getTimestamp(),
+            'micro' => (int) $this->format('u'),
+            'microsecond' => (int) $this->format('u'),
+            'microseconds' => (int) $this->format('u'),
+            'second' => (int) $this->format('s'),
+            'minute' => (int) $this->format('i'),
+            'hour' => (int) $this->format('H'),
+            'day' => (int) $this->format('j'),
+            'month' => (int) $this->format('n'),
+            'year' => (int) $this->format('Y'),
+            'dayOfWeek' => (int) $this->format('w'),
+            'dayOfWeekIso' => (int) $this->format('N'),
+            'dayOfYear' => (int) $this->format('z'),
+            'weekOfYear' => (int) $this->format('W'),
+            'timezone' => $this->getTimezone()->getName(),
+            'timezoneName' => $this->getTimezone()->getName(),
+            default => null
+        };
+    }
+
+    /**
+     * Check if a dynamic property exists.
+     */
+    public function __isset(string $name): bool
+    {
+        return match ($name) {
+            'timestamp',
+            'micro',
+            'microsecond',
+            'microseconds',
+            'second',
+            'minute',
+            'hour',
+            'day',
+            'month',
+            'year',
+            'dayOfWeek',
+            'dayOfWeekIso',
+            'dayOfYear',
+            'weekOfYear',
+            'timezone',
+            'timezoneName' => true,
+            default => false,
+        };
     }
 
     /**

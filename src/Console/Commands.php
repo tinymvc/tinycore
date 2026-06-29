@@ -5,9 +5,11 @@ namespace Spark\Console;
 use Spark\Console\Contracts\CommandsContract;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
 use function func_get_args;
 use function is_array;
 use function strlen;
+use RuntimeException;
 
 /**
  * Class Commands
@@ -99,9 +101,9 @@ class Commands implements CommandsContract
      */
     public function removeCommand(array|string $command): self
     {
-        $command = is_array($command) ? $command : func_get_args();
+        $commands = is_array($command) ? $command : func_get_args();
 
-        foreach ($command as $name) {
+        foreach ($commands as $name) {
             unset($this->commands[$name]);
         }
 
@@ -122,9 +124,9 @@ class Commands implements CommandsContract
      */
     public static function disable(array|string $command): void
     {
-        $command = is_array($command) ? $command : func_get_args();
+        $commands = is_array($command) ? $command : func_get_args();
 
-        foreach ($command as $name) {
+        foreach ($commands as $name) {
             self::$disabledCommands[$name] = true;
         }
     }
@@ -158,7 +160,12 @@ class Commands implements CommandsContract
      */
     public function description(string $description): self
     {
-        $this->commands[array_key_last($this->commands)]['description'] = $description;
+        $lastKey = array_key_last($this->commands);
+        if ($lastKey === null) {
+            throw new RuntimeException('No command has been registered yet.');
+        }
+
+        $this->commands[$lastKey]['description'] = $description;
 
         return $this;
     }
@@ -177,7 +184,12 @@ class Commands implements CommandsContract
      */
     public function help(string $help): self
     {
-        $this->commands[array_key_last($this->commands)]['help'] = $help;
+        $lastKey = array_key_last($this->commands);
+        if ($lastKey === null) {
+            throw new RuntimeException('No command has been registered yet.');
+        }
+
+        $this->commands[$lastKey]['help'] = $help;
 
         return $this;
     }
@@ -208,6 +220,10 @@ class Commands implements CommandsContract
      */
     public function getCommand(string $name): array
     {
+        if (!array_key_exists($name, $this->commands)) {
+            throw new RuntimeException("Command [{$name}] is not registered.");
+        }
+
         return $this->commands[$name];
     }
 
@@ -221,7 +237,12 @@ class Commands implements CommandsContract
      */
     public function showCommandHelp(string $commandName): void
     {
-        $command = $this->commands[$commandName];
+        if (!$this->hasCommand($commandName)) {
+            Prompt::message("Command '{$commandName}' not found.", 'danger');
+            return;
+        }
+
+        $command = $this->getCommand($commandName);
 
         Prompt::message("Command: {$commandName}", "success");
         Prompt::message("Description: " . $command['description'], "info");
@@ -241,6 +262,11 @@ class Commands implements CommandsContract
      */
     public function listCommands(): void
     {
+        if ($this->commands === []) {
+            Prompt::message('No commands are registered.', 'warning');
+            return;
+        }
+
         $maxLength = max(array_map('strlen', array_keys($this->commands))) + 4;
 
         ksort($this->commands);

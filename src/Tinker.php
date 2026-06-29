@@ -57,7 +57,7 @@ class Tinker
     private bool $useReadline;
 
     /** @var resource Stdin handle */
-    private $stdin;
+    private mixed $stdin;
 
     /**
      * Creating Tinker instance and 
@@ -210,9 +210,10 @@ class Tinker
             $relativeClass = str_replace([DIRECTORY_SEPARATOR, '.php'], ['\\', ''], $relativePath);
             $parts = explode('\\', $relativeClass);
             $name = end($parts);
+            $alias = $name;
 
             // Skip base Model class and any other non-model files
-            if (in_array($name, ['Model', 'Cast', 'Casts'])) {
+            if (in_array($name, ['Model', 'Cast', 'Casts'], true) || !preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
                 continue;
             }
 
@@ -221,9 +222,9 @@ class Tinker
             // Check if class exists and create alias
             if (class_exists($fullClass)) {
                 // Keep simple aliases, but avoid collisions when two subfolders share a class name
-                if (!class_exists($name, false) && !isset($aliases[$name])) {
-                    class_alias($fullClass, $name);
-                    $aliases[$name] = true;
+                if (!class_exists($alias, false) && !isset($aliases[$alias])) {
+                    class_alias($fullClass, $alias);
+                    $aliases[$alias] = true;
                 }
             }
         }
@@ -437,11 +438,10 @@ class Tinker
             // Execute the user's code
             $__result__ = eval ($code);
 
-            $capturedOutput = ob_get_contents();
-            ob_end_clean();
+            $capturedOutput = ob_get_clean();
 
             // Echo any output
-            if (!empty($capturedOutput)) {
+            if ($capturedOutput !== false && $capturedOutput !== '') {
                 echo $capturedOutput;
             }
 
@@ -462,7 +462,7 @@ class Tinker
             return $__result__;
 
         } catch (Throwable $e) {
-            if (ob_get_level() > 0) {
+            while (ob_get_level() > 0) {
                 ob_end_clean();
             }
             throw $e;
@@ -1196,7 +1196,7 @@ class Tinker
      */
     private function removeRootDir(string $path): string
     {
-        return str_replace(root_dir(), '', $path);
+        return str_starts_with($path, root_dir()) ? substr($path, strlen(root_dir())) : $path;
     }
 
     /**

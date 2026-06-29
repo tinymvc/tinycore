@@ -4,8 +4,12 @@ namespace Spark;
 
 use Generator;
 use InvalidArgumentException;
+use ReflectionException;
+use ReflectionFunction;
+use ReflectionMethod;
 use Spark\Contracts\PipeInterface;
 use Spark\Support\Traits\Macroable;
+use Spark\Foundation\Application;
 use Throwable;
 use Closure;
 use function count;
@@ -52,7 +56,7 @@ class Pipeline
      * 
      * @param mixed $payload The initial payload to be processed by the pipeline.
      */
-    public function __construct(private $payload = null)
+    public function __construct(private mixed $payload = null)
     {
     }
 
@@ -232,30 +236,20 @@ class Pipeline
      */
     public function then(?callable $destination = null): mixed
     {
+        $originalPipes = $this->pipes;
+
+        if ($destination) {
+            $this->pipes[] = $this->resolvePipe($destination);
+        }
+
         try {
-            // Create a temporary copy of pipes to avoid mutation
-            $originalPipes = $this->pipes;
-
-            if ($destination) {
-                $this->pipes[] = $this->resolvePipe($destination);
-            }
-
             $result = $this->executeMiddleware(
                 fn() => $this->executePipeline($this->payload)
             );
 
-            // Restore original pipes to avoid mutation
-            $this->pipes = $originalPipes;
-
             $this->log('Pipeline completed successfully');
             return $result;
-
         } catch (Throwable $e) {
-            // Restore pipes even on error
-            if (isset($originalPipes)) {
-                $this->pipes = $originalPipes;
-            }
-
             $this->log("Pipeline failed: {$e->getMessage()}", 'error');
 
             if ($this->errorHandler) {
@@ -263,7 +257,19 @@ class Pipeline
             }
 
             throw $e;
+        } finally {
+            $this->pipes = $originalPipes;
         }
+    }
+
+    /**
+     * Execute the pipeline and return the payload if no destination is provided.
+     *
+     * @return mixed
+     */
+    public function thenReturn(): mixed
+    {
+        return $this->then(fn($payload) => $payload);
     }
 
     /**
@@ -356,7 +362,7 @@ class Pipeline
     {
         $pipeline = array_reduce(
             array_reverse($this->middleware),
-            fn($next, $middleware) => fn($payload) => $middleware($payload, $next),
+            fn(Closure $next, callable $middleware) => fn($payload) => $this->callPipeWithAdaptiveArguments($middleware, $payload, $next),
             $core
         );
 
@@ -402,8 +408,7 @@ class Pipeline
             return $pipe->handle($payload, $next);
         }
 
-        // For regular callables, pass payload, next, and context
-        return $pipe($payload, $next, $this->context);
+        return $this->callPipeWithAdaptiveArguments($pipe, $payload, $next);
     }
 
     /**
@@ -437,8 +442,13 @@ class Pipeline
      */
     private function resolveStringPipe(string $pipe): callable
     {
+        if (str_contains($pipe, '@')) {
+            [$class, $method] = explode('@', $pipe, 2);
+            return $this->resolveArrayPipe([$class, $method]);
+        }
+
         if (class_exists($pipe)) {
-            $instance = new $pipe();
+            $instance = $this->resolvePipeInstance($pipe);
 
             if ($instance instanceof PipeInterface) {
                 return $instance;
@@ -473,8 +483,15 @@ class Pipeline
         }
 
         [$class, $method, $parameters] = array_pad($pipe, 3, []);
+        $parameters = is_array($parameters) ? $parameters : [$parameters];
 
-        $instance = is_string($class) ? new $class(...(array) $parameters) : $class;
+        if (!is_string($class) && !is_object($class)) {
+            throw new InvalidArgumentException('Pipe class in array format must be a class name or object instance');
+        }
+
+        $instance = is_string($class)
+            ? $this->resolvePipeInstance($class, $parameters)
+            : $class;
 
         if (!method_exists($instance, $method)) {
             $className = is_object($instance) ? get_class($instance) : (string) $instance;
@@ -482,6 +499,79 @@ class Pipeline
         }
 
         return [$instance, $method];
+    }
+
+    /**
+     * Resolve a pipe instance using the application container when possible.
+     *
+     * @param class-string $pipe
+     * @param array $constructorParameters Optional constructor args.
+     * @return object
+     */
+    private function resolvePipeInstance(string $pipe, array $constructorParameters = []): object
+    {
+        if (
+            class_exists(Application::class)
+            && isset(Application::$app)
+            && Application::$app !== null
+            && method_exists(Application::$app, 'make')
+        ) {
+            try {
+                return Application::$app->make($pipe, $constructorParameters);
+            } catch (Throwable) {
+                // Fallback to direct instantiation below.
+            }
+        }
+
+        return new $pipe(...$constructorParameters);
+    }
+
+    /**
+     * Invoke a pipe callback with the correct number of arguments.
+     *
+     * Supports:
+     * - fn($payload)
+     * - fn($payload, $next)
+     * - fn($payload, $next, $context)
+     */
+    private function callPipeWithAdaptiveArguments(callable $pipe, mixed $payload, Closure $next): mixed
+    {
+        $parameters = $this->getCallableParameterCount($pipe);
+
+        return match (true) {
+            $parameters >= 3 => $pipe($payload, $next, $this->context),
+            $parameters === 2 => $pipe($payload, $next),
+            $parameters === 1 => $pipe($payload),
+            default => $pipe(),
+        };
+    }
+
+    /**
+     * Get how many parameters a callable accepts.
+     *
+     * Falls back to 3 on reflection failure which allows middleware-like callables
+     * to still receive (payload, next, context).
+     */
+    private function getCallableParameterCount(callable $pipe): int
+    {
+        try {
+            if (is_array($pipe)) {
+                return (new ReflectionMethod($pipe[0], $pipe[1]))->getNumberOfParameters();
+            }
+
+            if (is_object($pipe) && method_exists($pipe, '__invoke')) {
+                return (new ReflectionMethod($pipe, '__invoke'))->getNumberOfParameters();
+            }
+
+            if (is_string($pipe) && str_contains($pipe, '::')) {
+                [$class, $method] = explode('::', $pipe, 2);
+                return (new ReflectionMethod($class, $method))->getNumberOfParameters();
+            }
+
+            return (new ReflectionFunction($pipe))->getNumberOfParameters();
+        } catch (ReflectionException) {
+            return 3;
+        }
     }
 
     /**

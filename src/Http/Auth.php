@@ -134,7 +134,7 @@ class Auth implements AuthContract, ArrayAccess
                 ) {
                     $jwtHash = $this->makeJwtHash($user);
                     if ($jwtHash !== $this->config['__jwt_hash']) {
-                        $this->user = false; // Set user to false to indicate invalid JWT hash
+                        $this->user = null; // Set user to null to indicate invalid JWT hash
                         $this->logout(); // Logout if JWT hash does not match
                         return null; // Return null if JWT validation fails
                     }
@@ -147,7 +147,7 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         // Return the currently logged in user
-        return ($this->user ??= null) ?: null;
+        return $this->user ?? null;
     }
 
     /**
@@ -182,11 +182,17 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function user(null|string $key = null, $default = null): mixed
     {
-        if ($key !== null && !$this->isGuest()) {
-            return $this->getUser()->get($key, $default);
+        $user = $this->getUser();
+
+        if ($user === null) {
+            return $key === null ? null : $default;
         }
 
-        return $this->getUser(); // Return the user model or false if not logged in
+        if ($key !== null) {
+            return $user->get($key, $default);
+        }
+
+        return $user; // Return the user model
     }
 
     /**
@@ -503,7 +509,12 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetExists($key): bool
     {
-        return isset($this->getUser()->{$key});
+        $user = $this->getUser();
+        if ($user === null) {
+            return false;
+        }
+
+        return $user->isset($key);
     }
 
     /**
@@ -514,7 +525,12 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetUnset($key): void
     {
-        unset($this->getUser()->{$key});
+        $user = $this->getUser();
+        if ($user === null) {
+            return;
+        }
+
+        $user->unset($key);
     }
 
     /**
@@ -527,7 +543,12 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetGet($key): mixed
     {
-        return $this->getUser()->{$key};
+        $user = $this->getUser();
+        if ($user === null) {
+            return null;
+        }
+
+        return $user->{$key};
     }
 
     /**
@@ -540,7 +561,12 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function offsetSet($key, $value): void
     {
-        $this->getUser()->{$key} = $value;
+        $user = $this->getUser();
+        if ($user === null) {
+            return;
+        }
+
+        $user->{$key} = $value;
     }
 
     /**

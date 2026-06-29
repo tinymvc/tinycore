@@ -82,6 +82,13 @@ class Blade implements BladeContract
     private string|null $currentSection = null;
 
     /**
+     * Stack of nested section names
+     *
+     * @var array
+     */
+    private array $sectionStack = [];
+
+    /**
      * Template that this view extends
      * 
      * @var string|null
@@ -256,9 +263,9 @@ class Blade implements BladeContract
      * @param string $template
      * @return void
      */
-    public function setExtends(string $template): void
+    public function setExtends(mixed $template): void
     {
-        $this->extendsTemplate = $template;
+        $this->extendsTemplate = (string) $template;
     }
 
     /**
@@ -288,6 +295,7 @@ class Blade implements BladeContract
         $this->extendsTemplate = null;
         $this->sections = [];
         $this->currentSection = null;
+        $this->sectionStack = [];
 
         // Render compiled template
         $content = $this->renderCompiledTemplate($compiledPath, $context);
@@ -311,6 +319,8 @@ class Blade implements BladeContract
      */
     public function include(string $template, array $context = []): string
     {
+        $this->runComposers($template);
+
         $templatePath = $this->getTemplatePath($template);
         $compiledPath = $this->compiler->getCompiledPath($template);
 
@@ -340,6 +350,8 @@ class Blade implements BladeContract
         } else {
             $component = "components/$component";
         }
+
+        $this->runComposers($component);
 
         $componentPath = $this->getTemplatePath($component);
         $compiledPath = $this->compiler->getCompiledPath($component);
@@ -379,9 +391,11 @@ class Blade implements BladeContract
      * @param string $name
      * @return void
      */
-    public function startSection(string $name): void
+    public function startSection(mixed $name): void
     {
-        $this->currentSection = $name;
+        $sectionName = (string) $name;
+        $this->sectionStack[] = $sectionName;
+        $this->currentSection = $sectionName;
         ob_start();
     }
 
@@ -392,10 +406,26 @@ class Blade implements BladeContract
      */
     public function endSection(): void
     {
-        if ($this->currentSection) {
-            $this->sections[$this->currentSection] = ob_get_clean();
-            $this->currentSection = null;
+        if (!empty($this->sectionStack)) {
+            $section = array_pop($this->sectionStack);
+            $this->sections[$section] = ob_get_clean();
+            $this->currentSection = $this->sectionStack ? array_values($this->sectionStack)[count($this->sectionStack) - 1] : null;
         }
+    }
+
+    /**
+     * End section and return its content.
+     *
+     * @return string
+     */
+    public function stopAndYieldSection(): string
+    {
+        $name = $this->getCurrentSection();
+        if ($name !== null) {
+            $this->endSection();
+        }
+
+        return $this->yieldSection($name ?? '', '');
     }
 
     /**
@@ -405,15 +435,19 @@ class Blade implements BladeContract
      * @param string $default
      * @return string
      */
-    public function yieldSection(string $name, string $default = ''): string
+    public function yieldSection(string $name, mixed $default = ''): string
     {
         // Check if sections are passed from child template first
-        if (isset($GLOBALS['sections']) && isset($GLOBALS['sections'][$name])) {
+        if (isset($GLOBALS['sections']) && array_key_exists($name, $GLOBALS['sections'])) {
             return $GLOBALS['sections'][$name];
         }
 
         // Check local sections
-        return $this->sections[$name] ?? $default;
+        if (array_key_exists($name, $this->sections)) {
+            return $this->sections[$name];
+        }
+
+        return $default;
     }
 
     /**
@@ -425,12 +459,12 @@ class Blade implements BladeContract
     public function hasSection(string $name): bool
     {
         // Check if sections are passed from child template
-        if (isset($GLOBALS['sections']) && isset($GLOBALS['sections'][$name])) {
+        if (isset($GLOBALS['sections']) && array_key_exists($name, $GLOBALS['sections'])) {
             return true;
         }
 
         // Check local sections
-        return isset($this->sections[$name]);
+        return array_key_exists($name, $this->sections);
     }
 
     /**
@@ -590,9 +624,9 @@ class Blade implements BladeContract
      * This should be available in your view context
      * 
      * @param array $attributes
-     * @return string
+     * @return Attributes
      */
-    public function compileAttributes(array $attributes): string
+    public function compileAttributes(array $attributes): Attributes
     {
         return new Attributes($attributes);
     }

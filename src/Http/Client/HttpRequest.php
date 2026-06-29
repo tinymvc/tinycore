@@ -6,8 +6,11 @@ use Spark\Http\Client\Contracts\HttpRequestContract;
 use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
 use function in_array;
 use function is_array;
+use function is_file;
+use function is_object;
 use function is_resource;
 use function is_string;
 
@@ -34,6 +37,12 @@ class HttpRequest implements HttpRequestContract
 
     /** @var bool Whether this is a multipart request */
     protected bool $isMultipart = false;
+
+    /** @var array Parsed response headers from the latest execution. */
+    protected array $responseHeaders = [];
+
+    /** @var array<string> Temporary upload files that should be cleaned up. */
+    protected array $temporaryUploadFiles = [];
 
     /**
      * Constructor.
@@ -180,13 +189,14 @@ class HttpRequest implements HttpRequestContract
      */
     public function withCookies(array $cookies): self
     {
-        $cookieStrings = array_map(
-            fn($key, $value) => "$key=$value",
-            array_keys($cookies),
-            $cookies
-        );
+        $cookieStrings = [];
+        foreach ($cookies as $name => $value) {
+            $cookieStrings[] = rawurlencode((string) $name) . '=' . rawurlencode((string) $value);
+        }
 
-        return $this->withHeader('Cookie', implode('; ', $cookieStrings));
+        $this->setOption(CURLOPT_COOKIE, implode('; ', $cookieStrings));
+
+        return $this;
     }
 
     /**
@@ -197,8 +207,20 @@ class HttpRequest implements HttpRequestContract
      */
     public function withCookieJar(string $cookieJar): self
     {
+        $directory = dirname($cookieJar);
+
+        if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
+            throw new HttpException("Unable to create cookie jar directory: {$directory}");
+        }
+
         if (!is_file($cookieJar)) {
-            touch($cookieJar);
+            if (touch($cookieJar) === false) {
+                throw new HttpException("Unable to create cookie jar file: {$cookieJar}");
+            }
+        }
+
+        if (!is_readable($cookieJar) || !is_writable($cookieJar)) {
+            throw new HttpException("Cookie jar is not readable/writable: {$cookieJar}");
         }
 
         $this->setOption(CURLOPT_COOKIEJAR, $cookieJar);
@@ -271,7 +293,7 @@ class HttpRequest implements HttpRequestContract
     public function withoutVerifying(): self
     {
         $this->setOption(CURLOPT_SSL_VERIFYPEER, false);
-        $this->setOption(CURLOPT_SSL_VERIFYHOST, false);
+        $this->setOption(CURLOPT_SSL_VERIFYHOST, 0);
         return $this;
     }
 
@@ -296,15 +318,15 @@ class HttpRequest implements HttpRequestContract
      */
     public function withPostFields(array|string $fields, null|string $contentType = null): self
     {
-        if (empty($fields)) {
+        if ($fields === '' || $fields === []) {
             return $this; // No fields to set
         }
 
         if ($contentType === null && is_array($fields)) {
             $contentType = 'application/json';
         }
-        // Auto-detect content type for string fields
-        elseif ($contentType === null && is_string($fields)) {
+
+        if ($contentType === null && is_string($fields)) {
             $decoded = json_decode($fields, true);
             if (json_last_error() === JSON_ERROR_NONE) {
                 $contentType = 'application/json';
@@ -313,12 +335,19 @@ class HttpRequest implements HttpRequestContract
 
         $contentType ??= 'application/x-www-form-urlencoded';
 
-        // Set the Content-Type header
         $this->withContentType($contentType);
 
-        // Prepare post fields based on content type
-        $postFields = $contentType === 'application/json' && is_array($fields) ? json_encode($fields) :
-            (is_array($fields) && $contentType === 'application/x-www-form-urlencoded' ? http_build_query($fields) : $fields);
+        $postFields = $contentType === 'application/json'
+            ? (is_array($fields)
+                ? json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                : $fields)
+            : (is_array($fields)
+                ? http_build_query($fields, '', '&', PHP_QUERY_RFC3986)
+                : $fields);
+
+        if ($postFields === false) {
+            throw new HttpException('Invalid POST field payload for the selected content type.');
+        }
 
         return $this->withOptions([CURLOPT_POSTFIELDS => $postFields]);
     }
@@ -336,29 +365,47 @@ class HttpRequest implements HttpRequestContract
     {
         $this->isMultipart = true;
 
-        // If contents is a file path, create a CURLFile
         if (is_string($contents) && is_file($contents)) {
-            $mimeType = $headers['Content-Type'] ?? mime_content_type($contents) ?: 'application/octet-stream';
+            if (!is_readable($contents)) {
+                throw new HttpException("Unable to read attachment file: {$contents}");
+            }
+
+            $mimeType = $headers['Content-Type'] ?? (mime_content_type($contents) ?: 'application/octet-stream');
             $filename ??= basename($contents);
             $this->attachments[$name] = new \CURLFile($contents, $mimeType, $filename);
+
+            return $this;
         }
-        // If contents is a resource (file handle)
-        elseif (is_resource($contents)) {
-            $tempFile = tempnam(sys_get_temp_dir(), 'upload_');
-            file_put_contents($tempFile, stream_get_contents($contents));
-            $mimeType = $headers['Content-Type'] ?? 'application/octet-stream';
-            $filename ??= basename($tempFile);
-            $this->attachments[$name] = new \CURLFile($tempFile, $mimeType, $filename);
+
+        if (!is_resource($contents) && !is_string($contents)) {
+            throw new HttpException('Upload content must be a string, resource, or existing file path.');
         }
-        // If contents is raw string data
-        else {
-            // For raw content, we need to write to a temp file
-            $tempFile = tempnam(sys_get_temp_dir(), 'upload_');
-            file_put_contents($tempFile, $contents);
-            $mimeType = $headers['Content-Type'] ?? 'application/octet-stream';
-            $filename ??= 'file';
-            $this->attachments[$name] = new \CURLFile($tempFile, $mimeType, $filename);
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'spark_upload_');
+        if (!is_string($tempFile)) {
+            throw new HttpException('Failed to create temporary upload file.');
         }
+
+        if (is_resource($contents)) {
+            $meta = stream_get_meta_data($contents);
+            if (($meta['seekable'] ?? false) === true) {
+                rewind($contents);
+            }
+            $tempContents = stream_get_contents($contents);
+            if ($tempContents === false) {
+                throw new HttpException('Failed to read upload resource.');
+            }
+            $contents = $tempContents;
+        }
+
+        if (file_put_contents($tempFile, (string) $contents) === false) {
+            throw new HttpException('Failed to write temporary upload file.');
+        }
+
+        $mimeType = $headers['Content-Type'] ?? 'application/octet-stream';
+        $filename ??= 'file';
+        $this->temporaryUploadFiles[] = $tempFile;
+        $this->attachments[$name] = new \CURLFile($tempFile, $mimeType, $filename);
 
         return $this;
     }
@@ -514,6 +561,30 @@ class HttpRequest implements HttpRequestContract
     }
 
     /**
+     * Get response headers parsed from the request.
+     *
+     * @return array
+     */
+    public function getResponseHeaders(): array
+    {
+        return $this->responseHeaders;
+    }
+
+    /**
+     * Clear temporary upload files created during attachment handling.
+     */
+    public function clearTemporaryUploadFiles(): void
+    {
+        foreach ($this->temporaryUploadFiles as $tempFile) {
+            if (is_file($tempFile)) {
+                @unlink($tempFile);
+            }
+        }
+
+        $this->temporaryUploadFiles = [];
+    }
+
+    /**
      * Build the cURL handle for this request.
      * 
      * @return resource|\CurlHandle The cURL handle
@@ -521,54 +592,62 @@ class HttpRequest implements HttpRequestContract
      */
     public function buildCurlHandle()
     {
+        $this->responseHeaders = [];
         $curl = curl_init();
         if ($curl === false) {
             throw new HttpException('Failed to initialize cURL.');
         }
 
-        // Get the HTTP method in uppercase
         $method = strtoupper($this->method);
+        $userHeaderCallback = null;
 
-        // Default options
+        if (array_key_exists(CURLOPT_HEADERFUNCTION, $this->options)) {
+            $userHeaderCallback = $this->options[CURLOPT_HEADERFUNCTION];
+            unset($this->options[CURLOPT_HEADERFUNCTION]);
+        }
+
         $defaultOptions = [
             CURLOPT_URL => $this->getFullUrl(),
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS => 10,
             CURLOPT_TIMEOUT => 60,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_ENCODING => 'utf-8',
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_ENCODING => '',
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_HEADERFUNCTION => function (resource|\CurlHandle $curlHandle, string $headerLine) use ($userHeaderCallback): int {
+                $this->parseHeaderLine($headerLine);
+
+                if (is_callable($userHeaderCallback)) {
+                    $consumed = (int) $userHeaderCallback($curlHandle, $headerLine);
+                    return $consumed > 0 ? $consumed : strlen($headerLine);
+                }
+
+                return strlen($headerLine);
+            },
         ];
 
-        // Handle POST/PUT/PATCH/DELETE data
-        if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
-            // If we have attachments, prepare multipart form data
+        if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             if ($this->isMultipart || !empty($this->attachments)) {
                 $postFields = $this->attachments;
 
-                // Merge in regular data fields if present
                 if (!empty($this->data) && is_array($this->data)) {
                     $postFields = [...$this->flattenArray($this->data), ...$postFields];
                 }
 
-                // cURL will automatically set Content-Type: multipart/form-data
                 $this->setOption(CURLOPT_POSTFIELDS, $postFields);
             } elseif (!empty($this->data)) {
                 $this->withPostFields($this->data);
             }
         }
 
-        // Set headers
         if (!empty($this->headers)) {
             $defaultOptions[CURLOPT_HTTPHEADER] = $this->headers;
         }
 
-        // Merge with custom options
-        curl_setopt_array($curl, $defaultOptions);
-        curl_setopt_array($curl, $this->options);
+        curl_setopt_array($curl, array_replace($defaultOptions, $this->options));
 
         return $curl;
     }
@@ -582,24 +661,94 @@ class HttpRequest implements HttpRequestContract
     public function execute(): HttpResponseContract
     {
         $curl = $this->buildCurlHandle();
-        $body = curl_exec($curl);
 
-        if ($body === false) {
-            throw new HttpException('cURL error: ' . curl_error($curl));
+        try {
+            $body = curl_exec($curl);
+
+            if ($body === false && curl_errno($curl)) {
+                throw new HttpException('cURL error: ' . curl_error($curl));
+            }
+
+            if (curl_errno($curl)) {
+                throw new HttpException('cURL Error: ' . curl_error($curl));
+            }
+
+            return new HttpResponse(
+                body: (string) $body,
+                status: (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
+                lastUrl: (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+                length: (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
+                headers: $this->responseHeaders,
+            );
+        } finally {
+            if ($curl !== null) {
+                $this->closeCurlHandle($curl);
+            }
+
+            $this->clearTemporaryUploadFiles();
+        }
+    }
+
+    /**
+     * Safely close a cURL handle across supported PHP versions.
+     *
+     * PHP 8.1+ typically represents handles as objects, while some environments
+     * may still provide resource-based handles.
+     *
+     * @param mixed $handle
+     */
+    protected function closeCurlHandle(mixed &$handle): void
+    {
+        if ($handle === null) {
+            return;
         }
 
-        // Check for cURL errors
-        if (curl_errno($curl)) {
-            throw new HttpException('cURL Error: ' . curl_error($curl));
+        if (is_object($handle) && method_exists($handle, 'close')) {
+            $handle->close();
+            $handle = null;
+            return;
         }
 
-        return new HttpResponse(
-            body: $body ?: '',
-            status: curl_getinfo($curl, CURLINFO_HTTP_CODE),
-            lastUrl: curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-            length: curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-            headers: (array) curl_getinfo($curl, CURLINFO_HEADER_OUT) ?: [],
-        );
+        if (is_object($handle)) {
+            $handle = null;
+            return;
+        }
+
+        if (is_resource($handle)) {
+            $handle = null;
+        }
+    }
+
+    /**
+     * Parse response header lines from cURL.
+     *
+     * @param string $headerLine
+     */
+    protected function parseHeaderLine(string $headerLine): void
+    {
+        $trimmed = trim($headerLine);
+        if ($trimmed === '' || str_starts_with($trimmed, 'HTTP/')) {
+            return;
+        }
+
+        $separator = strpos($headerLine, ':');
+        if ($separator === false) {
+            return;
+        }
+
+        $name = strtolower(trim(substr($headerLine, 0, $separator)));
+        $value = trim(substr($headerLine, $separator + 1));
+
+        if (!array_key_exists($name, $this->responseHeaders)) {
+            $this->responseHeaders[$name] = $value;
+            return;
+        }
+
+        if (!is_array($this->responseHeaders[$name])) {
+            $this->responseHeaders[$name] = [$this->responseHeaders[$name]];
+        }
+
+        $this->responseHeaders[$name][] = $value;
     }
 
     /**

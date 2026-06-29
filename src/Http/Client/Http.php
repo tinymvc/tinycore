@@ -26,14 +26,14 @@ class Http extends HttpRequest implements HttpContract
     /**
      * File path to download response to.
      *
-     * @var null|string|resource
+     * @var null|string
      */
-    private mixed $download = null;
+    private ?string $download = null;
 
     /**
      * The Http constructor.
      * 
-     * Initializes a new HTTP request with the specified method, URL, parameters, 
+     * Initializes a new HTTP request with the specified method, URL, parameters,
      * data, download file, and key.
      * 
      * @param string $method HTTP method
@@ -107,64 +107,85 @@ class Http extends HttpRequest implements HttpContract
         $this->setParams($params);
 
         $startedAt = microtime(true);
+        $curl = null;
+        $downloadStream = null;
+        $downloadPath = $this->download;
+        $downloadMode = is_string($downloadPath) && $downloadPath !== '';
+        $downloadFailed = false;
 
-        $curl = $this->buildCurlHandle();
+        try {
+            $curl = $this->buildCurlHandle();
+            if ($downloadMode) {
+                $directory = dirname($downloadPath);
+                if ($directory !== '' && !is_dir($directory)) {
+                    throw new HttpException("Download directory does not exist: {$directory}");
+                }
 
-        // Set up file download if specified
-        if (isset($this->download) && is_string($this->download)) {
-            if (is_file($this->download)) {
-                unlink($this->download); // Remove existing file if it exists
+                if (is_file($downloadPath)) {
+                    if (!@unlink($downloadPath)) {
+                        throw new HttpException("Unable to remove existing download file: {$downloadPath}");
+                    }
+                }
+
+                $downloadStream = fopen($downloadPath, 'w');
+                if (!is_resource($downloadStream)) {
+                    throw new HttpException("Unable to open download file: {$downloadPath}");
+                }
+
+                curl_setopt($curl, CURLOPT_FILE, $downloadStream);
+                curl_setopt($curl, CURLOPT_RETURNTRANSFER, false);
             }
 
-            // Open the file for writing
-            $this->download = fopen($this->download, 'w+');
-            curl_setopt($curl, CURLOPT_FILE, $this->download);
+            $body = curl_exec($curl);
+
+            if ($body === false && curl_errno($curl)) {
+                $downloadFailed = true;
+                throw new HttpException('cURL Error: ' . curl_error($curl));
+            }
+
+            if (curl_errno($curl)) {
+                $downloadFailed = true;
+                throw new HttpException('cURL Error: ' . curl_error($curl));
+            }
+
+            $response = [
+                'body' => $downloadMode ? '' : (string) $body,
+                'status' => (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
+                'lastUrl' => (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+                'length' => (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
+                'headers' => $this->responseHeaders,
+            ];
+
+            $this->triggerHttpRequestEvent(
+                $this->getFullUrl(),
+                [
+                    'method' => $this->getMethod(),
+                    'url' => $url,
+                    'params' => $this->getParams(),
+                    'body' => $this->getData(),
+                    'headers' => $this->getHeaders(),
+                ],
+                $response,
+                $startedAt
+            );
+
+            return new HttpResponse(...$response);
+        } finally {
+            if (is_resource($downloadStream)) {
+                fclose($downloadStream);
+            }
+
+            if ($curl !== null) {
+                $this->closeCurlHandle($curl);
+            }
+
+            if ($downloadMode && $downloadFailed && is_file($downloadPath)) {
+                @unlink($downloadPath);
+            }
+
+            $this->download = null;
+            $this->clearTemporaryUploadFiles();
         }
-
-        // Start output buffering to capture the response body
-        ob_start();
-        echo curl_exec($curl);
-        $body = ob_get_clean(); // Get the output buffer content
-
-        // Check if output buffering was successful
-        if ($body === false) {
-            throw new HttpException('Failed to capture cURL output.');
-        }
-
-        // Check for cURL errors
-        if (curl_errno($curl)) {
-            throw new HttpException('cURL Error: ' . curl_error($curl));
-        }
-
-        // Execute the cURL request and gather response data
-        $response = [
-            'body' => $body ?: '',
-            'status' => curl_getinfo($curl, CURLINFO_HTTP_CODE),
-            'lastUrl' => curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-            'length' => curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-            'headers' => (array) curl_getinfo($curl, CURLINFO_HEADER_OUT) ?: [],
-        ];
-
-        // Close file if download was specified
-        if (isset($this->download) && is_resource($this->download)) {
-            fclose($this->download);
-        }
-
-        $this->triggerHttpRequestEvent(
-            $this->getFullUrl(),
-            [
-                'method' => $this->getMethod(),
-                'url' => $url,
-                'params' => $this->getParams(),
-                'body' => $this->getData(),
-                'headers' => $this->getHeaders(),
-            ],
-            $response,
-            $startedAt
-        );
-
-        // The response data, including body, status code, final URL, and content length.
-        return new HttpResponse(...$response);
     }
 
     /**
@@ -221,7 +242,7 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets the HTTP method for the request.
      * 
-     * @deprecated Use withMethod() instead for fluent interface
+     * @deprecated Use withMethod() instead for consistent naming
      * @param string $method The HTTP method (e.g., 'GET', 'POST').
      * @return self
      */
@@ -354,13 +375,18 @@ class Http extends HttpRequest implements HttpContract
      * Sets the file path to download the response to.
      *
      * @param string $location File path for download.
-     * @param bool $force Whether to overwrite the file if it already exists.
+     * @param bool $force Whether to overwrite the file if it already exists (default: false).
      * @return self
      */
     public function download(string $location, bool $force = false): self
     {
         if (is_file($location) && !$force) {
             throw new \RuntimeException("File already exists at {$location}. Use force=true to overwrite.");
+        }
+
+        $directory = dirname($location);
+        if ($directory !== '' && !is_dir($directory)) {
+            throw new HttpException("Download directory does not exist: {$directory}");
         }
 
         $this->download = $location;

@@ -6,6 +6,7 @@ use Spark\Contracts\Http\MiddlewareContract;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
 use Spark\Http\Request;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
 use Closure;
 use function func_get_args;
@@ -163,9 +164,17 @@ class Middleware implements MiddlewareContract
         $middleware = is_array($middleware) ? $middleware : func_get_args();
 
         foreach ($middleware as $key) {
-            if (!in_array($key, $this->stack)) {
-                $this->stack[] = $key;
+            if (!is_string($key)) {
+                continue;
             }
+
+            $key = trim($key);
+
+            if ($key === '' || in_array($key, $this->stack, true)) {
+                continue;
+            }
+
+            $this->stack[] = $key;
         }
         return $this;
     }
@@ -180,13 +189,20 @@ class Middleware implements MiddlewareContract
      * - Memory efficient
      * 
      * @param Request $request
+     * @param array $queue Optional middleware stack to process for this request
      * @param array $except Middleware aliases to exclude from execution
      * @return mixed Response from middleware if early return, null otherwise
      */
-    public function process(Request $request, array $except = [])
+    public function process(Request $request, array $queue = [], array $except = []): mixed
     {
-        // Filter out excepted middlewares
-        $stack = array_filter($this->stack ?? [], fn($m) => !in_array($m, $except));
+        $stack = $queue !== [] ? array_values(
+            array_unique(
+                [...$this->stack, ...$queue],
+                SORT_REGULAR
+            )
+        ) : $this->stack;
+
+        $stack = $this->filterStack($stack, $except);
 
         // Fast path: all middlewares excluded = no early return
         if (empty($stack)) {
@@ -195,6 +211,41 @@ class Middleware implements MiddlewareContract
 
         // Use optimized pipeline processing
         return $this->createPipeline($request, fn() => null, $stack);
+    }
+
+    /**
+     * Filter middleware stack against the except list.
+     * 
+     * @param array $stack
+     * @param array $except
+     * @return array
+     */
+    private function filterStack(array $stack, array $except): array
+    {
+        if (empty($except)) {
+            return $stack;
+        }
+
+        $nm = fn(string $name) => explode(':', trim($name), 2)[0];
+
+        $exceptedMiddleware = [];
+        foreach ($except as $middlewareName) {
+            if (!is_string($middlewareName)) {
+                continue;
+            }
+
+            $exceptedMiddleware[$nm($middlewareName)] = true;
+        }
+
+        if (empty($exceptedMiddleware)) {
+            return $stack;
+        }
+
+        return array_values(array_filter(
+            $stack,
+            fn($middlewareName) => is_string($middlewareName)
+            && !isset($exceptedMiddleware[$nm($middlewareName)])
+        ));
     }
 
     /**
@@ -268,11 +319,7 @@ class Middleware implements MiddlewareContract
     private function getMiddlewareHandler(string $name): callable
     {
         // Check if registered
-        if (isset($this->middlewares[$name])) {
-            $middleware = $this->middlewares[$name];
-        } else {
-            $middleware = $name; // Treat as class name
-        }
+        $middleware = $this->middlewares[$name] ?? $name;
 
         // Return callable directly
         if (is_callable($middleware)) {
@@ -281,7 +328,7 @@ class Middleware implements MiddlewareContract
 
         // Instantiate class and create callable
         if (is_string($middleware) && class_exists($middleware)) {
-            $instance = new $middleware();
+            $instance = Application::$app->make($middleware);
 
             if (
                 $instance instanceof MiddlewareInterface ||

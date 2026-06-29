@@ -573,10 +573,12 @@ class Router implements RouterContract
         }
 
         // Remove unresolved optional parameters
-        $route = preg_replace('/\{[a-zA-Z0-9_]+\?\}/', '', $route);
+        $route = preg_replace('/\/\{[a-zA-Z0-9_]+\?\}/', '', $route);
 
         // Remove trailing wildcard
-        return rtrim($route, '*/');
+        $route = rtrim($route, '*/');
+
+        return $route !== '' ? $route : '/';
     }
 
     /**
@@ -616,11 +618,13 @@ class Router implements RouterContract
                 /** @var \Spark\Http\Middleware $middleware */
                 $middleware = Application::$app->make(Middleware::class);
 
-                // Add route-specific middleware to the middleware stack
-                $middleware->queue($route['middleware']);
-
                 // Execute middleware stack - check for early returns (auth failures, redirects, etc.)
-                $middlewareResponse = $middleware->process($request, (array) ($route['withoutMiddleware'] ?? []));
+                $middlewareResponse = $middleware->process(
+                    request: $request,
+                    queue: (array) ($route['middleware'] ?? []),
+                    except: (array) ($route['withoutMiddleware'] ?? [])
+                );
+
                 if ($middlewareResponse !== null) {
                     return $this->parseHttpResponse($middlewareResponse);
                 }
@@ -668,12 +672,19 @@ class Router implements RouterContract
      */
     private function matchRoute($routeMethod, $routePath, Request $request): bool
     {
+        $requestMethod = strtoupper($request->getMethod());
+
+        // Laravel treats HEAD requests as GET route matches.
+        if ($requestMethod === 'HEAD') {
+            $requestMethod = 'GET';
+        }
+
         if ($routeMethod !== '*' && !(is_array($routeMethod) && in_array('*', $routeMethod))) {
             // Convert route method to uppercase
             $routeMethod = array_map('strtoupper', (array) $routeMethod);
 
             // Check if the request method is allowed for this route
-            if (!in_array($request->getMethod(), $routeMethod)) {
+            if (!in_array($requestMethod, $routeMethod)) {
                 return false;
             }
         }
@@ -700,9 +711,9 @@ class Router implements RouterContract
     /**
      * Escapes special characters in the route path for use in regular expressions.
      *
-     * Replaces '/' with '\/' and '*' with '(.*)'. Also replaces optional dynamic
-     * parameters (/{param?}/) with optional groups (?:/([a-zA-Z0-9_-]+))? and
-     * required dynamic parameters (/{param}/) with required groups ([a-zA-Z0-9_-]+).
+     * Replaces '/' with '\/' and '*' with '(?:.*)'. Also replaces optional dynamic
+     * parameters (/{param?}/) with optional groups (?:/[^\/]+)? and
+     * required dynamic parameters (/{param}/) with required groups ([^\/]+).
      *
      * @param string $routePath The route path to escape.
      *
@@ -710,20 +721,44 @@ class Router implements RouterContract
      */
     private function escapeRoutePath(string $routePath): string
     {
-        $pattern = preg_replace(
-            ['/\/\{[a-zA-Z0-9_]+\?\}/', '/\{[a-zA-Z0-9_]+\}/'],
-            ['(?:/([a-zA-Z0-9_-]+))?', '([a-zA-Z0-9_-]+)'],
-            $routePath
-        );
+        $routePath = trim($routePath, '/');
+        $segmentPattern = '[^\/]+';
 
-        return str_replace(['/', '*'], ['\/', '(.*)'], $pattern);
+        if ($routePath === '') {
+            return '\/';
+        }
+
+        $segments = array_filter(explode('/', $routePath), 'strlen');
+        $compiledPath = '\/';
+
+        foreach ($segments as $index => $segment) {
+            if ($segment === '*') {
+                $compiledPath .= $index === 0 ? '(?:.*)' : '\/(?:.*)';
+                continue;
+            }
+
+            if (preg_match('/^\{([a-zA-Z0-9_]+\?)\}$/', $segment)) {
+                $compiledPath .= $index === 0 ? "($segmentPattern)?" : "(?:\\/($segmentPattern))?";
+                continue;
+            }
+
+            if (preg_match('/^\{([a-zA-Z0-9_]+)\}$/', $segment)) {
+                $compiledPath .= "\\/($segmentPattern)";
+                continue;
+            }
+
+            $compiledPath .= '\/' . preg_quote($segment, '/');
+        }
+
+        return $compiledPath;
     }
 
     /**
      * Maps matched segments to parameter names in the route path.
      *
-     * If the number of parameter names matches the number of segments, map the
-     * segments to the parameter names, otherwise return the original matches.
+     * Route parameter names are extracted in declaration order and mapped to each
+     * captured route segment by position. Optional parameters unresolved in URL path
+     * resolve to null. Routes without placeholders return an empty array.
      *
      * @param string $routePath The route path to map.
      * @param array $matches The matched segments.
@@ -734,24 +769,17 @@ class Router implements RouterContract
     {
         // Map matched segments to parameter names in the route path
         if (preg_match_all('/\{([^\}]+)\}/', $routePath, $names)) {
-            if (count($names[1]) === count($matches)) {
-                // If the number of parameter names matches the number of segments,
-                // map the segments to the parameter names
-                $matches = array_combine(
-                    array_map(
-                        fn($name) => str_replace('?', '', $name),
-                        $names[1]
-                    ),
-                    array_map(
-                        fn($value) => trim($value, ' /'),
-                        $matches
-                    )
-                );
+            $parameters = [];
+
+            foreach ($names[1] as $index => $name) {
+                $parameters[str_replace('?', '', $name)] = isset($matches[$index]) && $matches[$index] !== '' ? $matches[$index] : null;
             }
+
+            return $parameters;
         }
 
         // Return the matched parameters
-        return $matches;
+        return [];
     }
 
     /**

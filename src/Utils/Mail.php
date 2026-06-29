@@ -117,19 +117,23 @@ class Mail extends PHPMailer implements MailUtilContract
     public function configureSmtp(array $config): self
     {
         $this->isSMTP();
-        $this->Host = $config['host'];
-        $this->Port = $config['port'] ?? 25;
+        $this->Host = $config['host'] ?? '';
+        $this->Port = (int) ($config['port'] ?? 587);
 
         // Enable SMTP authentication
-        if (isset($config['username']) && isset($config['password'])) {
+        if (!empty($config['username']) || !empty($config['password'])) {
             $this->SMTPAuth = true;
             $this->Username = $config['username'];
             $this->Password = $config['password'];
         }
 
         // Set encryption type
-        $this->SMTPSecure = (isset($config['encryption']) && strtolower($config['encryption']) === 'tls')
-            ? PHPMailer::ENCRYPTION_STARTTLS : PHPMailer::ENCRYPTION_SMTPS;
+        $this->SMTPSecure = match (strtolower($config['encryption'] ?? '')) {
+            'tls' => PHPMailer::ENCRYPTION_STARTTLS,
+            'ssl', 'smtps' => PHPMailer::ENCRYPTION_SMTPS,
+            default => '',
+        };
+        $this->SMTPAutoTLS = ($this->SMTPSecure === PHPMailer::ENCRYPTION_STARTTLS);
 
         return $this; // Return the instance
     }
@@ -341,6 +345,20 @@ class Mail extends PHPMailer implements MailUtilContract
     }
 
     /**
+     * Set the sender of the email.
+     *
+     * Alias for `from()` to match the service contract.
+     *
+     * @param string $address The email address of the sender.
+     * @param string|null $name The name of the sender.
+     * @return self Returns the instance for method chaining.
+     */
+    public function mailer($address, $name = null): self
+    {
+        return $this->from($address, $name);
+    }
+
+    /**
      * Set the reply-to email address and name.
      *
      * This method takes an email address and an optional name, and sets the reply-to
@@ -368,11 +386,14 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function send(): bool
     {
+        $status = false;
+
         try {
             $status = parent::send();
             $message = $status ? 'Email sent successfully.' : ($this->ErrorInfo ?: 'Email sending failed.');
             $this->logEmailStatus($status ? 'Sent' : 'Failed', $message);
         } catch (\Throwable $e) {
+            $status = false;
             $this->logEmailStatus('Error', $e->getMessage());
         }
 
@@ -429,27 +450,51 @@ class Mail extends PHPMailer implements MailUtilContract
             return; // Logging is disabled
         }
 
-        $fmAddr = fn($addrs) => array_map(
-            fn($addr) => sprintf('%s <%s>', $addr[1] ?: 'Unknown', $addr[0]),
+        if (!fm()->ensureDirectoryWritable(dirname($this->config['log_file']))) {
+            return;
+        }
+
+        $fmAddr = static fn(array $addrs) => array_values(array_filter(array_map(
+            static function (array $addr): string {
+                if (!isset($addr[0])) {
+                    return '';
+                }
+
+                $email = $addr[0];
+                $name = $addr[1] ?? '';
+                $label = $name !== '' ? $name : 'Unknown';
+
+                return sprintf('%s <%s>', $label, $email);
+            },
             $addrs
-        );
+        ), static fn(string $line): bool => $line !== ''));
 
         $context = json_encode([
             'to' => $fmAddr($this->getToAddresses()),
             'cc' => $fmAddr($this->getCcAddresses()),
             'bcc' => $fmAddr($this->getBccAddresses()),
             'reply_to' => $fmAddr($this->getReplyToAddresses()),
-            'from' => $fmAddr([$this->From, $this->FromName]),
+            'from' => $this->From ? (($this->FromName !== '' ? $this->FromName . ' <' : '') . $this->From . ($this->FromName !== '' ? '>' : '')) : '',
             'attachments' => array_map(fn($att) => [
-                'path' => $att[0],
-                'filename' => $att[1] ?? basename($att[0]),
+                'path' => $att[0] ?? '',
+                'filename' => $att[1] ?? basename((string) ($att[0] ?? '')),
                 'type' => $att[4] ?? 'application/octet-stream',
             ], $this->getAttachments()),
             'subject' => $this->Subject,
             'body' => $this->Body,
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-        $logEntry = sprintf("[%s] status.%s %s %s\n", date('Y-m-d H:i:s'), $status, $message, $context);
+        if ($context === false) {
+            $context = '{}';
+        }
+
+        $logEntry = sprintf(
+            "[%s] status.%s %s %s\n",
+            date('Y-m-d H:i:s'),
+            $status,
+            $message,
+            $context
+        );
 
         file_put_contents($this->config['log_file'], $logEntry, FILE_APPEND | LOCK_EX);
     }

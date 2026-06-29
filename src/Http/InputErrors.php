@@ -4,8 +4,12 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\InputErrorsContract;
 use Spark\Contracts\Support\Arrayable;
+use function array_key_exists;
 use function count;
 use function is_array;
+use function is_bool;
+use function is_object;
+use function is_scalar;
 
 /**
  * Class InputErrors - HTTP Request input validation errors
@@ -38,8 +42,11 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
      */
     public function __construct(Session $session)
     {
-        $this->messages = $session->getFlash('errors', []);
-        $this->attributes = $session->getFlash('input', []);
+        $messages = $session->getFlash('errors', []);
+        $attributes = $session->getFlash('input', []);
+
+        $this->messages = is_array($messages) ? $messages : [];
+        $this->attributes = is_array($attributes) ? $attributes : [];
     }
 
     /**
@@ -59,7 +66,20 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
      */
     public function getOld(string $field, ?string $default = null): ?string
     {
-        return $this->attributes[$field] ?? $default;
+        if (!array_key_exists($field, $this->attributes)) {
+            return $default;
+        }
+
+        $value = $this->attributes[$field];
+        if (is_array($value) || is_object($value)) {
+            return json_encode($value) ?: null;
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        return is_bool($value) ? ($value ? '1' : '0') : (string) $value;
     }
 
     /**
@@ -96,13 +116,34 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
      * @param bool $merge Merge all error messages into a single array
      * @return array
      */
-    public function all($merge = true): array
+    public function all(bool $merge = true): array
     {
-        if ($merge) {
-            return array_merge(...array_values($this->messages));
+        if (!$merge) {
+            return $this->messages;
         }
 
-        return $this->messages;
+        if (empty($this->messages)) {
+            return [];
+        }
+
+        $merged = [];
+
+        foreach ($this->messages as $message) {
+            if ($message === null) {
+                continue;
+            }
+
+            if (is_array($message)) {
+                foreach ($message as $item) {
+                    $merged[] = (string) $item;
+                }
+                continue;
+            }
+
+            $merged[] = (string) $message;
+        }
+
+        return $merged;
     }
 
     /**
@@ -124,7 +165,7 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
      */
     public function has(string $field): bool
     {
-        return isset($this->messages[$field]);
+        return array_key_exists($field, $this->messages);
     }
 
     /**
@@ -153,7 +194,23 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
     public function first(string $field): ?string
     {
         $error = $this->messages[$field] ?? null;
-        return is_array($error) ? ($error[0] ?? null) : ((string) $error ?: null);
+        if ($error === null) {
+            return null;
+        }
+
+        if (is_array($error)) {
+            if (!array_key_exists(0, $error) || $error[0] === null) {
+                return null;
+            }
+
+            return is_scalar($error[0]) ? (string) $error[0] : (json_encode($error[0]) ?: null);
+        }
+
+        if (is_scalar($error)) {
+            return (string) $error;
+        }
+
+        return json_encode($error) ?: null;
     }
 
     /**
@@ -387,7 +444,11 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
      */
     public function offsetSet($offset, $value): void
     {
-        $this->addMessage($offset, $value);
+        if (is_array($value) || is_object($value)) {
+            $value = json_encode($value) ?: '';
+        }
+
+        $this->addMessage((string) $offset, (string) $value);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace Spark\Foundation\Console;
 
 use Spark\Console\Prompt;
 use Spark\Support\Str;
+use function is_string;
 
 /**
  * Class MakeStubCommandsHandler
@@ -99,7 +100,6 @@ class MakeStubCommandsHandler
                 'stub' => __DIR__ . '/stubs/database/seeder.stub',
                 'destination' => 'database/migrations/::subfolder:lowercase/seed_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
                 'replacements' => [
-                    '{{ namespace }}' => 'Database\Seeders::subfolder:namespace',
                     '{{ class }}' => '::name:singularize:ucfirst',
                 ],
             ]
@@ -431,10 +431,17 @@ class MakeStubCommandsHandler
     private function askName(array &$args, string|array $questions): void
     {
         foreach ((array) $questions as $index => $question) {
-            if (!isset($args['_args'][$index])) {
+            $value = $args['_args'][$index] ?? '';
+            if (!is_string($value)) {
+                $value = (string) $value;
+            }
+
+            if (trim($value) === '') {
                 do {
-                    $args['_args'][$index] = Prompt::ask($question);
-                } while (!isset($args['_args'][$index]));
+                    $value = trim((string) Prompt::ask($question));
+                } while (trim($value) === '');
+
+                $args['_args'][$index] = $value;
             }
         }
     }

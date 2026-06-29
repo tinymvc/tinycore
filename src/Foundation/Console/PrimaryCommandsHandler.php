@@ -125,6 +125,10 @@ class PrimaryCommandsHandler
         Prompt::message('Installing the queue database...', 'info');
 
         $pdo = $queue->getPdoConnection(); // Get the PDO connection from the Queue instance
+        if (!$pdo instanceof \PDO) {
+            Prompt::message('Queue is configured to use Redis; queue:install supports only sqlite storage.', 'warning');
+            return;
+        }
 
         try {
             $pdo->exec(

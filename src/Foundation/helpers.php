@@ -18,6 +18,7 @@ use Spark\Http\Validator;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Http\Session;
+use Spark\DotEnv;
 use Spark\Queue\Job;
 use Spark\Translator;
 use Spark\Utils\Cache;
@@ -473,31 +474,40 @@ if (!function_exists('url')) {
     {
         global $home_url, $request_url;
 
-        $path ??= ''; // Set empty path if null provided
+        if ($path === null || $path === '') {
+            $requestPath = '/';
 
-        // If the path is empty then asume it for current request url
-        // or, if the path is '/' then it is home url
-        if ($path === '') {
-            if (isset($request_url) && !empty($parameters)) {
-                $request_url = $request_url->withParameters($parameters);
+            if (is_web()) {
+                try {
+                    $requestPath = request()->getPath();
+                } catch (\Throwable) {
+                    $requestPath = '/';
+                }
             }
 
-            return $request_url ??= new Url(home_url(request()->getPath()), $parameters);
+            if (!isset($request_url)) {
+                $request_url = new Url(home_url($requestPath));
+            }
 
+            return !empty($parameters) ? $request_url->withQuery($parameters) : $request_url;
         } elseif ($path === '/') {
-            if (isset($home_url) && !empty($parameters)) {
-                $home_url = $home_url->withParameters($parameters);
+            if (!isset($home_url)) {
+                $home_url = new Url(home_url('/'));
             }
 
-            return $home_url ??= new Url(home_url('/'), $parameters);
+            return !empty($parameters) ? $home_url->withQuery($parameters) : $home_url;
         }
 
-        if (!str_contains($path, '://')) {
+        $normalizedPath = (string) $path;
+        if (!str_contains($normalizedPath, '://') && !str_starts_with($normalizedPath, '//')) {
             $path = home_url($path); // Resolve relative path to absolute URL
+        } else {
+            $path = $normalizedPath;
         }
 
         // If the path is not empty, generate the URL based on the provided path and parameters.
-        return new Url($path, $parameters);
+        $url = new Url($path);
+        return !empty($parameters) ? $url->withQuery($parameters) : $url;
     }
 }
 
@@ -515,10 +525,27 @@ if (!function_exists('home_url')) {
      */
     function home_url(string $path = ''): string
     {
-        $rootUrl = config('app.app_url', request()->getRootUrl());
-        $url = rtrim("$rootUrl/" . ltrim(str_replace('\\', '/', $path), '/'), '/');
+        if ($path === '' || $path === null) {
+            $path = '';
+        }
 
-        return $url; // Return the generated URL
+        if (str_contains($path, '://') || str_starts_with($path, '//')) {
+            return $path;
+        }
+
+        $rootUrl = is_web() ? request()->getRootUrl() : config('app.url', '');
+        $rootUrl = rtrim((string) $rootUrl, '/');
+        $path = ltrim(str_replace('\\', '/', (string) $path), '/');
+
+        if ($rootUrl === '') {
+            return $path === '' ? '/' : "/$path";
+        }
+
+        if ($path === '') {
+            return $rootUrl;
+        }
+
+        return "$rootUrl/$path";
     }
 }
 
@@ -536,8 +563,24 @@ if (!function_exists('asset_url')) {
      */
     function asset_url(string $path = ''): string
     {
-        $path = config('app.asset_url') . ltrim($path, '/');
-        return strpos($path, '/', 0) === 0 ? home_url($path) : $path;
+        if (str_contains((string) $path, '://') || str_starts_with((string) $path, '//')) {
+            return $path;
+        }
+
+        $assetBase = (string) config('app.asset_url', '');
+        $normalizedPath = ltrim(str_replace('\\', '/', (string) $path), '/');
+        $assetBase = rtrim($assetBase, '/');
+        $fullPath = $assetBase === '' ? $normalizedPath : $normalizedPath === '' ? $assetBase : "$assetBase/$normalizedPath";
+
+        if (str_starts_with($assetBase, 'http://') || str_starts_with($assetBase, 'https://')) {
+            return $fullPath === '' ? $assetBase : $fullPath;
+        }
+
+        if ($fullPath === '') {
+            return home_url('/');
+        }
+
+        return home_url($fullPath);
     }
 }
 
@@ -573,8 +616,24 @@ if (!function_exists('media_url')) {
      */
     function media_url(string $path = ''): string
     {
-        $path = config('app.media_url') . ltrim($path, '/');
-        return strpos($path, '/', 0) === 0 ? home_url($path) : $path;
+        if (str_contains((string) $path, '://') || str_starts_with((string) $path, '//')) {
+            return $path;
+        }
+
+        $mediaBase = (string) config('app.media_url', '');
+        $normalizedPath = ltrim(str_replace('\\', '/', (string) $path), '/');
+        $mediaBase = rtrim($mediaBase, '/');
+        $fullPath = $mediaBase === '' ? $normalizedPath : $normalizedPath === '' ? $mediaBase : "$mediaBase/$normalizedPath";
+
+        if (str_starts_with($mediaBase, 'http://') || str_starts_with($mediaBase, 'https://')) {
+            return $fullPath === '' ? $mediaBase : $fullPath;
+        }
+
+        if ($fullPath === '') {
+            return home_url('/');
+        }
+
+        return home_url($fullPath);
     }
 }
 
@@ -926,10 +985,22 @@ if (!function_exists('env')) {
      *
      * @return mixed The value of the specified environment variable, or the default value if it is not set.
      */
-    function env(string $key, $default = null)
+    function env(string $key, mixed $default = null): mixed
     {
-        $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
-        return $value !== false ? $value : $default;
+        if (array_key_exists($key, $_ENV)) {
+            return DotEnv::parseValue($_ENV[$key]);
+        }
+
+        if (array_key_exists($key, $_SERVER)) {
+            return DotEnv::parseValue($_SERVER[$key]);
+        }
+
+        $value = getenv($key, true);
+        if ($value === false) {
+            $value = getenv($key);
+        }
+
+        return $value !== false ? DotEnv::parseValue($value) : (is_callable($default) ? $default() : $default);
     }
 }
 
@@ -948,8 +1019,38 @@ if (!function_exists('envs')) {
         foreach ($envs as $key => $value) {
             $_ENV[$key] = $value;
             $_SERVER[$key] = $value;
-            putenv("$key=$value");
+            putenv(sprintf('%s=%s', $key, DotEnv::stringifyValue($value)));
         }
+    }
+}
+
+if (!function_exists('env_parse_value')) {
+    /**
+     * Parse an environment value with the same normalization used by env().
+     */
+    function env_parse_value(mixed $value): mixed
+    {
+        return DotEnv::parseValue($value);
+    }
+}
+
+if (!function_exists('normalize_env_numeric_value')) {
+    /**
+     * Parse numeric-like environment values.
+     */
+    function normalize_env_numeric_value(string $value): mixed
+    {
+        return DotEnv::parseNumericValue($value);
+    }
+}
+
+if (!function_exists('env_string_value')) {
+    /**
+     * Convert an environment value to the string representation stored by putenv().
+     */
+    function env_string_value(mixed $value): string
+    {
+        return DotEnv::stringifyValue($value);
     }
 }
 
@@ -1168,7 +1269,7 @@ if (!function_exists('gate')) {
         /** @var \Spark\Http\Gate $gate */
         $gate = get(Gate::class);
 
-        if (func_num_args() === 2) {
+        if ($ability !== null && func_num_args() === 2 && $callback !== null) {
             $gate->define($ability, $callback);
         }
 
@@ -1180,37 +1281,90 @@ if (!function_exists('event')) {
     /**
      * Manage and dispatch events.
      *
-     * This function allows you to either add event listeners or dispatch events.
-     * If an array of event names and listeners is provided with no additional
-     * arguments, it registers the listeners. If a single event name is provided
-     * or additional arguments are given, it dispatches the event.
+     * @param array|string|null $eventName
+     *   - `null`: returns the event dispatcher instance.
+     *   - `array`: registers listeners from an event => listener map.
+     *   - `string`: dispatches the event.
+     * @param mixed $payload
+     *   Event payload when dispatching. Can be a single value or an array of arguments.
+     * @param bool $halt
+     *   When true, dispatches using "until" semantics and returns the first non-null response.
      *
-     * @param array|string $eventName The event name(s) or listeners to be registered.
-     * @param mixed ...$args Additional arguments to pass when dispatching an event.
-     * @return Events The event dispatcher instance.
+     * @return mixed|\Spark\Events
      */
-    function event(null|array|string $eventName = null, ...$args): Events
+    function event(null|array|string $eventName = null, mixed $payload = [], bool $halt = false): mixed
     {
         /** @var \Spark\Events $event */
         $event = get(Events::class);
 
-        // If an array of events is provided with no additional arguments, add listeners.
-        if (is_array($eventName) && empty($args)) {
-            foreach ($eventName as $k => $v) {
-                if (is_array($v)) {
-                    foreach ($v as $e) {
-                        $event->addListener($k, $e);
-                    }
-                } else {
-                    $event->addListener($k, $v);
-                }
-            }
-        } elseif (is_string($eventName)) {
-            // Dispatch the event with any additional arguments.
-            $event->dispatch($eventName, ...$args);
+        if ($eventName === null) {
+            return $event;
         }
 
-        return $event;
+    if (is_array($eventName) && $payload === [] && !$halt) {
+            foreach ($eventName as $eventNameKey => $listener) {
+                $eventNameString = (string) $eventNameKey;
+
+                if (
+                    is_array($listener)
+                    && array_is_list($listener)
+                    && count($listener) === 2
+                    && is_int($listener[1] ?? null)
+                ) {
+                    $event->addListener($eventNameString, $listener[0], $listener[1]);
+                    continue;
+                }
+
+                if (
+                    is_array($listener)
+                    && array_is_list($listener)
+                    && count($listener) === 2
+                    && is_string($listener[1] ?? null)
+                    && (
+                        (is_string($listener[0] ?? null)
+                            && class_exists($listener[0])
+                            && method_exists($listener[0], $listener[1]))
+                        || (is_object($listener[0] ?? null)
+                            && method_exists($listener[0], $listener[1]))
+                    )
+                ) {
+                    $event->addListener($eventNameString, $listener);
+                    continue;
+                }
+
+                if (is_array($listener) && array_is_list($listener)) {
+                    foreach ($listener as $registeredListener) {
+                        if (
+                            is_array($registeredListener)
+                            && array_is_list($registeredListener)
+                            && count($registeredListener) === 2
+                            && is_int($registeredListener[1] ?? null)
+                        ) {
+                            $event->addListener($eventNameString, $registeredListener[0], $registeredListener[1]);
+                            continue;
+                        }
+
+                        $event->addListener($eventNameString, $registeredListener);
+                    }
+
+                    continue;
+                }
+
+                $event->addListener($eventNameString, $listener);
+            }
+
+            return $event;
+        }
+
+        if (is_array($eventName)) {
+            return $event;
+        }
+
+        $arguments = is_array($payload) ? array_values($payload) : [$payload];
+
+        return $halt
+            ? $event->until($eventName, ...$arguments)
+            : $event->dispatchWithResponse($eventName, ...$arguments);
     }
 }
 
@@ -1374,20 +1528,36 @@ if (!function_exists('vite')) {
      * The Vite instance provides a convenient interface for interacting with the
      * development server and production build processes.
      *
-     * @param null|string|array $config The configuration for the Vite instance.
+     * @param null|string|array $entrypoints The entry file(s) or configuration for the Vite instance.
+     * @param null|string|array $buildDirectoryOrConfig The build directory or additional config for the Vite instance.
      *
      * @return Vite The Vite instance initialized with the given configuration.
      */
-    function vite(null|string|array $config = null): Vite
+    function vite(null|string|array $entrypoints = null, null|string|array $buildDirectoryOrConfig = null): Vite
     {
         /** @var \Spark\Utils\Vite $vite The vite instance */
         $vite = get(Vite::class);
 
-        if ($config !== null) {
-            return $vite->configure($config);
+        if ($entrypoints === null && $buildDirectoryOrConfig === null) {
+            return $vite;
         }
 
-        return $vite;
+        $config = match (true) {
+            is_string($entrypoints) => ['entry' => $entrypoints],
+            is_array($entrypoints) && array_is_list($entrypoints) => ['entry' => $entrypoints],
+            is_array($entrypoints) => $entrypoints,
+            default => []
+        };
+
+        if ($buildDirectoryOrConfig !== null) {
+            if (is_string($buildDirectoryOrConfig)) {
+                $config['dist'] = $buildDirectoryOrConfig;
+            } else {
+                $config = [...$config, ...$buildDirectoryOrConfig];
+            }
+        }
+
+        return $vite->configure($config);
     }
 }
 
@@ -1418,11 +1588,13 @@ if (!function_exists('validator')) {
      * @param array|null $messages An optional array of custom error messages.
      * @return \Spark\Http\Validator Returns a validator object.
      */
-    function validator(string|array $rules, null|array $attributes = null, null|array $messages = null): Validator
+    function validator(null|array|string $rules, null|array $attributes = null, null|array $messages = null): Validator
     {
         $validator = Validator::make($rules, $attributes);
 
-        $messages && $validator->mergeErrorMessages($messages);
+        if ($messages !== null) {
+            $validator->mergeErrorMessages($messages);
+        }
 
         return $validator;
     }
@@ -1612,7 +1784,11 @@ if (!function_exists('abort')) {
 
         // If the request is an AJAX request or the path starts with /api/, 
         // return a JSON response
-        if (request()->expectsJson()) {
+        if (
+            is_web()
+            && Application::$app->resolved(Request::class)
+            && request()->expectsJson()
+        ) {
             // If the request is an AJAX request, return a JSON response
             json(['message' => $message ?? _e('Internal Server Error'), 'code' => $code], $code)
                 ->send();
@@ -1623,19 +1799,27 @@ if (!function_exists('abort')) {
         /** @var \Spark\View\Blade The Blade view instance */
         $view = get(Blade::class);
 
+        $originalPath = $view->getPath();
+        $errorTemplate = "errors/$error";
+
         // Set the view path to the errors folder
         if (!$view->templateExists("errors/$error")) {
             $view->setPath(__DIR__ . '/resources/views');
         }
 
         // Set the error template
-        $errorTemplate = "errors/$error";
         if (!$view->templateExists($errorTemplate)) {
             $errorTemplate = 'errors/error';
         }
 
         // Render the error view
-        $viewHtml = $view->render($errorTemplate, compact('code', 'message'));
+        try {
+            $viewHtml = $view->render($errorTemplate, compact('code', 'message'));
+        } catch (\Throwable $e) {
+            $viewHtml = '<div id="error-page"><p id="error-code">' . $code . '</p><span id="error-separator"></span><p>' . _e($message ?? 'Error') . '</p></div>';
+        } finally {
+            $view->setPath($originalPath);
+        }
 
         // Send the response with the error view
         response($viewHtml, $code)
@@ -1663,7 +1847,7 @@ if (!function_exists('command')) {
         $command = get(Commands::class);
 
         // If arguments are provided, add a new command
-        if (func_num_args() > 0) {
+        if ($name !== null && $callback !== null) {
             $command->addCommand($name, $callback, $description);
         }
 
@@ -1926,11 +2110,11 @@ if (!function_exists('carbon')) {
      * a Unix timestamp (as an integer or string). It returns a Carbon DateTime
      * instance initialized with the provided datetime.
      *
-     * @param Carbon|DateTimeInterface|int|string $time The datetime string or Unix timestamp to convert.
+     * @param Carbon|DateTimeInterface|float|int|string|null $time The datetime string or Unix timestamp to convert.
      * @param DateTimeZone|string|null $timezone An optional timezone identifier or DateTimeZone instance to set the timezone for the Carbon instance.
      * @return \Spark\Utils\Carbon A Carbon DateTime instance representing the provided datetime.
      */
-    function carbon(Carbon|DateTimeInterface|int|string $time = 'now', DateTimeZone|string|null $timezone = null): Carbon
+    function carbon(Carbon|DateTimeInterface|float|int|string|null $time = 'now', DateTimeZone|string|null $timezone = null): Carbon
     {
         return Carbon::parse($time, $timezone);
     }
@@ -2023,6 +2207,10 @@ if (!function_exists('tracer')) {
      */
     function tracer(): Tracer
     {
+        if (!isset(Tracer::$instance)) {
+            Tracer::start();
+        }
+
         return Tracer::$instance;
     }
 }
@@ -2085,7 +2273,7 @@ if (!function_exists('tracer_log')) {
      */
     function tracer_log(string $message): void
     {
-        Tracer::$instance->log($message);
+        tracer()->log($message);
     }
 }
 

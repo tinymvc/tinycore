@@ -98,7 +98,7 @@ interface HttpContract
     /**
      * Sets the request body for the HTTP request.
      *
-     * @param string|array $body The body content to send with the request. Can be a string or an array (which will be JSON-encoded).
+     * @param string $cookieJar The path to the cookie jar file to use for the request.
      * @return self
      */
     public function cookieJar(string $cookieJar): self;
@@ -139,46 +139,46 @@ interface HttpContract
     public function postFields(array|string $fields, null|string $contentType = null): self;
 
     /**
-     * Sets the fields to be sent in a PUT request.
-     *
-     * @param array|string $fields The fields to send in the PUT request. Can be an associative array or a string.
-     * @param string|null $contentType Optional content type for the PUT data (e.g., 'application/json').
+     * Sends a GET request to the specified URL with optional query parameters.
+     * 
+     * @param string $url The target URL for the GET request.
+     * @param array $params Optional query parameters to include in the request URL.
      * @return self
      */
     public function get(string $url, array $params = []): HttpResponseContract;
 
     /**
-     * Sets the fields to be sent in a PATCH request.
-     *
-     * @param array|string $fields The fields to send in the PATCH request. Can be an associative array or a string.
-     * @param string|null $contentType Optional content type for the PATCH data (e.g., 'application/json').
+     * Sends a POST request to the specified URL with optional data.
+     * 
+     * @param string $url The target URL for the POST request.
+     * @param array|string $data Optional data to include in the POST request body. Can
      * @return self
      */
     public function post(string $url, array|string $data = []): HttpResponseContract;
 
     /**
-     * Sets the fields to be sent in a DELETE request.
-     *
-     * @param array|string $fields The fields to send in the DELETE request. Can be an associative array or a string.
-     * @param string|null $contentType Optional content type for the DELETE data (e.g., 'application/json').
+     * Sends a PUT request to the specified URL with optional data.
+     * 
+     * @param string $url The target URL for the PUT request.
+     * @param array|string $data Optional data to include in the PUT request body. Can
      * @return self
      */
     public function put(string $url, array|string $data = []): HttpResponseContract;
 
     /**
-     * Sets the fields to be sent in a PATCH request.
-     *
-     * @param array|string $fields The fields to send in the PATCH request. Can be an associative array or a string.
-     * @param string|null $contentType Optional content type for the PATCH data (e.g., 'application/json').
+     * Sends a PATCH request to the specified URL with optional data.
+     * 
+     * @param string $url The target URL for the PATCH request.
+     * @param array|string $data Optional data to include in the PATCH request body. Can
      * @return self
      */
     public function patch(string $url, array|string $data = []): HttpResponseContract;
 
     /**
-     * Sets the fields to be sent in a DELETE request.
-     *
-     * @param array|string $fields The fields to send in the DELETE request. Can be an associative array or a string.
-     * @param string|null $contentType Optional content type for the DELETE data (e.g., 'application/json').
+     * Sends a DELETE request to the specified URL with optional data.
+     * 
+     * @param string $url The target URL for the DELETE request.
+     * @param array|string $data Optional data to include in the DELETE request body. Can
      * @return self
      */
     public function delete(string $url, array|string $data = []): HttpResponseContract;

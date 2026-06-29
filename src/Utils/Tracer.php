@@ -7,6 +7,7 @@ use Spark\Contracts\Utils\TracerUtilContract;
 use Spark\Facades\Blade;
 use Spark\Support\Traits\Macroable;
 use Throwable;
+use function in_array;
 
 /**
  * Class tracer
@@ -22,6 +23,36 @@ class Tracer implements TracerUtilContract
 
     /** @var Tracer $instance */
     public static self $instance;
+
+    private const LOG_FILE_MAX_SIZE = 10_485_760;
+
+    /** @var array<int, string> */
+    private const ERROR_TYPES = [
+        E_ERROR => 'Error',
+        E_WARNING => 'Warning',
+        E_PARSE => 'Parse Error',
+        E_NOTICE => 'Notice',
+        E_CORE_ERROR => 'Core Error',
+        E_CORE_WARNING => 'Core Warning',
+        E_COMPILE_ERROR => 'Compile Error',
+        E_COMPILE_WARNING => 'Compile Warning',
+        E_USER_ERROR => 'User Error',
+        E_USER_WARNING => 'User Warning',
+        E_USER_NOTICE => 'User Notice',
+        E_STRICT => 'Strict',
+        E_RECOVERABLE_ERROR => 'Recoverable Error',
+        E_DEPRECATED => 'Deprecated',
+        E_USER_DEPRECATED => 'User Deprecated',
+    ];
+
+    private const FATAL_ERROR_TYPES = [
+        E_ERROR,
+        E_PARSE,
+        E_CORE_ERROR,
+        E_COMPILE_ERROR,
+        E_USER_ERROR,
+        E_RECOVERABLE_ERROR,
+    ];
 
     /**
      * tracer constructor.
@@ -41,6 +72,11 @@ class Tracer implements TracerUtilContract
 
         // Set default error log file if not provided
         $this->logFile ??= storage_dir('logs/spark.log');
+
+        $logDirectory = dirname($this->logFile);
+        if (!is_dir($logDirectory)) {
+            @mkdir($logDirectory, 0775, true);
+        }
 
         // Enable error reporting
         error_reporting(E_ALL);
@@ -69,10 +105,25 @@ class Tracer implements TracerUtilContract
      * @param string $errstr The error message.
      * @param string $errfile The filename where the error was raised.
      * @param int $errline The line number where the error was raised.
+     *
+     * @return bool Whether to continue with internal PHP error handler.
      */
-    public function handleError(int $errno, string $errstr, string $errfile, int $errline): void
+    public function handleError(int $errno, string $errstr, string $errfile, int $errline): bool
     {
-        $this->renderError('Error', $errstr, $errfile, $errline);
+        if (!(error_reporting() & $errno)) {
+            return false;
+        }
+
+        $type = self::ERROR_TYPES[$errno] ?? 'Error';
+
+        if (!is_debug_mode() && !in_array($errno, self::FATAL_ERROR_TYPES, true)) {
+            $this->log("$type: $errstr in $errfile on line $errline");
+            return true;
+        }
+
+        $this->renderError($type, $errstr, $errfile, $errline);
+
+        return true;
     }
 
     /**
@@ -96,13 +147,31 @@ class Tracer implements TracerUtilContract
 
     /**
      * Handles shutdown errors when the script ends unexpectedly.
+     *
+     * This handler focuses on fatal errors to avoid duplicate handling for
+     * non-fatal notices and warnings.
      */
     public function handleShutdown(): void
     {
         $error = error_get_last();
-        if ($error !== null) {
-            $this->renderError('Shutdown Error', $error['message'], $error['file'], $error['line']);
+        if ($error === null) {
+            return;
         }
+
+        $fatalErrors = [
+            E_ERROR,
+            E_PARSE,
+            E_CORE_ERROR,
+            E_COMPILE_ERROR,
+            E_USER_ERROR,
+            E_RECOVERABLE_ERROR,
+        ];
+
+        if (!in_array($error['type'], $fatalErrors, true)) {
+            return;
+        }
+
+        $this->renderError('Fatal Error', $error['message'], $error['file'], $error['line']);
     }
 
     /**
@@ -190,6 +259,20 @@ class Tracer implements TracerUtilContract
      */
     public function log(string $message): void
     {
+        $logFile = $this->logFile;
+
+        if (!is_dir(dirname($logFile))) {
+            return;
+        }
+
+        if (is_file($logFile) && !is_writable($logFile)) {
+            return;
+        }
+
+        if (is_file($logFile) && filesize($logFile) >= self::LOG_FILE_MAX_SIZE) {
+            @rename($logFile, "$logFile." . date('YmdHis'));
+        }
+
         if (!is_writable(dirname($this->logFile))) {
             return; // Skip logging if the directory is not writable
         }

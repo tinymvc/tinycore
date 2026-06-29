@@ -4,57 +4,70 @@ namespace Spark\Utils;
 
 use PDO;
 use PDOStatement;
+use RuntimeException;
 use Spark\Contracts\Utils\CacheUtilContract;
 use Spark\Exceptions\Utils\CacheUtilException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Utils\RedisConnector;
+use function array_key_exists;
+use function array_map;
 use function count;
 use function func_get_args;
 use function is_array;
+use function is_string;
+use function max;
+use function md5;
 use function sprintf;
+use function time;
+use function trim;
 
 /**
  * Class Cache
- * 
- * Production-ready SQLite-based cache with concurrency support and distributed locking.
- * Optimized for high-performance caching with WAL mode, prepared statements, and proper indexing.
- * 
+ *
+ * SQLite or Redis based cache with automatic driver detection.
+ *
  * @package Spark\Utils
- * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Cache implements CacheUtilContract, \ArrayAccess
 {
     use Macroable, Conditionable;
 
-    /** @var PDO The PDO connection instance */
-    private PDO $pdo;
+    private const REDIS_NULL = '__spark_null__';
+
+    /** @var PDO The PDO connection instance for sqlite. */
+    private ?PDO $pdo = null;
+
+    /** @var \Redis The Redis connection for redis driver. */
+    private ?\Redis $redis = null;
 
     /** @var array Cached prepared statements */
     private array $statements = [];
 
+    /** @var string */
+    private string $name;
+
+    /** @var string */
+    private string $driver = 'sqlite';
+
+    /** @var array */
+    private array $connection = [];
+
+    /** @var string */
+    private string $redisKeyPrefix = 'cache';
+
     public function __construct(string $name = 'default')
     {
-        try {
-            // Determine the cache file path.
-            $cache = sprintf('%s.cache', cache_dir(md5($name)));
-            $createDB = !is_file($cache); // Check if the database file needs to be created.
+        $this->name = $name;
+        $this->connection = $this->resolveDriverConfig($name);
+        $this->driver = strtolower((string) ($this->connection['driver'] ?? 'sqlite'));
 
-            // Initialize the PDO connection to SQLite database.
-            $this->pdo = new PDO("sqlite:$cache");
-
-            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-            // Optimize SQLite performance with PRAGMA settings.
-            $this->pdo->exec("PRAGMA journal_mode = WAL");
-            $this->pdo->exec("PRAGMA synchronous = NORMAL");
-            $this->pdo->exec("PRAGMA cache_size = 10000");
-            $this->pdo->exec("PRAGMA temp_store = MEMORY");
-
-            $createDB && $this->createTables(); // Create tables if they don't exist.
-        } catch (\PDOException $e) {
-            throw new CacheUtilException("Failed to connect to SQLite database: " . $e->getMessage());
+        if ($this->driver === 'redis') {
+            $this->initializeRedis();
+            return;
         }
+
+        $this->initializeSqlite($name, $this->connection);
     }
 
     /**
@@ -69,87 +82,294 @@ class Cache implements CacheUtilContract, \ArrayAccess
     }
 
     /**
+     * Creates sqlite tables for cache metadata.
+     */
+    private function initializeSqlite(string $name, array $config): void
+    {
+        try {
+            $cache = $config['path'] ?? sprintf('%s.cache', cache_dir(md5($name)));
+            $createDB = !is_file($cache);
+
+            $this->pdo = new PDO("sqlite:$cache");
+
+            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+            $this->pdo->exec("PRAGMA journal_mode = WAL");
+            $this->pdo->exec("PRAGMA synchronous = NORMAL");
+            $this->pdo->exec("PRAGMA cache_size = 10000");
+            $this->pdo->exec("PRAGMA temp_store = MEMORY");
+
+            if ($createDB) {
+                $this->createTables();
+            }
+        } catch (\PDOException $e) {
+            throw new RuntimeException('Failed to connect to SQLite database: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Creates the Redis connection.
+     */
+    private function initializeRedis(): void
+    {
+        $config = RedisConnector::resolveConnectionConfig($this->connection);
+
+        $this->redis = RedisConnector::make($config, $this->name);
+
+        $prefix = trim((string) ($config['prefix'] ?? 'spark'));
+        if ($prefix === '') {
+            $prefix = 'spark';
+        }
+        $prefix = trim($prefix, ':');
+        $this->redisKeyPrefix = sprintf('%s:cache:%s:', $prefix, md5($this->name));
+    }
+
+    /**
+     * Reads cache driver and driver-specific configuration.
+     */
+    private function resolveDriverConfig(string $name): array
+    {
+        $cacheConfig = (array) config('cache', []);
+
+        $driver = strtolower((string) ($cacheConfig['driver'] ?? 'sqlite'));
+        $connectionName = (string) ($cacheConfig['default'] ?? $cacheConfig['connection'] ?? 'default');
+
+        $connections = (array) ($cacheConfig['connections'] ?? $cacheConfig['stores'] ?? []);
+        $driverConfig = null;
+
+        if (is_array($connections[$connectionName] ?? null)) {
+            $driverConfig = $connections[$connectionName];
+        } elseif (strtolower($connectionName) !== 'default' && is_array($cacheConfig[$connectionName] ?? null)) {
+            $driverConfig = $cacheConfig[$connectionName];
+        } elseif (is_array($cacheConfig[$driver] ?? null)) {
+            $driverConfig = $cacheConfig[$driver];
+        } else {
+            $driverConfig = $cacheConfig;
+        }
+
+        if (!is_array($driverConfig)) {
+            $driverConfig = [];
+        }
+
+        return RedisConnector::mergeConfig([
+            'driver' => $driver,
+            'name' => $name,
+            'connection' => $connectionName,
+        ], $driverConfig);
+    }
+
+    /**
      * Creates the necessary tables and indexes for caching and locking.
      *
      * @return void
      */
     private function createTables(): void
     {
-        $this->pdo->exec("
-            CREATE TABLE IF NOT EXISTS caches (
-                key TEXT PRIMARY KEY,
-                data BLOB NOT NULL,
-                created_at INTEGER NOT NULL,
-                expire_at INTEGER DEFAULT 0,
-                CHECK (expire_at >= 0)
-            )
-        ");
+        if (!$this->pdo) {
+            return;
+        }
 
-        $this->pdo->exec("
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_key 
-            ON caches(key)
-        ");
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS caches (
+            key TEXT PRIMARY KEY,
+            data BLOB NOT NULL,
+            created_at INTEGER NOT NULL,
+            expire_at INTEGER DEFAULT 0,
+            CHECK (expire_at >= 0)
+        )");
 
-        $this->pdo->exec("
-            CREATE INDEX IF NOT EXISTS idx_created 
-            ON caches(created_at)
-        ");
-
-        $this->pdo->exec("
-            CREATE INDEX IF NOT EXISTS idx_expire 
-            ON caches(expire_at) 
-            WHERE expire_at > 0
-        ");
+        $this->pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_key ON caches(key)");
+        $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_created ON caches(created_at)");
+        $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_expire ON caches(expire_at) WHERE expire_at > 0");
     }
 
     /**
      * Get or prepare a cached statement.
-     *
-     * @param string $key The statement key.
-     * @param string $sql The SQL query.
-     * @return PDOStatement The prepared statement.
      */
     protected function statement(string $key, string $sql): PDOStatement
     {
+        if (!$this->pdo) {
+            throw new RuntimeException('SQLite statements are not available for redis cache.');
+        }
+
         return $this->statements[$key] ??= $this->pdo->prepare($sql);
+    }
+
+    private function isRedis(): bool
+    {
+        return $this->driver === 'redis' && $this->redis instanceof \Redis;
+    }
+
+    private function cacheKey(string $key): string
+    {
+        return $this->redisKeyPrefix . $key;
+    }
+
+    private function packRedisValue(string $key, mixed $data, ?string $expire): array
+    {
+        $now = time();
+        $expireAt = $expire !== null ? strtotime($expire) : 0;
+
+        if ($expireAt === false) {
+            $expireAt = 0;
+        }
+
+        $payload = [
+            'key' => $key,
+            'value' => serialize($data),
+            'created_at' => $now,
+            'expire_at' => (int) $expireAt,
+        ];
+
+        return [
+            'payload' => serialize($payload),
+            'expireAt' => (int) $expireAt,
+        ];
+    }
+
+    private function unpackRedisValue(mixed $value): ?array
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        /** @var array|false $payload */
+        $payload = @unserialize($value);
+        if (!is_array($payload) || !array_key_exists('value', $payload) || !array_key_exists('created_at', $payload)) {
+            return null;
+        }
+
+        $decoded = @unserialize((string) $payload['value']);
+
+        return [
+            'value' => $decoded,
+            'created_at' => (int) ($payload['created_at'] ?? 0),
+            'expire_at' => (int) ($payload['expire_at'] ?? 0),
+        ];
+    }
+
+    private function scanRedisKeys(string $pattern, callable $callback): void
+    {
+        if (!$this->redis) {
+            return;
+        }
+
+        $cursor = 0;
+        do {
+            $keys = $this->redis->scan($cursor, $pattern);
+            if ($keys === false) {
+                break;
+            }
+
+            foreach ($keys as $key) {
+                $callback($key);
+            }
+        } while ($cursor > 0);
+    }
+
+    private function cleanupExpiredRedis(): int
+    {
+        if (!$this->redis) {
+            return 0;
+        }
+
+        $now = time();
+        $deleted = 0;
+        $expiredKeys = [];
+
+        $this->scanRedisKeys($this->cachePrefixPattern(), function (string $redisKey) use ($now, &$expiredKeys) {
+            $packed = $this->redis?->get($redisKey);
+            $unpacked = $this->unpackRedisValue($packed);
+
+            if ($unpacked === null || ($unpacked['expire_at'] !== 0 && $unpacked['expire_at'] < $now)) {
+                $expiredKeys[] = $redisKey;
+            }
+        });
+
+        if ($expiredKeys !== []) {
+            $deleted = $this->redis->del($expiredKeys);
+        }
+
+        return (int) $deleted;
+    }
+
+    private function cachePrefixPattern(): string
+    {
+        return $this->redisKeyPrefix . '*';
     }
 
     /**
      * Checks if a cache key exists and optionally erases expired entries.
-     *
-     * @param string $key The key to check in cache.
-     * @param bool $eraseExpired Whether to erase expired entries before checking.
-     * @return bool
      */
     public function has(string $key, bool $eraseExpired = false): bool
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return false;
+            }
+
+            $redisKey = $this->cacheKey($key);
+            $raw = $this->redis->get($redisKey);
+
+            if ($raw === false) {
+                return false;
+            }
+
+            $payload = $this->unpackRedisValue($raw);
+            if (!is_array($payload)) {
+                return false;
+            }
+
+            if ($payload['expire_at'] > 0 && $payload['expire_at'] <= time()) {
+                if ($eraseExpired) {
+                    $this->redis->del($redisKey);
+                }
+
+                return false;
+            }
+
+            return true;
+        }
+
         $eraseExpired && $this->eraseExpired();
 
         $stmt = $this->statement(
             'has',
-            "SELECT 1 FROM caches WHERE key = ? AND (expire_at = 0 OR expire_at > ?)"
+            'SELECT 1 FROM caches WHERE key = ? AND (expire_at = 0 OR expire_at > ?)'
         );
 
         $stmt->execute([$key, time()]);
+
         return (bool) $stmt->fetchColumn();
     }
 
     /**
      * Stores data in the cache with an optional expiration time.
-     *
-     * @param string $key Unique identifier for the cached data.
-     * @param mixed $data The data to cache.
-     * @param string|null $expire Expiration time as a string (e.g., '+1 day').
-     * @return self
      */
     public function store(string $key, mixed $data, null|string $expire = null): self
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return $this;
+            }
+
+            $packed = $this->packRedisValue($key, $data, $expire);
+            $redisKey = $this->cacheKey($key);
+            $this->redis->set($redisKey, $packed['payload']);
+
+            if ($packed['expireAt'] > 0) {
+                $this->redis->expire($redisKey, max(1, $packed['expireAt'] - time()));
+            }
+
+            return $this;
+        }
+
         $now = time();
         $expireAt = $expire !== null ? strtotime($expire) : 0;
 
         $stmt = $this->statement(
             'store',
-            "INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)"
+            'INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)'
         );
 
         $stmt->execute([
@@ -164,48 +384,86 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Loads data from cache or generates it using a callback if not present.
-     *
-     * @param string $key The cache key.
-     * @param callable $callback Function to generate the data if not cached.
-     * @param null|string $expire Optional expiration time.
-     * @return mixed
      */
     public function load(string $key, callable $callback, null|string $expire = null): mixed
     {
-        // Erase expired entries if enabled.
-        $expire && $this->eraseExpired();
+        if (null !== ($expire) && $this->isRedis()) {
+            $this->cleanupExpiredRedis();
+        }
 
-        // Check if cache is already exists, else store it into cache. 
-        if (!$this->has($key)) {
+        if (!$this->has($key, $expire !== null)) {
             $data = $callback($this);
             $this->store($key, $data, $expire);
             return $data;
         }
 
-        // Retrieve entry from cache.
         return $this->retrieve($key);
     }
 
     /**
      * Retrieves data from the cache for given keys, optionally erasing expired entries.
-     *
-     * @param string|array $keys Cache key(s) to retrieve.
-     * @param bool $eraseExpired Whether to erase expired entries before retrieval.
-     * @return mixed
      */
     public function retrieve(string|array $keys, bool $eraseExpired = false): mixed
     {
-        $eraseExpired && $this->eraseExpired();
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return is_array($keys) ? [] : null;
+            }
 
-        if (empty($keys)) {
-            return is_array($keys) ? [] : null; // Return empty array or null based on input type
+            if (empty($keys)) {
+                return is_array($keys) ? [] : null;
+            }
+
+            if ($eraseExpired) {
+                $this->cleanupExpiredRedis();
+            }
+
+            if (is_array($keys)) {
+                $redisKeys = array_map($this->cacheKey(...), $keys);
+                $values = $this->redis->mget($redisKeys);
+
+                $results = [];
+                foreach ($keys as $index => $key) {
+                    $raw = $values[$index] ?? false;
+
+                    if ($raw === false) {
+                        continue;
+                    }
+
+                    $payload = $this->unpackRedisValue($raw);
+                    if (!is_array($payload)) {
+                        continue;
+                    }
+
+                    if ($payload['expire_at'] > 0 && $payload['expire_at'] <= time()) {
+                        continue;
+                    }
+
+                    $results[$key] = $payload['value'];
+                }
+
+                return $results;
+            }
+
+            $raw = $this->redis->get($this->cacheKey((string) $keys));
+            $payload = $this->unpackRedisValue($raw);
+
+            if (!is_array($payload) || ($payload['expire_at'] > 0 && $payload['expire_at'] <= time())) {
+                return null;
+            }
+
+            return $payload['value'];
         }
 
         if (is_array($keys)) {
             $placeholders = rtrim(str_repeat('?,', count($keys)), ',');
-            $stmt = $this->pdo->prepare(
+            $stmt = $this->pdo?->prepare(
                 "SELECT key, data FROM caches WHERE key IN ($placeholders) AND (expire_at = 0 OR expire_at > ?)"
             );
+
+            if (!$stmt) {
+                return [];
+            }
 
             $stmt->execute([...$keys, time()]);
             $results = [];
@@ -219,7 +477,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
         $stmt = $this->statement(
             'retrieve',
-            "SELECT data FROM caches WHERE key = ? AND (expire_at = 0 OR expire_at > ?)"
+            'SELECT data FROM caches WHERE key = ? AND (expire_at = 0 OR expire_at > ?)'
         );
 
         $stmt->execute([$keys, time()]);
@@ -229,16 +487,30 @@ class Cache implements CacheUtilContract, \ArrayAccess
     }
 
     /**
-     * Retrieves the metadata for the given cache key.
-     *
-     * @param string $key The cache key.
-     * @return mixed The metadata for the given cache key, or null if not found.
+     * Retrieves metadata for a cache key.
      */
     public function metadata(string $key): mixed
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return null;
+            }
+
+            $row = $this->unpackRedisValue($this->redis->get($this->cacheKey($key)));
+
+            if (!is_array($row)) {
+                return null;
+            }
+
+            return [
+                'created_at' => $row['created_at'],
+                'expire_at' => $row['expire_at'],
+            ];
+        }
+
         $stmt = $this->statement(
             'metadata',
-            "SELECT created_at, expire_at FROM caches WHERE key = ?"
+            'SELECT created_at, expire_at FROM caches WHERE key = ?'
         );
 
         $stmt->execute([$key]);
@@ -249,17 +521,47 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Retrieves all data from the cache, optionally erasing expired entries.
-     *
-     * @param bool $eraseExpired Whether to erase expired entries before retrieval.
-     * @return array
      */
     public function retrieveAll(bool $eraseExpired = false): array
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return [];
+            }
+
+            if ($eraseExpired) {
+                $this->cleanupExpiredRedis();
+            }
+
+            $result = [];
+            $this->scanRedisKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$result) {
+                if ($this->redis === null) {
+                    return;
+                }
+
+                $raw = $this->redis->get($redisKey);
+                $payload = $this->unpackRedisValue($raw);
+
+                if (!is_array($payload)) {
+                    return;
+                }
+
+                if ($payload['expire_at'] > 0 && $payload['expire_at'] <= time()) {
+                    return;
+                }
+
+                $key = substr($redisKey, strlen($this->redisKeyPrefix));
+                $result[$key] = $payload['value'];
+            });
+
+            return $result;
+        }
+
         $eraseExpired && $this->eraseExpired();
 
         $stmt = $this->statement(
             'retrieve_all',
-            "SELECT key, data FROM caches WHERE expire_at = 0 OR expire_at > ?"
+            'SELECT key, data FROM caches WHERE expire_at = 0 OR expire_at > ?'
         );
 
         $stmt->execute([time()]);
@@ -274,34 +576,50 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Erases specified cache entries.
-     *
-     * @param string|array $keys Cache key(s) to erase.
-     * @return self
      */
     public function erase(string|array $keys): self
     {
         $keys = is_array($keys) ? $keys : func_get_args();
+
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return $this;
+            }
+
+            if (empty($keys)) {
+                return $this;
+            }
+
+            $redisKeys = array_map($this->cacheKey(...), $keys);
+            $this->redis->del($redisKeys);
+            return $this;
+        }
+
         $placeholders = rtrim(str_repeat('?,', count($keys)), ',');
 
-        $stmt = $this->pdo->prepare("
-            DELETE FROM caches 
-            WHERE key IN ($placeholders)
-        ");
+        $stmt = $this->pdo?->prepare("DELETE FROM caches WHERE key IN ($placeholders)");
+
+        if (!$stmt) {
+            return $this;
+        }
 
         $stmt->execute($keys);
         return $this;
     }
 
     /**
-     * Erases expired cache entries based on their timestamps and expiration times.
-     *
-     * @return self
+     * Erases expired cache entries based on their timestamps.
      */
     public function eraseExpired(): self
     {
+        if ($this->isRedis()) {
+            $this->cleanupExpiredRedis();
+            return $this;
+        }
+
         $stmt = $this->statement(
             'erase_expired',
-            "DELETE FROM caches WHERE expire_at > 0 AND expire_at < ?"
+            'DELETE FROM caches WHERE expire_at > 0 AND expire_at < ?'
         );
 
         $stmt->execute([time()]);
@@ -310,15 +628,41 @@ class Cache implements CacheUtilContract, \ArrayAccess
     }
 
     /**
-     * Retrieves all expired cache entries without removing them.
-     *
-     * @return array An associative array of expired cache entries.
+     * Retrieves all expired cache entries.
      */
     public function getExpired(): array
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return [];
+            }
+
+            $result = [];
+            $now = time();
+            $this->scanRedisKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$result, $now) {
+                if (!$this->redis) {
+                    return;
+                }
+
+                $raw = $this->redis->get($redisKey);
+                $payload = $this->unpackRedisValue($raw);
+
+                if (!is_array($payload)) {
+                    return;
+                }
+
+                if ($payload['expire_at'] > 0 && $payload['expire_at'] < $now) {
+                    $key = substr($redisKey, strlen($this->redisKeyPrefix));
+                    $result[$key] = $payload['value'];
+                }
+            });
+
+            return $result;
+        }
+
         $stmt = $this->statement(
             'get_expired',
-            "SELECT key, data FROM caches WHERE expire_at > 0 AND expire_at < ?"
+            'SELECT key, data FROM caches WHERE expire_at > 0 AND expire_at < ?'
         );
 
         $stmt->execute([time()]);
@@ -333,21 +677,33 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Clears all cache data.
-     *
-     * @return self
      */
     public function flush(): self
     {
-        $this->pdo->exec("DELETE FROM caches");
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return $this;
+            }
+
+            $this->cleanupExpiredRedis();
+
+            $keys = [];
+            $this->scanRedisKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$keys) {
+                $keys[] = $redisKey;
+            });
+
+            if ($keys !== []) {
+                $this->redis->del($keys);
+            }
+
+            return $this;
+        }
+
+        $this->pdo?->exec('DELETE FROM caches');
+
         return $this;
     }
 
-    /**
-     * Clears all cache data if the given condition is true.
-     *
-     * @param bool $condition The condition to check.
-     * @return self
-     */
     public function flushIf(bool $condition): self
     {
         $condition && $this->flush();
@@ -356,29 +712,51 @@ class Cache implements CacheUtilContract, \ArrayAccess
     }
 
     /**
-     * Clears all cache data by deleting the cache file 
-     * and resetting properties.
-     *
-     * @return self
+     * Clears all cache data and reclaims storage.
      */
     public function clear(): self
     {
-        $this->flush(); // Ensure all data is deleted.
-        $this->pdo->exec("VACUUM"); // Reclaim space in the database file.
+        $this->flush();
+
+        if ($this->isRedis()) {
+            return $this;
+        }
+
+        $this->pdo?->exec('VACUUM');
 
         return $this;
     }
 
     /**
      * Stores multiple cache entries in a single transaction.
-     *
-     * @param array $items Associative array of key => value pairs.
-     * @param string|null $expire Expiration time as a string.
-     * @return self
      */
     public function storeMany(array $items, null|string $expire = null): self
     {
-        if (empty($items)) {
+        if ($items === []) {
+            return $this;
+        }
+
+        if ($this->isRedis()) {
+            $now = time();
+            $redisPayloads = [];
+
+            foreach ($items as $key => $value) {
+                $packed = $this->packRedisValue((string) $key, $value, $expire);
+                $redisPayloads[$this->cacheKey((string) $key)] = $packed['payload'];
+            }
+
+            foreach ($redisPayloads as $redisKey => $payload) {
+                $this->redis?->set($redisKey, $payload);
+
+                // Use per-key expiry from same configured value.
+                if ($expire !== null) {
+                    $expireAt = strtotime($expire);
+                    if ($expireAt !== false && $expireAt > $now) {
+                        $this->redis?->expire($redisKey, max(1, $expireAt - $now));
+                    }
+                }
+            }
+
             return $this;
         }
 
@@ -386,11 +764,11 @@ class Cache implements CacheUtilContract, \ArrayAccess
         $expireAt = $expire !== null ? strtotime($expire) : 0;
 
         try {
-            $this->pdo->beginTransaction();
+            $this->pdo?->beginTransaction();
 
             $stmt = $this->statement(
-                'store',
-                "INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)"
+                'store_many',
+                'INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)'
             );
 
             foreach ($items as $key => $value) {
@@ -402,9 +780,9 @@ class Cache implements CacheUtilContract, \ArrayAccess
                 ]);
             }
 
-            $this->pdo->commit();
+            $this->pdo?->commit();
         } catch (\PDOException $e) {
-            $this->pdo->rollBack();
+            $this->pdo?->rollBack();
             throw new CacheUtilException("Failed to store multiple items: " . $e->getMessage());
         }
 
@@ -413,40 +791,51 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Increment a numeric cache value.
-     *
-     * @param string $key The cache key.
-     * @param int $amount Amount to increment (default: 1).
-     * @return int|false The new value, or false if the key doesn't exist or isn't numeric.
      */
     public function increment(string $key, int $amount = 1): int|false
     {
+        if ($this->isRedis()) {
+            $value = $this->retrieve($key);
+
+            if (!is_numeric($value)) {
+                return false;
+            }
+
+            $value = (int) $value + $amount;
+            $stored = $this->metadata($key);
+            $ttl = $stored['expire_at'] ?? 0;
+
+            if ($ttl > 0) {
+                $seconds = max(1, $ttl - time());
+            }
+
+            $this->store($key, $value, $ttl > 0 ? ('+' . $seconds . ' seconds') : null);
+            return $value;
+        }
+
         try {
-            $this->pdo->beginTransaction();
+            $this->pdo?->beginTransaction();
 
             $value = $this->retrieve($key);
 
             if ($value === null || !is_numeric($value)) {
-                $this->pdo->rollBack();
+                $this->pdo?->rollBack();
                 return false;
             }
 
             $newValue = (int) $value + $amount;
             $this->store($key, $newValue);
 
-            $this->pdo->commit();
+            $this->pdo?->commit();
             return $newValue;
         } catch (\PDOException $e) {
-            $this->pdo->rollBack();
+            $this->pdo?->rollBack();
             return false;
         }
     }
 
     /**
      * Decrement a numeric cache value.
-     *
-     * @param string $key The cache key.
-     * @param int $amount Amount to decrement (default: 1).
-     * @return int|false The new value, or false if the key doesn't exist or isn't numeric.
      */
     public function decrement(string $key, int $amount = 1): int|false
     {
@@ -455,38 +844,34 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Store a value if the key doesn't exist.
-     *
-     * @param string $key The cache key.
-     * @param mixed $value The value to store.
-     * @param string|null $expire Expiration time.
-     * @return bool True if stored, false if key already exists.
      */
     public function add(string $key, mixed $value, null|string $expire = null): bool
     {
-        try {
-            $this->pdo->beginTransaction();
+        if ($this->isRedis()) {
+            $packed = $this->packRedisValue($key, $value, $expire);
 
-            if ($this->has($key)) {
-                $this->pdo->rollBack();
+            $added = $this->redis?->setnx($this->cacheKey($key), $packed['payload']);
+            if (!$added) {
                 return false;
             }
 
-            $this->store($key, $value, $expire);
-            $this->pdo->commit();
+            if ($packed['expireAt'] > 0) {
+                $this->redis?->expire($this->cacheKey($key), max(1, $packed['expireAt'] - time()));
+            }
+
             return true;
-        } catch (\PDOException $e) {
-            $this->pdo->rollBack();
-            return false;
         }
+
+        if (!$this->has($key)) {
+            $this->store($key, $value, $expire);
+            return true;
+        }
+
+        return false;
     }
 
     /**
      * Remember a value in cache forever or retrieve it from callback.
-     *
-     * @param string $key The cache key.
-     * @param callable $callback Callback to generate value if not cached.
-     * @param null|string $expire Expiration time.
-     * @return mixed
      */
     public function remember(string $key, callable $callback, null|string $expire = null): mixed
     {
@@ -501,30 +886,65 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Gets statistics about the cache.
-     *
-     * @return array Cache statistics including size, count, locks, etc.
      */
     public function stats(): array
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return [];
+            }
+
+            $now = time();
+            $totalEntries = 0;
+            $expiredEntries = 0;
+
+            $this->scanRedisKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$totalEntries, &$expiredEntries, $now) {
+                if (!$this->redis) {
+                    return;
+                }
+
+                $raw = $this->redis->get($redisKey);
+                $payload = $this->unpackRedisValue($raw);
+
+                if (!is_array($payload)) {
+                    return;
+                }
+
+                $totalEntries++;
+                if ($payload['expire_at'] > 0 && $payload['expire_at'] < $now) {
+                    $expiredEntries++;
+                }
+            });
+
+            $memory = 0;
+            $info = $this->redis->info('memory');
+            if (is_array($info) && isset($info['used_memory'])) {
+                $memory = (int) $info['used_memory'];
+            }
+
+            return [
+                'total_entries' => $totalEntries,
+                'active_entries' => $totalEntries - $expiredEntries,
+                'expired_entries' => $expiredEntries,
+                'database_size' => $memory,
+            ];
+        }
+
         try {
-            // Get total cache entries
-            $stmt = $this->pdo->query("SELECT COUNT(*) FROM caches");
-            $totalEntries = (int) $stmt->fetchColumn();
+            $stmt = $this->pdo?->query('SELECT COUNT(*) FROM caches');
+            $totalEntries = (int) $stmt?->fetchColumn();
 
-            // Get expired entries count
-            $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM caches WHERE expire_at > 0 AND expire_at < ?");
-            $stmt->execute([time()]);
-            $expiredEntries = (int) $stmt->fetchColumn();
+            $stmt = $this->pdo?->prepare('SELECT COUNT(*) FROM caches WHERE expire_at > 0 AND expire_at < ?');
+            $stmt?->execute([time()]);
+            $expiredEntries = (int) ($stmt?->fetchColumn() ?? 0);
 
-            // Get active entries count
             $activeEntries = $totalEntries - $expiredEntries;
 
-            // Get database file size
-            $stmt = $this->pdo->query("PRAGMA page_count");
-            $pageCount = (int) $stmt->fetchColumn();
+            $stmt = $this->pdo?->query('PRAGMA page_count');
+            $pageCount = (int) ($stmt?->fetchColumn() ?? 0);
 
-            $stmt = $this->pdo->query("PRAGMA page_size");
-            $pageSize = (int) $stmt->fetchColumn();
+            $stmt = $this->pdo?->query('PRAGMA page_size');
+            $pageSize = (int) ($stmt?->fetchColumn() ?? 0);
 
             $dbSize = $pageCount * $pageSize;
 
@@ -541,37 +961,44 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * Pull a value from the cache and delete it.
-     *
-     * @param string $key The cache key.
-     * @param mixed $default Default value if key doesn't exist.
-     * @return mixed
      */
     public function pull(string $key, mixed $default = null): mixed
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return $default;
+            }
+
+            $value = $this->retrieve($key);
+            if ($value !== null) {
+                $this->erase($key);
+                return $value;
+            }
+
+            return $default;
+        }
+
         try {
-            $this->pdo->beginTransaction();
+            $this->pdo?->beginTransaction();
 
             $value = $this->retrieve($key);
 
             if ($value !== null) {
                 $this->erase($key);
-                $this->pdo->commit();
+                $this->pdo?->commit();
                 return $value;
             }
 
-            $this->pdo->commit();
+            $this->pdo?->commit();
             return $default;
         } catch (\PDOException $e) {
-            $this->pdo->rollBack();
+            $this->pdo?->rollBack();
             return $default;
         }
     }
 
     /**
      * Store multiple cache entries from an array where keys expire at different times.
-     *
-     * @param array $items Associative array of key => ['value' => $val, 'expire' => $exp].
-     * @return self
      */
     public function storeManyWithExpiry(array $items): self
     {
@@ -579,16 +1006,43 @@ class Cache implements CacheUtilContract, \ArrayAccess
             return $this;
         }
 
+        $now = time();
+
+        if ($this->isRedis()) {
+
+            foreach ($items as $key => $config) {
+                if (!is_array($config)) {
+                    continue;
+                }
+
+                $value = $config['value'] ?? null;
+                $expire = $config['expire'] ?? null;
+
+                $packed = $this->packRedisValue((string) $key, $value, $expire);
+                $redisKey = $this->cacheKey((string) $key);
+                $this->redis?->set($redisKey, $packed['payload']);
+
+                if ($packed['expireAt'] > 0) {
+                    $this->redis?->expire($redisKey, max(1, $packed['expireAt'] - $now));
+                }
+            }
+
+            return $this;
+        }
+
         try {
-            $this->pdo->beginTransaction();
+            $this->pdo?->beginTransaction();
 
             $stmt = $this->statement(
-                'store',
-                "INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)"
+                'store_many_expiry',
+                'INSERT OR REPLACE INTO caches (key, data, created_at, expire_at) VALUES (?, ?, ?, ?)'
             );
 
-            $now = time();
             foreach ($items as $key => $config) {
+                if (!is_array($config)) {
+                    continue;
+                }
+
                 $value = $config['value'] ?? null;
                 $expire = $config['expire'] ?? null;
                 $expireAt = $expire !== null ? strtotime($expire) : 0;
@@ -601,23 +1055,39 @@ class Cache implements CacheUtilContract, \ArrayAccess
                 ]);
             }
 
-            $this->pdo->commit();
+            $this->pdo?->commit();
         } catch (\PDOException $e) {
-            $this->pdo->rollBack();
-            throw new CacheUtilException("Failed to store items with expiry: " . $e->getMessage());
+            $this->pdo?->rollBack();
+            throw new CacheUtilException('Failed to store items with expiry: ' . $e->getMessage());
         }
 
         return $this;
     }
 
     /**
-     * Get the remaining time to live for a cache key in seconds.
-     *
-     * @param string $key The cache key.
-     * @return int|null Seconds until expiration, null if no expiration or key doesn't exist.
+     * Get the remaining time to live for a cache key.
      */
     public function ttl(string $key): ?int
     {
+        if ($this->isRedis()) {
+            if (!$this->redis) {
+                return null;
+            }
+
+            if ($this->has($key)) {
+                $metadata = $this->metadata($key);
+
+                if (($metadata['expire_at'] ?? 0) === 0) {
+                    return null;
+                }
+
+                $ttl = (int) (($metadata['expire_at'] ?? 0) - time());
+                return $ttl > 0 ? $ttl : 0;
+            }
+
+            return null;
+        }
+
         $metadata = $this->metadata($key);
 
         if (!$metadata || $metadata['expire_at'] == 0) {
@@ -629,23 +1099,21 @@ class Cache implements CacheUtilContract, \ArrayAccess
     }
 
     /**
-     * Optimize the database by running VACUUM and ANALYZE.
-     *
-     * @return self
+     * Optimize the storage backend.
      */
     public function optimize(): self
     {
+        if ($this->isRedis()) {
+            $this->cleanupExpiredRedis();
+            return $this;
+        }
+
         try {
-            // Clean expired entries first
             $this->eraseExpired();
-
-            // Reclaim unused space
-            $this->pdo->exec("VACUUM");
-
-            // Update query planner statistics
-            $this->pdo->exec("ANALYZE");
+            $this->pdo?->exec('VACUUM');
+            $this->pdo?->exec('ANALYZE');
         } catch (\PDOException $e) {
-            // Ignore errors
+            // Ignore optimize errors.
         }
 
         return $this;
@@ -653,46 +1121,33 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
     /**
      * ArrayAccess method to check if a cache key exists.
-     * 
-     * @param mixed $offset The cache key.
-     * @return bool
      */
     public function offsetExists(mixed $offset): bool
     {
-        return $this->has($offset);
+        return $this->has((string) $offset);
     }
 
     /**
      * ArrayAccess method to retrieve a cache entry.
-     * 
-     * @param mixed $offset The cache key.
-     * @return mixed
      */
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->retrieve($offset);
+        return $this->retrieve((string) $offset);
     }
 
     /**
      * ArrayAccess method to store a cache entry.
-     * 
-     * @param mixed $offset The cache key.
-     * @param mixed $value The data to cache.
-     * @return void
      */
     public function offsetSet(mixed $offset, mixed $value): void
     {
-        $this->store($offset, $value);
+        $this->store((string) $offset, $value);
     }
 
     /**
      * ArrayAccess method to erase a cache entry.
-     * 
-     * @param mixed $offset The cache key.
-     * @return void
      */
     public function offsetUnset(mixed $offset): void
     {
-        $this->erase($offset);
+        $this->erase((string) $offset);
     }
 }

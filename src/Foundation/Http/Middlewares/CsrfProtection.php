@@ -6,6 +6,7 @@ use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Hash;
 use Spark\Http\Request;
+use function is_string;
 
 /**
  * Class CsrfProtection
@@ -42,7 +43,10 @@ abstract class CsrfProtection implements MiddlewareInterface
             return $next($request);
         }
 
-        // Check if the request method is POST
+        // Ensure token exists on safe requests where it can be refreshed.
+        $this->checkCsrfToken();
+
+        // Validate CSRF token on unsafe requests.
         if ($request->isPostBack()) {
             // Retrieve the CSRF token from the POST data
             $token = $request->post('_token');
@@ -53,9 +57,6 @@ abstract class CsrfProtection implements MiddlewareInterface
                 // Return a 403 Forbidden response if the token is invalid
                 throw new InvalidCsrfTokenException('Invalid CSRF token');
             }
-        } else {
-            // Check the CSRF token
-            $this->checkCsrfToken();
         }
 
         return $next($request); // Proceed to the next middleware or request handler
@@ -74,8 +75,33 @@ abstract class CsrfProtection implements MiddlewareInterface
      */
     protected function getXsrfToken(Request $request): ?string
     {
+        $rawToken = null;
+
+        // Legacy header key used by frameworks and JS clients.
+        if (($candidate = $request->header('X-XSRF-TOKEN')) !== null) {
+            $rawToken = $candidate;
+        } elseif (($candidate = $request->header('X-CSRF-TOKEN')) !== null) {
+            // Alternative header name commonly used by Axios/Fetch.
+            $rawToken = $candidate;
+        }
+
+        if ($rawToken === null) {
+            return null;
+        }
+
         // Retrieve the CSRF token from the request headers
-        $token = $request->header('X-XSRF-TOKEN', '');
+
+        $token = $rawToken;
+
+        // If client sends plain token, use as-is.
+        if (!is_string($token) || $token === '') {
+            return null;
+        }
+
+        $sessionToken = session('csrf_token', '');
+        if (hash_equals($sessionToken, $token)) {
+            return $token;
+        }
 
         // Decrypt the token using the Hash facade
         try {
@@ -102,15 +128,30 @@ abstract class CsrfProtection implements MiddlewareInterface
             return false;
         }
 
+        $path = trim($request->getPath(), '/');
+
         // Iterate over the except array
         foreach ($this->except as $url) {
+            if (!is_string($url)) {
+                continue;
+            }
+
+            $url = trim($url, '/');
+
+            if ($url === '') {
+                if ($path === '') {
+                    return true;
+                }
+
+                continue;
+            }
+
             // If the URL ends with a wildcard, check if the request path starts with the URL
-            if (substr($url, -1) === '*') {
-                $url = rtrim($url, '*');
-                $skip = strpos($request->getPath(), $url) === 0;
+            if (str_contains($url, '*')) {
+                $pattern = '#^' . str_replace('\*', '.*', preg_quote($url, '#')) . '$#';
+                $skip = (bool) preg_match($pattern, $path);
             } else {
-                // Otherwise, check if the request path is equal to the URL
-                $skip = $url === $request->getPath();
+                $skip = $url === $path || $url === '/' && $path === '';
             }
 
             // If the request path matches the URL, return true
@@ -129,9 +170,8 @@ abstract class CsrfProtection implements MiddlewareInterface
      * This method checks if a CSRF token is already set in the browser cookies.
      * If not, it generates a new token and sets it as a cookie. The token is
      * a 64-character hexadecimal string generated from random bytes. The cookie
-     * is configured with security options such as HTTPS-only transmission, a
-     * 6-hour expiration time, and strict same-site policy to prevent cross-site
-     * requests.
+     * is configured with session-scope options, HTTPS-only transmission when
+     * detected, a session-based lifetime, and Lax same-site policy.
      * 
      * @return void
      */
@@ -147,7 +187,7 @@ abstract class CsrfProtection implements MiddlewareInterface
             cookie(
                 'XSRF-TOKEN',
                 $encrypted,
-                ['path' => '/', 'secure' => true, 'httponly' => false, 'samesite' => 'Strict']
+                ['path' => '/', 'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'httponly' => false, 'samesite' => 'Lax', 'expires' => 0]
             );
 
             // Store the token in the session

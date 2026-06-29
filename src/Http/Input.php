@@ -6,6 +6,8 @@ use Spark\Contracts\Http\InputContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Support\Collection;
+use Spark\Support\Str;
+use Spark\Support\Stringable;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function func_get_args;
@@ -74,7 +76,14 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function email(?string $key = null): ?string
     {
         $key ??= 'email';
-        return filter_var($this->get($key), FILTER_SANITIZE_EMAIL) ?: null;
+        $value = $this->get($key);
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $sanitized = filter_var((string) $value, FILTER_SANITIZE_EMAIL);
+        return $sanitized === false ? null : $sanitized;
     }
 
     /**
@@ -87,8 +96,15 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function text(?string $key = null, bool $stripTags = true): ?string
     {
         $key ??= 'text';
-        $value = filter_var($this->get($key), FILTER_UNSAFE_RAW);
-        return $stripTags && $value ? strip_tags($value) : $value;
+        $value = $this->get($key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        $sanitized = filter_var((string) $value, FILTER_UNSAFE_RAW);
+
+        return $stripTags ? strip_tags((string) $sanitized) : (string) $sanitized;
     }
 
     /**
@@ -101,7 +117,11 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function string(string $key, $default = null): ?string
     {
         $value = $this->get($key, $default);
-        if ($value === null || is_string($value)) {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_string($value)) {
             return $value;
         }
 
@@ -110,7 +130,8 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         }
 
         if (is_array($value)) {
-            return json_encode($value);
+            $encoded = json_encode($value);
+            return $encoded !== false ? $encoded : null;
         }
 
         return (string) $value;
@@ -125,7 +146,13 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function html(?string $key = null): ?string
     {
         $key ??= 'html';
-        return htmlspecialchars($this->get($key), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = $this->get($key);
+
+        if ($value === null) {
+            return null;
+        }
+
+        return htmlspecialchars((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**
@@ -137,7 +164,15 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function number(?string $key = null): ?int
     {
         $key ??= 'number';
-        return filter_var($this->get($key), FILTER_SANITIZE_NUMBER_INT) ?: null;
+        $value = $this->get($key);
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $sanitized = filter_var((string) $value, FILTER_SANITIZE_NUMBER_INT);
+
+        return $sanitized === false || $sanitized === '' ? null : (int) $sanitized;
     }
 
     /**
@@ -146,9 +181,18 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $key Key in the data array to sanitize.
      * @return float|null Sanitized float or null if invalid.
      */
-    public function float(string $key): ?float
+    public function float(?string $key = null): ?float
     {
-        return filter_var($this->get($key), FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION) ?: null;
+        $key ??= 'float';
+        $value = $this->get($key);
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $sanitized = filter_var((string) $value, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION | FILTER_FLAG_ALLOW_THOUSAND | FILTER_FLAG_ALLOW_SCIENTIFIC);
+
+        return $sanitized === false || $sanitized === '' ? null : (float) $sanitized;
     }
 
     /**
@@ -171,7 +215,14 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function url(?string $key = null): ?string
     {
         $key ??= 'url';
-        return filter_var($this->get($key), FILTER_SANITIZE_URL) ?: null;
+        $value = $this->get($key);
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $sanitized = filter_var((string) $value, FILTER_SANITIZE_URL);
+        return $sanitized === false || $sanitized === '' ? null : $sanitized;
     }
 
     /**
@@ -183,7 +234,13 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function ip(?string $key = null): ?string
     {
         $key ??= 'ip';
-        return filter_var($this->get($key), FILTER_VALIDATE_IP) ?: null;
+        $value = $this->get($key);
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return filter_var((string) $value, FILTER_VALIDATE_IP) ?: null;
     }
 
     /**
@@ -195,10 +252,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function alpha(string $key): ?string
     {
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null || $value === '')
             return null;
 
-        $sanitized = preg_replace('/[^a-zA-Z]/', '', $value);
+        $sanitized = preg_replace('/[^a-zA-Z]/', '', (string) $value);
         return $sanitized !== '' ? $sanitized : null;
     }
 
@@ -211,10 +268,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function alphaNum(string $key): ?string
     {
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null || $value === '')
             return null;
 
-        $sanitized = preg_replace('/[^a-zA-Z0-9]/', '', $value);
+        $sanitized = preg_replace('/[^a-zA-Z0-9]/', '', (string) $value);
         return $sanitized !== '' ? $sanitized : null;
     }
 
@@ -227,10 +284,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function alphaDash(string $key): ?string
     {
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null || $value === '')
             return null;
 
-        $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '', $value);
+        $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) $value);
         return $sanitized !== '' ? $sanitized : null;
     }
 
@@ -244,10 +301,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'digits';
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null || $value === '')
             return null;
 
-        $sanitized = preg_replace('/[^0-9]/', '', $value);
+        $sanitized = preg_replace('/[^0-9]/', '', (string) $value);
         return $sanitized !== '' ? $sanitized : null;
     }
 
@@ -262,11 +319,11 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'phone';
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null || $value === '')
             return null;
 
         $pattern = $keepPlus ? '/[^0-9+]/' : '/[^0-9]/';
-        $sanitized = preg_replace($pattern, '', $value);
+        $sanitized = preg_replace($pattern, '', (string) $value);
         return $sanitized !== '' ? $sanitized : null;
     }
 
@@ -281,10 +338,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'date';
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null || $value === '')
             return null;
 
-        $timestamp = strtotime($value);
+        $timestamp = strtotime((string) $value);
         return $timestamp !== false ? date($format, $timestamp) : null;
     }
 
@@ -299,10 +356,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'json';
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null || $value === '')
             return null;
 
-        $decoded = json_decode($value, true);
+        $decoded = json_decode((string) $value, true);
         if (json_last_error() !== JSON_ERROR_NONE)
             return null;
 
@@ -374,10 +431,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'password';
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null)
             return null;
 
-        $sanitized = trim($value);
+        $sanitized = trim((string) $value);
 
         if ($hash) {
             if (!empty($options)) {
@@ -400,15 +457,15 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function safe(string $key, array $allowedTags = []): ?string
     {
         $value = $this->get($key);
-        if (!$value)
+        if ($value === null)
             return null;
 
         if (empty($allowedTags)) {
-            return strip_tags($value);
+            return strip_tags((string) $value);
         }
 
         $allowedTagsString = '<' . implode('><', $allowedTags) . '>';
-        return strip_tags($value, $allowedTagsString);
+        return strip_tags((string) $value, $allowedTagsString);
     }
 
     /**
@@ -566,46 +623,46 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Magic method to unset a key-value pair in the sanitizer data array.
      *
-     * @param string $name Key to unset.
+     * @param string $name name to unset.
      * @return void
      */
-    public function offsetExists($key): bool
+    public function offsetExists($name): bool
     {
-        return $this->has($key);
+        return $this->has($name);
     }
 
     /**
      * Magic method to unset a key-value pair in the sanitizer data array.
      *
-     * @param string $name Key to unset.
+     * @param string $name name to unset.
      * @return void
      */
-    public function offsetUnset($key): void
+    public function offsetUnset($name): void
     {
-        $this->data->forget($key);
+        $this->data->forget($name);
     }
 
     /**
      * Magic method to retrieve a value from the sanitizer data array.
      *
-     * @param string $key Key to retrieve.
+     * @param string $name Key to retrieve.
      * @return mixed The value associated with the key, or null if not found.
      */
-    public function offsetGet($key): mixed
+    public function offsetGet($name): mixed
     {
-        return $this->get($key);
+        return $this->get($name);
     }
 
     /**
      * Magic method to set a key-value pair in the sanitizer data array.
      *
-     * @param string $key Key to set.
+     * @param string $name Key to set.
      * @param mixed $value Value to set.
      * @return void
      */
-    public function offsetSet($key, $value): void
+    public function offsetSet($name, $value): void
     {
-        $this->set($key, $value);
+        $this->set($name, $value);
     }
 
     /**
@@ -637,11 +694,24 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         $result = [];
 
         foreach ($config as $field => $type) {
-            // Check if the type is a string with multiple options
-            // If so, split it into an array of types
+            if (is_int($field)) {
+                $field = (string) $type;
+                $type = 'string';
+            }
+
+            // If the type is an array, use the first element as the type.
+            if (is_array($type)) {
+                $type = $type[0] ?? null;
+            }
+
+            // Pick the first item when a Laravel-like pipe string is passed.
             if (is_string($type) && str_contains($type, '|')) {
-                $type = explode('|', $type);
-                $type = array_filter($type, fn($t) => in_array($t, [
+                $type = array_values(array_filter(array_map('trim', explode('|', $type))));
+                $type = $type[0] ?? 'string';
+            }
+
+            if (
+                !is_string($type) || !in_array($type, [
                     'email',
                     'text',
                     'html',
@@ -663,18 +733,9 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
                     'file',
                     'password',
                     'safe'
-                ]));
-            }
-
-            // If the type is an array, use the first element as the type
-            if (is_array($type)) {
-                $type = $type[0] ?? null;
-            }
-
-            //  If the type is not a string, assume the key itself is the type
-            //  This allows for flexibility in specifying types or using the key as the type.
-            if (is_int($field)) {
-                $field = $type;
+                ], true)
+            ) {
+                $type = 'string';
             }
 
             $result[$field] = match ($type) {
@@ -763,6 +824,27 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     }
 
     /**
+     * Sanitizes a string into a URL-friendly slug.
+     *
+     * @param ?string $key Key in the data array to sanitize.
+     * @param string $separator Separator character.
+     * @param string $language Language for transliteration.
+     * @param array $dictionary Optional replacements for transliteration.
+     * @return string|null
+     */
+    public function slug(?string $key = null, string $separator = '-', string $language = 'en', array $dictionary = ['@' => 'at']): ?string
+    {
+        $key ??= 'slug';
+
+        $value = $this->get($key);
+        if ($value === null) {
+            return null;
+        }
+
+        return Str::slug((string) $value, $separator, $language, $dictionary);
+    }
+
+    /**
      * Converts the sanitizer data array to a Spark\Support\Stringable instance.
      *
      * @param string $key Key in the data array to convert to Stringable.
@@ -771,8 +853,8 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function str(string $key, string $default = ''): \Spark\Support\Stringable
     {
-        return new \Spark\Support\Stringable(
-            $this->data->get($key, $default)
+        return new Stringable(
+            (string) $this->data->get($key, $default)
         );
     }
 
@@ -833,6 +915,12 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function __toString(): string
     {
-        return $this->text($this->data->first(), true) ?? '';
+        $first = $this->data->first();
+
+        return match (true) {
+            $first === null => '',
+            is_array($first), is_object($first) => json_encode($first) ?: '',
+            default => (string) $first,
+        };
     }
 }

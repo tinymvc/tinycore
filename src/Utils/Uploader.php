@@ -8,11 +8,11 @@ use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Exceptions\Utils\UploaderUtilException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use function count;
+use function array_key_exists;
 use function in_array;
 use function is_array;
 use function is_string;
-use function sprintf;
+use function strlen;
 
 /**
  * Class uploader
@@ -74,7 +74,15 @@ class Uploader implements UploaderUtilContract
         null|int $compress = null,
         null|UploaderUtilDriverInterface $driver = null
     ): self {
-        $this->extensions = $extensions;
+        $extensions = $extensions === null ? [] : $extensions;
+
+        $this->extensions = array_values(array_unique(array_filter(
+            array_map(
+                static fn(string $extension): string => ltrim(strtolower(trim($extension)), '.'),
+                array_filter($extensions, 'is_string')
+            ),
+            static fn(string $extension): bool => $extension !== ''
+        )));
         $this->multiple = $multiple;
         $this->maxSize = $maxSize;
         $this->resize = isset($resize[0]) ? [$resize[0] => $resize[1]] : $resize;
@@ -124,17 +132,33 @@ class Uploader implements UploaderUtilContract
             $files = $files->toArray();
         }
 
-        $this->multiple ??= is_array($files['name']) && count($files['name']) > 1;
+        if (!is_array($files) || !isset($files['name'])) {
+            throw new UploaderUtilException(__('Invalid upload payload.'));
+        }
+
+        if (empty($files['name'])) {
+            throw new UploaderUtilException(__('No files were provided.'));
+        }
+
+        $this->multiple ??= is_array($files['name']) && array_is_list((array) $files['name']);
+
+        if (!$this->multiple && is_array($files['name'])) {
+            throw new UploaderUtilException(__('Invalid upload payload for single upload.'));
+        }
 
         if ($this->multiple) {
             $uploadedFiles = [];
             foreach ($files['name'] as $key => $name) {
+                if (!array_key_exists($key, $files['tmp_name'])) {
+                    continue;
+                }
+
                 $file = [
-                    'name' => $files['name'][$key],
-                    'type' => $files['type'][$key],
+                    'name' => $name,
+                    'type' => $files['type'][$key] ?? '',
                     'tmp_name' => $files['tmp_name'][$key],
-                    'error' => $files['error'][$key],
-                    'size' => $files['size'][$key],
+                    'error' => $files['error'][$key] ?? 0,
+                    'size' => $files['size'][$key] ?? 0,
                 ];
                 $uploadedFiles = array_merge($uploadedFiles, (array) $this->processUpload($file));
             }
@@ -181,7 +205,14 @@ class Uploader implements UploaderUtilContract
             return array_map($this->removeUploadDir(...), $files);
         }
 
-        return str_replace([upload_dir(), '\\'], ['', '/'], $files);
+        $baseDir = rtrim(str_replace('\\', '/', upload_dir()), '/');
+        $normalizedPath = str_replace('\\', '/', $files);
+
+        if (str_starts_with($normalizedPath, "$baseDir/")) {
+            return ltrim(substr($normalizedPath, strlen("$baseDir/")), '/');
+        }
+
+        return $normalizedPath;
     }
 
     /**
@@ -205,75 +236,83 @@ class Uploader implements UploaderUtilContract
      */
     protected function processUpload(array $file): array|string
     {
+        if (!isset($file['tmp_name'], $file['name'])) {
+            throw new UploaderUtilException(__('Invalid file data.'));
+        }
+
+        $tmpName = $file['tmp_name'];
+        if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            throw new UploaderUtilException(__('Upload error: %s', $file['error'] ?? UPLOAD_ERR_UNKNOWN));
+        }
+
         // Validate file size
-        if (isset($this->maxSize) && $file['size'] > ($this->maxSize * 1024)) {
+        if (isset($this->maxSize) && ((int) ($file['size'] ?? 0) > ($this->maxSize * 1024))) {
             throw new UploaderUtilException(__('File size exceeds the maximum limit.'));
         }
 
         // Validate file extension
-        $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-        if (!empty($this->extensions) && !in_array(strtolower($extension), $this->extensions)) {
+        $extension = strtolower(ltrim(pathinfo($file['name'], PATHINFO_EXTENSION), '.'));
+        if (!empty($this->extensions) && !in_array(strtolower($extension), $this->extensions, true)) {
             throw new UploaderUtilException(__('Invalid file extension. Only %s are accepted.', implode(', ', $this->extensions)));
         }
 
         // Check if additional image options are set
-        $additionalImageOptions = (isset($this->compress) || isset($this->resize) || isset($this->resizes)) &&
+        $additionalImageOptions = (isset($this->compress) || !empty($this->resize) || !empty($this->resizes)) &&
             in_array($extension, ['jpg', 'jpeg', 'png', 'gif']);
 
         // Create a unique file name
         $filename = $this->generateUniqueFileName($file['name']);
         $destination = dir_path("{$this->uploadDir}/$filename");
 
-        // Move the uploaded file to the destination
-        if ($this->driver && !$additionalImageOptions) {
-            if (!$this->handleUpload($file['tmp_name'], $destination)) {
-                throw new UploaderUtilException(__('Failed to move uploaded file.'));
-            }
-        } else {
-            if (!move_uploaded_file($file['tmp_name'], $destination)) {
-                throw new UploaderUtilException(__('Failed to move uploaded file.'));
-            }
-        }
-
-        // Compress, resize, and bulk resize image if options are set and the file is an image
         if ($additionalImageOptions) {
-            $image = new Image($destination);
-            if (isset($this->compress)) {
-                $image->compress($this->compress);
+            // For image processing we need a local file first.
+            if (!move_uploaded_file($tmpName, $destination)) {
+                throw new UploaderUtilException(__('Failed to move uploaded file.'));
             }
-            if (isset($this->resize)) {
-                $image->resize(
-                    array_keys($this->resize)[0],
-                    array_values($this->resize)[0]
-                );
-            }
-            if (isset($this->resizes)) {
-                $resizedImgs = $image->bulkResize($this->resizes);
-                $destination = [$destination, ...$resizedImgs];
-            }
+
+            $destination = $this->processImageOptions($destination);
 
             if ($this->driver) {
-                foreach ((array) $destination as $k => $file) {
-                    try {
-                        $this->handleUpload($file, $file);
-                        unlink($file); // Remove the original file after upload
-                    } catch (\Exception $e) {
-                        foreach ((array) $destination as $k2 => $file) {
-                            if (is_file($file)) {
-                                unlink($file);
-                            }
+                $uploadedFiles = [];
 
-                            // Delete the file if it was uploaded by the driver
-                            if ($k > $k2) {
-                                $this->delete($file);
-                            }
+                try {
+                    foreach ($destination as $filePath) {
+                        if (!is_file($filePath)) {
+                            throw new UploaderUtilException(__('Optimized image file not found: %s', $filePath));
                         }
 
-                        // Throw an exception if the upload failed
-                        throw new UploaderUtilException(__('Failed to upload file using driver: %s', $e->getMessage()));
+                        if (!$this->handleUpload($filePath, $filePath)) {
+                            throw new UploaderUtilException(__('Failed to upload file using driver.'));
+                        }
+
+                        $uploadedFiles[] = $filePath;
                     }
+
+                    foreach ($destination as $filePath) {
+                        if (!@unlink($filePath)) {
+                            throw new UploaderUtilException(__('Failed to remove local temporary file: %s', $filePath));
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    foreach ($destination as $filePath) {
+                        if (is_file($filePath)) {
+                            @unlink($filePath);
+                        }
+                    }
+
+                    foreach ($uploadedFiles as $uploadedFile) {
+                        $this->delete($uploadedFile);
+                    }
+
+                    throw new UploaderUtilException(__('Failed to upload file using driver: %s', $e->getMessage()), previous: $e);
                 }
             }
+        } elseif (!$this->driver) {
+            if (!move_uploaded_file($tmpName, $destination)) {
+                throw new UploaderUtilException(__('Failed to move uploaded file.'));
+            }
+        } elseif (!$this->handleUpload($tmpName, $destination)) {
+            throw new UploaderUtilException(__('Failed to move uploaded file.'));
         }
 
         return $this->removeUploadDir($destination);
@@ -296,6 +335,53 @@ class Uploader implements UploaderUtilContract
     }
 
     /**
+     * Apply image transform options and return all local file paths.
+     *
+     * @param string $destination Destination of the uploaded image.
+     * @return array List of local image paths.
+     */
+    protected function processImageOptions(string $destination): array
+    {
+        $paths = [$destination];
+
+        try {
+            $image = new Image($destination);
+
+            if (isset($this->compress)) {
+                $image->compress($this->compress);
+            }
+
+            if (!empty($this->resize)) {
+                $image->resize(
+                    (int) array_key_first($this->resize),
+                    (int) $this->resize[array_key_first($this->resize)]
+                );
+            }
+
+            if (!empty($this->resizes)) {
+                $paths = [...$paths, ...$image->bulkResize($this->resizes)];
+            }
+
+            return $paths;
+        } catch (\Throwable $e) {
+            if (is_file($destination)) {
+                @unlink($destination);
+            }
+
+            foreach ($paths as $path) {
+                if ($path !== $destination && is_file($path)) {
+                    @unlink($path);
+                }
+            }
+
+            throw new UploaderUtilException(
+                __('Image processing failed: %s', $e->getMessage()),
+                previous: $e
+            );
+        }
+    }
+
+    /**
      * Generates a unique file name based on the original file name and a unique identifier.
      *
      * @param string $fileName Original file name.
@@ -303,7 +389,7 @@ class Uploader implements UploaderUtilContract
      */
     protected function generateUniqueFileName(string $fileName): string
     {
-        $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+        $extension = strtolower((string) pathinfo($fileName, PATHINFO_EXTENSION));
         $baseName = pathinfo($fileName, PATHINFO_FILENAME);
 
         // Normalize and transliterate the filename (optional, if you want readable names)
@@ -315,13 +401,19 @@ class Uploader implements UploaderUtilContract
         $baseName = preg_replace('/[^a-zA-Z0-9]+/u', '-', $baseName);
 
         // Limit the length of the base name (60 characters) while keeping multibyte safety
-        $baseName = mb_substr($baseName, 0, 60, 'UTF-8');
+        $baseName = function_exists('mb_substr')
+            ? mb_substr($baseName, 0, 60, 'UTF-8')
+            : substr($baseName, 0, 60);
+
+        if (trim($baseName) === '') {
+            $baseName = 'upload';
+        }
 
         // Ensure the file name is unique
-        return sprintf(
-            '%s.%s',
-            uniqid($baseName . '_', true),
-            $extension
-        );
+        $uniqueSuffix = uniqid($baseName . '_', true);
+
+        return $extension === ''
+            ? $uniqueSuffix
+            : "{$uniqueSuffix}.{$extension}";
     }
 }

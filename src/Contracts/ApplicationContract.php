@@ -15,14 +15,19 @@ interface ApplicationContract
      * Creates a new instance of the application.
      *
      * This method takes the root path of the application and an optional array of
-     * environment variables.
+     * configuration values or configuration folder path.
      *
      * @param string $path The path to the root directory of the application.
-     * @param array $env An optional array of environment variables.
+     * @param null|string|array $config Optional config array, config folder path, or null.
+     * @param null|array $providers Optional provider class names to register.
      *
      * @return self A new instance of the application.
      */
-    public static function create(string $path, array $env = []): self;
+    public static function create(
+        string $path,
+        null|string|array $config = null,
+        null|array $providers = null
+    ): self;
 
     /**
      * Returns the root path of the application.
@@ -136,6 +141,20 @@ interface ApplicationContract
     public function withExceptions(array $exceptions): self;
 
     /**
+     * Configures the queue system.
+     *
+     * @param null|array $jobs An array of jobs to add when configuring the queue.
+     * @param bool|string $log Whether queue operations should be logged, or the log file path.
+     * @param null|callable $then Optional callback for additional queue setup.
+     * @return self
+     */
+    public function withQueue(
+        null|array $jobs = null,
+        bool|string $log = false,
+        null|callable $then = null
+    ): self;
+
+    /**
      * Runs the application.
      *
      * This method takes no arguments and returns no value.
@@ -144,4 +163,13 @@ interface ApplicationContract
      * @return void
      */
     public function run(): void;
+
+    /**
+     * Runs the command line interface.
+     *
+     * This method bootstraps providers and runs the command console.
+     *
+     * @return void
+     */
+    public function handleCommand(): void;
 }

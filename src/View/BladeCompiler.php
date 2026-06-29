@@ -170,7 +170,24 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileExtends(string $template): string
     {
-        return preg_replace('/\@extends\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php $this->setExtends(\'$1\'); ?>', $template);
+        $offset = 0;
+
+        while (preg_match('/\@extends\s*\(/', $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $matchStart = $matches[0][1];
+            $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+
+            $expression = $this->extractBalancedExpression($template, $parenStart);
+            if ($expression === false) {
+                throw new InvalidArgumentException('Unbalanced parentheses in @extends directive');
+            }
+
+            $replacement = '<?php $this->setExtends(' . trim($expression) . '); ?>';
+            $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+            $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
+            $offset = $matchStart + strlen($replacement);
+        }
+
+        return $template;
     }
 
     /**
@@ -178,24 +195,44 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileSections(string $template): string
     {
-        // @section('name')
-        $template = preg_replace('/\@section\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?php $this->startSection(\'$1\'); ?>', $template);
+        $offset = 0;
 
-        // @section('name', expression) - inline section
-        $template = preg_replace_callback('/\@section\s*\(\s*[\'"]([^\'"]+)[\'"]\s*,\s*(.+?)\s*\)/s', function ($matches) {
-            $sectionName = $matches[1];
-            $expression = trim($matches[2]);
-            return "<?php \$this->startSection('$sectionName'); echo $expression; \$this->endSection(); ?>";
-        }, $template);
+        while (preg_match('/\@section\s*\(/', $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $matchStart = $matches[0][1];
+            $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+
+            $expression = $this->extractBalancedExpression($template, $parenStart);
+            if ($expression === false) {
+                throw new InvalidArgumentException('Unbalanced parentheses in @section directive');
+            }
+
+            $args = $this->splitDirectiveArguments($expression, 2);
+            $section = trim($args[0] ?? '');
+            $valueExpression = trim($args[1] ?? '');
+
+            if ($section === '') {
+                throw new InvalidArgumentException('Invalid @section directive: section name is missing.');
+            }
+
+            if (count($args) >= 2) {
+                $replacement = "<?php \$this->startSection({$section}); echo {$valueExpression}; \$this->endSection(); ?>";
+            } else {
+                $replacement = "<?php \$this->startSection({$section}); ?>";
+            }
+
+            $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+            $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
+            $offset = $matchStart + strlen($replacement);
+        }
 
         // @endsection
-        $template = preg_replace('/\@endsection/', '<?php $this->endSection(); ?>', $template);
+        $template = preg_replace('/\@endsection\b/', '<?php $this->endSection(); ?>', $template);
 
         // @stop (alias for @endsection)
-        $template = preg_replace('/\@stop/', '<?php $this->endSection(); ?>', $template);
+        $template = preg_replace('/\@stop\b/', '<?php $this->endSection(); ?>', $template);
 
         // @show (end section and immediately yield it)
-        $template = preg_replace('/\@show/', '<?php $this->endSection(); echo $this->yieldSection($this->getCurrentSection()); ?>', $template);
+        $template = preg_replace('/\@show\b/', '<?php echo $this->stopAndYieldSection(); ?>', $template);
 
         return $template;
     }
@@ -205,14 +242,31 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileYields(string $template): string
     {
-        // @yield('section', 'default') - with string default
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*[\'"]([^\'"]*)[\'"])?\s*\)/', '<?= $this->yieldSection(\'$1\', \'$2\'); ?>', $template);
+        $offset = 0;
 
-        // @yield('section', $variable) - with variable default
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"](?:\s*,\s*([^,\)\'\"]+))?\s*\)/', '<?= $this->yieldSection(\'$1\', isset($2) ? $2 : \'\'); ?>', $template);
+        while (preg_match('/\@yield\s*\(/', $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $matchStart = $matches[0][1];
+            $parenStart = $matchStart + strlen($matches[0][0]) - 1;
 
-        // @yield('section') - no default
-        $template = preg_replace('/\@yield\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)/', '<?= $this->yieldSection(\'$1\', \'\'); ?>', $template);
+            $expression = $this->extractBalancedExpression($template, $parenStart);
+            if ($expression === false) {
+                throw new InvalidArgumentException('Unbalanced parentheses in @yield directive');
+            }
+
+            $args = $this->splitDirectiveArguments($expression, 2);
+            $section = trim($args[0] ?? "''");
+            $default = trim($args[1] ?? "''");
+
+            if ($section === '') {
+                throw new InvalidArgumentException('Invalid @yield directive: section name is missing.');
+            }
+
+            $replacement = "<?= \$this->yieldSection({$section}, {$default}); ?>";
+
+            $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+            $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
+            $offset = $matchStart + strlen($replacement);
+        }
 
         return $template;
     }

@@ -7,6 +7,9 @@ use Spark\Http\Client\Contracts\HttpRequestContract;
 use Spark\Http\Client\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
 use function count;
+use function is_object;
+use function is_resource;
+use function spl_object_id;
 
 /**
  * Class HttpPool
@@ -105,10 +108,10 @@ class HttpPool implements HttpPoolContract
      * @param string $method HTTP method
      * @param string $url Target URL
      * @param array $params Query parameters
-     * @param array $data POST/PUT/PATCH data
+     * @param string|array $data POST/PUT/PATCH data
      * @return \Spark\Http\Client\Contracts\HttpRequestContract
      */
-    private function addRequest(string $method, string $url, array $params = [], array $data = []): HttpRequestContract
+    private function addRequest(string $method, string $url, array $params = [], string|array $data = []): HttpRequestContract
     {
         $key = $this->nextKey ?? count($this->pendingRequests);
         $this->nextKey = null;
@@ -177,50 +180,143 @@ class HttpPool implements HttpPoolContract
         }
 
         $handles = [];
+        $requestMap = [];
         $keys = [];
 
-        // Add all requests to the multi handle
-        foreach ($requests as $request) {
-            if (!$request instanceof HttpRequest) {
-                continue;
+        try {
+            foreach ($requests as $request) {
+                if (!($request instanceof HttpRequestContract)) {
+                    continue;
+                }
+
+                $curl = $request->buildCurlHandle();
+                curl_multi_add_handle($multiHandle, $curl);
+
+                $handleId = is_object($curl) ? spl_object_id($curl) : (int) $curl;
+                $handles[$handleId] = $curl;
+                $requestMap[$handleId] = $request;
+                $keys[$handleId] = $request->getKey();
             }
 
-            $curl = $request->buildCurlHandle();
-            curl_multi_add_handle($multiHandle, $curl);
+            if (empty($handles)) {
+                return [];
+            }
 
-            $handleId = (int) $curl;
-            $handles[$handleId] = $curl;
-            $keys[$handleId] = $request->getKey();
+            $running = null;
+            do {
+                $status = curl_multi_exec($multiHandle, $running);
+
+                if ($status !== CURLM_OK && $status !== CURLM_CALL_MULTI_PERFORM) {
+                    throw new HttpException('cURL multi execution failed: ' . curl_multi_strerror($status));
+                }
+
+                if ($running > 0) {
+                    $selectResult = curl_multi_select($multiHandle, 1.0);
+                    if ($selectResult === -1) {
+                        usleep(100000);
+                    }
+                }
+            } while ($running > 0);
+
+            $responses = [];
+            foreach ($handles as $handleId => $curl) {
+                if (curl_errno($curl)) {
+                    throw new HttpException('cURL Error: ' . curl_error($curl));
+                }
+
+                $body = curl_multi_getcontent($curl);
+                if ($body === false) {
+                    $body = '';
+                }
+
+                $responses[$keys[$handleId]] = new HttpResponse(
+                    body: (string) $body,
+                    status: (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
+                    lastUrl: (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+                    length: (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
+                    headers: (method_exists($requestMap[$handleId], 'getResponseHeaders')
+                        ? $requestMap[$handleId]->getResponseHeaders()
+                        : []),
+                );
+            }
+
+            return $responses;
+        } finally {
+            foreach ($handles as $handleId => $curl) {
+                if ($multiHandle !== null) {
+                    @curl_multi_remove_handle($multiHandle, $curl);
+                }
+
+                if ($curl !== null) {
+                    $this->closeCurlHandle($curl);
+                }
+
+                if (isset($requestMap[$handleId]) && method_exists($requestMap[$handleId], 'clearTemporaryUploadFiles')) {
+                    $requestMap[$handleId]->clearTemporaryUploadFiles();
+                }
+            }
+
+            if ($multiHandle !== null) {
+                $this->closeCurlMultiHandle($multiHandle);
+            }
+        }
+    }
+
+    /**
+     * Safely close a cURL handle across supported PHP versions.
+     *
+     * @param mixed $handle
+     */
+    private function closeCurlHandle(mixed &$handle): void
+    {
+        if ($handle === null) {
+            return;
         }
 
-        // Execute all requests concurrently
-        $running = null;
-        do {
-            curl_multi_exec($multiHandle, $running);
-            curl_multi_select($multiHandle, 0.1);
-        } while ($running > 0);
+        if (is_object($handle) && method_exists($handle, 'close')) {
+            $handle->close();
+            $handle = null;
 
-        // Collect responses
-        $responses = [];
-        foreach ($handles as $handleId => $curl) {
-            $key = $keys[$handleId];
-
-            // Get response data
-            $body = curl_multi_getcontent($curl);
-            $responses[$key] = new HttpResponse(
-                body: $body ?: '',
-                status: curl_getinfo($curl, CURLINFO_HTTP_CODE),
-                lastUrl: curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-                length: curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-                headers: (array) curl_getinfo($curl, CURLINFO_HEADER_OUT) ?: [],
-            );
-
-            // Clean up
-            curl_multi_remove_handle($multiHandle, $curl);
+            return;
         }
 
-        curl_multi_close($multiHandle);
+        if (is_object($handle)) {
+            $handle = null;
 
-        return $responses;
+            return;
+        }
+
+        if (is_resource($handle)) {
+            $handle = null;
+        }
+    }
+
+    /**
+     * Safely close a multi cURL handle across supported PHP versions.
+     *
+     * @param mixed $multiHandle
+     */
+    private function closeCurlMultiHandle(mixed &$multiHandle): void
+    {
+        if ($multiHandle === null) {
+            return;
+        }
+
+        if (is_object($multiHandle) && method_exists($multiHandle, 'close')) {
+            $multiHandle->close();
+            $multiHandle = null;
+
+            return;
+        }
+
+        if (is_object($multiHandle)) {
+            $multiHandle = null;
+
+            return;
+        }
+
+        if (is_resource($multiHandle)) {
+            $multiHandle = null;
+        }
     }
 }

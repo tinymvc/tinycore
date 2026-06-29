@@ -42,7 +42,7 @@ class Console implements ConsoleContract
         global $argv;
 
         // Retrieve the command name from the command line arguments
-        $commandName = $argv[1] ?? null;
+        $commandName = $argv[1] ?? '';
 
         // Get the command line arguments
         $rawArgs = array_slice($argv, 2);
@@ -52,7 +52,7 @@ class Console implements ConsoleContract
 
         Prompt::newline(); // Add a newline
 
-        if (!$commandName) {
+        if ($commandName === '') {
             // If no command name is provided, list all available commands
             Prompt::message("Available commands:", "info");
             $this->commands->listCommands();
@@ -87,6 +87,11 @@ class Console implements ConsoleContract
      */
     public function executeCommand(string $name, array $args): void
     {
+        if (!$this->commands->hasCommand($name)) {
+            Prompt::message("Command '{$name}' not found.", "danger");
+            return;
+        }
+
         if ($this->commands->isDisabled($name)) {
             Prompt::message("Command '{$name}' is disabled.", "warning");
             return;

@@ -6,9 +6,11 @@ use Spark\Contracts\TranslatorContract;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 
+use function array_key_exists;
 use function count;
 use function in_array;
 use function is_array;
+use function is_string;
 use function sprintf;
 
 /**
@@ -123,28 +125,54 @@ class Translator implements TranslatorContract
     {
         // Check if the text has a translation
         $translation = $this->getTranslatedText($text);
+        $resolvedArgs = $args;
 
-        // Determine if the translation has plural forms
-        if (is_array($translation)) {
-            $translation = $arg > 1 ? $translation[1] : $translation[0];
-            $args = $arg > 1 && !empty($args2) ? $args2 : $args;
-        } elseif (!empty($args) && !empty($args2)) {
-            $args = $arg > 1 ? $args2 : $args;
+        if ($arg !== null && empty($resolvedArgs)) {
+            $resolvedArgs = is_array($arg) ? $arg : [$arg];
         }
 
-        // Handle different argument styles
-        if ($arg !== null && empty($args)) {
-            $args = is_array($arg) ? $arg : [$arg];
+        if (is_array($translation)) {
+            $index = 0;
+            if (is_numeric($arg) && $arg != 1) {
+                $index = 1;
+            }
+
+            if (array_is_list($translation) && isset($translation[$index])) {
+                $translation = $translation[$index];
+            } elseif (isset($translation['other'])) {
+                $translation = $translation['other'];
+            } elseif (isset($translation['one'])) {
+                $translation = $translation['one'];
+            } else {
+                $translation = $translation[0] ?? '';
+            }
+
+            if (!empty($args2) && is_numeric($arg) && $arg != 1) {
+                $resolvedArgs = $args2;
+            }
+        } else {
+            if (!empty($args2) && is_numeric($arg) && $arg != 1) {
+                $resolvedArgs = $args2;
+            }
+        }
+
+        // Ensure translation is string and use empty arguments when non-replacement style is passed.
+        if (!is_string($translation)) {
+            $translation = (string) $translation;
         }
 
         // Check if we're using :name style placeholders
-        if ($this->hasNamedPlaceholders($translation)) {
-            return $this->replaceNamedPlaceholders($translation, $args);
+        if ($this->hasNamedPlaceholders($translation) && !empty($resolvedArgs)) {
+            return $this->replaceNamedPlaceholders($translation, $resolvedArgs);
+        }
+
+        if (!$resolvedArgs) {
+            return $translation;
         }
 
         // Use vsprintf for %s style placeholders (backward compatibility)
         try {
-            return vsprintf($translation, $args);
+            return vsprintf($translation, $resolvedArgs);
         } catch (\Throwable $e) {
             // If vsprintf fails, return the translation as-is
             return $translation;
@@ -174,14 +202,14 @@ class Translator implements TranslatorContract
         // If args is associative array, replace by key names
         if (!array_is_list($args)) {
             foreach ($args as $key => $value) {
-                $text = str_replace(":$key", $value, $text);
+                $text = str_replace(":$key", (string) $value, $text);
             }
         } else {
             // If args is indexed array, replace placeholders in order they appear
             preg_match_all('/:\w+/', $text, $matches);
             foreach ($matches[0] as $index => $placeholder) {
                 if (isset($args[$index])) {
-                    $text = str_replace($placeholder, $args[$index], $text);
+                    $text = str_replace($placeholder, (string) $args[$index], $text);
                 }
             }
         }
@@ -270,11 +298,14 @@ class Translator implements TranslatorContract
      */
     public function has(string $key): bool
     {
-        // Load pending files to check if translation exists
-        $translation = $this->getTranslatedText($key);
+        if (array_key_exists($key, $this->translatedTexts)) {
+            return true;
+        }
 
-        // Check if we got the actual translation or just the key back
-        return $translation !== $key || isset($this->translatedTexts[$key]);
+        // Load pending files to check if translation exists
+        $this->getTranslatedText($key);
+
+        return array_key_exists($key, $this->translatedTexts);
     }
 
     /**

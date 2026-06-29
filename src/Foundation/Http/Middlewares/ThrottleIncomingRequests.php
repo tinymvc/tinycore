@@ -7,6 +7,10 @@ use Spark\Foundation\Exceptions\TooManyRequests;
 use Spark\Http\Request;
 use Spark\Utils\Cache;
 use function count;
+use function is_array;
+use function is_numeric;
+use function max;
+use function md5;
 use function sprintf;
 
 /**
@@ -36,8 +40,8 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
      */
     public function handle(Request $request, \Closure $next, ...$args): mixed
     {
-        $attempts = $args[0] ?? 50; // Max requests in the time frame
-        $duration = $args[1] ?? 1; // Duration in minutes for the time frame
+        $attempts = $this->normalizePositiveInt($args[0] ?? 50, 50); // Max requests in the time frame
+        $duration = $this->normalizePositiveInt($args[1] ?? 1, 1); // Duration in minutes for the time frame
         $suffix = $args[2] ?? ''; // Optional suffix for cache key differentiation
 
         if (!$this->authorizeCurrentRequest($request, $duration, $attempts, $suffix)) {
@@ -51,30 +55,35 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
      * Authorize the current request based on IP address and request limits.
      *
      * @param Request $request The current request.
-     * @param int $minute The time frame in minutes.
+     * @param int $duration The time frame in minutes for which the request count is tracked.
      * @param int $attempts The maximum number of requests allowed in the time frame.
      * @param string $suffix An optional suffix to differentiate cache keys.
      *
      * @return bool True if the request is authorized, false otherwise.
      */
-    private function authorizeCurrentRequest(Request $request, int $minute, int $attempts, string $suffix): bool
+    private function authorizeCurrentRequest(Request $request, int $duration, int $attempts, string $suffix): bool
     {
-        $ip = $request->ip();
-        $path = $request->getPath();
+        $ip = (string) $request->ip() ?: '127.0.0.1';
+        $path = trim($request->getPath(), '/');
 
-        if (!$ip) {
-            return false;
-        }
-
-        $cache = new Cache("throttle_incoming_requests$suffix");
-        $key = md5("$path$ip");
+        $cache = new Cache('th:requests');
+        $identifier = md5("{$request->getMethod()}|{$path}|{$ip}|{$suffix}");
+        $key = "{$duration}m:{$attempts}:{$identifier}";
 
         $now = time();
-        $windowStart = $now - $minute * 60;
+        $windowStart = $now - ($duration * 60);
 
-        $timestamps = $cache->retrieve($key, eraseExpired: true) ?: [];
+        $timestamps = $cache->retrieve($key, eraseExpired: true);
+        if (!is_array($timestamps)) {
+            $timestamps = [];
+        }
 
-        $timestamps = array_filter($timestamps, fn($timestamp) => $timestamp > $windowStart);
+        $timestamps = array_values(
+            array_filter(
+                $timestamps,
+                fn($timestamp) => is_numeric($timestamp) && (int) $timestamp > $windowStart
+            )
+        );
 
         if (count($timestamps) >= $attempts) {
             return false;
@@ -82,8 +91,21 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
 
         $timestamps[] = $now;
 
-        $cache->store($key, $timestamps, sprintf("+%d minutes", $minute + 1));
+        $cache->store($key, $timestamps, sprintf('+%d minutes', $duration));
 
         return true;
+    }
+
+    /**
+     * Normalize throttle config values.
+     */
+    private function normalizePositiveInt(mixed $value, int $fallback): int
+    {
+        if (!is_numeric($value)) {
+            return $fallback;
+        }
+
+        $value = (int) $value;
+        return max(1, $value);
     }
 }

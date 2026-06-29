@@ -86,6 +86,10 @@ class Concurrency
      */
     public function add(Closure|callable $task, ?string $key = null): static
     {
+        if (!is_callable($task)) {
+            throw new InvalidArgumentException('Each task must be callable');
+        }
+
         if ($key !== null) {
             $this->tasks[$key] = $task;
         } else {
@@ -121,7 +125,7 @@ class Concurrency
     public function execute(?array $tasks = null): array
     {
         if ($tasks !== null) {
-            $this->tasks = $tasks;
+            $this->tasks = $this->normalizeTasks($tasks);
         }
 
         if (empty($this->tasks)) {
@@ -229,6 +233,23 @@ class Concurrency
         unset($runtimes);
 
         return $results;
+    }
+
+    /**
+     * Validate and normalize task list.
+     *
+     * @param array $tasks
+     * @return array
+     */
+    protected function normalizeTasks(array $tasks): array
+    {
+        foreach ($tasks as $key => $task) {
+            if (!is_callable($task)) {
+                throw new InvalidArgumentException("Task at key [{$key}] is not callable");
+            }
+        }
+
+        return $tasks;
     }
 
     /**

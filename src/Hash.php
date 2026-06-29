@@ -8,6 +8,7 @@ use Spark\Exceptions\Hash\EncryptionFailedException;
 use Spark\Exceptions\Hash\InvalidEncryptingKeyException;
 use Spark\Support\Traits\Macroable;
 use function chr;
+use function defined;
 use function in_array;
 use function is_array;
 use function ord;
@@ -28,11 +29,9 @@ class Hash implements HashContract
     /**
      * The algorithm used for password hashing.
      *
-     * This is the name of an algorithm supported by the password_hash() function.
-     *
-     * @var string
+     * @var string|int
      */
-    private string $passwordAlgorithm;
+    private string|int $passwordAlgorithm;
 
     /**
      * Default options for password hashing.
@@ -67,10 +66,12 @@ class Hash implements HashContract
         $this->setKey($key); // Set the encryption key
 
         // Default password algorithm
-        $this->passwordAlgorithm = PASSWORD_ARGON2ID;
+        $this->passwordAlgorithm = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT;
 
         // Set default password options
-        $this->passwordOptions = ['memory_cost' => 65536, 'time_cost' => 4, 'threads' => 2];
+        $this->passwordOptions = $this->passwordAlgorithm === PASSWORD_BCRYPT
+            ? ['cost' => 12]
+            : ['memory_cost' => 65536, 'time_cost' => 4, 'threads' => 2];
     }
 
     /**
@@ -104,7 +105,9 @@ class Hash implements HashContract
     public function setPasswordAlgorithm(string|int $algorithm): void
     {
         // Validate that the algorithm is supported
-        $supportedAlgorithms = [PASSWORD_BCRYPT, PASSWORD_ARGON2I, PASSWORD_ARGON2ID];
+        $supportedAlgorithms = [PASSWORD_BCRYPT];
+        defined('PASSWORD_ARGON2I') && $supportedAlgorithms[] = PASSWORD_ARGON2I;
+        defined('PASSWORD_ARGON2ID') && $supportedAlgorithms[] = PASSWORD_ARGON2ID;
 
         if (!in_array($algorithm, $supportedAlgorithms, true)) {
             throw new \InvalidArgumentException('Unsupported password hashing algorithm.');
@@ -186,7 +189,13 @@ class Hash implements HashContract
      */
     public function hashPassword(string $password): string
     {
-        return password_hash($password, $this->passwordAlgorithm, $this->passwordOptions);
+        $hash = password_hash($password, $this->passwordAlgorithm, $this->passwordOptions);
+
+        if ($hash === false) {
+            throw new \RuntimeException('Unable to hash password.');
+        }
+
+        return $hash;
     }
 
     /**
@@ -266,7 +275,9 @@ class Hash implements HashContract
         }
 
         // Check if it's one of the supported algorithms
-        $supportedAlgorithms = [PASSWORD_BCRYPT, PASSWORD_ARGON2I, PASSWORD_ARGON2ID];
+        $supportedAlgorithms = [PASSWORD_BCRYPT];
+        defined('PASSWORD_ARGON2I') && $supportedAlgorithms[] = PASSWORD_ARGON2I;
+        defined('PASSWORD_ARGON2ID') && $supportedAlgorithms[] = PASSWORD_ARGON2ID;
 
         return in_array($info['algo'], $supportedAlgorithms, true);
     }
@@ -285,9 +296,9 @@ class Hash implements HashContract
     /**
      * Get the current password hashing algorithm.
      *
-     * @return string The current password hashing algorithm.
+     * @return string|int The current password hashing algorithm.
      */
-    public function getPasswordAlgorithm(): string
+    public function getPasswordAlgorithm(): string|int
     {
         return $this->passwordAlgorithm;
     }
@@ -518,7 +529,13 @@ class Hash implements HashContract
     public function bcrypt(string $password, array $options = []): string
     {
         $options = ['cost' => 12, ...$options];
-        return password_hash($password, PASSWORD_BCRYPT, $options);
+        $hash = password_hash($password, PASSWORD_BCRYPT, $options);
+
+        if ($hash === false) {
+            throw new \RuntimeException('Unable to hash password with bcrypt.');
+        }
+
+        return $hash;
     }
 
     /**
@@ -530,8 +547,18 @@ class Hash implements HashContract
      */
     public function argon2i(string $password, array $options = []): string
     {
+        if (!defined('PASSWORD_ARGON2I')) {
+            throw new \RuntimeException('Argon2i password hashing is not supported in this environment.');
+        }
+
         $options = [...$this->passwordOptions, ...$options];
-        return password_hash($password, PASSWORD_ARGON2I, $options);
+        $hash = password_hash($password, PASSWORD_ARGON2I, $options);
+
+        if ($hash === false) {
+            throw new \RuntimeException('Unable to hash password with argon2i.');
+        }
+
+        return $hash;
     }
 
     /**
@@ -543,8 +570,18 @@ class Hash implements HashContract
      */
     public function argon2id(string $password, array $options = []): string
     {
+        if (!defined('PASSWORD_ARGON2ID')) {
+            throw new \RuntimeException('Argon2id password hashing is not supported in this environment.');
+        }
+
         $options = [...$this->passwordOptions, ...$options];
-        return password_hash($password, PASSWORD_ARGON2ID, $options);
+        $hash = password_hash($password, PASSWORD_ARGON2ID, $options);
+
+        if ($hash === false) {
+            throw new \RuntimeException('Unable to hash password with argon2id.');
+        }
+
+        return $hash;
     }
 
     /**

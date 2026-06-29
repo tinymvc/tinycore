@@ -57,6 +57,13 @@ class Container implements ContainerContract, \ArrayAccess
     private array $instances = [];
 
     /**
+     * Registered singleton bindings.
+     *
+     * @var array<string, true>
+     */
+    private array $singletons = [];
+
+    /**
      * Registered aliases.
      *
      * @var array<string, string>
@@ -96,6 +103,7 @@ class Container implements ContainerContract, \ArrayAccess
     public function bind(string $abstract, callable|string|null $concrete = null): void
     {
         $this->bindings[$abstract] = $concrete ?? $abstract;
+        unset($this->singletons[$abstract], $this->instances[$abstract]);
     }
 
     /**
@@ -111,7 +119,7 @@ class Container implements ContainerContract, \ArrayAccess
     public function singleton(string $abstract, callable|string|null $concrete = null): void
     {
         $this->bind($abstract, $concrete);
-        $this->instances[$abstract] = null; // Marks it for singleton resolution
+        $this->singletons[$abstract] = true;
     }
 
     /**
@@ -189,10 +197,11 @@ class Container implements ContainerContract, \ArrayAccess
         // Resolve aliases
         $abstract = $this->resolveAlias($abstract);
 
-        // Return a singleton instance if it exists
-        if (array_key_exists($abstract, $this->instances)) {
-            if ($this->instances[$abstract] === null) {
-                $this->instances[$abstract] = $this->build($this->bindings[$abstract]);
+        if (isset($this->singletons[$abstract])) {
+            if (!array_key_exists($abstract, $this->instances)) {
+                $this->instances[$abstract] = $this->build(
+                    $this->bindings[$abstract] ?? $abstract
+                );
             }
             return $this->instances[$abstract];
         }
@@ -214,19 +223,22 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function make(string $abstract, array $parameters = []): mixed
     {
-        // If parameters provided, we need to build with parameters
-        if (!empty($parameters)) {
-            $abstract = $this->resolveAlias($abstract);
-            $concrete = $this->bindings[$abstract] ?? $abstract;
+        $abstract = $this->resolveAlias($abstract);
+        $concrete = $this->bindings[$abstract] ?? $abstract;
+        $isSingleton = isset($this->singletons[$abstract]);
 
-            // For closures, pass parameters
-            if (is_callable($concrete)) {
-                return $concrete($this, ...$parameters);
+        if (!empty($parameters)) {
+            if ($isSingleton && array_key_exists($abstract, $this->instances)) {
+                return $this->instances[$abstract];
             }
 
-            // For classes, we'd need to inject parameters into constructor
-            // This is a simplified version - could be enhanced
-            return $this->build($concrete);
+            $instance = $this->build($concrete, $parameters);
+
+            if ($isSingleton) {
+                $this->instances[$abstract] = $instance;
+            }
+
+            return $instance;
         }
 
         return $this->get($abstract);
@@ -371,6 +383,8 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function instance(string $abstract, mixed $instance): void
     {
+        $abstract = $this->resolveAlias($abstract);
+        $this->singletons[$abstract] = true;
         $this->instances[$abstract] = $instance;
     }
 
@@ -382,7 +396,7 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function bound(string $abstract): bool
     {
-        return isset($this->bindings[$abstract]) || isset($this->instances[$abstract]) || isset($this->aliases[$abstract]);
+        return isset($this->bindings[$abstract]) || array_key_exists($abstract, $this->instances) || isset($this->aliases[$abstract]);
     }
 
     /**
@@ -395,7 +409,7 @@ class Container implements ContainerContract, \ArrayAccess
     {
         $abstract = $this->resolveAlias($abstract);
 
-        return isset($this->instances[$abstract]) && $this->instances[$abstract] !== null;
+        return array_key_exists($abstract, $this->instances);
     }
 
     /**
@@ -454,6 +468,7 @@ class Container implements ContainerContract, \ArrayAccess
         $abstract = $this->resolveAlias($abstract);
 
         // Remove from instances, bindings, and aliases
+        unset($this->singletons[$abstract]);
         unset($this->instances[$abstract]);
         unset($this->bindings[$abstract]);
 
@@ -482,11 +497,7 @@ class Container implements ContainerContract, \ArrayAccess
 
         // Reset the binding
         $this->bindings[$abstract] = $concrete ?? $abstract;
-
-        // Reset the instance for singleton bindings
-        if (array_key_exists($abstract, $this->instances)) {
-            $this->instances[$abstract] = null;
-        }
+        unset($this->instances[$abstract]);
     }
 
     /**
@@ -554,8 +565,9 @@ class Container implements ContainerContract, \ArrayAccess
     {
         return [
             'bindings' => $this->bindings,
-            'instances' => array_filter($this->instances, fn($instance) => $instance !== null),
+            'instances' => $this->instances,
             'aliases' => $this->aliases,
+            'singletons' => array_keys($this->singletons),
             'providers' => array_map(get_class(...), $this->providers),
         ];
     }
@@ -636,10 +648,13 @@ class Container implements ContainerContract, \ArrayAccess
      *
      * @throws BuildServiceException If the class does not exist or is not instantiable.
      */
-    private function build(string|callable $concrete): mixed
+    private function build(string|callable $concrete, array $parameters = []): mixed
     {
         if (is_callable($concrete)) {
-            return $concrete($this);
+            $reflectionFunction = new ReflectionFunction($concrete);
+            $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters);
+
+            return $concrete(...$dependencies);
         }
 
         if (!isset($this->reflectionCache[$concrete])) {
@@ -657,24 +672,24 @@ class Container implements ContainerContract, \ArrayAccess
             throw new BuildServiceException("Class {$concrete} is not instantiable.");
         }
 
-        $constructor = $reflection->getConstructor();
-
-        if (!$constructor) {
-            return $reflection->newInstance();
+        if (in_array($concrete, $this->buildStack, true)) {
+            throw new BuildServiceException("Circular dependency detected while resolving [{$concrete}].");
         }
 
-        // Add this concrete to the build stack for contextual binding resolution
         $this->buildStack[] = $concrete;
 
-        $dependencies = array_map(
-            fn($param) => $this->resolveParameter($param),
-            $constructor->getParameters()
-        );
+        $constructor = $reflection->getConstructor();
+        try {
+            if (!$constructor) {
+                return $reflection->newInstance();
+            }
 
-        // Remove from build stack after building
-        array_pop($this->buildStack);
+            $dependencies = $this->getReflectorDependencies($constructor, $parameters);
 
-        return $reflection->newInstanceArgs($dependencies);
+            return $reflection->newInstanceArgs($dependencies);
+        } finally {
+            array_pop($this->buildStack);
+        }
     }
 
     /**
@@ -697,6 +712,10 @@ class Container implements ContainerContract, \ArrayAccess
         if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
             $typeName = $type->getName();
 
+            if (is_a($this, $typeName, true)) {
+                return $this;
+            }
+
             // Check for contextual binding
             $concrete = $this->getContextualConcrete($typeName);
             if ($concrete !== null) {
@@ -711,6 +730,9 @@ class Container implements ContainerContract, \ArrayAccess
             foreach ($type->getTypes() as $unionType) {
                 if ($unionType instanceof ReflectionNamedType && !$unionType->isBuiltin()) {
                     $typeName = $unionType->getName();
+                    if (is_a($this, $typeName, true)) {
+                        return $this;
+                    }
 
                     // Check for contextual binding
                     $concrete = $this->getContextualConcrete($typeName);

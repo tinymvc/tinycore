@@ -8,6 +8,7 @@ use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorUtilContract;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
 use function array_slice;
 use function is_array;
 use function sprintf;
@@ -48,6 +49,8 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      */
     public function __construct(public int $total = 0, public int $limit = 10, public string $keyword = 'page')
     {
+        $this->total = max(0, $total);
+        $this->limit = max(1, $limit);
         $this->reset();
     }
 
@@ -59,7 +62,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
     public function reset(): self
     {
         $this->pages = (int) ceil($this->total() / $this->limit());
-        $this->page = min($this->pages(), $this->keywordValue());
+        $this->page = max(1, min($this->pages(), $this->keywordValue()));
         $this->offset = (int) ceil($this->limit() * ($this->page() - 1));
 
         return $this;
@@ -82,7 +85,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      */
     public function page(): int
     {
-        return max($this->page, 0);
+        return max($this->page, 1);
     }
 
     /**
@@ -112,7 +115,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      */
     public function limit(): int
     {
-        return max($this->limit, 0);
+        return max($this->limit, 1);
     }
 
     /**
@@ -339,7 +342,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      * 
      * @return string HTML string with pagination links.
      */
-    public function links(int $links = 1, array $classes = [], array $entity = []): string
+    public function links(int $links = 2, array $classes = [], array $entity = []): string
     {
         //Add dynamic pagination buttons in unordered list...
         $output = [
@@ -390,8 +393,12 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      * 
      * @return array Array of pagination links.
      */
-    public function generateLinks(int $links = 1): array
+    public function generateLinks(int $links = 2): array
     {
+        if ($this->pages() <= 0) {
+            return [];
+        }
+
         // Calculate start, end page number.
         $start = max(1, $this->page() - $links);
         $end = min($this->pages(), $this->page() + $links);
@@ -542,7 +549,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      */
     public function firstItem(): int
     {
-        return max($this->offset(), 1);
+        return $this->total() === 0 ? 0 : ($this->offset() + 1);
     }
 
     /**
@@ -563,7 +570,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      */
     public function offsetExists(mixed $offset): bool
     {
-        return property_exists($this, $offset) || isset($this->data[$offset]);
+        return property_exists($this, $offset) || array_key_exists($offset, $this->data);
     }
 
     /**

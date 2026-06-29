@@ -20,6 +20,7 @@ use Spark\Utils\Mail as BaseMail;
  * @method static BaseMail bcc($address, $name = null)
  * @method static BaseMail attachFile($path, $name = null)
  * @method static BaseMail from($address, $name = null)
+ * @method static BaseMail mailer($address, $name = null)
  * @method static BaseMail reply($address, $name = null)
  * 
  * @package Spark\Facades

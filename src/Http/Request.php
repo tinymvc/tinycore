@@ -13,6 +13,7 @@ use function count;
 use function func_get_args;
 use function in_array;
 use function is_array;
+use function is_scalar;
 use function is_string;
 
 /**
@@ -314,7 +315,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function route(string $key, ?string $default = null): ?string
     {
-        return $this->routeParams[$key] ?? $default;
+        if (array_key_exists($key, $this->routeParams)) {
+            return $this->routeParams[$key];
+        }
+
+        return $default;
     }
 
     /**
@@ -325,7 +330,17 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function hasRouteParam(string|array $key): bool
     {
-        return isset($this->routeParams[$key]);
+        if (is_array($key)) {
+            foreach ($key as $routeKey) {
+                if (!array_key_exists($routeKey, $this->routeParams)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return array_key_exists($key, $this->routeParams);
     }
 
     /**
@@ -1086,7 +1101,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function offsetExists($name): bool
     {
-        return $this->offsetGet($name) !== null;
+        return match (true) {
+            $this->hasQuery($name) => $this->query->has($name),
+            $this->hasPost($name) => $this->post->has($name),
+            $this->hasFile($name) => $this->hasFile($name),
+            $this->hasRouteParam($name) => true,
+            default => false,
+        };
     }
 
     /**
@@ -1097,11 +1118,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function offsetUnset($name): void
     {
+        if ($this->hasRouteParam($name)) {
+            unset($this->routeParams[$name]);
+            return; // Exit early if the route parameter was found and removed.
+        }
+
         match (true) {
             $this->hasQuery($name) => $this->query->forget($name),
             $this->hasPost($name) => $this->post->forget($name),
             $this->hasFile($name) => $this->files->forget($name),
-            $this->hasRouteParam($name) => $this->routeParams[$name] = null,
             default => null,
         };
     }
@@ -1307,8 +1332,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 
             // If the request wants a JSON response
             if ($this->isFirelineRequest()) {
+                $flattenedErrors = $this->flattenValidationErrors($errors);
                 $errorHtml = '<ul>' // Build the error HTML
-                    . collect(array_merge(...array_values($errors)))
+                    . collect($flattenedErrors)
                         ->map(fn($error) => "<li>{$error}</li>")
                         ->join('') // Join the errors into a string
                     . '</ul>';
@@ -1317,8 +1343,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
                 json(['status' => 'error', 'message' => $errorHtml])->send();
             } elseif ($this->expectsJson()) {
                 // Validate error message
+                $flattenedErrors = $this->flattenValidationErrors($errors);
                 $message = $validator->getFirstError()
-                    . (count($errors) > 1 ? ' (and ' . count($errors) . ' more errors)' : '');
+                    . (count($flattenedErrors) > 1 ? ' (and ' . (count($flattenedErrors) - 1) . ' more errors)' : '');
 
                 // Return the errors as a JSON response
                 json(['message' => $message, 'errors' => $errors], 422)->send();
@@ -1351,6 +1378,43 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         }
 
         return $this->validated = $validator->validated(); // Return the validated attributes
+    }
+
+    /**
+     * Flatten validation errors into a list of string messages.
+     *
+     * @param array $errors
+     * @return array
+     */
+    private function flattenValidationErrors(array $errors): array
+    {
+        $flattened = [];
+
+        foreach ($errors as $error) {
+            if ($error === null) {
+                continue;
+            }
+
+            if (is_array($error)) {
+                foreach ($error as $item) {
+                    if ($item === null) {
+                        continue;
+                    }
+
+                    if (is_scalar($item)) {
+                        $flattened[] = (string) $item;
+                        continue;
+                    }
+
+                    $flattened[] = json_encode($item) ?: (string) $item;
+                }
+                continue;
+            }
+
+            $flattened[] = is_scalar($error) ? (string) $error : (json_encode($error) ?: (string) $error);
+        }
+
+        return $flattened;
     }
 
     /**

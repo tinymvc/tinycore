@@ -2,10 +2,22 @@
 
 namespace Spark\Utils;
 
+use Throwable;
 use Spark\Contracts\Utils\ViteUtilContract;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
+use function array_map;
+use function array_unique;
+use function array_values;
+use function explode;
+use function is_array;
+use function is_file;
 use function is_string;
+use function ltrim;
+use function rtrim;
 use function sprintf;
+use function str_contains;
+use function str_starts_with;
 
 /**
  * Class Vite
@@ -22,6 +34,14 @@ class Vite implements ViteUtilContract
 
     /** @var array Configuration array for the Vite helper */
     private array $config;
+
+    private const DEFAULT_ENTRY = 'app.js';
+    private const DEFAULT_HOST = 'localhost';
+    private const DEFAULT_SCHEME = 'http';
+    private const DEFAULT_PORT = 5173;
+    private const DEFAULT_DIST_DIR = 'build';
+    private const DEFAULT_PUBLIC_DIR = 'public';
+    private const DEV_CHECK_TIMEOUT_SECONDS = 2;
 
     /**
      * Constructor for the Vite helper class.
@@ -41,22 +61,50 @@ class Vite implements ViteUtilContract
     public function configure(string|array $config): self
     {
         if (is_string($config)) {
-            $config = ['entry' => $config]; // If a string is provided, treat it as the entry file name.
+            $config = ['entry' => $config];
         }
 
-        // Set default parameters into Vite configuration.
+        if (is_array($config) && array_is_list($config)) {
+            $config = ['entry' => $config];
+        }
+
         $this->config = [
-            'scheme' => 'http://',
-            'host' => 'localhost',
-            'port' => 5133,
+            'scheme' => self::DEFAULT_SCHEME,
+            'host' => self::DEFAULT_HOST,
+            'port' => self::DEFAULT_PORT,
             'running' => null,
-            'root' => '/',
-            'entry' => 'app.js',
-            'dist' => 'build',
-            'dist_path' => 'public/',
+            'base' => '/',
+            'root' => null,
+            'entry' => self::DEFAULT_ENTRY,
+            'dist' => self::DEFAULT_DIST_DIR,
+            'dist_path' => self::DEFAULT_PUBLIC_DIR,
             'manifest' => null,
+            'manifest_path' => null,
             ...$config
         ];
+
+        if (array_key_exists('running', $config)) {
+            $this->config['running'] = $config['running'] === null ? null : (bool) $config['running'];
+        } else {
+            $this->config['running'] = null;
+        }
+
+        $this->config['scheme'] = $this->normalizeScheme((string) $this->config('scheme'));
+        $this->config['base'] = $this->normalizeBasePath((string) $this->config('base'));
+
+        $root = is_string($this->config('root')) ? (string) $this->config('root') : '';
+        if ($root !== '' && $this->config('base') === '/') {
+            $this->config['base'] = $this->normalizeBasePath($root);
+        }
+
+        $this->config['root'] = $this->config('base');
+        $this->config['entry'] = $this->normalizeEntries($this->config('entry'));
+        $this->config['dist_path'] = $this->normalizePublicPath((string) $this->config('dist_path'));
+        $this->config['dist'] = $this->normalizeBuildDirectory((string) $this->config('dist'));
+
+        if ($this->config['entry'] === []) {
+            $this->config['entry'] = [self::DEFAULT_ENTRY];
+        }
 
         return $this;
     }
@@ -80,16 +128,26 @@ class Vite implements ViteUtilContract
      */
     public function __toString(): string
     {
-        $viteModules = '';
-        $entry = $this->config('entry');
-        if (
-            str_contains($entry, '.jsx') ||
-            str_contains($entry, '.tsx')
-        ) {
-            $viteModules = $this->reactRefreshTag($entry);
+        $entries = $this->entryPoints();
+        if ($entries === []) {
+            return '';
         }
 
-        return $viteModules . $this->importModules($entry);
+        $output = '';
+        $firstEntry = $entries[0];
+
+        if ($this->isRunning($firstEntry)) {
+            $output .= sprintf(
+                '<script type="module" crossorigin src="%s"></script>',
+                $this->serverUrl('@vite/client')
+            );
+
+            if ($this->requiresReactRefresh($entries)) {
+                $output .= $this->reactRefreshTag($firstEntry);
+            }
+        }
+
+        return $output . $this->importModules($entries);
     }
 
     /**
@@ -97,15 +155,47 @@ class Vite implements ViteUtilContract
      * 
      * @return string The combined HTML string of JavaScript and CSS tags.
      */
-    public function importModules(?string $entry = null): string
+    public function importModules(null|string|array $entry = null): string
     {
-        $entry ??= $this->config('entry');
+        $entries = $this->normalizeEntries($entry ?? $this->config('entry'));
+        $seenJs = [];
+        $seenPreload = [];
+        $seenCss = [];
+        $tags = '';
 
-        return $this->jsTag($entry)
-            . $this->jsPreloadImports($entry)
-            . $this->cssTag($entry);
+        foreach ($entries as $entrypoint) {
+            if ($entrypoint === '') {
+                continue;
+            }
+
+            $isRunning = $this->isRunning($entrypoint);
+            $jsUrl = $isRunning ? $this->serverUrl($entrypoint) : $this->assetUrl($entrypoint);
+            if ($jsUrl !== '' && !isset($seenJs[$jsUrl])) {
+                $seenJs[$jsUrl] = true;
+                $tags .= sprintf('<script type="module" crossorigin src="%s"></script>', $jsUrl);
+            }
+
+            if ($isRunning) {
+                continue;
+            }
+
+            foreach ($this->importsUrls($entrypoint) as $url) {
+                if (!isset($seenPreload[$url])) {
+                    $seenPreload[$url] = true;
+                    $tags .= sprintf('<link rel="modulepreload" href="%s">', $url);
+                }
+            }
+
+            foreach ($this->cssUrls($entrypoint) as $url) {
+                if (!isset($seenCss[$url])) {
+                    $seenCss[$url] = true;
+                    $tags .= sprintf('<link rel="stylesheet" href="%s">', $url);
+                }
+            }
+        }
+
+        return $tags;
     }
-
 
     /**
      * Generates a script tag to inject React Refresh runtime.
@@ -115,9 +205,10 @@ class Vite implements ViteUtilContract
      */
     public function reactRefreshTag(?string $entry = null): string
     {
-        $entry ??= $this->config('entry');
+        $entry = $this->normalizeEntries($entry)[0] ?? '';
         $tag = '';
-        if ($this->isRunning($entry)) {
+
+        if ($entry !== '' && $this->isRunning($entry)) {
             $tag = <<<HTML
                 <script type="module">
                     import RefreshRuntime from "{$this->serverUrl('@react-refresh')}";
@@ -149,7 +240,17 @@ class Vite implements ViteUtilContract
             return $this->config['running'] = false;
         }
 
-        return $this->config['running'] = http(url: $this->serverUrl($entry))->ok();
+        try {
+            return $this->config['running'] = http(
+                'GET',
+                $this->serverUrl('@vite/client'),
+                [],
+                [],
+                [CURLOPT_TIMEOUT => self::DEV_CHECK_TIMEOUT_SECONDS, CURLOPT_CONNECTTIMEOUT => 1]
+            )->ok();
+        } catch (Throwable) {
+            return $this->config['running'] = false;
+        }
     }
 
     /**
@@ -160,6 +261,11 @@ class Vite implements ViteUtilContract
      */
     public function jsTag(string $entry): string
     {
+        $entry = $this->normalizeEntries($entry)[0] ?? '';
+        if ($entry === '') {
+            return '';
+        }
+
         $url = $this->isRunning($entry) ? $this->serverUrl($entry) : $this->assetUrl($entry);
 
         return $url ? sprintf('<script type="module" crossorigin src="%s"></script>', $url) : '';
@@ -210,12 +316,25 @@ class Vite implements ViteUtilContract
      */
     public function getManifest(): array
     {
-        return $this->config['manifest'] ??=
-            $this->hasManifest() ? (array) json_decode(file_get_contents($this->getManifestPath()), true) : [];
+        if (is_array($this->config['manifest'])) {
+            return $this->config['manifest'];
+        }
+
+        if (!$this->hasManifest()) {
+            return $this->config['manifest'] = [];
+        }
+
+        $contents = @file_get_contents($this->getManifestPath());
+        if ($contents === false) {
+            return $this->config['manifest'] = [];
+        }
+
+        $manifest = json_decode($contents, true);
+        return $this->config['manifest'] = is_array($manifest) ? $manifest : [];
     }
 
     /**
-     * Checks if the Vite manifest file exists.
+     * Checks if the Vite manifest exists.
      * 
      * @return bool
      *   TRUE if the manifest file exists, FALSE otherwise.
@@ -233,7 +352,14 @@ class Vite implements ViteUtilContract
      */
     public function getManifestPath(): string
     {
-        return root_dir($this->config('dist_path') . $this->config('dist') . '/.vite/manifest.json');
+        $manifestPath = $this->config('manifest_path');
+        if (is_string($manifestPath) && $manifestPath !== '') {
+            return str_starts_with($manifestPath, '/')
+                ? $manifestPath
+                : root_dir($manifestPath);
+        }
+
+        return root_dir($this->buildPath() . '/.vite/manifest.json');
     }
 
     /**
@@ -244,8 +370,15 @@ class Vite implements ViteUtilContract
      */
     public function assetUrl(string $entry): string
     {
+        $entry = $this->normalizeEntries($entry)[0] ?? '';
+        if ($entry === '') {
+            return '';
+        }
+
         $manifest = $this->getManifest();
-        return isset($manifest[$entry]) ? $this->distUrl($manifest[$entry]['file']) : '';
+        $file = $manifest[$entry]['file'] ?? null;
+
+        return is_string($file) ? $this->distUrl($file) : '';
     }
 
     /**
@@ -256,14 +389,16 @@ class Vite implements ViteUtilContract
      */
     public function importsUrls(string $entry): array
     {
-        $urls = [];
-        $manifest = $this->getManifest();
-
-        if (!empty($manifest[$entry]['imports'])) {
-            foreach ($manifest[$entry]['imports'] as $import) {
-                $urls[] = $this->distUrl($manifest[$import]['file']);
-            }
+        $entry = $this->normalizeEntries($entry)[0] ?? '';
+        if ($entry === '') {
+            return [];
         }
+
+        $manifest = $this->getManifest();
+        $urls = [];
+        $seen = [];
+
+        $this->collectImportsUrls($entry, $manifest, $urls, $seen);
 
         return $urls;
     }
@@ -292,14 +427,16 @@ class Vite implements ViteUtilContract
      */
     public function cssUrls(string $entry): array
     {
-        $urls = [];
-        $manifest = $this->getManifest();
-
-        if (!empty($manifest[$entry]['css'])) {
-            foreach ($manifest[$entry]['css'] as $file) {
-                $urls[] = $this->distUrl($file);
-            }
+        $entry = $this->normalizeEntries($entry)[0] ?? '';
+        if ($entry === '') {
+            return [];
         }
+
+        $manifest = $this->getManifest();
+        $urls = [];
+        $seen = [];
+
+        $this->collectCssUrls($entry, $manifest, $urls, $seen);
 
         return $urls;
     }
@@ -312,14 +449,17 @@ class Vite implements ViteUtilContract
      */
     private function serverUrl(string $path = ''): string
     {
-        return sprintf(
-            '%s%s:%d%s%s',
+        $base = sprintf(
+            '%s://%s:%d%s',
             $this->config('scheme'),
             $this->config('host'),
-            $this->config('port'),
-            $this->config('root'),
-            $path
+            (int) $this->config('port'),
+            $this->config('base')
         );
+
+        return $path === ''
+            ? rtrim($base, '/')
+            : rtrim($base, '/') . '/' . ltrim($path, '/');
     }
 
     /**
@@ -330,6 +470,206 @@ class Vite implements ViteUtilContract
      */
     private function distUrl(string $path = ''): string
     {
-        return home_url($this->config('dist') . '/' . ltrim($path));
+        $filePath = ltrim($path, '/');
+        if ($filePath === '') {
+            return '';
+        }
+
+        return home_url($this->config('dist') . '/' . $filePath);
+    }
+
+    /**
+     * Builds normalized build path.
+     * 
+     * @return string
+     */
+    private function buildPath(): string
+    {
+        $public = rtrim($this->config('dist_path'), '/');
+        $dist = rtrim($this->config('dist'), '/');
+
+        return $public === '' ? $dist : $public . '/' . $dist;
+    }
+
+    /**
+     * Collects all nested manifest imports recursively.
+     * 
+     * @param string $entry
+     * @param array $manifest
+     * @param array $urls
+     * @param array $seen
+     * @return void
+     */
+    private function collectImportsUrls(string $entry, array $manifest, array &$urls, array &$seen): void
+    {
+        if (!isset($manifest[$entry]['imports']) || !is_array($manifest[$entry]['imports'])) {
+            return;
+        }
+
+        foreach ($manifest[$entry]['imports'] as $import) {
+            if (!is_string($import) || !isset($manifest[$import])) {
+                continue;
+            }
+
+            $file = $manifest[$import]['file'] ?? null;
+            if (is_string($file) && !isset($seen[$file])) {
+                $seen[$file] = true;
+                $urls[] = $this->distUrl($file);
+            }
+
+            $this->collectImportsUrls($import, $manifest, $urls, $seen);
+        }
+    }
+
+    /**
+     * Collects CSS URLs for an entry and all of its nested imports.
+     * 
+     * @param string $entry
+     * @param array $manifest
+     * @param array $urls
+     * @param array $seen
+     * @return void
+     */
+    private function collectCssUrls(string $entry, array $manifest, array &$urls, array &$seen): void
+    {
+        if (!isset($manifest[$entry]) || !is_array($manifest[$entry])) {
+            return;
+        }
+
+        if (isset($manifest[$entry]['css']) && is_array($manifest[$entry]['css'])) {
+            foreach ($manifest[$entry]['css'] as $file) {
+                if (!is_string($file) || isset($seen[$file])) {
+                    continue;
+                }
+
+                $seen[$file] = true;
+                $urls[] = $this->distUrl($file);
+            }
+        }
+
+        if (isset($manifest[$entry]['imports']) && is_array($manifest[$entry]['imports'])) {
+            foreach ($manifest[$entry]['imports'] as $import) {
+                if (is_string($import)) {
+                    $this->collectCssUrls($import, $manifest, $urls, $seen);
+                }
+            }
+        }
+    }
+
+    /**
+     * Normalize entry points.
+     * 
+     * @param mixed $entries
+     * @return array
+     */
+    private function normalizeEntries(mixed $entries): array
+    {
+        if (is_string($entries)) {
+            return $entries !== '' ? [$this->normalizeEntry($entries)] : [];
+        }
+
+        if (!is_array($entries)) {
+            return [];
+        }
+
+        if (!array_is_list($entries)) {
+            $value = $entries['entry'] ?? null;
+            return $this->normalizeEntries($value);
+        }
+
+        $normalized = array_map(fn($entry) => is_string($entry)
+            ? $this->normalizeEntry($entry)
+            : null, $entries);
+
+        return array_values(array_unique(array_filter($normalized, fn($entry) => $entry !== null && $entry !== '')));
+    }
+
+    /**
+     * Returns all unique entry points for current configuration.
+     * 
+     * @return array
+     */
+    private function entryPoints(): array
+    {
+        return $this->normalizeEntries($this->config('entry'));
+    }
+
+    /**
+     * Normalize a single entry path.
+     * 
+     * @param string $entry
+     * @return string
+     */
+    private function normalizeEntry(string $entry): string
+    {
+        return ltrim($entry, '/');
+    }
+
+    /**
+     * Check if entries include React files.
+     * 
+     * @param array $entries
+     * @return bool
+     */
+    private function requiresReactRefresh(array $entries): bool
+    {
+        foreach ($entries as $entry) {
+            if (str_contains($entry, '.jsx') || str_contains($entry, '.tsx')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Normalize scheme value.
+     * 
+     * @param string $scheme
+     * @return string
+     */
+    private function normalizeScheme(string $scheme): string
+    {
+        $scheme = trim($scheme);
+        if ($scheme === '') {
+            return self::DEFAULT_SCHEME;
+        }
+
+        return str_contains($scheme, '://') ? explode('://', $scheme)[0] : $scheme;
+    }
+
+    /**
+     * Normalize base path.
+     * 
+     * @param string $path
+     * @return string
+     */
+    private function normalizeBasePath(string $path): string
+    {
+        return '/' . trim($path, '/');
+    }
+
+    /**
+     * Normalize public directory path.
+     * 
+     * @param string $path
+     * @return string
+     */
+    private function normalizePublicPath(string $path): string
+    {
+        return trim($path, '/');
+    }
+
+    /**
+     * Normalize dist directory path.
+     * 
+     * @param string $path
+     * @return string
+     */
+    private function normalizeBuildDirectory(string $path): string
+    {
+        $path = trim($path, '/');
+
+        return $path === '' ? self::DEFAULT_DIST_DIR : $path;
     }
 }

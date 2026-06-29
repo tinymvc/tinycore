@@ -3,11 +3,13 @@
 namespace Spark;
 
 use Spark\Contracts\EventDispatcherContract;
-use Spark\Exceptions\InvalidEventCallbackException;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
+use function is_array;
+use function is_object;
+use function is_string;
 
 /**
  * Class EventDispatcher
@@ -44,11 +46,15 @@ class Events implements EventDispatcherContract
      * Registers a listener for a specific event.
      *
      * @param string   $eventName The name of the event.
-     * @param callable $listener  The listener callback.
+     * @param string|array|callable $listener  The listener callback.
      * @param int      $priority  The priority of the listener (default is 0).
      */
     public function addListener(string $eventName, string|array|callable $listener, int $priority = 0): void
     {
+        if (!$this->isValidListener($listener)) {
+            throw new \InvalidArgumentException('Event listener must be callable or container resolvable.');
+        }
+
         $this->listeners[$eventName][] = ['callback' => $listener, 'priority' => $priority];
     }
 
@@ -106,7 +112,7 @@ class Events implements EventDispatcherContract
      * @param mixed  ...$args   Arguments to pass to the event listeners.
      * @return void
      * 
-     * @throws InvalidEventCallbackException If the event callback is invalid.
+     * @throws \InvalidArgumentException If the event callback is invalid.
      */
     public function dispatch(string $eventName, ...$args): void
     {
@@ -117,30 +123,42 @@ class Events implements EventDispatcherContract
             return;
         }
 
-        // Sort listeners by priority (highest first)
-        $eventListeners = collect($this->listeners[$eventName])
-            ->sortByDesc('priority')
-            ->all();
+        foreach ($this->getSortedEventListeners($eventName) as $listener) {
+            $result = $this->callListener($listener['callback'], $args, $eventName);
 
-        foreach ($eventListeners as $listener) {
-            try {
-                // Resolve and invoke the callback
-                $result = Application::$app->call($listener['callback'], $args);
-
-                // If listener returns false or shouldHalt is true, stop propagation
-                if ($result === false || $this->shouldHalt) {
-                    break;
-                }
-            } catch (\Throwable $e) {
-                // Log the error but continue with other listeners
-                tracer_log("Event listener failed for [{$eventName}]: " . $e->getMessage());
-
-                // Re-throw if in debug mode
-                if (is_debug_mode()) {
-                    throw $e;
-                }
+            if ($result === false || $this->shouldHalt) {
+                break;
             }
         }
+    }
+
+    /**
+     * Dispatches an event and returns all listener responses.
+     *
+     * @param string $eventName The name of the event.
+     * @param mixed  ...$args   Arguments to pass to the event listeners.
+     * @return array<int, mixed>
+     */
+    public function dispatchWithResponse(string $eventName, ...$args): array
+    {
+        $this->shouldHalt = false;
+
+        if (!isset($this->listeners[$eventName])) {
+            return [];
+        }
+
+        $responses = [];
+
+        foreach ($this->getSortedEventListeners($eventName) as $listener) {
+            $result = $this->callListener($listener['callback'], $args, $eventName);
+            $responses[] = $result;
+
+            if ($result === false || $this->shouldHalt) {
+                break;
+            }
+        }
+
+        return $responses;
     }
 
     /**
@@ -235,23 +253,11 @@ class Events implements EventDispatcherContract
             return null;
         }
 
-        $eventListeners = collect($this->listeners[$eventName])
-            ->sortByDesc('priority')
-            ->all();
+        foreach ($this->getSortedEventListeners($eventName) as $listener) {
+            $result = $this->callListener($listener['callback'], $args, $eventName);
 
-        foreach ($eventListeners as $listener) {
-            try {
-                $result = Application::$app->call($listener['callback'], $args);
-
-                if ($result !== null) {
-                    return $result;
-                }
-            } catch (\Throwable $e) {
-                tracer_log("Event listener failed for [{$eventName}]: " . $e->getMessage());
-
-                if (is_debug_mode()) {
-                    throw $e;
-                }
+            if ($result !== null) {
+                return $result;
             }
         }
 
@@ -326,5 +332,76 @@ class Events implements EventDispatcherContract
     public function flush(): void
     {
         $this->listeners = [];
+    }
+
+    /**
+     * Resolve event listeners ordered by descending priority.
+     *
+     * @param string $eventName
+     * @return array<int, array{callback: string|array|callable, priority: int}>
+     */
+    protected function getSortedEventListeners(string $eventName): array
+    {
+        return collect($this->listeners[$eventName] ?? [])
+            ->sortByDesc('priority')
+            ->all();
+    }
+
+    /**
+     * Resolve and invoke a listener.
+     */
+    protected function callListener(string|array|callable $listener, array $args, string $eventName): mixed
+    {
+        try {
+            if (is_callable($listener)) {
+                return $listener(...$args);
+            }
+
+            return Application::$app->call($listener, $args);
+        } catch (\Throwable $e) {
+            tracer_log("Event listener failed for [{$eventName}]: " . $e->getMessage());
+
+            if (is_debug_mode()) {
+                throw $e;
+            }
+
+            return null;
+        }
+    }
+
+    /**
+     * Determine whether a listener can be resolved by the dispatcher.
+     */
+    protected function isValidListener(string|array|callable $listener): bool
+    {
+        if (is_callable($listener)) {
+            return true;
+        }
+
+        if (is_string($listener)) {
+            if (str_contains($listener, '@')) {
+                $segments = explode('@', $listener, 2);
+                return count($segments) === 2
+                    && $segments[1] !== ''
+                    && class_exists($segments[0])
+                    && method_exists($segments[0], $segments[1]);
+            }
+
+            return class_exists($listener) && method_exists($listener, '__invoke');
+        }
+
+        if (is_array($listener) && array_is_list($listener) && count($listener) === 2) {
+            [$target, $method] = $listener;
+
+            if (is_string($method) && is_string($target) && class_exists($target)) {
+                return method_exists($target, $method);
+            }
+
+            if (is_string($method) && is_object($target)) {
+                return method_exists($target, $method);
+            }
+        }
+
+        return false;
     }
 }

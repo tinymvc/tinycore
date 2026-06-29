@@ -7,6 +7,7 @@ use Spark\Contracts\Utils\ImageUtilContract;
 use Spark\Exceptions\Utils\ImageUtilException;
 use Spark\Support\Traits\Macroable;
 use function intval;
+use function is_numeric;
 use function sprintf;
 
 /**
@@ -69,13 +70,11 @@ class Image implements ImageUtilContract
      * @throws ImageUtilException If the GD extension is not loaded, or if the required functions are not enabled in this system.
      * @throws ImageUtilException If the source image file does not exist.
      */
-    public function setImageSource(string $imageSource)
+    public function setImageSource(string $imageSource): void
     {
         $this->imageSource = $imageSource;
 
-        // Clear the GD image resource
-        if (isset($this->image)) {
-            imagedestroy($this->image);
+        if ($this->image instanceof GdImage) {
             $this->image = null;
         }
 
@@ -115,6 +114,10 @@ class Image implements ImageUtilContract
 
         if ($imageSize === false) {
             throw new ImageUtilException("Failed to get image size for: {$this->imageSource}");
+        }
+
+        if (!isset($imageSize[0], $imageSize[1], $imageSize['mime'])) {
+            throw new ImageUtilException("Unable to read required image metadata for: {$this->imageSource}");
         }
 
         $this->info = array_merge($imageSize, pathinfo($this->imageSource));
@@ -179,9 +182,9 @@ class Image implements ImageUtilContract
      * 
      * @throws ImageUtilException If the image type is unsupported.
      */
-    public function getImage()
+    public function getImage(): GdImage
     {
-        if (!isset($this->image)) {
+        if (!$this->image instanceof GdImage) {
             $this->image = match ($this->getInfo('mime')) {
                 'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($this->imageSource),
                 'image/png' => @imagecreatefrompng($this->imageSource),
@@ -247,6 +250,8 @@ class Image implements ImageUtilContract
             throw new ImageUtilException("Failed to save compressed image to: {$destination}");
         }
 
+        $this->setImageSource($destination);
+
         return $result;
     }
 
@@ -272,15 +277,34 @@ class Image implements ImageUtilContract
         }
 
         $destination ??= $this->imageSource;
-        [$width, $height] = $this->getInfo();
+
+        $width = $this->getInfo(0);
+        $height = $this->getInfo(1);
+
+        if (!is_numeric($width) || !is_numeric($height)) {
+            throw new ImageUtilException('Image width and height are not numeric.');
+        }
+
+        $width = (int) $width;
+        $height = (int) $height;
+
+        if ($width <= 0 || $height <= 0) {
+            throw new ImageUtilException("Invalid source image dimensions: {$width}x{$height}");
+        }
 
         $image = $this->getImage();
-        $aspectRatio = $width / $height;
-        $imgAspectRatio = $imgWidth / $imgHeight;
+        $scale = max($imgWidth / $width, $imgHeight / $height);
+        $scaledWidth = (int) round($width * $scale);
+        $scaledHeight = (int) round($height * $scale);
 
-        [$newWidth, $newHeight] = $aspectRatio >= $imgAspectRatio
-            ? [$width / ($height / $imgHeight), $imgHeight]
-            : [$imgWidth, $height / ($width / $imgWidth)];
+        $sourceX = 0;
+        $sourceY = 0;
+        $destX = (int) floor(($imgWidth - $scaledWidth) / 2);
+        $destY = (int) floor(($imgHeight - $scaledHeight) / 2);
+
+        if ($scaledWidth <= 0 || $scaledHeight <= 0) {
+            throw new ImageUtilException("Failed to calculate resize target for image: {$this->imageSource}");
+        }
 
         $photo = @imagecreatetruecolor($imgWidth, $imgHeight);
 
@@ -297,7 +321,7 @@ class Image implements ImageUtilContract
 
         if (file_exists($destination)) {
             if (!@unlink($destination)) {
-                imagedestroy($photo);
+                $photo = null;
                 throw new ImageUtilException("Failed to delete existing file: {$destination}");
             }
         }
@@ -305,18 +329,18 @@ class Image implements ImageUtilContract
         $resampled = imagecopyresampled(
             $photo,
             $image,
-            intval(0 - ($newWidth - $imgWidth) / 2),
-            intval(0 - ($newHeight - $imgHeight) / 2),
-            0,
-            0,
-            intval($newWidth),
-            intval($newHeight),
+            $destX,
+            $destY,
+            $sourceX,
+            $sourceY,
+            $scaledWidth,
+            $scaledHeight,
             intval($width),
             intval($height)
         );
 
         if ($resampled === false) {
-            imagedestroy($photo);
+            $photo = null;
             throw new ImageUtilException("Failed to resample image");
         }
 
@@ -326,12 +350,13 @@ class Image implements ImageUtilContract
             default => @imagejpeg($photo, $destination),
         };
 
-        // Free memory
-        imagedestroy($photo);
-
         if ($result === false) {
+            $photo = null;
             throw new ImageUtilException("Failed to save resized image to: {$destination}");
         }
+
+        $photo = null;
+        $this->setImageSource($destination);
 
         return $result;
     }
@@ -348,6 +373,13 @@ class Image implements ImageUtilContract
         $saved = [];
 
         foreach ($sizes as $width => $height) {
+            $width = (int) $width;
+            $height = (int) $height;
+
+            if ($width <= 0 || $height <= 0) {
+                throw new ImageUtilException("Bulk resize dimensions must be positive: {$width}x{$height}");
+            }
+
             $savePath = sprintf(
                 '%s/%s-%sx%s.%s',
                 $this->getInfo('dirname'),
@@ -377,18 +409,26 @@ class Image implements ImageUtilContract
     public function rotate(float $degrees): bool
     {
         $image = $this->getImage();
+        $mime = (string) $this->getInfo('mime');
+        $background = 0;
 
-        if ($this->getInfo('mime') === 'image/png') {
+        if ($mime === 'image/png') {
             imagesavealpha($image, true);
+            $background = imagecolorallocatealpha($image, 0, 0, 0, 127);
         }
 
-        $rotated = @imagerotate($image, $degrees, 0);
+        $rotated = @imagerotate($image, $degrees, $background);
 
         if ($rotated === false) {
             throw new ImageUtilException("Failed to rotate image by {$degrees} degrees");
         }
 
-        $result = match ($this->getInfo('mime')) {
+        if ($mime === 'image/png') {
+            imagealphablending($rotated, false);
+            imagesavealpha($rotated, true);
+        }
+
+        $result = match ($mime) {
             'image/png' => @imagepng($rotated, $this->imageSource),
             'image/gif' => @imagegif($rotated, $this->imageSource),
             default => @imagejpeg($rotated, $this->imageSource),
@@ -396,23 +436,15 @@ class Image implements ImageUtilContract
 
         // Update the cached image resource and free the old one
         if ($result !== false) {
-            imagedestroy($this->image);
+            $this->image = null;
             $this->image = $rotated;
         } else {
-            imagedestroy($rotated);
+            $rotated = null;
             throw new ImageUtilException("Failed to save rotated image to: {$this->imageSource}");
         }
 
-        return $result;
-    }
+        $this->setImageSource($this->imageSource);
 
-    /**
-     * Destructor to clean up image resources.
-     */
-    public function __destruct()
-    {
-        if (isset($this->image)) {
-            imagedestroy($this->image);
-        }
+        return $result;
     }
 }

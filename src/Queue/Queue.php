@@ -3,6 +3,7 @@
 namespace Spark\Queue;
 
 use PDO;
+use PDOException;
 use RuntimeException;
 use Spark\Console\Prompt;
 use Spark\Queue\Contracts\JobContract;
@@ -12,98 +13,161 @@ use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Carbon;
+use Spark\Utils\RedisConnector;
+use function array_map;
+use function array_slice;
+use function array_unique;
 use function count;
+use function explode;
 use function get_class;
+use function in_array;
 use function is_array;
+use function is_bool;
 use function is_string;
+use function max;
 use function sprintf;
 
 /**
  * A job queue that stores the jobs in a JSON file.
  *
- * This class uses the {@see Job} class to store the jobs in a JSON file.
- * The queue is saved to a file on the disk, and the jobs are loaded from
- * the file when the queue is constructed.
- * 
- * @package Spark\Queue
- * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
+ * This class uses SQLite by default and Redis when configured.
  */
 class Queue implements QueueContract
 {
     use Macroable;
 
-    /**
-     * The log file path or false if logging is disabled.
-     *
-     * @var bool|string
-     */
+    private const REDIS_NULL = '__spark_null__';
+
+    /** @var bool|string */
     private bool|string $log;
 
-    /**
-     * The PDO instance for database operations.
-     *
-     * @var PDO
-     */
-    private PDO $pdo;
+    /** @var string */
+    private string $driver = 'sqlite';
 
-    /**
-     * Constructs a new instance of the queue.
-     *
-     * @param bool|string $log Whether to enable logging. If true, logs to
-     *                         storage_dir('logs/queue.log'). If a string is provided,
-     *                        logs to that file. If false, logging is disabled.
-     */
+    /** @var array */
+    private array $connection = [];
+
+    /** @var PDO */
+    private ?PDO $pdo = null;
+
+    /** @var \Redis|null */
+    private ?\Redis $redis = null;
+
+    /** @var string */
+    private string $redisPrefix = 'spark:queue';
+
+    /** @var string */
+    private string $connectionName = 'default';
+
     public function __construct(bool|string $log = false)
     {
-        try {
-            $this->pdo = new PDO('sqlite:' . storage_dir('queue/jobs.db')); // Initialize SQLite database.
-            $this->pdo->exec("PRAGMA foreign_keys = ON"); // Enable foreign key constraints.
-            $this->pdo->exec("PRAGMA journal_mode = WAL"); // Write-Ahead Logging
-            $this->pdo->exec("PRAGMA synchronous = NORMAL"); // Faster writes
-            $this->pdo->exec("PRAGMA cache_size = 10000"); // 10MB cache
-            $this->pdo->exec("PRAGMA temp_store = MEMORY"); // Temp tables in RAM
-        } catch (\PDOException $e) {
-            throw new RuntimeException('Failed to connect to the SQLite database: ' . $e->getMessage());
+        $this->connection = $this->resolveDriverConfig();
+        $this->driver = strtolower((string) ($this->connection['driver'] ?? 'sqlite'));
+        $this->connectionName = (string) ($this->connection['connection'] ?? 'default');
+
+        if ($this->driver === 'redis') {
+            $this->initializeRedis();
+        } else {
+            $this->initializeSqlite();
         }
 
-        $this->logging($log); // Set up logging.
+        $this->logging($log);
     }
 
-    /**
-     * Returns the PDO instance used for database operations.
-     *
-     * @return PDO The PDO instance.
-     */
-    public function getPdoConnection(): PDO
+    public function getPdoConnection(): ?PDO
     {
         return $this->pdo;
     }
 
-    /**
-     * Sets up logging for the queue.
-     *
-     * @param bool|string $log Whether to enable logging. If true, logs to
-     *                         storage_dir('queue.log'). If a string is provided,
-     *                         logs to that file. If false, logging is disabled.
-     *
-     * @return void
-     */
+    private function initializeSqlite(): void
+    {
+        try {
+            $path = (string) ($this->connection['path'] ?? storage_dir('queue/jobs.db'));
+            $this->pdo = new PDO("sqlite:$path");
+            $this->pdo->exec('PRAGMA foreign_keys = ON');
+            $this->pdo->exec('PRAGMA journal_mode = WAL');
+            $this->pdo->exec('PRAGMA synchronous = NORMAL');
+            $this->pdo->exec('PRAGMA cache_size = 10000');
+            $this->pdo->exec('PRAGMA temp_store = MEMORY');
+        } catch (PDOException $e) {
+            throw new RuntimeException('Failed to connect to the SQLite database: ' . $e->getMessage());
+        }
+    }
+
+    private function initializeRedis(): void
+    {
+        $redisConfig = RedisConnector::resolveConnectionConfig($this->connection);
+        $this->redis = RedisConnector::make($redisConfig, $this->connectionName);
+
+        $prefix = trim((string) ($redisConfig['prefix'] ?? 'spark'));
+        if ($prefix === '') {
+            $prefix = 'spark';
+        }
+        $prefix = trim($prefix, ':');
+        $this->redisPrefix = sprintf('%s:queue:%s', $prefix, md5($this->connectionName));
+
+        // Ensure lock keys for failed cleanup never outlive jobs unless explicitly removed.
+        $this->deleteNamespaceMetaKeys();
+    }
+
+    private function resolveDriverConfig(): array
+    {
+        $queueConfig = (array) config('queue', []);
+
+        $driver = strtolower((string) ($queueConfig['driver'] ?? 'sqlite'));
+        $defaultConnection = 'default';
+
+        if (is_string($queueConfig['default'] ?? null) && $queueConfig['default'] !== '') {
+            $defaultConnection = $queueConfig['default'];
+        } elseif (is_string($queueConfig['connection'] ?? null) && $queueConfig['connection'] !== '') {
+            $defaultConnection = $queueConfig['connection'];
+        }
+
+        $connectionName = $defaultConnection;
+        $connections = (array) ($queueConfig['connections'] ?? $queueConfig['stores'] ?? []);
+
+        if (is_array($connections[$connectionName] ?? null)) {
+            $connection = $connections[$connectionName];
+        } elseif (is_array($queueConfig[$driver] ?? null)) {
+            $connection = $queueConfig[$driver];
+        } elseif (is_array($queueConfig[$connectionName] ?? null) && $connectionName !== 'driver') {
+            $connection = $queueConfig[$connectionName];
+        } else {
+            $connection = $queueConfig;
+        }
+
+        if (!is_array($connection)) {
+            $connection = [];
+        }
+
+        if (!isset($connection['driver'])) {
+            $connection['driver'] = $driver;
+        }
+
+        return [
+            ...$connection,
+            'connection' => $connectionName,
+            'driver' => strtolower((string) $connection['driver'])
+        ];
+    }
+
+    private function isRedis(): bool
+    {
+        return $this->driver === 'redis' && $this->redis instanceof \Redis;
+    }
+
     public function logging(bool|string $log = true): void
     {
-        // Set up logging based on the provided parameter.
         if ($log === true) {
             $this->log = storage_dir('logs/queue.log');
         } else {
             $this->log = $log;
         }
 
-        // If the queue file does not exist, try to create it.
         if ($this->log) {
             if (!is_file($this->log) && !touch($this->log)) {
                 throw new InvalidStorageFileException('Failed to create the queue log file.');
-            }
-            // If the queue file is not writable, try to make it so.
-            elseif (!is_writable($this->log) && !chmod($this->log, 0666)) {
+            } elseif (!is_writable($this->log) && !chmod($this->log, 0666)) {
                 throw new InvalidStorageFileException(
                     sprintf('The queue log file (%s) is not writable.', $this->log)
                 );
@@ -113,222 +177,184 @@ class Queue implements QueueContract
 
     /**
      * Adds a job to the queue.
-     *
-     * @param JobContract $job The job to be added.
-     * @param string $queue The name of the queue to add the job to.
      */
     public function push(JobContract $job, string $queue = 'default'): void
     {
-        $job = $this->serializeJob($job);
+        if ($this->isRedis()) {
+            $this->pushRedis($job, $queue);
+            return;
+        }
 
+        $payload = $this->serializeJob($job);
         try {
-            $this->pdo->prepare(
-                "INSERT INTO jobs (payload, queue, scheduled_time, created_at, repeat, status, attempts) 
-                VALUES (:payload, :queue, :scheduled_time, :created_at, :repeat, :status, :attempts)"
-            )
-                ->execute([
-                    ':payload' => json_encode([
-                        'callback' => $job['callback'],
-                        'parameters' => $job['parameters'],
-                    ]),
-                    ':queue' => $queue,
-                    ':scheduled_time' => $job['scheduledTime'],
-                    ':created_at' => now(),
-                    ':repeat' => $job['repeat'],
-                    ':status' => 'pending',
-                    ':attempts' => 0,
-                ]);
-        } catch (\PDOException $e) {
+            $this->pdo?->prepare(
+                'INSERT INTO jobs (payload, queue, scheduled_time, created_at, repeat, status, attempts) ' .
+                'VALUES (:payload, :queue, :scheduled_time, :created_at, :repeat, :status, :attempts)'
+            )->execute([
+                        ':payload' => json_encode([
+                            'callback' => $payload['callback'],
+                            'parameters' => $payload['parameters'],
+                        ]),
+                        ':queue' => $queue,
+                        ':scheduled_time' => $payload['scheduledTime'],
+                        ':created_at' => now(),
+                        ':repeat' => $payload['repeat'],
+                        ':status' => 'pending',
+                        ':attempts' => 0,
+                    ]);
+        } catch (PDOException $e) {
             throw new FailedToSaveJobsException('Failed to add job to the queue: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Adds a job to the queue only if an identical job does not already exist.
-     *
-     * This method checks if a job with the same callback and parameters already
-     * exists in the specified queue. If such a job exists, it will not add the
-     * new job to prevent duplicates. If no such job exists, it will add the new
-     * job to the queue.
-     *
-     * @param JobContract $job The job to be added.
-     * @param string $queue The name of the queue to add the job to.
-     *
-     * @return void
-     */
     public function pushOnce(JobContract $job, string $queue = 'default'): void
     {
+        if ($this->isRedis()) {
+            $this->pushOnceRedis($job, $queue);
+            return;
+        }
+
         $payload = json_encode([
             'callback' => $job->getCallback(),
             'parameters' => $job->getParameters(),
         ]);
 
-        $repeatCondition = $job->isRepeated() ? "= :repeat" : "IS NULL";
-        $stmt = $this->pdo->prepare(
+        $repeatCondition = $job->isRepeated() ? '= :repeat' : 'IS NULL';
+        $stmt = $this->pdo?->prepare(
             "SELECT COUNT(*) FROM jobs WHERE payload = :payload AND queue = :queue AND repeat $repeatCondition"
         );
+        if (!$stmt) {
+            throw new RuntimeException('Queue storage is not initialized.');
+        }
+
         $stmt->execute([
             ':payload' => $payload,
             ':queue' => $queue,
             ':repeat' => $job->getRepeat()
         ]);
-        $count = $stmt->fetchColumn();
 
-        $count === 0 && $this->push($job, $queue);
+        $count = $stmt->fetchColumn();
+        if ($count === 0) {
+            $this->push($job, $queue);
+        }
     }
 
-    /**
-     * Clears all jobs from the queue.
-     *
-     * This method will remove all jobs from the queue and mark the queue as changed.
-     *
-     * @return void
-     */
     public function clearAllJobs(): void
     {
-        $this->pdo->exec("DELETE FROM jobs");
+        if ($this->isRedis()) {
+            $this->clearAllJobsRedis();
+            return;
+        }
+
+        $this->pdo?->exec('DELETE FROM jobs');
     }
 
-    /**
-     * Clears all repeated jobs from the queue.
-     *
-     * This method will filter out jobs that are marked to be repeated from the
-     * queue and mark the queue as changed.
-     *
-     * @return void
-     */
     public function clearRepeatedJobs(): void
     {
-        $this->pdo->exec("DELETE FROM jobs WHERE repeat IS NOT NULL");
+        if ($this->isRedis()) {
+            $this->clearJobsByFilterRedis(fn(array $job): bool => (string) ($job['repeat'] ?? '') !== '');
+            return;
+        }
+
+        $this->pdo?->exec("DELETE FROM jobs WHERE repeat IS NOT NULL");
     }
 
-    /**
-     * Clears all failed jobs from the queue.
-     *
-     * This method will filter out jobs that have failed from the
-     * queue and mark the queue as changed.
-     *
-     * @return void
-     */
     public function clearFailedJobs(): void
     {
-        $this->pdo->exec("DELETE FROM jobs WHERE status = 'failed'");
+        if ($this->isRedis()) {
+            $this->clearJobsByFilterRedis(fn(array $job): bool => (string) ($job['status'] ?? '') === 'failed');
+            return;
+        }
+
+        $this->pdo?->exec("DELETE FROM jobs WHERE status = 'failed'");
     }
 
-    /**
-     * Removes a job from the queue by its ID.
-     *
-     * This method will remove the job with the given ID from the queue and mark
-     * the queue as changed.
-     *
-     * @param int $id The ID of the job to be removed.
-     *
-     * @return bool True if the job was removed, false otherwise.
-     */
     public function removeJobById(int $id): bool
     {
-        $statement = $this->pdo->prepare("DELETE FROM jobs WHERE id = :id");
-        $statement->execute([':id' => $id]);
+        if ($this->isRedis()) {
+            return $this->removeJobByIdRedis($id);
+        }
 
-        return $statement->rowCount() > 0;
+        $statement = $this->pdo?->prepare('DELETE FROM jobs WHERE id = :id');
+        $statement?->execute([':id' => $id]);
+
+        return (int) ($statement?->rowCount() ?? 0) > 0;
     }
 
-    /**
-     * Removes all jobs from a specific queue.
-     *
-     * This method will remove all jobs associated with the given queue name
-     * from the queue and mark the queue as changed.
-     *
-     * @param string $name The name of the queue to be removed.
-     *
-     * @return bool True if any jobs were removed, false otherwise.
-     */
     public function removeQueue(string $name): bool
     {
-        $statement = $this->pdo->prepare("DELETE FROM jobs WHERE queue = :queue");
-        $statement->execute([':queue' => $name]);
+        if ($this->isRedis()) {
+            return $this->removeQueueRedis($name);
+        }
 
-        return $statement->rowCount() > 0;
+        $statement = $this->pdo?->prepare('DELETE FROM jobs WHERE queue = :queue');
+        $statement?->execute([':queue' => $name]);
+
+        return (int) ($statement?->rowCount() ?? 0) > 0;
     }
 
-    /**
-     * Returns the next job from the queue.
-     *
-     * This method retrieves the next job from the specified queue(s) that is
-     * pending and scheduled to run at or before the current time.
-     * Uses a transaction to prevent race conditions between multiple workers.
-     *
-     * @param array|string $queue The name(s) of the queue(s) to retrieve the job from.
-     *
-     * @return false|\Spark\Queue\Contracts\JobContract The next job in the queue, or false if no job is available.
-     */
     private function getNextJob(array|string $queue = 'default'): false|JobContract
     {
+        if ($this->isRedis()) {
+            return $this->getNextJobRedis($queue);
+        }
+
         try {
-            $this->pdo->beginTransaction();
+            $this->pdo?->beginTransaction();
 
-            $queue = $this->joinEnum($queue);
+            $queueClause = $this->sqliteInClause($queue, 'queue');
+            if ($queueClause['sql'] === '') {
+                $this->pdo?->commit();
+                return false;
+            }
 
-            // Select job and immediately mark it as reserved to prevent race conditions
-            $statement = $this->pdo->prepare(
-                "SELECT * FROM jobs WHERE queue IN($queue) AND status = 'pending' 
-                    AND (scheduled_time IS NULL OR scheduled_time <= :now) 
-                    ORDER BY scheduled_time ASC LIMIT 1"
+            $statement = $this->pdo?->prepare(
+                "SELECT * FROM jobs WHERE queue IN({$queueClause['sql']}) AND status = 'pending' " .
+                "AND (scheduled_time IS NULL OR scheduled_time <= :now) " .
+                "ORDER BY scheduled_time ASC LIMIT 1"
             );
 
-            $statement->execute([':now' => now()]);
+            if (!$statement) {
+                return false;
+            }
+
+            $statement->execute([
+                ...$queueClause['params'],
+                ':now' => now(),
+            ]);
             $job = $statement->fetch(PDO::FETCH_ASSOC);
 
             if ($job) {
-                // Mark job as reserved immediately to prevent other workers from picking it up
-                $updateStmt = $this->pdo->prepare(
+                $updateStmt = $this->pdo?->prepare(
                     "UPDATE jobs SET status = 'reserved', reserved_at = :reserved_at WHERE id = :id AND status = 'pending'"
                 );
 
-                $updateStmt->execute([
+                $updateStmt?->execute([
                     ':reserved_at' => now(),
                     ':id' => $job['id']
                 ]);
 
-                // If no rows were updated, another worker got this job
-                if ($updateStmt->rowCount() === 0) {
-                    $this->pdo->commit();
+                if (($updateStmt?->rowCount() ?? 0) === 0) {
+                    $this->pdo?->commit();
                     return false;
                 }
 
-                $this->pdo->commit();
+                $this->pdo?->commit();
                 return $this->unserializeJob($job);
             }
 
-            $this->pdo->commit();
+            $this->pdo?->commit();
             return false;
 
-        } catch (\PDOException $e) {
-            $this->pdo->rollBack();
+        } catch (PDOException $e) {
+            $this->pdo?->rollBack();
             throw new RuntimeException('Failed to get next job: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Runs the jobs in the queue.
-     *
-     * This method will iterate over the jobs in the queue and execute them if
-     * their scheduled time is in the past. If the job is repeated, it will be
-     * rescheduled for the next time. If the job is not repeated, it will be
-     * removed from the queue.
-     * 
-     * @param bool $once Whether to run only once (process one batch) or continuously.
-     * @param int $timeout Maximum execution time in seconds before stopping.
-     * @param int $sleep Sleep time in seconds between queue checks when no jobs are available.
-     * @param int $delay Delay time in seconds before retrying failed jobs.
-     * @param int $tries Maximum number of attempts for a job before marking it as permanently failed.
-     * @param array|string $queue The queue(s) to run jobs from.
-     * 
-     * @return void
-     */
     public function work(
         bool $once = false,
-        int $timeout = 3600, // 1 hour
+        int $timeout = 3600,
         int $sleep = 3,
         int $delay = 5,
         int $tries = 3,
@@ -342,23 +368,19 @@ class Queue implements QueueContract
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
         $this->message("Queue worker started for queue(s): $queueNames");
 
-        sleep(rand(0, $sleep)); // Random sleep to prevent thundering herd problem.
-
-        // Recover stale jobs (jobs stuck in 'processing' status for too long)
+        sleep(rand(0, $sleep));
         $this->recoverStaleJobs();
 
         do {
-            // Check if timeout has been reached
             if ((microtime(true) - $startedAt) >= $timeout) {
                 $this->message('Queue worker timeout reached. Shutting down...');
                 break;
             }
 
-            // Get the next job from the queue
             $job = $this->getNextJob($queue);
 
             if (!$job) {
-                $once === false && sleep($sleep); // No jobs available, sleep for a bit if not running once
+                $once === false && sleep($sleep);
                 continue;
             }
 
@@ -367,71 +389,61 @@ class Queue implements QueueContract
 
             $this->message(
                 sprintf(
-                    "Processing job #%d (%s) - Attempt %d/%d",
+                    'Processing job #%d (%s) - Attempt %d/%d',
                     $jobId,
                     $job->getDisplayName(),
                     $attempts + 1,
-                    $tries
+                    $tries,
                 ),
             );
 
             try {
-                // Mark job as processing
                 $this->updateJobStatus($jobId, 'processing', $attempts + 1);
 
-                // Execute the job
                 $job->handle();
 
-                // Job succeeded
                 if ($job->isRepeated()) {
-                    // Reschedule repeated job
                     $nextRun = now()->modify('+' . $job->getRepeat());
                     $this->rescheduleJob($jobId, $nextRun);
 
                     $this->message(
                         sprintf(
-                            "Job #%d completed and rescheduled for %s",
+                            'Job #%d completed and rescheduled for %s',
                             $jobId,
                             $nextRun
                         ),
                     );
                 } else {
-                    // Remove one-time job
-                    $this->removeJobById($jobId);
-
+                    $this->removeJobById((int) $jobId);
                     $this->message("Job #$jobId completed successfully");
                 }
 
                 $ranJobs++;
-
             } catch (\Throwable $e) {
-                // Job failed
                 $newAttempts = $attempts + 1;
 
                 $this->message(
-                    sprintf("Job #%d failed: %s", $jobId, $e->getMessage()),
+                    sprintf('Job #%d failed: %s', $jobId, $e->getMessage()),
                 );
 
                 if ($newAttempts >= $tries) {
-                    // Max attempts reached, mark as permanently failed
                     $this->markJobAsFailed($jobId, $e, $newAttempts);
                     $failedJobs++;
 
                     $this->message(
                         sprintf(
-                            "Job #%d failed permanently after %d attempts",
+                            'Job #%d failed permanently after %d attempts',
                             $jobId,
                             $newAttempts
                         ),
                     );
                 } else {
-                    // Retry the job after delay
                     $retryTime = now()->addSeconds($delay);
                     $this->retryJob($jobId, $retryTime, $newAttempts);
 
                     $this->message(
                         sprintf(
-                            "Job #%d will be retried at %s",
+                            'Job #%d will be retried at %s',
                             $jobId,
                             $retryTime
                         ),
@@ -441,54 +453,40 @@ class Queue implements QueueContract
                 $failedJobs++;
             }
 
-            // Check if we should stop after processing one job
             if ($once) {
                 break;
             }
-
         } while (true);
 
         $timeUsed = microtime(true) - $startedAt;
         $memoryUsed = memory_get_usage(true) - $startedMemory;
 
-        // Log the queue run summary
         if ($ranJobs > 0 || $failedJobs > 0) {
             $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
         }
 
         $this->message(
-            sprintf("Queue worker finished. Ran %d job(s), %d failed", $ranJobs, $failedJobs),
+            sprintf('Queue worker finished. Ran %d job(s), %d failed', $ranJobs, $failedJobs),
         );
     }
 
-    /**
-     * Logs a message to the queue log file if logging is enabled.
-     *
-     * @param string $message The message to log.
-     *
-     * @return void
-     */
     private function message(string $message): void
     {
         echo '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
     }
 
-    /**
-     * Updates the status of a job in the database.
-     *
-     * @param int $jobId The ID of the job to update.
-     * @param string $status The new status of the job.
-     * @param int $attempts The number of attempts made to run the job.
-     *
-     * @return void
-     */
     private function updateJobStatus(int $jobId, string $status, int $attempts): void
     {
-        $statement = $this->pdo->prepare(
+        if ($this->isRedis()) {
+            $this->updateJobStatusRedis($jobId, $status, $attempts);
+            return;
+        }
+
+        $statement = $this->pdo?->prepare(
             "UPDATE jobs SET status = :status, attempts = :attempts, reserved_at = :reserved_at WHERE id = :id"
         );
 
-        $statement->execute([
+        $statement?->execute([
             ':status' => $status,
             ':attempts' => $attempts,
             ':reserved_at' => $status === 'processing' ? now() : null,
@@ -496,128 +494,96 @@ class Queue implements QueueContract
         ]);
     }
 
-    /**
-     * Reschedules a repeated job for its next execution.
-     *
-     * @param int $jobId The ID of the job to reschedule.
-     * @param Carbon $nextRun The time for the next execution.
-     *
-     * @return void
-     */
     private function rescheduleJob(int $jobId, Carbon $nextRun): void
     {
-        $statement = $this->pdo->prepare(
+        if ($this->isRedis()) {
+            $this->rescheduleJobRedis($jobId, $nextRun);
+            return;
+        }
+
+        $statement = $this->pdo?->prepare(
             "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = 0, reserved_at = NULL WHERE id = :id"
         );
 
-        $statement->execute([
+        $statement?->execute([
             ':scheduled_time' => $nextRun,
             ':id' => $jobId,
         ]);
     }
 
-    /**
-     * Marks a job as permanently failed and logs it to the failed_jobs table.
-     *
-     * @param int $jobId The ID of the job that failed.
-     * @param \Throwable $exception The exception that caused the failure.
-     * @param int $attempts The number of attempts made to run the job.
-     *
-     * @return void
-     */
     private function markJobAsFailed(int $jobId, \Throwable $exception, int $attempts): void
     {
+        if ($this->isRedis()) {
+            $this->markJobAsFailedRedis($jobId, $exception, $attempts);
+            return;
+        }
+
         try {
-            $this->pdo->beginTransaction();
+            $this->pdo?->beginTransaction();
 
-            // Update job status
-            $statement = $this->pdo->prepare(
-                "UPDATE jobs SET status = 'failed', attempts = :attempts WHERE id = :id"
-            );
-
-            $statement->execute([
+            $statement = $this->pdo?->prepare("UPDATE jobs SET status = 'failed', attempts = :attempts WHERE id = :id");
+            $statement?->execute([
                 ':attempts' => $attempts,
                 ':id' => $jobId,
             ]);
 
-            // Log to failed_jobs table
-            $statement = $this->pdo->prepare(
-                "INSERT INTO failed_jobs (job_id, failed_at, exception, attempts) 
-                VALUES (:job_id, :failed_at, :exception, :attempts)"
+            $statement = $this->pdo?->prepare(
+                "INSERT INTO failed_jobs (job_id, failed_at, exception, attempts) VALUES (:job_id, :failed_at, :exception, :attempts)"
             );
 
-            // Get the stack trace from the previous exception if available
-            $stackTraceString = $exception->getPrevious()
-                ? $exception->getPrevious()->getTraceAsString()
-                : $exception->getTraceAsString();
+            $stackTraceString = $exception->getPrevious()?->getTraceAsString() ?? $exception->getTraceAsString();
 
-            $statement->execute([
+            $statement?->execute([
                 ':job_id' => $jobId,
                 ':failed_at' => now(),
-                ':exception' => sprintf(
-                    "%s: %s\nStack trace:\n%s",
-                    get_class($exception),
-                    $exception->getMessage(),
-                    $stackTraceString
-                ),
+                ':exception' => sprintf('%s: %s\nStack trace:\n%s', get_class($exception), $exception->getMessage(), $stackTraceString),
                 ':attempts' => $attempts,
             ]);
 
-            $this->pdo->commit();
-
-        } catch (\PDOException $e) {
-            $this->pdo->rollBack();
+            $this->pdo?->commit();
+        } catch (PDOException $e) {
+            $this->pdo?->rollBack();
             throw new RuntimeException('Failed to mark job as failed: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Retries a failed job by rescheduling it for a later time.
-     *
-     * @param int $jobId The ID of the job to retry.
-     * @param Carbon $retryTime The time to retry the job.
-     * @param int $attempts The number of attempts made so far.
-     *
-     * @return void
-     */
     private function retryJob(int $jobId, Carbon $retryTime, int $attempts): void
     {
-        $statement = $this->pdo->prepare(
+        if ($this->isRedis()) {
+            $this->retryJobRedis($jobId, $retryTime, $attempts);
+            return;
+        }
+
+        $statement = $this->pdo?->prepare(
             "UPDATE jobs SET scheduled_time = :scheduled_time, status = 'pending', attempts = :attempts, reserved_at = NULL WHERE id = :id"
         );
 
-        $statement->execute([
+        $statement?->execute([
             ':scheduled_time' => $retryTime,
             ':attempts' => $attempts,
             ':id' => $jobId,
         ]);
     }
 
-    /**
-     * Recovers stale jobs that are stuck in 'processing' or 'reserved' status.
-     *
-     * This method finds jobs that have been reserved or processing for too long
-     * (likely due to worker crashes) and resets them to pending status.
-     *
-     * @param int $timeout The number of seconds after which a job is considered stale (default: 3600 = 1 hour).
-     *
-     * @return int The number of stale jobs recovered.
-     */
     private function recoverStaleJobs(int $timeout = 3600): int
     {
+        if ($this->isRedis()) {
+            return $this->recoverStaleJobsRedis($timeout);
+        }
+
         try {
             $staleTime = now()->subSeconds($timeout);
 
-            $statement = $this->pdo->prepare(
-                "UPDATE jobs SET status = 'pending', reserved_at = NULL 
-                WHERE status IN ('processing', 'reserved') 
-                AND reserved_at IS NOT NULL 
-                AND reserved_at < :stale_time"
+            $statement = $this->pdo?->prepare(
+                "UPDATE jobs SET status = 'pending', reserved_at = NULL " .
+                "WHERE status IN ('processing', 'reserved') " .
+                "AND reserved_at IS NOT NULL " .
+                "AND reserved_at < :stale_time"
             );
 
-            $statement->execute([':stale_time' => $staleTime]);
+            $statement?->execute([':stale_time' => $staleTime]);
 
-            $recovered = $statement->rowCount();
+            $recovered = (int) ($statement?->rowCount() ?? 0);
 
             if ($recovered > 0) {
                 Prompt::message(
@@ -627,211 +593,149 @@ class Queue implements QueueContract
             }
 
             return $recovered;
-
-        } catch (\PDOException $e) {
+        } catch (PDOException $e) {
             throw new RuntimeException('Failed to recover stale jobs: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Returns the jobs in the queue.
-     * 
-     * This method retrieves jobs from the queue based on the specified
-     * queue names and statuses, with pagination support.
-     * 
-     * @param array|string|null $queue The name(s) of the queue(s) to filter jobs by.
-     * @param array|string|null $status The status(es) of the jobs to filter by.
-     * @param int $from The starting index for pagination.
-     * @param int $to The ending index for pagination.
-     *
-     * @return array<int,\Spark\Queue\Contracts\JobContract> The array of jobs in the queue.
-     */
     public function getJobs(
         array|string|null $queue = null,
         array|string|null $status = null,
         int $from = 0,
         int $to = 500,
     ): array {
+        if ($this->isRedis()) {
+            return $this->getJobsRedis($queue, $status, $from, $to);
+        }
+
         try {
-            $where = '';
+            $whereParts = [];
+            $params = [];
             if (!empty($queue)) {
-                $queue = $this->joinEnum($queue);
-                $where .= "queue IN($queue)";
+                $queueClause = $this->sqliteInClause($queue, 'jobs_queue');
+                if ($queueClause['sql'] !== '') {
+                    $whereParts[] = "queue IN({$queueClause['sql']})";
+                    $params = [...$params, ...$queueClause['params']];
+                }
             }
 
             if (!empty($status)) {
-                $status = $this->joinEnum($status);
-                $where .= !empty($where) ? " AND " : "";
-                $where .= "status IN($status)";
+                $statusClause = $this->sqliteInClause($status, 'jobs_status');
+                if ($statusClause['sql'] !== '') {
+                    $whereParts[] = "status IN({$statusClause['sql']})";
+                    $params = [...$params, ...$statusClause['params']];
+                }
             }
 
-            if (!empty($where)) {
-                $where = "WHERE $where"; // Add WHERE clause if needed.
+            if ($whereParts !== []) {
+                $query = sprintf('SELECT * FROM jobs WHERE %s LIMIT :from, :to', implode(' AND ', $whereParts));
+            } else {
+                $query = 'SELECT * FROM jobs LIMIT :from, :to';
             }
 
-            $statement = $this->pdo->prepare(
-                "SELECT * FROM jobs $where LIMIT :from, :to"
-            );
-
-            $statement->execute([':from' => $from, ':to' => $to]);
+            $statement = $this->pdo?->prepare($query);
+            $statement?->execute([
+                ':from' => $from,
+                ':to' => $to,
+                ...$params,
+            ]);
             $jobs = [];
-            while ($row = $statement->fetch(PDO::FETCH_ASSOC)) {
-                $jobs[] = $this->unserializeJob($row);
+
+            while ($row = $statement?->fetch(PDO::FETCH_ASSOC)) {
+                if (is_array($row)) {
+                    $jobs[] = $this->unserializeJob($row);
+                }
             }
-        } catch (\PDOException $e) {
-            throw new FailedToLoadJobsException(
-                'Failed to load jobs from the queue: ' . $e->getMessage()
-            );
-        }
 
-        return $jobs;
+            return $jobs;
+        } catch (PDOException $e) {
+            throw new FailedToLoadJobsException('Failed to load jobs from the queue: ' . $e->getMessage());
+        }
     }
 
-    /**
-     * Joins an array or string of enum values into a single string for SQL queries.
-     *
-     * @param array|string|null $values The enum values to join.
-     *
-     * @return string The joined enum values as a string.
-     */
-    private function joinEnum(array|string|null $values): string
-    {
-        if (empty($values)) {
-            return '';
-        }
-
-        if (is_string($values)) {
-            $values = explode(',', $values);
-        }
-
-        $values = array_map('trim', $values);
-        $values = array_filter($values);
-
-        return "'" . implode("','", $values) . "'";
-    }
-
-    /**
-     * Returns the failed jobs in the queue.
-     * 
-     * This method retrieves failed jobs from the queue with pagination support.
-     * 
-     * @param int $from The starting index for pagination.
-     * @param int $to The ending index for pagination.
-     *
-     * @return array<int,\Spark\Queue\Contracts\JobContract> The array of failed jobs in the queue.
-     */
     public function getFailedJobs(int $from = 0, int $to = 500): array
     {
-        try {
-            $statement = $this->pdo->prepare(
-                "SELECT fj.*, j.payload, j.queue, j.scheduled_time, j.created_at, j.repeat, j.status 
-                FROM failed_jobs fj 
-                JOIN jobs j ON fj.job_id = j.id 
-                ORDER BY fj.failed_at DESC 
-                LIMIT :from, :to"
-            );
-
-            $statement->execute([':from' => $from, ':to' => $to]);
-            $jobs = [];
-            while ($row = $statement->fetch(PDO::FETCH_ASSOC)) {
-                $jobs[] = $this->unserializeJob($row);
-            }
-        } catch (\PDOException $e) {
-            throw new FailedToLoadJobsException(
-                'Failed to load failed jobs from the queue: ' . $e->getMessage()
-            );
+        if ($this->isRedis()) {
+            return $this->getFailedJobsRedis($from, $to);
         }
 
-        return $jobs;
-    }
-
-    /**
-     * Retries all failed jobs in the queue.
-     *
-     * This method will move all jobs from the failed_jobs table back to the
-     * jobs table with a status of 'pending' and reset their attempt counts.
-     *
-     * @return void
-     */
-    public function retryFailedJobs(): void
-    {
         try {
-            $this->pdo->beginTransaction();
+            $statement = $this->pdo?->prepare(
+                "SELECT fj.*, j.payload, j.queue, j.scheduled_time, j.created_at, j.repeat, j.status " .
+                "FROM failed_jobs fj " .
+                "JOIN jobs j ON fj.job_id = j.id " .
+                "ORDER BY fj.failed_at DESC " .
+                "LIMIT :from, :to"
+            );
 
-            // Get all failed job IDs
-            $statement = $this->pdo->prepare("SELECT job_id FROM failed_jobs");
-            $statement->execute();
-            $failedJobIds = $statement->fetchAll(PDO::FETCH_COLUMN);
+            $statement?->execute([':from' => $from, ':to' => $to]);
+            $jobs = [];
 
-            if (empty($failedJobIds)) {
-                $this->pdo->commit();
-                return; // No failed jobs to retry.
+            while ($row = $statement?->fetch(PDO::FETCH_ASSOC)) {
+                if (is_array($row)) {
+                    $jobs[] = $this->unserializeJob($row);
+                }
             }
 
-            // Update jobs to pending status
+            return $jobs;
+        } catch (PDOException $e) {
+            throw new FailedToLoadJobsException('Failed to load failed jobs from the queue: ' . $e->getMessage());
+        }
+    }
+
+    public function retryFailedJobs(): void
+    {
+        if ($this->isRedis()) {
+            $this->retryFailedJobsRedis();
+            return;
+        }
+
+        try {
+            $this->pdo?->beginTransaction();
+
+            $statement = $this->pdo?->prepare('SELECT job_id FROM failed_jobs');
+            $statement?->execute();
+            $failedJobIds = $statement?->fetchAll(PDO::FETCH_COLUMN);
+
+            if (empty($failedJobIds)) {
+                $this->pdo?->commit();
+                return;
+            }
+
             $inClause = implode(',', array_fill(0, count($failedJobIds), '?'));
-            $updateStatement = $this->pdo->prepare(
-                "UPDATE jobs SET status = 'pending', attempts = 0, reserved_at = NULL WHERE id IN ($inClause)"
-            );
-            $updateStatement->execute($failedJobIds);
-
-            // Clear failed_jobs table
-            $this->pdo->exec("DELETE FROM failed_jobs");
-
-            $this->pdo->commit();
-
-        } catch (\PDOException $e) {
-            $this->pdo->rollBack();
+            $statement = $this->pdo?->prepare("UPDATE jobs SET status = 'pending', attempts = 0, reserved_at = NULL WHERE id IN ($inClause)");
+            $statement?->execute($failedJobIds);
+            $this->pdo?->exec('DELETE FROM failed_jobs');
+            $this->pdo?->commit();
+        } catch (PDOException $e) {
+            $this->pdo?->rollBack();
             throw new RuntimeException('Failed to retry failed jobs: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Serializes a Job object into an array that can be saved to JSON.
-     *
-     * This method takes a Job object and returns an array of data that can be saved
-     * to JSON. The callback is serialized into a string and the scheduled time is
-     * saved as a string. The repeat and priority are saved as they are. The event
-     * listeners are serialized into an array of arrays, where each inner array
-     * contains the priority and callback of the event listener.
-     *
-     * @param \Spark\Queue\Contracts\JobContract $job The Job object to be serialized.
-     *
-     * @return array The serialized Job object as an array.
-     */
     private function serializeJob(JobContract $job): array
     {
         return [
-            'callback' => $job->getCallback(), // Serialize the callback and save it.
-            'parameters' => $job->getParameters(), // Save the parameters as it is.
-            'scheduledTime' => $job->getScheduledTime(), // Save the scheduled time as string.
-            'repeat' => $job->getRepeat(), // Save the repeat as it is.
-            'metadata' => $job->getMetadata(), // Save the metadata as it is.
+            'callback' => $job->getCallback(),
+            'parameters' => $job->getParameters(),
+            'scheduledTime' => (string) $job->getScheduledTime(),
+            'repeat' => $job->getRepeat(),
+            'metadata' => $job->getMetadata(),
         ];
     }
 
-    /**
-     * Unserializes a serialized Job object into a Job object.
-     *
-     * This method takes a serialized Job object and returns a Job object.
-     * The callback is unserialized into a callable and the scheduled time is
-     * set using the ISO 8601 string. The repeat and priority are set as they
-     * are. The event listeners are unserialized into an array of arrays, where
-     * each inner array contains the priority and callback of the event listener.
-     *
-     * @param array $job The serialized Job object to be unserialized.
-     *
-     * @return \Spark\Queue\Contracts\JobContract The unserialized Job object.
-     */
     private function unserializeJob(array $job): JobContract
     {
-        $payload = json_decode($job['payload'], true);
+        $payload = json_decode((string) ($job['payload'] ?? '{}'), true);
+        if (!is_array($payload)) {
+            $payload = [];
+        }
 
         return new Job(
-            callback: $payload['callback'],
-            parameters: $payload['parameters'],
-            scheduledTime: new Carbon($job['scheduled_time']),
-            repeat: $job['repeat'],
+            callback: $payload['callback'] ?? null,
+            parameters: $payload['parameters'] ?? [],
+            scheduledTime: new Carbon($job['scheduled_time'] ?? now()),
+            repeat: $job['repeat'] ?? null,
             metadata: [
                 'id' => $job['id'] ?? null,
                 'queue' => $job['queue'] ?? 'default',
@@ -845,24 +749,48 @@ class Queue implements QueueContract
         );
     }
 
-    /**
-     * Adds a log entry to the queue log file.
-     *
-     * This method will add a log entry to the queue log file with the time
-     * taken to run the jobs, the memory used, and the number of jobs run.
-     * The log entry is added to the beginning of the log file and only the
-     * latest 5000 entries are kept.
-     *
-     * @param float $timeUsed The time taken to run the jobs in milliseconds.
-     * @param int $memoryUsed The memory used to run the jobs in bytes.
-     * @param int $ranJobs The number of jobs that were run.
-     *
-     * @return void
-     */
+    private function sqliteInClause(array|string|null $values, string $paramPrefix): array
+    {
+        if (empty($values)) {
+            return [
+                'sql' => '',
+                'params' => [],
+            ];
+        }
+
+        if (is_string($values)) {
+            $values = explode(',', $values);
+        }
+
+        $values = array_map('trim', (array) $values);
+        $values = array_filter($values);
+        if ($values === []) {
+            return [
+                'sql' => '',
+                'params' => [],
+            ];
+        }
+
+        $values = array_values($values);
+        $placeholders = [];
+        $params = [];
+
+        foreach ($values as $index => $value) {
+            $param = sprintf(':%s_%d', $paramPrefix, $index);
+            $placeholders[] = $param;
+            $params[$param] = (string) $value;
+        }
+
+        return [
+            'sql' => implode(',', $placeholders),
+            'params' => $params,
+        ];
+    }
+
     private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs, int $failedJobs): void
     {
         if (empty($this->log)) {
-            return; // If logging is disabled, do nothing.
+            return;
         }
 
         $logEntry = sprintf(
@@ -875,5 +803,670 @@ class Queue implements QueueContract
         );
 
         file_put_contents($this->log, $logEntry, FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * ------------------------------
+     * Redis implementations
+     * ------------------------------
+     */
+    private function redisKey(string $key): string
+    {
+        return $this->redisPrefix . ':' . ltrim($key, ':');
+    }
+
+    private function redisJobsSetKey(): string
+    {
+        return $this->redisKey('jobs');
+    }
+
+    private function redisQueueJobsSetKey(string $queue): string
+    {
+        return $this->redisKey("jobs:queue:$queue");
+    }
+
+    private function redisQueuesSetKey(): string
+    {
+        return $this->redisKey('queues');
+    }
+
+    private function redisPendingSetKey(string $queue): string
+    {
+        return $this->redisKey("pending:$queue");
+    }
+
+    private function redisReservedSetKey(string $queue): string
+    {
+        return $this->redisKey("reserved:$queue");
+    }
+
+    private function redisJobHashKey(int $id): string
+    {
+        return $this->redisKey("job:$id");
+    }
+
+    private function redisFailedSetKey(): string
+    {
+        return $this->redisKey('failed');
+    }
+
+    private function redisNextIdKey(): string
+    {
+        return $this->redisKey('next_id');
+    }
+
+    private function redisFingerprintKey(string $queue, array $payload, ?string $repeat): string
+    {
+        $fingerprint = sha1(json_encode($payload, JSON_UNESCAPED_UNICODE));
+        return $this->redisKey("dupe:$queue:$repeat:$fingerprint");
+    }
+
+    private function redisNormalizeValue(mixed $value): string
+    {
+        return match (true) {
+            $value === null => self::REDIS_NULL,
+            is_bool($value) => $value ? '1' : '0',
+            default => (string) $value,
+        };
+    }
+
+    private function redisToValue(string $value): ?string
+    {
+        return $value === self::REDIS_NULL ? null : $value;
+    }
+
+    private function redisToIntValue(string $value): int
+    {
+        return (int) ($value === self::REDIS_NULL ? 0 : $value);
+    }
+
+    private function redisToTimestamp(null|string $value): int
+    {
+        if ($value === null || $value === self::REDIS_NULL || $value === '') {
+            return time();
+        }
+
+        $timestamp = strtotime($value);
+
+        return $timestamp === false ? time() : $timestamp;
+    }
+
+    private function nextRedisId(): int
+    {
+        return (int) ($this->redis?->incr($this->redisNextIdKey()) ?? 1);
+    }
+
+    private function getRedisJob(int $id): ?array
+    {
+        if (!$this->redis) {
+            return null;
+        }
+
+        $row = $this->redis->hGetAll($this->redisJobHashKey($id));
+        if ($row === []) {
+            return null;
+        }
+
+        return $row;
+    }
+
+    private function redisNullIfMissing(?string $value): ?string
+    {
+        return ($value === self::REDIS_NULL || $value === '') ? null : $value;
+    }
+
+    private function pushRedis(JobContract $job, string $queue, ?int $jobId = null): void
+    {
+        $payload = $this->serializeJob($job);
+        $jobId = $jobId ?? $this->nextRedisId();
+        $payloadData = json_encode([
+            'callback' => $payload['callback'],
+            'parameters' => $payload['parameters'],
+        ], JSON_UNESCAPED_UNICODE);
+
+        $row = [
+            'id' => (string) $jobId,
+            'payload' => $payloadData,
+            'queue' => $queue,
+            'scheduled_time' => $payload['scheduledTime'],
+            'created_at' => (string) now(),
+            'repeat' => $payload['repeat'] ?? self::REDIS_NULL,
+            'status' => 'pending',
+            'attempts' => '0',
+            'reserved_at' => self::REDIS_NULL,
+            'exception' => self::REDIS_NULL,
+            'failed_at' => self::REDIS_NULL,
+        ];
+
+        $jobKey = $this->redisJobHashKey($jobId);
+
+        $this->redis?->hMSet($jobKey, array_map($this->redisNormalizeValue(...), $row));
+        $this->redis?->sAdd($this->redisJobsSetKey(), $jobId);
+        $this->redis?->sAdd($this->redisQueueJobsSetKey($queue), $jobId);
+        $this->redis?->sAdd($this->redisQueuesSetKey(), $queue);
+        $this->redis?->zAdd($this->redisPendingSetKey($queue), $this->redisToTimestamp((string) $payload['scheduledTime']), (string) $jobId);
+
+        $dupeKey = $this->redisFingerprintKey($queue, [
+            'callback' => $payload['callback'],
+            'parameters' => $payload['parameters'],
+        ], $payload['repeat'] ?? '');
+
+        $this->redis?->set($dupeKey, (string) $jobId);
+    }
+
+    private function pushOnceRedis(JobContract $job, string $queue): void
+    {
+        $payload = $this->serializeJob($job);
+        $dupeKey = $this->redisFingerprintKey($queue, [
+            'callback' => $payload['callback'],
+            'parameters' => $payload['parameters'],
+        ], $payload['repeat'] ?? '');
+
+        $existing = $this->redis?->get($dupeKey);
+        if (is_string($existing) && $existing !== '') {
+            $existingId = (int) $existing;
+            $existingJob = $this->getRedisJob($existingId);
+            if ($existingJob !== null && $this->redisToValue($existingJob['status'] ?? '') !== null) {
+                return;
+            }
+
+            $this->redis?->del($dupeKey);
+        }
+
+        $jobId = $this->nextRedisId();
+
+        if ($this->redis?->setnx($dupeKey, (string) $jobId) !== true) {
+            return;
+        }
+
+        try {
+            $this->pushRedis($job, $queue, $jobId);
+        } catch (\Throwable $e) {
+            $this->redis?->del($dupeKey);
+            throw new FailedToSaveJobsException('Failed to add job to the queue: ' . $e->getMessage());
+        }
+    }
+
+    private function getNextJobRedis(array|string $queue = 'default'): false|JobContract
+    {
+        $queues = $this->toQueueList($queue);
+        if ($queues === []) {
+            return false;
+        }
+
+        $bestQueue = null;
+        $bestId = null;
+        $bestScore = null;
+
+        $now = time();
+
+        foreach ($queues as $queueName) {
+            $jobs = $this->redis?->zRangeByScore(
+                $this->redisPendingSetKey($queueName),
+                '-inf',
+                $now,
+                ['withscores' => true, 'limit' => [0, 1]]
+            );
+
+            if (!$jobs || count($jobs) === 0) {
+                continue;
+            }
+
+            $jobId = (int) array_key_first($jobs);
+            $score = (int) (array_values($jobs)[0] ?? 0);
+
+            if ($bestScore === null || $score < $bestScore) {
+                $bestScore = $score;
+                $bestQueue = $queueName;
+                $bestId = $jobId;
+            }
+        }
+
+        if ($bestQueue === null || $bestId === null) {
+            return false;
+        }
+
+        if (($this->redis?->zRem($this->redisPendingSetKey($bestQueue), (string) $bestId) ?? 0) === 0) {
+            return false;
+        }
+
+        $row = $this->getRedisJob($bestId);
+        if (!$row) {
+            return false;
+        }
+
+        $this->updateJobStatusRedis($bestId, 'reserved', $this->redisToIntValue($row['attempts'] ?? '0'));
+
+        return $this->unserializeJob([
+            'id' => $bestId,
+            'payload' => $row['payload'] ?? '{}',
+            'queue' => $row['queue'] ?? $bestQueue,
+            'scheduled_time' => $row['scheduled_time'] ?? null,
+            'created_at' => $row['created_at'] ?? null,
+            'repeat' => $this->redisNullIfMissing($row['repeat'] ?? null),
+            'status' => $row['status'] ?? 'pending',
+            'attempts' => $this->redisToIntValue($row['attempts'] ?? '0'),
+            'reserved_at' => $this->redisNullIfMissing($row['reserved_at'] ?? null),
+            'exception' => $this->redisNullIfMissing($row['exception'] ?? null),
+            'failed_at' => $this->redisNullIfMissing($row['failed_at'] ?? null),
+        ]);
+    }
+
+    private function clearAllJobsRedis(): void
+    {
+        $allIds = $this->redis?->sMembers($this->redisJobsSetKey()) ?: [];
+        if (!is_array($allIds)) {
+            return;
+        }
+
+        foreach ($allIds as $id) {
+            $this->removeJobByIdRedis((int) $id);
+        }
+
+        $this->redis?->del($this->redisJobsSetKey(), $this->redisFailedSetKey(), $this->redisQueuesSetKey(), $this->redisNextIdKey());
+        $this->deleteNamespaceMetaKeys();
+    }
+
+    private function clearJobsByFilterRedis(callable $filter): void
+    {
+        $allIds = $this->redis?->sMembers($this->redisJobsSetKey()) ?: [];
+        if (!is_array($allIds)) {
+            return;
+        }
+
+        foreach ($allIds as $id) {
+            $row = $this->getRedisJob((int) $id);
+            if (!$row) {
+                continue;
+            }
+
+            if ($filter($this->normalizeRedisRow((int) $id, $row))) {
+                $this->removeJobByIdRedis((int) $id);
+            }
+        }
+    }
+
+    private function normalizeRedisRow(int $id, array $row): array
+    {
+        return [
+            'id' => $id,
+            'payload' => $row['payload'] ?? '{}',
+            'queue' => $this->redisNullIfMissing((string) ($row['queue'] ?? 'default')),
+            'scheduled_time' => $this->redisNullIfMissing((string) ($row['scheduled_time'] ?? null)),
+            'created_at' => $this->redisNullIfMissing((string) ($row['created_at'] ?? null)),
+            'repeat' => $this->redisNullIfMissing((string) ($row['repeat'] ?? null)),
+            'status' => $this->redisNullIfMissing((string) ($row['status'] ?? 'pending')),
+            'attempts' => $this->redisToIntValue((string) ($row['attempts'] ?? '0')),
+            'reserved_at' => $this->redisNullIfMissing((string) ($row['reserved_at'] ?? null)),
+            'exception' => $this->redisNullIfMissing((string) ($row['exception'] ?? null)),
+            'failed_at' => $this->redisNullIfMissing((string) ($row['failed_at'] ?? null)),
+        ];
+    }
+
+    private function removeJobByIdRedis(int $id): bool
+    {
+        $row = $this->getRedisJob($id);
+        if (!$row) {
+            return false;
+        }
+
+        $queue = $this->redisNullIfMissing((string) ($row['queue'] ?? 'default'));
+
+        $this->redis?->sRem($this->redisJobsSetKey(), $id);
+        if ($queue !== null) {
+            $this->redis?->sRem($this->redisQueueJobsSetKey($queue), $id);
+            $this->redis?->zRem($this->redisPendingSetKey($queue), (string) $id);
+            $this->redis?->zRem($this->redisReservedSetKey($queue), (string) $id);
+        }
+
+        $this->redis?->zRem($this->redisFailedSetKey(), (string) $id);
+        $this->redis?->del($this->redisJobHashKey($id));
+
+        $payload = json_decode((string) ($row['payload'] ?? '{}'), true);
+        if (is_array($payload)) {
+            $dupe = $this->redisFingerprintKey($queue ?? 'default', $payload, $row['repeat'] ?? null);
+            $this->redis?->del($dupe);
+        }
+
+        return true;
+    }
+
+    private function removeQueueRedis(string $name): bool
+    {
+        $ids = $this->redis?->sMembers($this->redisQueueJobsSetKey($name)) ?: [];
+        $removed = false;
+
+        if (is_array($ids)) {
+            foreach ($ids as $id) {
+                $removed = $this->removeJobByIdRedis((int) $id) || $removed;
+            }
+        }
+
+        $this->redis?->del(
+            $this->redisQueueJobsSetKey($name),
+            $this->redisPendingSetKey($name),
+            $this->redisReservedSetKey($name)
+        );
+
+        if ($removed) {
+            $this->redis?->sRem($this->redisQueuesSetKey(), $name);
+        }
+
+        return $removed;
+    }
+
+    private function getJobsRedis(
+        array|string|null $queue = null,
+        array|string|null $status = null,
+        int $from = 0,
+        int $to = 500,
+    ): array {
+        $ids = [];
+
+        if ($queue === null) {
+            $ids = $this->redis?->sMembers($this->redisJobsSetKey()) ?: [];
+        } else {
+            $queues = $this->toQueueList($queue);
+            $ids = [];
+            foreach ($queues as $name) {
+                $queueIds = $this->redis?->sMembers($this->redisQueueJobsSetKey($name));
+                if (is_array($queueIds)) {
+                    $ids = array_merge($ids, $queueIds);
+                }
+            }
+            $ids = array_unique(array_map('intval', $ids));
+        }
+
+        if (!is_array($ids)) {
+            return [];
+        }
+
+        $statusList = $this->toStatusList($status);
+        $jobs = [];
+
+        foreach ($ids as $id) {
+            $row = $this->getRedisJob((int) $id);
+            if (!$row) {
+                continue;
+            }
+
+            $statusValue = $this->redisNullIfMissing((string) ($row['status'] ?? 'pending'));
+            if ($statusList !== [] && !in_array($statusValue, $statusList, true)) {
+                continue;
+            }
+
+            $jobs[] = $this->unserializeJob($this->normalizeRedisRow((int) $id, $row));
+        }
+
+        usort($jobs, static fn(JobContract $a, JobContract $b) => $a->getMetadata('scheduled_time', 0) <=> $b->getMetadata('scheduled_time', 0));
+
+        $jobs = array_slice($jobs, $from, max(0, $to));
+        return $jobs;
+    }
+
+    private function getFailedJobsRedis(int $from = 0, int $to = 500): array
+    {
+        $ids = $this->redis?->zRevRange($this->redisFailedSetKey(), $from, $from + max(0, $to - 1)) ?: [];
+        if (!is_array($ids)) {
+            return [];
+        }
+
+        $jobs = [];
+        foreach ($ids as $id) {
+            $row = $this->getRedisJob((int) $id);
+            if (!$row) {
+                continue;
+            }
+
+            $jobs[] = $this->unserializeJob($this->normalizeRedisRow((int) $id, $row));
+        }
+
+        return $jobs;
+    }
+
+    private function retryFailedJobsRedis(): void
+    {
+        $ids = $this->redis?->zRevRange($this->redisFailedSetKey(), 0, -1) ?: [];
+        if (!is_array($ids)) {
+            return;
+        }
+
+        foreach ($ids as $id) {
+            $job = $this->getRedisJob((int) $id);
+            if (!$job) {
+                continue;
+            }
+
+            $row = $this->normalizeRedisRow((int) $id, $job);
+            $this->redis?->hMSet($this->redisJobHashKey((int) $id), [
+                'status' => 'pending',
+                'attempts' => '0',
+                'reserved_at' => self::REDIS_NULL,
+                'failed_at' => self::REDIS_NULL,
+                'exception' => self::REDIS_NULL,
+            ]);
+
+            $this->redis?->zAdd($this->redisPendingSetKey($row['queue'] ?? 'default'), $this->redisToTimestamp($row['scheduled_time'] ?? null), (string) $id);
+            $this->redis?->zRem($this->redisFailedSetKey(), (string) $id);
+        }
+    }
+
+    private function updateJobStatusRedis(int $jobId, string $status, int $attempts): void
+    {
+        if (!$this->redis) {
+            return;
+        }
+
+        $job = $this->getRedisJob($jobId);
+        if (!$job) {
+            return;
+        }
+
+        $queue = $this->redisNullIfMissing((string) ($job['queue'] ?? 'default')) ?? 'default';
+        $scheduled = $this->redisToTimestamp($job['scheduled_time'] ?? null);
+
+        $pendingSet = $this->redisPendingSetKey($queue);
+        $reservedSet = $this->redisReservedSetKey($queue);
+
+        $this->redis->zRem($pendingSet, (string) $jobId);
+        $this->redis->zRem($reservedSet, (string) $jobId);
+
+        $payload = [
+            'status' => $status,
+            'attempts' => (string) max(0, $attempts),
+            'reserved_at' => self::REDIS_NULL,
+            'failed_at' => $job['failed_at'] ?? self::REDIS_NULL,
+            'exception' => $job['exception'] ?? self::REDIS_NULL,
+        ];
+
+        if (in_array($status, ['reserved', 'processing'], true)) {
+            $payload['reserved_at'] = (string) now()->timestamp;
+            $this->redis->zAdd($reservedSet, now()->timestamp, (string) $jobId);
+        } elseif ($status === 'pending') {
+            $this->redis->zAdd($pendingSet, $scheduled, (string) $jobId);
+        }
+
+        $this->redis->hMSet($this->redisJobHashKey($jobId), array_map($this->redisNormalizeValue(...), $payload));
+    }
+
+    private function rescheduleJobRedis(int $jobId, Carbon $nextRun): void
+    {
+        if (!$this->redis) {
+            return;
+        }
+
+        $job = $this->getRedisJob($jobId);
+        if (!$job) {
+            return;
+        }
+
+        $queue = $this->redisNullIfMissing((string) ($job['queue'] ?? 'default')) ?? 'default';
+        $this->redis->hMSet($this->redisJobHashKey($jobId), [
+            'scheduled_time' => (string) $nextRun,
+            'status' => 'pending',
+            'attempts' => '0',
+            'reserved_at' => self::REDIS_NULL,
+        ]);
+
+        $this->redis->zAdd($this->redisPendingSetKey($queue), $nextRun->timestamp, (string) $jobId);
+        $this->redis->zRem($this->redisReservedSetKey($queue), (string) $jobId);
+    }
+
+    private function retryJobRedis(int $jobId, Carbon $retryTime, int $attempts): void
+    {
+        if (!$this->redis) {
+            return;
+        }
+
+        $job = $this->getRedisJob($jobId);
+        if (!$job) {
+            return;
+        }
+
+        $queue = $this->redisNullIfMissing((string) ($job['queue'] ?? 'default')) ?? 'default';
+        $this->redis->hMSet($this->redisJobHashKey($jobId), [
+            'scheduled_time' => (string) $retryTime,
+            'status' => 'pending',
+            'attempts' => (string) $attempts,
+            'reserved_at' => self::REDIS_NULL,
+        ]);
+
+        $this->redis->zAdd($this->redisPendingSetKey($queue), $retryTime->timestamp, (string) $jobId);
+        $this->redis->zRem($this->redisReservedSetKey($queue), (string) $jobId);
+        $this->redis->zRem($this->redisFailedSetKey(), (string) $jobId);
+    }
+
+    private function markJobAsFailedRedis(int $jobId, \Throwable $exception, int $attempts): void
+    {
+        if (!$this->redis) {
+            return;
+        }
+
+        $row = $this->getRedisJob($jobId);
+        if (!$row) {
+            return;
+        }
+
+        $queue = $this->redisNullIfMissing((string) ($row['queue'] ?? 'default')) ?? 'default';
+
+        $stack = $exception->getPrevious()?->getTraceAsString() ?? $exception->getTraceAsString();
+        $exceptionText = sprintf('%s: %s\nStack trace:\n%s', get_class($exception), $exception->getMessage(), $stack);
+        $failedAt = now();
+
+        $this->redis->hMSet($this->redisJobHashKey($jobId), [
+            'status' => 'failed',
+            'attempts' => (string) $attempts,
+            'reserved_at' => self::REDIS_NULL,
+            'failed_at' => (string) $failedAt,
+            'exception' => $exceptionText,
+        ]);
+
+        $this->redis->zRem($this->redisReservedSetKey($queue), (string) $jobId);
+        $this->redis->zAdd($this->redisFailedSetKey(), $failedAt->timestamp, (string) $jobId);
+    }
+
+    private function recoverStaleJobsRedis(int $timeout = 3600): int
+    {
+        if (!$this->redis) {
+            return 0;
+        }
+
+        $staleBefore = time() - $timeout;
+        $queues = $this->redis->sMembers($this->redisQueuesSetKey()) ?: [];
+        if (!is_array($queues)) {
+            return 0;
+        }
+
+        $recovered = 0;
+
+        foreach ($queues as $queue) {
+            $reserved = $this->redis->zRangeByScore($this->redisReservedSetKey((string) $queue), '-inf', $staleBefore, ['withscores' => true]);
+            if (!is_array($reserved)) {
+                continue;
+            }
+
+            foreach (array_keys($reserved) as $id) {
+                $row = $this->getRedisJob((int) $id);
+                if (!$row) {
+                    $this->redis->zRem($this->redisReservedSetKey((string) $queue), (string) $id);
+                    continue;
+                }
+
+                $status = $this->redisNullIfMissing((string) ($row['status'] ?? ''));
+                if ($status !== 'processing' && $status !== 'reserved') {
+                    $this->redis->zRem($this->redisReservedSetKey((string) $queue), (string) $id);
+                    continue;
+                }
+
+                $this->updateJobStatusRedis((int) $id, 'pending', (int) $this->redisToIntValue($row['attempts'] ?? '0'));
+                $recovered++;
+            }
+        }
+
+        if ($recovered > 0) {
+            Prompt::message(
+                sprintf('Recovered <bold>%d</bold> stale job(s)', $recovered),
+                'warning'
+            );
+        }
+
+        return $recovered;
+    }
+
+    private function toQueueList(array|string $queues): array
+    {
+        if (is_string($queues)) {
+            return array_filter(array_map('trim', explode(',', $queues)));
+        }
+
+        return array_unique(array_values(array_filter((array) $queues, static fn($q): bool => is_string($q) && trim($q) !== '')));
+    }
+
+    private function toStatusList(array|string|null $status): array
+    {
+        if ($status === null) {
+            return [];
+        }
+
+        if (is_string($status)) {
+            return array_filter(array_map('trim', explode(',', $status)));
+        }
+
+        return array_map('trim', array_filter((array) $status, static fn($value): bool => is_string($value) && trim($value) !== ''));
+    }
+
+    private function deleteNamespaceMetaKeys(): void
+    {
+        if (!$this->redis) {
+            return;
+        }
+
+        $cursor = 0;
+        $dupeKeys = [];
+        do {
+            $keys = $this->redis->scan($cursor, $this->redisPrefix . ':dupe:*');
+            if ($keys !== false) {
+                foreach ((array) $keys as $key) {
+                    $dupeKeys[] = (string) $key;
+                }
+            }
+        } while ($cursor > 0);
+
+        if ($dupeKeys === []) {
+            return;
+        }
+
+        foreach ($dupeKeys as $dupeKey) {
+            $jobId = $this->redis->get($dupeKey);
+            if (!is_string($jobId) || $jobId === '') {
+                $this->redis->del($dupeKey);
+                continue;
+            }
+
+            $row = $this->getRedisJob((int) $jobId);
+            if (!$row) {
+                $this->redis->del($dupeKey);
+            }
+        }
     }
 }

@@ -57,7 +57,7 @@ interface InputErrorsContract
      * @param bool $merge Merge all error messages into a single array
      * @return array
      */
-    public function all($merge = true): array;
+    public function all(bool $merge = true): array;
 
     /**
      * Get the error message for a specific field.

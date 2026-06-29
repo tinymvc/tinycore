@@ -2,9 +2,9 @@
 
 namespace Spark\Routing\Contracts;
 
-use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Http\Response;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Routing\Route;
 use Spark\Routing\RouteGroup;
 
@@ -111,13 +111,13 @@ interface RouterContract
      * Gets the URL path for a named route.
      * 
      * @param string $name The name of the route.
-     * @param string|null|array $context Optional context parameter for dynamic segments.
+     * @param null|string|array|Arrayable $context Optional context parameter for dynamic segments.
      * 
      * @return string Returns the route's path.
      * 
      * @throws \Spark\Exceptions\Routing\InvalidNamedRouteException if the route does not exist.
      */
-    public function route(string $name, null|string|array $context = null): string;
+    public function route(string $name, null|string|array|Arrayable $context = null): string;
 
     /**
      * Dispatches the incoming HTTP request to the appropriate route handler.

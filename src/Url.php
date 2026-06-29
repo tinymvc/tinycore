@@ -33,6 +33,9 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
     /** @var string The absolute URL */
     private string $absoluteUrl;
 
+    /** @var bool */
+    private bool $isAbsolute;
+
     /**
      * Constructor to initialize the URL object
      * 
@@ -55,6 +58,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
 
         $this->components = $parsed;
         $this->parameters = $parameters;
+        $this->isAbsolute = $this->determineIfAbsolute($parsed);
     }
 
     /**
@@ -267,7 +271,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
      */
     public function getPort(): ?int
     {
-        return $this->components['port'] ?? null;
+        return isset($this->components['port']) ? (int) $this->components['port'] : null;
     }
 
     /**
@@ -351,6 +355,10 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
      */
     private function buildAbsoluteUrl(): string
     {
+        if (!$this->isAbsolute || $this->getHost() === '') {
+            return $this->buildParsedPath();
+        }
+
         $url = $this->getScheme() . '://' . $this->getHost();
 
         $port = $this->getPort();
@@ -421,6 +429,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
     {
         $new = clone $this;
         $new->components['query'] = ltrim($queryString, '?');
+        $new->isAbsolute = $new->determineIfAbsolute($new->components);
         $new->updateUrl();
 
         return $new;
@@ -475,6 +484,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
     {
         $new = clone $this;
         $new->components['fragment'] = ltrim($fragment, '#');
+        $new->isAbsolute = $new->determineIfAbsolute($new->components);
         $new->updateUrl();
 
         return $new;
@@ -506,6 +516,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
     {
         $new = clone $this;
         $new->components['path'] = '/' . ltrim($path, '/');
+        $new->isAbsolute = $new->determineIfAbsolute($new->components);
         $new->updateUrl();
 
         return $new;
@@ -524,6 +535,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
     {
         $new = clone $this;
         $new->components['scheme'] = rtrim($scheme, ':/');
+        $new->isAbsolute = $new->determineIfAbsolute($new->components);
         $new->updateUrl();
 
         return $new;
@@ -542,6 +554,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
     {
         $new = clone $this;
         $new->components['host'] = $host;
+        $new->isAbsolute = $new->determineIfAbsolute($new->components);
         $new->updateUrl();
 
         return $new;
@@ -564,6 +577,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
         } else {
             $new->components['port'] = $port;
         }
+        $new->isAbsolute = $new->determineIfAbsolute($new->components);
         $new->updateUrl();
 
         return $new;
@@ -812,7 +826,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
      */
     public function isSecure(): bool
     {
-        return strtolower($this->getScheme()) === 'https';
+        return $this->isAbsolute && strtolower($this->getScheme()) === 'https';
     }
 
     /**
@@ -825,6 +839,10 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
      */
     public function isDefaultPort(): bool
     {
+        if (!$this->isAbsolute) {
+            return true;
+        }
+
         $port = $this->getPort();
         $scheme = $this->getScheme();
 
@@ -844,6 +862,9 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
     public function getAuthority(): string
     {
         $authority = $this->getHost();
+        if ($authority === '') {
+            return '';
+        }
 
         if (!$this->isDefaultPort()) {
             $authority .= ':' . $this->getPort();
@@ -922,6 +943,10 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
      */
     public function getBaseUrl(): string
     {
+        if (!$this->isAbsolute || $this->getHost() === '') {
+            return '';
+        }
+
         $base = $this->getScheme() . '://' . $this->getHost();
 
         $port = $this->getPort();
@@ -949,7 +974,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
      */
     public function isRelative(): bool
     {
-        return empty($this->components['scheme']) && empty($this->components['host']);
+        return !$this->isAbsolute;
     }
 
     /**
@@ -1033,5 +1058,16 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
 
         // Return everything except the last two parts
         return implode('.', array_slice($parts, 0, $count - 2));
+    }
+
+    /**
+     * Determine if parsed components represent an absolute URL.
+     *
+     * @param array $components
+     * @return bool
+     */
+    private function determineIfAbsolute(array $components): bool
+    {
+        return !empty($components['scheme']) || !empty($components['host']);
     }
 }

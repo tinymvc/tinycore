@@ -12,8 +12,9 @@ interface HttpRequestContract
     public function addHeader(string $header): void;
 
     /**
-     * Add multiple headers to the request.
-     * @param array $headers
+     * Set a cURL option for the request.
+     * @param int $option
+     * @param mixed $value
      * @return void
      */
     public function setOption(int $option, mixed $value): void;
@@ -70,9 +71,8 @@ interface HttpRequestContract
     public function withBasicAuth(string $username, string $password): self;
 
     /**
-     * Set the Authorization header for the request using Digest Auth.
-     * @param string $username
-     * @param string $password
+     * Set the cookies for the request.
+     * @param array $cookies
      * @return self
      */
     public function withCookies(array $cookies): self;
@@ -115,8 +115,7 @@ interface HttpRequestContract
     public function withTimeout(int $seconds): self;
 
     /**
-     * Set the connection timeout for the request.
-     * @param int $seconds
+     * Disable SSL certificate verification for the request.
      * @return self
      */
     public function withoutVerifying(): self;
@@ -150,6 +149,12 @@ interface HttpRequestContract
      * @return self
      */
     public function asMultipart(): self;
+
+    /**
+     * Get the request key.
+     * @return string|int
+     */
+    public function getKey(): string|int;
 
     /**
      * Set the request to be sent as application/json.

@@ -10,9 +10,11 @@ interface QueueContract
     /**
      * Gets the PDO connection used by the queue.
      *
-     * @return \PDO The PDO connection instance.
+     * This returns null when the queue is configured to use Redis.
+     *
+     * @return \PDO|null The PDO connection instance.
      */
-    public function getPdoConnection(): \PDO;
+    public function getPdoConnection(): ?\PDO;
 
     /**
      * Adds a job to the queue.
@@ -55,7 +57,7 @@ interface QueueContract
      */
     public function work(
         bool $once = false,
-        int $timeout = 60,
+        int $timeout = 3600,
         int $sleep = 3,
         int $delay = 5,
         int $tries = 3,

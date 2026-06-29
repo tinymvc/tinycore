@@ -25,7 +25,7 @@ use Spark\Hash as BaseHash;
  * @method static bool verify(string $password, string $hashedPassword)
  * @method static bool needsRehash(string $hashedPassword)
  * @method static array passwordInfo(string $hashedPassword)
- * @method static string getPasswordAlgorithm()
+ * @method static string|int getPasswordAlgorithm()
  * @method static array getPasswordOptions()
  * @method static string getKey()
  * @method static string encrypt(string $value)

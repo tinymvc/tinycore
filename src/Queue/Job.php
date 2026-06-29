@@ -8,6 +8,7 @@ use Spark\Queue\Exceptions\FailedToResolveJobError;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Carbon;
+use function array_key_exists;
 use function get_class;
 use function is_array;
 use function is_object;
@@ -407,11 +408,11 @@ class Job implements JobContract
         }
 
         if (is_array($this->callback)) {
-            if (is_object($this->callback[0])) {
+            if (array_key_exists(0, $this->callback) && is_object($this->callback[0])) {
                 return get_class($this->callback[0]);
             }
 
-            return $this->callback[0];
+            return $this->callback[0] ?? 'unknown';
         }
 
         return $this->metadata['queue'] ?? 'unknown';

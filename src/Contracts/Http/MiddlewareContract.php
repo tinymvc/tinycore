@@ -37,8 +37,9 @@ interface MiddlewareContract
      * or null if all middleware pass through without returning.
      * 
      * @param Request $request The request being processed.
+     * @param array $queue Optional middleware stack to process for this request.
      * @param array $except An array of middleware keys to skip during processing.
      * @return mixed Response from middleware if early return, null otherwise
      */
-    public function process(Request $request, array $except = []);
+    public function process(Request $request, array $queue = [], array $except = []);
 }

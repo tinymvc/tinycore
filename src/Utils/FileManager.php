@@ -8,7 +8,6 @@ use RecursiveIteratorIterator;
 use function func_get_args;
 use function is_array;
 use function sprintf;
-use function strlen;
 
 /**
  * FileManager class provides utility methods for file and directory operations.
@@ -54,7 +53,7 @@ class FileManager
     public static function isImage(string $path): bool
     {
         $mimeType = static::mimeType($path);
-        return str_starts_with($mimeType, 'image/');
+        return is_string($mimeType) && str_starts_with($mimeType, 'image/');
     }
 
     /**
@@ -269,7 +268,17 @@ class FileManager
      */
     public static function mimeType(string $path): string|false
     {
-        return finfo_file(finfo_open(FILEINFO_MIME_TYPE), $path);
+        if (!static::exists($path)) {
+            return false;
+        }
+
+        $finfo = @new \finfo(FILEINFO_MIME_TYPE);
+
+        if (!$finfo) {
+            return false;
+        }
+
+        return $finfo->file($path);
     }
 
     /**
@@ -318,7 +327,6 @@ class FileManager
      * 
      * @param string $path
      * @param int $mode
-     * @param bool $recursive
      * @return bool
      */
     public static function ensureDirectoryExists(string $path, int $mode = 0755): bool
@@ -341,7 +349,9 @@ class FileManager
      */
     public static function ensureDirectoryWritable(string $path, int $mode = 0755): bool
     {
-        self::ensureDirectoryExists($path, $mode);
+        if (!self::ensureDirectoryExists($path, $mode)) {
+            return false;
+        }
 
         // Check if directory is writable
         if (self::isWritable($path)) {
@@ -576,10 +586,20 @@ class FileManager
      */
     public static function humanFileSize(int $bytes, int $decimals = 2): string
     {
-        $size = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-        $factor = floor((strlen($bytes) - 1) / 3);
+        if ($bytes <= 0) {
+            return "0 B";
+        }
 
-        return sprintf("%.{$decimals}f", $bytes / pow(1024, $factor)) . ' ' . @$size[$factor];
+        $size = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
+        $factor = 0;
+        $value = (float) $bytes;
+
+        while ($value >= 1024 && $factor < count($size) - 1) {
+            $value /= 1024;
+            $factor++;
+        }
+
+        return sprintf("%.{$decimals}f %s", $value, $size[$factor]);
     }
 
     /**

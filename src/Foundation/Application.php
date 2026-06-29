@@ -12,6 +12,7 @@ use Spark\Exceptions\NotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Foundation\Exceptions\TooManyRequests;
 use Spark\Hash;
+use Spark\DotEnv;
 use Spark\Http\Auth;
 use Spark\Http\InputErrors;
 use Spark\Http\Middleware;
@@ -29,8 +30,10 @@ use Spark\Utils\Tracer;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
 use Throwable;
+use function array_key_exists;
 use function get_class;
 use function is_array;
+use function is_object;
 use function is_string;
 
 /**
@@ -71,10 +74,7 @@ class Application extends \Spark\Container implements ApplicationContract
         Tracer::start(); // Initialize the tracer
 
         // Load environment variables from .env file
-        \Spark\DotEnv::loadFrom(
-            envPath: dir_path($this->path . '/.env'),
-            compilePath: dir_path($this->path . '/bootstrap/cache/env.php')
-        );
+        DotEnv::bootstrap($this->path);
 
         // Register core services for global use
         $this->singleton(Translator::class);
@@ -161,7 +161,28 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function mergeConfig(array $config): void
     {
-        $this->config = [...$this->config, ...$config];
+        $this->config = $this->mergeConfigValues($this->config, $config);
+    }
+
+    /**
+     * Merge two configuration arrays recursively.
+     *
+     * @param array $base
+     * @param array $override
+     * @return array
+     */
+    private function mergeConfigValues(array $base, array $override): array
+    {
+        foreach ($override as $key => $value) {
+            if (array_key_exists($key, $base) && is_array($base[$key]) && is_array($value)) {
+                $base[$key] = $this->mergeConfigValues($base[$key], $value);
+                continue;
+            }
+
+            $base[$key] = $value;
+        }
+
+        return $base;
     }
 
     /**
@@ -197,19 +218,39 @@ class Application extends \Spark\Container implements ApplicationContract
         null|callable $then = null
     ): self {
 
-        $config && is_array($config) && $this->mergeConfig($config);
+        if (is_array($config)) {
+            $this->mergeConfig($config);
+        }
 
-        $config && is_string($config) && $this->mergeConfig($this->discoverConfig(
-            folder: $config,
-            cache: $this->path . '/bootstrap/cache/config.php'
-        ));
+        if (is_string($config)) {
+            $rootPath = rtrim($this->path, '/\\');
+            $this->mergeConfig(DotEnv::discoverConfig(
+                folder: dir_path("$rootPath/" . ltrim($config, '/\\')),
+                cache: dir_path("$rootPath/bootstrap/cache/config.php")
+            ));
+        }
 
-        $middlewares && $this->withMiddleware(register: $middlewares);
+        if (is_array($middlewares)) {
+            $this->withMiddleware(register: $middlewares);
+        }
 
-        $providers && array_map(
-            fn($provider) => $this->addServiceProvider(new $provider),
-            $providers
-        );
+        if ($providers !== null) {
+            foreach ($providers as $provider) {
+                if (is_string($provider)) {
+                    if (!class_exists($provider)) {
+                        continue;
+                    }
+
+                    $provider = new $provider;
+                }
+
+                if (!is_object($provider) || !method_exists($provider, 'register')) {
+                    continue;
+                }
+
+                $this->addServiceProvider($provider);
+            }
+        }
 
         $then && $then($this);
 
@@ -352,6 +393,10 @@ class Application extends \Spark\Container implements ApplicationContract
     public function withExceptions(array $exceptions): self
     {
         foreach ($exceptions as $exception => $handler) {
+            if (!is_string($exception) || !class_exists($exception) || !is_callable($handler)) {
+                continue;
+            }
+
             $this->exceptions[$exception] = $handler;
         }
 
@@ -391,10 +436,10 @@ class Application extends \Spark\Container implements ApplicationContract
      * event. The listener will be called when the event is dispatched.
      *
      * @param string $event The name of the event to listen for.
-     * @param callable $listener The listener callback to be called when the event is dispatched.
+     * @param string|array|callable $listener The listener callback to be called when the event is dispatched.
      * @return self
      */
-    public function on(string $event, callable $listener): self
+    public function on(string $event, string|array|callable $listener): self
     {
         $this->events()->addListener($event, $listener);
         return $this;
@@ -407,10 +452,10 @@ class Application extends \Spark\Container implements ApplicationContract
      * event. The listener will no longer be called when the event is dispatched.
      *
      * @param string $event The name of the event to remove the listener from.
-     * @param callable $listener The listener callback to be removed.
+     * @param string|array|callable $listener The listener callback to be removed.
      * @return self
      */
-    public function off(string $event, callable $listener): self
+    public function off(string $event, string|array|callable $listener): self
     {
         $this->events()->removeListener($event, $listener);
         return $this;
@@ -442,34 +487,6 @@ class Application extends \Spark\Container implements ApplicationContract
     public function dispatch(string $event, mixed ...$args): void
     {
         $this->events()->dispatch($event, ...$args);
-    }
-
-    /**
-     * Discovers configuration files in a specified folder and caches them.
-     *
-     * This method checks if a cached configuration file exists. If it does, 
-     * it loads the configuration from the cache. Otherwise, it scans the 
-     * specified folder for PHP files, loads their contents as configuration, 
-     * and returns the combined configuration array.
-     *
-     * @param string $folder The path to the folder containing configuration files.
-     * @param string $cache The path to the cached configuration file.
-     * @return array The combined configuration array.
-     */
-    protected function discoverConfig(string $folder, string $cache): array
-    {
-        if (is_file($cache)) {
-            return require $cache;
-        }
-
-        $config = [];
-
-        foreach (glob("$folder/*.php") as $file) {
-            $key = basename($file, '.php');
-            $config[$key] = require $file;
-        }
-
-        return $config;
     }
 
     /**
@@ -514,12 +531,30 @@ class Application extends \Spark\Container implements ApplicationContract
         } catch (TooManyRequests) {
             abort(error: 429, message: 'Too many requests');
         } catch (Throwable $e) {
-            if (isset($this->exceptions[get_class($e)])) {
-                $this->exceptions[get_class($e)]($e);
+            $handler = $this->getExceptionHandler($e);
+
+            if ($handler !== null) {
+                $responseOrNull = $handler($e);
+
+                if ($responseOrNull instanceof Response) {
+                    $responseOrNull->send();
+                    return;
+                }
             }
 
             Tracer::$instance->handleException($e);
         }
+    }
+
+    private function getExceptionHandler(Throwable $exception): ?callable
+    {
+        foreach ($this->exceptions as $exceptionClass => $handler) {
+            if (is_a($exception, $exceptionClass, false)) {
+                return $handler;
+            }
+        }
+
+        return null;
     }
 
     /**

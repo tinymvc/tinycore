@@ -16,7 +16,7 @@ use Spark\Http\Client\Contracts\HttpResponseContract;
  */
 class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \Stringable
 {
-    public array $json; // The JSON-decoded response body
+    private ?array $json = null;
 
     /**
      * Sets the response data.
@@ -99,7 +99,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      * @param mixed $default The default value if the header is not found.
      * @return mixed The header value or the default value.
      */
-    public function header(string $key, $default = null): mixed
+    public function header(string $key, mixed $default = null): mixed
     {
         return $this->headers[strtolower($key)] ?? $default;
     }
@@ -107,17 +107,27 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
     /**
      * Get the Response body as a JSON object.
      *
-     * @return array|null The JSON-decoded response body or null if decoding failed.
+     * @param string|null $key
+     * @param mixed $default
+     * @return mixed
      */
-    public function json(?string $key = null, $default = null): array
+    public function json(?string $key = null, mixed $default = null): mixed
     {
-        $json = $this->json ??= json_decode((string) $this->body, true) ?? [];
+        if ($this->json === null) {
+            $decoded = json_decode((string) $this->body, true);
 
-        if ($key === null) {
-            return $json;
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $this->json = [];
+            } else {
+                $this->json = $decoded ?? [];
+            }
         }
 
-        return data_get($json, $key, $default);
+        if ($key === null) {
+            return $this->json;
+        }
+
+        return data_get($this->json, $key, $default);
     }
 
     /**
@@ -127,7 +137,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function text(): string
     {
-        return (string) $this->body ?? '';
+        return (string) $this->body;
     }
 
     /**
@@ -148,7 +158,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      * @param mixed $default The default value to return if the key does not exist.
      * @return mixed The value associated with the key or the default value.
      */
-    public function get(string $key, $default = null): mixed
+    public function get(string $key, mixed $default = null): mixed
     {
         return data_get($this->json(), $key, $default);
     }
@@ -160,7 +170,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function isOk(): bool
     {
-        return $this->status === 200;
+        return $this->status >= 200 && $this->status < 300;
     }
 
     /**
@@ -180,7 +190,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function isSuccess(): bool
     {
-        return $this->status >= 200 && $this->status < 300;
+        return $this->isOk();
     }
 
     /**
@@ -190,7 +200,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function isSuccessful(): bool
     {
-        return $this->isSuccess();
+        return $this->isOk();
     }
 
     /**
@@ -200,7 +210,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function success(): bool
     {
-        return $this->isSuccess();
+        return $this->isOk();
     }
 
     /**
@@ -210,7 +220,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function successful(): bool
     {
-        return $this->isSuccess();
+        return $this->isOk();
     }
 
     /**
@@ -230,7 +240,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function failed(): bool
     {
-        return !$this->isSuccess();
+        return !$this->isOk();
     }
 
     /**
@@ -259,7 +269,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      * @param mixed $offset The offset to check.
      * @return bool True if success, false otherwise.
      */
-    public function offsetExists($offset): bool
+    public function offsetExists(mixed $offset): bool
     {
         return property_exists($this, $offset);
     }
@@ -270,9 +280,13 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      * @param mixed $offset The offset to retrieve.
      * @return mixed The value at the specified offset or null if not set.
      */
-    public function offsetGet($offset): mixed
+    public function offsetGet(mixed $offset): mixed
     {
-        return $this->{$offset} ?? null;
+        if (property_exists($this, $offset)) {
+            return $this->{$offset};
+        }
+
+        return null;
     }
 
     /**
@@ -281,7 +295,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      * @param mixed $offset The offset to set.
      * @param mixed $value The value to set at the specified offset.
      */
-    public function offsetSet($offset, $value): void
+    public function offsetSet(mixed $offset, mixed $value): void
     {
         $this->{$offset} = $value;
     }
@@ -291,7 +305,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      *
      * @param mixed $offset The offset to unset.
      */
-    public function offsetUnset($offset): void
+    public function offsetUnset(mixed $offset): void
     {
         unset($this->{$offset});
     }

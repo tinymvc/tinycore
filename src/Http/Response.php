@@ -146,8 +146,7 @@ class Response implements ResponseContract
             return;
         }
 
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mimeType = finfo_file($finfo, $filePath);
+        $mimeType = @mime_content_type($filePath) ?: 'application/octet-stream';
 
         header('Content-Description: File Transfer');
         header("Content-Type: $mimeType");

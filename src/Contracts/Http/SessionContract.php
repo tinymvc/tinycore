@@ -23,10 +23,10 @@ interface SessionContract
     public static function set(string $key, $value): void;
 
     /**
-     * Checks if a session variable exists and is not empty.
+     * Checks if a session variable exists and is not null.
      *
      * @param string $key The session variable key to check.
-     * @return bool True if the session variable exists and is not empty, false otherwise.
+     * @return bool True if the session variable exists and is not null, false otherwise.
      */
     public static function has(string $key): bool;
 
@@ -37,6 +37,47 @@ interface SessionContract
      * @return void
      */
     public static function delete(string $key): void;
+
+    /**
+     * Adds one or more values to the session.
+     *
+     * @param string|array<string, mixed> $key The session key or an associative array of session values.
+     * @param mixed $value The value to store when using a single key.
+     * @return void
+     */
+    public static function put(string|array $key, $value = null): void;
+
+    /**
+     * Removes one or more values from the session.
+     *
+     * @param string|array<string> $keys The session key or keys to remove.
+     * @return void
+     */
+    public static function forget(string|array $keys): void;
+
+    /**
+     * Removes all session data.
+     *
+     * @return void
+     */
+    public static function flush(): void;
+
+    /**
+     * Gets and removes an item from the session.
+     *
+     * @param string $key The session key.
+     * @param mixed $default Default value if the key does not exist.
+     * @return mixed The session value or default.
+     */
+    public static function pull(string $key, $default = null): mixed;
+
+    /**
+     * Clears the session and regenerates the session identifier.
+     *
+     * @param bool $deleteOldSession Whether to delete the old session file.
+     * @return bool Whether the session was invalidated.
+     */
+    public static function invalidate(bool $deleteOldSession = true): bool;
 
     /**
      * Regenerates the session ID to prevent session fixation attacks.
