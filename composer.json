@@ -3,6 +3,7 @@
     "description": "Core Classes of TinyMVC Framework",
     "license": "MIT",
     "require": {
+        "php": ">=8.2",
         "doctrine/inflector": "^2.0"
     },
     "autoload": {
@@ -17,9 +18,15 @@
     },
     "suggest": {
         "league/commonmark": "Required to use Str::markdown() and Stringable::markdown() (^2.6).",
-        "voku/portable-ascii": "Required to use on Str::slug() with non-english strings (^2.0).,",
+        "voku/portable-ascii": "Required to use Str::slug() with non-English strings (^2.0).",
         "ramsey/uuid": "Required to use Str::uuid() (^4.7).",
-        "doctrine/inflector": "Required to use Str::plural() and Stringable::plural() (^2.0)."
+        "doctrine/inflector": "Required to use Str::plural() and Stringable::plural() (^2.0).",
+        "ext-curl": "Required for the HTTP client.",
+        "ext-fileinfo": "Required for upload and file MIME detection.",
+        "ext-gd": "Required for image manipulation.",
+        "ext-pdo_sqlite": "Required for the default sqlite cache, lock, and queue drivers.",
+        "ext-redis": "Required for redis cache, lock, and queue drivers.",
+        "phpmailer/phpmailer": "Required for the Mail utility and Mail facade (^6.9)."
     },
     "authors": [
         {

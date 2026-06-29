@@ -22,7 +22,7 @@ interface HttpContract
     /**
      * Sets multiple cURL options at once.
      *
-     * @param array $options An associative array of cURL options, where the key is the option 
+     * @param array $options An associative array of cURL options, where the key is the option
      *                      constant and the value is the option value.
      * @return self
      */
@@ -140,7 +140,7 @@ interface HttpContract
 
     /**
      * Sends a GET request to the specified URL with optional query parameters.
-     * 
+     *
      * @param string $url The target URL for the GET request.
      * @param array $params Optional query parameters to include in the request URL.
      * @return self
@@ -149,7 +149,7 @@ interface HttpContract
 
     /**
      * Sends a POST request to the specified URL with optional data.
-     * 
+     *
      * @param string $url The target URL for the POST request.
      * @param array|string $data Optional data to include in the POST request body. Can
      * @return self
@@ -158,7 +158,7 @@ interface HttpContract
 
     /**
      * Sends a PUT request to the specified URL with optional data.
-     * 
+     *
      * @param string $url The target URL for the PUT request.
      * @param array|string $data Optional data to include in the PUT request body. Can
      * @return self
@@ -167,7 +167,7 @@ interface HttpContract
 
     /**
      * Sends a PATCH request to the specified URL with optional data.
-     * 
+     *
      * @param string $url The target URL for the PATCH request.
      * @param array|string $data Optional data to include in the PATCH request body. Can
      * @return self
@@ -176,7 +176,7 @@ interface HttpContract
 
     /**
      * Sends a DELETE request to the specified URL with optional data.
-     * 
+     *
      * @param string $url The target URL for the DELETE request.
      * @param array|string $data Optional data to include in the DELETE request body. Can
      * @return self

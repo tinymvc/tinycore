@@ -16,12 +16,12 @@ use function is_string;
 
 /**
  * Class Middleware
- * 
+ *
  * This class provides a standard middleware system for handling HTTP requests.
  * It follows industry standards from Laravel, Symfony, and other major frameworks.
  * The middleware system uses the Pipeline pattern for clean, fast, and predictable
  * middleware execution.
- * 
+ *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Middleware implements MiddlewareContract
@@ -30,10 +30,10 @@ class Middleware implements MiddlewareContract
 
     /**
      * Middleware constructor.
-     * 
+     *
      * This initializes the middleware with a map of registered middlewares
      * and an execution stack.
-     * 
+     *
      * @param array $middlewares Registered middleware map [alias => class]
      * @param array $stack Middleware stack to be processed ['auth', 'role:admin']
      */
@@ -43,13 +43,13 @@ class Middleware implements MiddlewareContract
 
     /**
      * Register a single middleware
-     * 
+     *
      * This method allows you to register a middleware with an alias.
      * The alias can be used to refer to the middleware in the stack.
-     * 
+     *
      * @param string $alias The alias for the middleware.
      * @param string|callable $middleware The middleware class or callable.
-     * 
+     *
      * @return self
      */
     public function register(string $alias, string|callable $middleware): self
@@ -60,13 +60,13 @@ class Middleware implements MiddlewareContract
 
     /**
      * Alias for register method
-     * 
+     *
      * This provides a more intuitive way to register middlewares using an alias.
      * It simply calls the register method internally.
-     * 
+     *
      * @param string $alias The alias for the middleware.
      * @param string|callable $middleware The middleware class or callable.
-     * 
+     *
      * @return self
      */
     public function alias(string $alias, string|callable $middleware): self
@@ -76,10 +76,10 @@ class Middleware implements MiddlewareContract
 
     /**
      * Check if a middleware alias is registered
-     * 
+     *
      * This method checks if a middleware with the given alias exists in the registry.
      * It returns true if the alias is registered, false otherwise.
-     * 
+     *
      * @param string $alias The alias to check for.
      * @return bool True if the alias is registered, false otherwise.
      */
@@ -90,13 +90,13 @@ class Middleware implements MiddlewareContract
 
     /**
      * Get the middleware class or callable by alias
-     * 
+     *
      * This method retrieves the middleware associated with the given alias.
      * If the alias is not registered, it throws a MiddlewareNotFoundExceptions.
-     * 
+     *
      * @param string $alias The alias of the middleware to retrieve.
      * @throws MiddlewareNotFoundExceptions If the middleware alias is not found.
-     * 
+     *
      * @return string|callable The middleware class name or callable associated with the alias.
      */
     public function get(string $alias): string|callable
@@ -109,10 +109,10 @@ class Middleware implements MiddlewareContract
 
     /**
      * Remove a middleware alias from the registry
-     * 
+     *
      * This method removes the middleware associated with the given alias from the registry.
      * It returns the instance for method chaining.
-     * 
+     *
      * @param string $alias The alias of the middleware to remove.
      * @return self
      */
@@ -124,10 +124,10 @@ class Middleware implements MiddlewareContract
 
     /**
      * Clear all registered middlewares and the execution stack
-     * 
+     *
      * This method removes all registered middlewares and clears the execution stack.
      * It returns the instance for method chaining.
-     * 
+     *
      * @return self
      */
     public function clear(): self
@@ -139,12 +139,12 @@ class Middleware implements MiddlewareContract
 
     /**
      * Register multiple middlewares at once
-     * 
+     *
      * This method allows you to register multiple middlewares
      * with their aliases in a single call.
-     * 
+     *
      * @param array $middlewares An associative array of alias => middleware class/callable.
-     * 
+     *
      * @return self
      */
     public function registerMany(array $middlewares): self
@@ -155,7 +155,7 @@ class Middleware implements MiddlewareContract
 
     /**
      * Add middlewares to the execution stack
-     * 
+     *
      * @param array|string $middleware The middleware aliases to queue for execution.
      * @return self
      */
@@ -181,13 +181,13 @@ class Middleware implements MiddlewareContract
 
     /**
      * Process request through middleware stack
-     * 
+     *
      * This follows framework standards while optimizing for performance:
      * - Uses industry-standard Pipeline pattern
      * - Handles early returns efficiently
      * - Single-pass execution
      * - Memory efficient
-     * 
+     *
      * @param Request $request
      * @param array $queue Optional middleware stack to process for this request
      * @param array $except Middleware aliases to exclude from execution
@@ -215,7 +215,7 @@ class Middleware implements MiddlewareContract
 
     /**
      * Filter middleware stack against the except list.
-     * 
+     *
      * @param array $stack
      * @param array $except
      * @return array
@@ -250,9 +250,9 @@ class Middleware implements MiddlewareContract
 
     /**
      * Create and execute the middleware pipeline
-     * 
+     *
      * This is the most efficient approach that follows framework standards
-     * 
+     *
      * @param Request $request
      * @param Closure $destination
      * @param array $stack
@@ -277,10 +277,10 @@ class Middleware implements MiddlewareContract
 
     /**
      * Resolve single middleware into Pipeline-compatible callable
-     * 
+     *
      * This converts middleware alias or class into a callable
      * that can be used in the Pipeline.
-     * 
+     *
      * @param string $middleware The middleware alias or class name.
      * @return callable The resolved middleware callable.
      */
@@ -307,13 +307,13 @@ class Middleware implements MiddlewareContract
 
     /**
      * Get middleware handler (class instance or callable)
-     * 
+     *
      * This resolves the middleware by its name.
      * It can return a callable directly or instantiate a class if needed.
-     * 
+     *
      * @param string $name The middleware name.
      * @throws MiddlewareNotFoundExceptions If the middleware cannot be resolved.
-     * 
+     *
      * @return callable The middleware handler.
      */
     private function getMiddlewareHandler(string $name): callable
@@ -348,10 +348,10 @@ class Middleware implements MiddlewareContract
 
     /**
      * Parse middleware string into name and parameters
-     * 
+     *
      * This splits a middleware string like 'auth:admin,editor'
      * into ['auth', ['admin', 'editor']].
-     * 
+     *
      * @param string $middleware The middleware string to parse.
      * @return array<string, array<string>> Parsed name and parameters.
      */
@@ -369,10 +369,10 @@ class Middleware implements MiddlewareContract
 
     /**
      * Get registered middlewares
-     * 
+     *
      * This returns the map of registered middlewares
      * where keys are aliases and values are class names or callables.
-     * 
+     *
      * @return array<string, string|callable>
      */
     public function getRegistered(): array
@@ -382,9 +382,9 @@ class Middleware implements MiddlewareContract
 
     /**
      * Get the current middleware stack
-     * 
+     *
      * This returns the stack of middleware that will be processed.
-     * 
+     *
      * @return array<string>
      */
     public function getStack(): array

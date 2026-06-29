@@ -7,13 +7,13 @@ use Spark\Utils\Tracer;
 
 /**
  * Facade for logging messages at various severity levels.
- * 
+ *
  * This class provides static methods to log messages with different levels
  * such as info, warning, error, debug, critical, alert, emergency, and notice.
- * 
+ *
  * Each method accepts a message string and an optional context array.
  * The context array is converted to a JSON string and appended to the log message.
- * 
+ *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  * @package Spark\Facades
  * @version 1.0.0
@@ -131,7 +131,7 @@ class Log implements LoggerInterface
         } else {
             $context = '';
         }
-        
+
         $level = strtoupper($level);
 
         if (!isset(Tracer::$instance)) {

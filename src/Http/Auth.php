@@ -12,6 +12,7 @@ use Throwable;
 use function in_array;
 use function intval;
 use function is_array;
+use function is_string;
 
 /**
  * Class Auth
@@ -383,26 +384,31 @@ class Auth implements AuthContract, ArrayAccess
             return; // If a driver is set, use it to handle logout
         }
 
-        // Erase the cache for the logged in user.
-        $this->clearCache();
+        $user = $this->user ?? null;
+        $id = $this->id ?? 0;
 
-        $this->user = null;
-        $this->id = 0;
+        // Erase the cache for the logged in user.
+        $this->clearCache($id);
 
         if (!in_array('session', $this->config['channels'])) {
+            $this->user = null;
+            $this->id = 0;
             return; // If session channel is not enabled, skip clearing session
         }
 
         // destroy cookie auth if enabled
         if ($this->config['cookie_enabled']) {
             // Clear the remember token from the database
-            if ($this->hasId() && isset($this->user, $this->user['remember_token']) && $this->config['use_remember_token']) {
-                $this->user->update(['remember_token' => null]);
+            if ($id > 0 && $user instanceof Model && isset($user['remember_token']) && $this->config['use_remember_token']) {
+                $user->update(['remember_token' => null]);
             }
 
             // Delete the authentication cookie by setting its expiration in the past
             cookie($this->config['cookie_name'], '', -3600);
         }
+
+        $this->user = null;
+        $this->id = 0;
 
         // Delete the session variable and unset the user property.
         session()->delete($this->config['session_key']);
@@ -695,7 +701,11 @@ class Auth implements AuthContract, ArrayAccess
 
         if ($authHeader && preg_match('/Basic\s(\S+)/', $authHeader, $matches)) {
             $encodedCredentials = $matches[1];
-            $decodedCredentials = base64_decode($encodedCredentials);
+            $decodedCredentials = base64_decode($encodedCredentials, true);
+            if (!is_string($decodedCredentials) || !str_contains($decodedCredentials, ':')) {
+                return null;
+            }
+
             [$username, $password] = explode(':', $decodedCredentials, 2);
 
             $user = $this->model::select('id, password')

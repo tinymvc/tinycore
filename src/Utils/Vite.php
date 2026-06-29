@@ -21,10 +21,10 @@ use function str_starts_with;
 
 /**
  * Class Vite
- * 
- * Helper class for integrating Vite with a PHP application. Handles configuration, 
+ *
+ * Helper class for integrating Vite with a PHP application. Handles configuration,
  * development server checks, and generates script and link tags for JavaScript and CSS assets.
- * 
+ *
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
@@ -45,7 +45,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Constructor for the Vite helper class.
-     * 
+     *
      * @param string|array $config Configuration options or entry file name.
      */
     public function __construct(string|array $config = [])
@@ -55,7 +55,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Configures the Vite helper with provided settings.
-     * 
+     *
      * @param string|array $config Configuration options or entry file name.
      */
     public function configure(string|array $config): self
@@ -111,7 +111,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Retrieves a configuration value by key, with an optional default.
-     * 
+     *
      * @param string $key The configuration key.
      * @param mixed $default The default value if the key is not found.
      * @return mixed The configuration value or the default.
@@ -123,7 +123,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Generates the full HTML output including JavaScript and CSS tags.
-     * 
+     *
      * @return string The combined HTML string of JavaScript and CSS tags.
      */
     public function __toString(): string
@@ -152,7 +152,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Generates the HTML tags for importing JavaScript and CSS modules.
-     * 
+     *
      * @return string The combined HTML string of JavaScript and CSS tags.
      */
     public function importModules(null|string|array $entry = null): string
@@ -225,7 +225,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Checks if the Vite development server is running.
-     * 
+     *
      * @param string $entry The entry file name to check.
      * @return bool True if the server is running, false otherwise.
      */
@@ -255,7 +255,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Generates a JavaScript tag for the given entry file.
-     * 
+     *
      * @param string $entry The entry file name.
      * @return string The HTML script tag for the JavaScript file.
      */
@@ -273,7 +273,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Generates HTML link tags to preload JavaScript imports for the given entry file.
-     * 
+     *
      * @param string $entry The entry file name.
      * @return string The HTML link tags for preloading JavaScript imports.
      */
@@ -292,7 +292,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Generates a CSS tag for the given entry file.
-     * 
+     *
      * @param string $entry The entry file name.
      * @return string The HTML link tag for the CSS file.
      */
@@ -311,7 +311,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Retrieves the Vite manifest file as an associative array.
-     * 
+     *
      * @return array The manifest data from the Vite build.
      */
     public function getManifest(): array
@@ -335,7 +335,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Checks if the Vite manifest exists.
-     * 
+     *
      * @return bool
      *   TRUE if the manifest file exists, FALSE otherwise.
      */
@@ -346,7 +346,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Retrieves the path to the Vite manifest file.
-     * 
+     *
      * @return string
      *   The path to the Vite manifest file.
      */
@@ -364,7 +364,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Gets the asset URL for the given entry file based on the Vite manifest.
-     * 
+     *
      * @param string $entry The entry file name.
      * @return string The URL for the asset.
      */
@@ -383,7 +383,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Retrieves the URLs for JavaScript imports associated with the given entry file.
-     * 
+     *
      * @param string $entry The entry file name.
      * @return array The array of URLs for JavaScript imports.
      */
@@ -406,11 +406,11 @@ class Vite implements ViteUtilContract
     /**
      * Returns the URL for the given asset, taking into account if the Vite
      * development server is running or not.
-     * 
+     *
      * If the development server is running, the URL for the asset on the server
      * is returned. Otherwise, the URL for the asset in the build directory is
      * returned.
-     * 
+     *
      * @param string $entry The asset file name.
      * @return string The URL for the asset.
      */
@@ -421,7 +421,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Retrieves the URLs for CSS files associated with the given entry file.
-     * 
+     *
      * @param string $entry The entry file name.
      * @return array The array of URLs for CSS files.
      */
@@ -443,7 +443,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Constructs the URL for the Vite development server.
-     * 
+     *
      * @param string $path Optional path to append to the server URL.
      * @return string The full URL for the Vite development server.
      */
@@ -464,7 +464,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Constructs the URL for the asset in the distribution directory.
-     * 
+     *
      * @param string $path Optional path to append to the distribution URL.
      * @return string The full URL for the asset.
      */
@@ -480,7 +480,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Builds normalized build path.
-     * 
+     *
      * @return string
      */
     private function buildPath(): string
@@ -493,7 +493,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Collects all nested manifest imports recursively.
-     * 
+     *
      * @param string $entry
      * @param array $manifest
      * @param array $urls
@@ -523,7 +523,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Collects CSS URLs for an entry and all of its nested imports.
-     * 
+     *
      * @param string $entry
      * @param array $manifest
      * @param array $urls
@@ -558,7 +558,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Normalize entry points.
-     * 
+     *
      * @param mixed $entries
      * @return array
      */
@@ -586,7 +586,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Returns all unique entry points for current configuration.
-     * 
+     *
      * @return array
      */
     private function entryPoints(): array
@@ -596,7 +596,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Normalize a single entry path.
-     * 
+     *
      * @param string $entry
      * @return string
      */
@@ -607,7 +607,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Check if entries include React files.
-     * 
+     *
      * @param array $entries
      * @return bool
      */
@@ -624,7 +624,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Normalize scheme value.
-     * 
+     *
      * @param string $scheme
      * @return string
      */
@@ -640,7 +640,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Normalize base path.
-     * 
+     *
      * @param string $path
      * @return string
      */
@@ -651,7 +651,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Normalize public directory path.
-     * 
+     *
      * @param string $path
      * @return string
      */
@@ -662,7 +662,7 @@ class Vite implements ViteUtilContract
 
     /**
      * Normalize dist directory path.
-     * 
+     *
      * @param string $path
      * @return string
      */

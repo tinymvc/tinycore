@@ -28,7 +28,7 @@ use function max;
 use function sprintf;
 
 /**
- * A job queue that stores the jobs in a JSON file.
+ * A job queue backed by SQLite by default, with Redis support when configured.
  *
  * This class uses SQLite by default and Redis when configured.
  */
@@ -227,14 +227,19 @@ class Queue implements QueueContract
             throw new RuntimeException('Queue storage is not initialized.');
         }
 
-        $stmt->execute([
+        $params = [
             ':payload' => $payload,
             ':queue' => $queue,
-            ':repeat' => $job->getRepeat()
-        ]);
+        ];
+
+        if ($job->isRepeated()) {
+            $params[':repeat'] = $job->getRepeat();
+        }
+
+        $stmt->execute($params);
 
         $count = $stmt->fetchColumn();
-        if ($count === 0) {
+        if ((int) $count === 0) {
             $this->push($job, $queue);
         }
     }
@@ -428,8 +433,6 @@ class Queue implements QueueContract
 
                 if ($newAttempts >= $tries) {
                     $this->markJobAsFailed($jobId, $e, $newAttempts);
-                    $failedJobs++;
-
                     $this->message(
                         sprintf(
                             'Job #%d failed permanently after %d attempts',
@@ -661,7 +664,8 @@ class Queue implements QueueContract
 
         try {
             $statement = $this->pdo?->prepare(
-                "SELECT fj.*, j.payload, j.queue, j.scheduled_time, j.created_at, j.repeat, j.status " .
+                "SELECT fj.id AS failed_job_id, fj.job_id AS id, fj.failed_at, fj.exception, fj.attempts, " .
+                "j.payload, j.queue, j.scheduled_time, j.created_at, j.repeat, j.status " .
                 "FROM failed_jobs fj " .
                 "JOIN jobs j ON fj.job_id = j.id " .
                 "ORDER BY fj.failed_at DESC " .
@@ -1198,7 +1202,7 @@ class Queue implements QueueContract
             $jobs[] = $this->unserializeJob($this->normalizeRedisRow((int) $id, $row));
         }
 
-        usort($jobs, static fn(JobContract $a, JobContract $b) => $a->getMetadata('scheduled_time', 0) <=> $b->getMetadata('scheduled_time', 0));
+        usort($jobs, static fn(JobContract $a, JobContract $b) => $a->getScheduledTime()->timestamp <=> $b->getScheduledTime()->timestamp);
 
         $jobs = array_slice($jobs, $from, max(0, $to));
         return $jobs;

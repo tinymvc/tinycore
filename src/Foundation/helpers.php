@@ -570,7 +570,9 @@ if (!function_exists('asset_url')) {
         $assetBase = (string) config('app.asset_url', '');
         $normalizedPath = ltrim(str_replace('\\', '/', (string) $path), '/');
         $assetBase = rtrim($assetBase, '/');
-        $fullPath = $assetBase === '' ? $normalizedPath : $normalizedPath === '' ? $assetBase : "$assetBase/$normalizedPath";
+        $fullPath = $assetBase === ''
+            ? $normalizedPath
+            : ($normalizedPath === '' ? $assetBase : "$assetBase/$normalizedPath");
 
         if (str_starts_with($assetBase, 'http://') || str_starts_with($assetBase, 'https://')) {
             return $fullPath === '' ? $assetBase : $fullPath;
@@ -623,7 +625,9 @@ if (!function_exists('media_url')) {
         $mediaBase = (string) config('app.media_url', '');
         $normalizedPath = ltrim(str_replace('\\', '/', (string) $path), '/');
         $mediaBase = rtrim($mediaBase, '/');
-        $fullPath = $mediaBase === '' ? $normalizedPath : $normalizedPath === '' ? $mediaBase : "$mediaBase/$normalizedPath";
+        $fullPath = $mediaBase === ''
+            ? $normalizedPath
+            : ($normalizedPath === '' ? $mediaBase : "$mediaBase/$normalizedPath");
 
         if (str_starts_with($mediaBase, 'http://') || str_starts_with($mediaBase, 'https://')) {
             return $fullPath === '' ? $mediaBase : $fullPath;
@@ -1301,7 +1305,7 @@ if (!function_exists('event')) {
             return $event;
         }
 
-    if (is_array($eventName) && $payload === [] && !$halt) {
+        if (is_array($eventName) && $payload === [] && !$halt) {
             foreach ($eventName as $eventNameKey => $listener) {
                 $eventNameString = (string) $eventNameKey;
 

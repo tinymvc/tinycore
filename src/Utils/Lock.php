@@ -84,8 +84,6 @@ class Lock implements LockUtilContract, \ArrayAccess
     private function initializeSqlite(): void
     {
         $lockPath = sprintf('%s.lock', cache_dir(md5($this->name)));
-        $createDB = !is_file($lockPath);
-
         try {
             $this->pdo = new PDO("sqlite:$lockPath");
 
@@ -98,7 +96,7 @@ class Lock implements LockUtilContract, \ArrayAccess
             $this->pdo->exec('PRAGMA temp_store = MEMORY');
             $this->pdo->exec('PRAGMA busy_timeout = 5000');
 
-            $createDB && $this->createTables();
+            $this->createTables();
         } catch (\PDOException $e) {
             throw new LockUtilException('Failed to connect to SQLite database: ' . $e->getMessage());
         }
@@ -207,6 +205,7 @@ class Lock implements LockUtilContract, \ArrayAccess
         }
 
         $startTime = time();
+        $timeout = max(1, $timeout);
         $expireAt = time() + $timeout;
 
         while (true) {
@@ -255,9 +254,8 @@ class Lock implements LockUtilContract, \ArrayAccess
             $payload = $this->encodeRedisLockData(max(1, $timeout));
             $payloadData = json_encode($payload, JSON_UNESCAPED_UNICODE);
 
-            $acquired = $this->redis->setnx($redisKey, $payloadData);
+            $acquired = $this->redis->set($redisKey, $payloadData, ['nx', 'ex' => max(1, $timeout)]);
             if ($acquired) {
-                $this->redis->expire($redisKey, max(1, $timeout));
                 return true;
             }
 

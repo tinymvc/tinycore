@@ -617,7 +617,7 @@ class HttpRequest implements HttpRequestContract
             CURLOPT_ENCODING => '',
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HEADERFUNCTION => function (resource|\CurlHandle $curlHandle, string $headerLine) use ($userHeaderCallback): int {
+            CURLOPT_HEADERFUNCTION => function ($curlHandle, string $headerLine) use ($userHeaderCallback): int {
                 $this->parseHeaderLine($headerLine);
 
                 if (is_callable($userHeaderCallback)) {

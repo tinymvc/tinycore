@@ -3,6 +3,7 @@
 namespace Spark\Utils;
 
 use RuntimeException;
+use function array_key_exists;
 use function defined;
 use function is_array;
 use function is_int;
@@ -17,12 +18,12 @@ use function sprintf;
  */
 final class RedisConnector
 {
-    private const string DEFAULT_HOST = '127.0.0.1';
-    private const int DEFAULT_PORT = 6379;
-    private const float DEFAULT_TIMEOUT = 2.5;
-    private const float DEFAULT_READ_TIMEOUT = 2.5;
-    private const int DEFAULT_RETRY_INTERVAL = 0;
-    private const int DEFAULT_DATABASE = 0;
+    private const DEFAULT_HOST = '127.0.0.1';
+    private const DEFAULT_PORT = 6379;
+    private const DEFAULT_TIMEOUT = 2.5;
+    private const DEFAULT_READ_TIMEOUT = 2.5;
+    private const DEFAULT_RETRY_INTERVAL = 0;
+    private const DEFAULT_DATABASE = 0;
 
     /** @var array<string, \Redis> */
     private static array $instances = [];
@@ -160,7 +161,12 @@ final class RedisConnector
     private static function cacheKey(string $connectionName, array $config): string
     {
         $cacheKeyParts = $config;
-        unset($cacheKeyParts['password']);
+        if (array_key_exists('password', $cacheKeyParts)) {
+            $cacheKeyParts['password_hash'] = $cacheKeyParts['password'] === null
+                ? null
+                : hash('sha256', (string) $cacheKeyParts['password']);
+            unset($cacheKeyParts['password']);
+        }
 
         if (isset($cacheKeyParts['options']) && is_array($cacheKeyParts['options'])) {
             $cacheKeyParts['options'] = self::sortOptionKeys($cacheKeyParts['options']);
@@ -316,7 +322,6 @@ final class RedisConnector
         $persistent = (bool) $config['persistent'];
         $persistentId = (string) ($config['persistent_id'] ?? $connectionName);
         $database = (int) $config['database'];
-        $prefix = (string) ($config['prefix'] ?? '');
         $socket = $config['socket'];
         $username = $config['username'];
         $password = $config['password'];
@@ -344,10 +349,6 @@ final class RedisConnector
 
         if ($database > 0) {
             $redis->select($database);
-        }
-
-        if ($prefix !== '') {
-            $redis->setOption(\Redis::OPT_PREFIX, "$prefix:");
         }
 
         foreach ((array) $config['options'] as $option => $value) {

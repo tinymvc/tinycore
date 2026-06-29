@@ -88,8 +88,6 @@ class Cache implements CacheUtilContract, \ArrayAccess
     {
         try {
             $cache = $config['path'] ?? sprintf('%s.cache', cache_dir(md5($name)));
-            $createDB = !is_file($cache);
-
             $this->pdo = new PDO("sqlite:$cache");
 
             $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -100,9 +98,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
             $this->pdo->exec("PRAGMA cache_size = 10000");
             $this->pdo->exec("PRAGMA temp_store = MEMORY");
 
-            if ($createDB) {
-                $this->createTables();
-            }
+            $this->createTables();
         } catch (\PDOException $e) {
             throw new RuntimeException('Failed to connect to SQLite database: ' . $e->getMessage());
         }
@@ -209,10 +205,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
     {
         $now = time();
         $expireAt = $expire !== null ? strtotime($expire) : 0;
-
-        if ($expireAt === false) {
-            $expireAt = 0;
-        }
+        $expireAt = $expireAt === false ? 0 : (int) $expireAt;
 
         $payload = [
             'key' => $key,
@@ -456,6 +449,10 @@ class Cache implements CacheUtilContract, \ArrayAccess
         }
 
         if (is_array($keys)) {
+            if ($keys === []) {
+                return [];
+            }
+
             $placeholders = rtrim(str_repeat('?,', count($keys)), ',');
             $stmt = $this->pdo?->prepare(
                 "SELECT key, data FROM caches WHERE key IN ($placeholders) AND (expire_at = 0 OR expire_at > ?)"
@@ -580,6 +577,10 @@ class Cache implements CacheUtilContract, \ArrayAccess
     public function erase(string|array $keys): self
     {
         $keys = is_array($keys) ? $keys : func_get_args();
+
+        if ($keys === []) {
+            return $this;
+        }
 
         if ($this->isRedis()) {
             if (!$this->redis) {
@@ -762,6 +763,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
 
         $now = time();
         $expireAt = $expire !== null ? strtotime($expire) : 0;
+        $expireAt = $expireAt === false ? 0 : (int) $expireAt;
 
         try {
             $this->pdo?->beginTransaction();
@@ -824,7 +826,11 @@ class Cache implements CacheUtilContract, \ArrayAccess
             }
 
             $newValue = (int) $value + $amount;
-            $this->store($key, $newValue);
+            $stmt = $this->statement(
+                'increment_update',
+                'UPDATE caches SET data = ?, created_at = ? WHERE key = ?'
+            );
+            $stmt->execute([serialize($newValue), time(), $key]);
 
             $this->pdo?->commit();
             return $newValue;
@@ -849,17 +855,16 @@ class Cache implements CacheUtilContract, \ArrayAccess
     {
         if ($this->isRedis()) {
             $packed = $this->packRedisValue($key, $value, $expire);
-
-            $added = $this->redis?->setnx($this->cacheKey($key), $packed['payload']);
-            if (!$added) {
-                return false;
-            }
+            $redisKey = $this->cacheKey($key);
+            $options = ['nx'];
 
             if ($packed['expireAt'] > 0) {
-                $this->redis?->expire($this->cacheKey($key), max(1, $packed['expireAt'] - time()));
+                $options['ex'] = max(1, $packed['expireAt'] - time());
             }
 
-            return true;
+            $added = $this->redis?->set($redisKey, $packed['payload'], $options);
+
+            return $added === true;
         }
 
         if (!$this->has($key)) {
@@ -1046,6 +1051,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
                 $value = $config['value'] ?? null;
                 $expire = $config['expire'] ?? null;
                 $expireAt = $expire !== null ? strtotime($expire) : 0;
+                $expireAt = $expireAt === false ? 0 : (int) $expireAt;
 
                 $stmt->execute([
                     $key,
