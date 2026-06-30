@@ -55,14 +55,16 @@ class DotEnv
      *
      * @param string $folder Path to configuration directory.
      * @param string $cache Path to cached config file.
+     * @param string $env Path to environment file.
      * @return array<string, mixed>
      */
-    public static function discoverConfig(string $folder, string $cache): array
+    public static function discoverConfig(string $folder, string $cache, string $env): array
     {
         $folder = dir_path($folder);
         $cache = dir_path($cache);
+        $env = dir_path($env);
 
-        if (self::isConfigCacheFresh($folder, $cache)) {
+        if (self::isConfigCacheFresh($folder, $cache, $env)) {
             $cached = self::loadConfigCache($cache);
 
             if (is_array($cached)) {
@@ -96,7 +98,7 @@ class DotEnv
             }
         }
 
-        self::writeConfigCache($cache, $config, $files);
+        self::writeConfigCache($cache, $config, $files, $env);
 
         return $config;
     }
@@ -139,7 +141,7 @@ class DotEnv
     /**
      * Check whether config cache is fresh based on source file mtimes.
      */
-    protected static function isConfigCacheFresh(string $folder, string $cache): bool
+    protected static function isConfigCacheFresh(string $folder, string $cache, string $env): bool
     {
         if (!is_file($cache) || !is_dir($folder)) {
             return false;
@@ -156,6 +158,10 @@ class DotEnv
         $cacheModifiedAt = filemtime($cache);
 
         if (count($compiledFiles) !== count($files) || $cacheModifiedAt === false) {
+            return false;
+        }
+
+        if (!array_key_exists('env', $compiled) || self::configEnvSignature($env) !== $compiled['env']) {
             return false;
         }
 
@@ -228,12 +234,13 @@ class DotEnv
     /**
      * Write compiled config cache to disk.
      */
-    protected static function writeConfigCache(string $cache, array $config, array $files = []): void
+    protected static function writeConfigCache(string $cache, array $config, array $files = [], string $env = ''): void
     {
         $cacheDir = dirname($cache);
         $payload = [
             'config' => $config,
             'files' => $files,
+            'env' => self::configEnvSignature($env),
             'generated_at' => time(),
         ];
 
@@ -242,6 +249,27 @@ class DotEnv
         }
 
         file_put_contents($cache, '<?php return ' . var_export($payload, true) . ';' . PHP_EOL);
+    }
+
+    /**
+     * Build the .env signature used to invalidate compiled config.
+     */
+    protected static function configEnvSignature(string $env): ?array
+    {
+        if ($env === '' || !is_file($env)) {
+            return null;
+        }
+
+        $modifiedAt = filemtime($env);
+
+        if ($modifiedAt === false) {
+            return null;
+        }
+
+        return [
+            'path' => $env,
+            'mtime' => $modifiedAt,
+        ];
     }
 
     /**

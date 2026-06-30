@@ -114,10 +114,6 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('cache:clear', [PrimaryCommandsHandler::class, 'clearCache'])
             ->description('Clear all cache files');
 
-        // Cache the configuration files
-        $commands->addCommand('config:cache', [PrimaryCommandsHandler::class, 'cacheConfig'])
-            ->description('Create a cache file for faster configuration loading');
-
         // Clear the configuration cache
         $commands->addCommand('config:clear', [PrimaryCommandsHandler::class, 'clearConfigCache'])
             ->description('Remove the configuration cache file');

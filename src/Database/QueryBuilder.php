@@ -1579,7 +1579,14 @@ class QueryBuilder implements QueryBuilderContract
 
         // Apply related model condition if necessary
         if ($this->isUsingModel()) {
-            $this->getModelBeingUsed()->fill($data);
+            $model = $this->getModelBeingUsed();
+            $model->fill($data);
+
+            $timestamps = $model->getCastedTimestampsForStorage();
+            if (!empty($timestamps)) {
+                $data = [...$data, ...$timestamps];
+            }
+
             $this->applyModelPrimaryCondition();
         }
 

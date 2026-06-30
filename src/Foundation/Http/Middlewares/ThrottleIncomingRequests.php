@@ -18,8 +18,8 @@ use function sprintf;
  * 
  * Usage: Throttle requests to a maximum number within a specified time frame.
  * Parameters:
- *      - $minute: Time frame in minutes (default: 1)
- *      - $requests: Maximum number of requests allowed in the time frame (default: 50)
+ *      - $attempts: Maximum number of requests allowed in the time frame (default: 50)
+ *      - $minutes: Time frame in minutes (default: 1)
  *      - $suffix: Optional suffix to differentiate cache keys (default: '')
  *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>

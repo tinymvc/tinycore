@@ -191,10 +191,13 @@ class Middleware implements MiddlewareContract
      * @param Request $request
      * @param array $queue Optional middleware stack to process for this request
      * @param array $except Middleware aliases to exclude from execution
+     * @param null|Closure $destination Final request handler.
      * @return mixed Response from middleware if early return, null otherwise
      */
-    public function process(Request $request, array $queue = [], array $except = []): mixed
+    public function process(Request $request, array $queue = [], array $except = [], ?Closure $destination = null): mixed
     {
+        $destination ??= fn(Request $request) => null;
+
         $stack = $queue !== [] ? array_values(
             array_unique(
                 [...$this->stack, ...$queue],
@@ -206,11 +209,11 @@ class Middleware implements MiddlewareContract
 
         // Fast path: all middlewares excluded = no early return
         if (empty($stack)) {
-            return null;
+            return $destination($request);
         }
 
         // Use optimized pipeline processing
-        return $this->createPipeline($request, fn() => null, $stack);
+        return $this->createPipeline($request, $destination, $stack);
     }
 
     /**

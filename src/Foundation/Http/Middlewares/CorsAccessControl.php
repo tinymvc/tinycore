@@ -18,6 +18,7 @@ use function is_string;
 use function preg_match;
 use function strcasecmp;
 use function str_contains;
+use function strtolower;
 use function trim;
 
 /**
@@ -68,13 +69,32 @@ abstract class CorsAccessControl implements MiddlewareInterface
             $headers = $config['headers'];
             $allowCredentials = $config['credentials'];
 
-            // Handle preflight requests with OPTIONS method.
-            if ($request->isMethod('options')) {
+            // Handle CORS preflight requests before the route callback is executed.
+            if ($this->isPreflightRequest($request)) {
+                $requestedMethod = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
+                $requestedHeaders = $this->requestedHeaders($request);
+
+                if (!$this->allowsMethod($requestedMethod, $methods) || !$this->allowsHeaders($requestedHeaders, $headers)) {
+                    return response('', 403);
+                }
+
                 $preflightResponse = response('', 204);
-                return $this->withCorsHeaders($preflightResponse, $allowedOrigin, $methods, $headers, $allowCredentials, $config['age'], true);
+                return $this->withCorsHeaders(
+                    $preflightResponse,
+                    $allowedOrigin,
+                    $this->allowedMethods($requestedMethod, $methods),
+                    $this->allowedHeaders($requestedHeaders, $headers),
+                    $allowCredentials,
+                    $config['age'],
+                    true
+                );
             }
 
             $response = $next($request);
+
+            if ($response === null) {
+                return null;
+            }
 
             if (!$response instanceof Response) {
                 $response = is_int($response)
@@ -123,12 +143,18 @@ abstract class CorsAccessControl implements MiddlewareInterface
         bool $isPreflight = false
     ): Response {
         $response
-            ->setHeader('Access-Control-Allow-Origin', $allowedOrigin)
-            ->setHeader('Access-Control-Allow-Credentials', $allowCredentials ? 'true' : 'false')
-            ->setHeader('Access-Control-Max-Age', (string) max(0, $maxAge));
+            ->setHeader('Access-Control-Allow-Origin', $allowedOrigin);
+
+        if ($allowCredentials) {
+            $response->setHeader('Access-Control-Allow-Credentials', 'true');
+        }
 
         if ($allowedOrigin !== '*') {
             $response->setHeader('Vary', 'Origin');
+        }
+
+        if ($isPreflight) {
+            $response->setHeader('Access-Control-Max-Age', (string) max(0, $maxAge));
         }
 
         if ($isPreflight && $methods !== []) {
@@ -140,6 +166,73 @@ abstract class CorsAccessControl implements MiddlewareInterface
         }
 
         return $response;
+    }
+
+    /**
+     * Determine if the request is a CORS preflight request.
+     */
+    private function isPreflightRequest(Request $request): bool
+    {
+        return $request->isMethod('OPTIONS')
+            && $request->header('Origin') !== null
+            && $request->header('Access-Control-Request-Method') !== null;
+    }
+
+    /**
+     * Check if the requested method is allowed by the CORS policy.
+     */
+    private function allowsMethod(string $requestedMethod, array $methods): bool
+    {
+        return $requestedMethod !== ''
+            && (in_array('*', $methods, true) || in_array($requestedMethod, $methods, true));
+    }
+
+    /**
+     * Extract requested preflight headers.
+     *
+     * @return array<int, string>
+     */
+    private function requestedHeaders(Request $request): array
+    {
+        $headers = $request->header('Access-Control-Request-Headers', '');
+
+        return $this->normalizeHeaderList($this->normalizeList($headers));
+    }
+
+    /**
+     * Check if requested preflight headers are allowed by the CORS policy.
+     */
+    private function allowsHeaders(array $requestedHeaders, array $headers): bool
+    {
+        if ($requestedHeaders === [] || in_array('*', $headers, true)) {
+            return true;
+        }
+
+        $allowed = array_map('strtolower', $headers);
+
+        foreach ($requestedHeaders as $header) {
+            if (!in_array(strtolower($header), $allowed, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Resolve methods to send in the preflight response.
+     */
+    private function allowedMethods(string $requestedMethod, array $methods): array
+    {
+        return in_array('*', $methods, true) ? [$requestedMethod] : $methods;
+    }
+
+    /**
+     * Resolve headers to send in the preflight response.
+     */
+    private function allowedHeaders(array $requestedHeaders, array $headers): array
+    {
+        return in_array('*', $headers, true) ? $requestedHeaders : $headers;
     }
 
     /**
@@ -208,7 +301,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
             return true;
         }
 
-        $pattern = str_replace('*', '.*', preg_quote(trim((string) $pattern), '/'));
+        $pattern = str_replace('\*', '.*', preg_quote(trim((string) $pattern), '/'));
         return (bool) preg_match("/^$pattern\$/i", $origin);
     }
 

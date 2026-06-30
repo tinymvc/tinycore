@@ -345,42 +345,16 @@ class PrimaryCommandsHandler
      */
     public function clearConfigCache()
     {
-        $cacheFile = root_dir('bootstrap/cache/config.php');
+        $cacheFiles = [
+            root_dir('bootstrap/cache/config.php'),
+            root_dir('bootstrap/cache/env.php'),
+        ];
 
-        if (file_exists($cacheFile)) {
-            unlink($cacheFile);
+        foreach ($cacheFiles as $cacheFile) {
+            is_file($cacheFile) && unlink($cacheFile);
         }
 
         Prompt::message("Configuration cache cleared.", "success");
-    }
-
-    /**
-     * Caches the configuration files.
-     *
-     * This method reads all the configuration files from the config directory,
-     * compiles them into a single array, and saves that array as a PHP file
-     * in the bootstrap/cache directory. This allows for faster loading of
-     * configuration settings in production environments.
-     *
-     * @return void
-     */
-    public function cacheConfig()
-    {
-        $config = [];
-        $discover = root_dir('config');
-        $cacheFile = root_dir('bootstrap/cache/config.php');
-
-        foreach (glob("$discover/*.php") as $file) {
-            $key = basename($file, '.php');
-            $config[$key] = require $file;
-        }
-
-        file_put_contents(
-            $cacheFile,
-            "<?php\n\nreturn " . var_export($config, true) . ";\n"
-        );
-
-        Prompt::message("Configuration cached successfully.", "success");
     }
 
     /**
@@ -396,24 +370,29 @@ class PrimaryCommandsHandler
     {
         $this->clearViewCaches(); // Also clear view caches
 
-        $cacheDir = storage_dir('cache');
+        $cacheDirs = [
+            storage_dir('cache'),
+            root_dir('bootstrap/cache'),
+        ];
 
-        if (is_dir($cacheDir)) {
-            foreach (scandir($cacheDir) as $item) {
-                if (in_array($item, ['.', '..', '.gitignore'])) {
-                    continue;
+        foreach ($cacheDirs as $cacheDir) {
+            if (is_dir($cacheDir)) {
+                foreach (scandir($cacheDir) as $item) {
+                    if (in_array($item, ['.', '..', '.gitignore'])) {
+                        continue;
+                    }
+
+                    $item = dir_path("$cacheDir/$item");
+
+                    if (is_dir($item)) {
+                        FileManager::deleteDirectory($item); // Delete directory
+                    } else {
+                        FileManager::delete($item); // Delete file
+                    }
                 }
-
-                $item = dir_path("$cacheDir/$item");
-
-                if (is_dir($item)) {
-                    FileManager::deleteDirectory($item); // Delete directory
-                } else {
-                    FileManager::delete($item); // Delete file
-                }
+            } else {
+                Prompt::message("Cache directory does not exist.", "warning");
             }
-        } else {
-            Prompt::message("Cache directory does not exist.", "warning");
         }
 
         Prompt::message("All cache contents cleared.", "success");
@@ -446,9 +425,16 @@ class PrimaryCommandsHandler
         );
 
         file_put_contents($envFile, $envFileContent);
+        touch($envFile); // Update the file's modification tsime
 
-        touch($envFile); // Update the file's modification time
-        unlink(root_dir('bootstrap/cache/env.php')); // Clear env cache to reflect new key
+        $caches = [
+            root_dir('bootstrap/cache/env.php'),
+            root_dir('bootstrap/cache/config.php'),
+        ];
+
+        foreach ($caches as $cache) {
+            is_file($cache) && unlink($cache); // Delete cache files if they exist
+        }
 
         envs(['APP_KEY' => $appKey]); // Update the env variable in runtime
 

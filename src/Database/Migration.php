@@ -104,6 +104,7 @@ class Migration implements MigrationContract
         sort($files);
 
         try {
+            $run = 0;
             foreach ($files as $file) {
                 if (basename($file) === 'migrations.json') {
                     continue;
@@ -133,8 +134,14 @@ class Migration implements MigrationContract
                     Prompt::message("Applied migration: {$migrationName}", 'success');
 
                     $appliedMigrations[] = $migrationName;
+                    $run++;
                 }
             }
+
+            if ($run === 0) {
+                Prompt::message("No new migrations to apply.", 'info');
+            }
+
             // Save the list of applied migrations
             $this->saveAppliedMigrations($appliedMigrations);
         } catch (Throwable $e) {
@@ -177,6 +184,7 @@ class Migration implements MigrationContract
         $migrationsToRollback = array_slice($remainingMigrations, 0, $steps);
 
         try {
+            $run = 0;
             foreach ($migrationsToRollback as $index => $migrationName) {
                 $file = $this->migrationsFolder . DIRECTORY_SEPARATOR . $migrationName;
 
@@ -194,8 +202,14 @@ class Migration implements MigrationContract
 
                     // Remove the rolled back migration from the list
                     $remainingMigrations = array_slice($remainingMigrations, $index + 1);
+                    $run++;
                 }
             }
+
+            if ($run === 0) {
+                Prompt::message("No migrations were rolled back.", 'info');
+            }
+
             // Save the list of applied migrations
             $remainingMigrations = array_reverse($remainingMigrations);
             $this->saveAppliedMigrations($remainingMigrations);

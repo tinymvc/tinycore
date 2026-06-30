@@ -130,7 +130,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /** Indicates whether the model should automatically manage timestamps. */
-    protected const USE_TIMESTAMPS = false;
+    protected const USE_TIMESTAMPS = true;
 
     /** The name of the "created at" column. */
     protected const CREATED_AT = 'created_at';
@@ -373,13 +373,15 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function save(bool $forceCreate = false): bool
     {
-        // Apply events for before save and encode array into json string. 
-        $data = $this->castDataForStorage($this->getFillableData());
+        $data = $this->getFillableData();
 
         // Apply timestamp casting if the model uses HasTimestamp trait and timestamps are defined.
         if (static::USE_TIMESTAMPS) {
             $data = [...$data, ...$this->getCastedTimestampsForStorage()];
         }
+
+        // Cast the data for storage, applying any necessary transformations or encodings.
+        $data = $this->castDataForStorage($data);
 
         // Initialize default status variables.
         $updatedStatus = false;
@@ -491,11 +493,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             // Handle array-like values into JSON strings.
             elseif ($value instanceof Arrayable) {
                 $data[$key] = json_encode($value->toArray());
-            }
-            elseif ($value instanceof Jsonable) {
+            } elseif ($value instanceof Jsonable) {
                 $data[$key] = $value->toJson();
-            }
-            elseif (is_array($value)) {
+            } elseif (is_array($value)) {
                 $data[$key] = json_encode($value);
             }
             // Handle Scalar values
@@ -527,6 +527,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 }
             }
         }
+
+        // If the model uses timestamps, decode them into Carbon instances.
+        static::USE_TIMESTAMPS && $this->decodeTimestamps();
 
         // Store the initial hash of the model's data for change tracking.
         $this->hasPrimaryValue() && ($this->tracking['__hash'] ??= $this->makeHash());
@@ -702,6 +705,19 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         foreach ($this->appends as $key) {
             if ($this->hasAccessor($key)) {
                 $attributes[$key] = $this->getAttributeValue($key, $this->attributes[$key] ?? null);
+            }
+        }
+
+        // Convert special objects to their string representations for JSON serialization
+        foreach ($attributes as &$attribute) {
+            if ($attribute instanceof \Spark\Utils\Carbon) {
+                $attribute = $attribute->toISOUtcString();
+            } elseif ($attribute instanceof \DateTimeInterface) {
+                $attribute = $attribute->format(\DateTimeInterface::ATOM);
+            } elseif ($attribute instanceof \Spark\Url) {
+                $attribute = $attribute->getUrl();
+            } elseif ($attribute instanceof Arrayable) {
+                $attribute = $attribute->toArray();
             }
         }
 
@@ -1462,14 +1478,14 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      *
      * @return array An array containing the casted timestamps for storage.
      */
-    protected function getCastedTimestampsForStorage(): array
+    public function getCastedTimestampsForStorage(): array
     {
         $timestamps = array_filter([static::CREATED_AT, static::UPDATED_AT]);
 
         $castedTimestamps = [];
 
         if (in_array(static::CREATED_AT, $timestamps)) {
-            $castedTimestamps[static::CREATED_AT] = $this->attributes[static::CREATED_AT] ??= now()->toDateTimeString();
+            $castedTimestamps[static::CREATED_AT] = $this->attributes[static::CREATED_AT] ??= now();
         }
 
         if (in_array(static::UPDATED_AT, $timestamps)) {
@@ -1477,9 +1493,28 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 unset($this->attributes[static::UPDATED_AT]);
             }
 
-            $castedTimestamps[static::UPDATED_AT] = $this->attributes[static::UPDATED_AT] ??= now()->toDateTimeString();
+            $castedTimestamps[static::UPDATED_AT] = $this->attributes[static::UPDATED_AT] ??= now();
         }
 
         return $castedTimestamps;
+    }
+
+    /**
+     * Decode timestamp attributes from storage format to Carbon instances.
+     *
+     * This method checks for the presence of timestamp attributes (created_at and updated_at)
+     * and converts their values from string format to Carbon instances for easier manipulation.
+     *
+     * @return void
+     */
+    public function decodeTimestamps(): void
+    {
+        $timestamps = array_filter([static::CREATED_AT, static::UPDATED_AT]);
+
+        foreach ($timestamps as $timestamp) {
+            if (isset($this->attributes[$timestamp])) {
+                $this->attributes[$timestamp] = carbon($this->attributes[$timestamp]);
+            }
+        }
     }
 }

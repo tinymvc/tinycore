@@ -224,9 +224,11 @@ class Application extends \Spark\Container implements ApplicationContract
 
         if (is_string($config)) {
             $rootPath = rtrim($this->path, '/\\');
+            $config = ltrim($config, '/\\');
             $this->mergeConfig(DotEnv::discoverConfig(
-                folder: dir_path("$rootPath/" . ltrim($config, '/\\')),
-                cache: dir_path("$rootPath/bootstrap/cache/config.php")
+                folder: dir_path("$rootPath/$config"),
+                cache: dir_path("$rootPath/bootstrap/cache/" . preg_replace('/[^a-zA-Z0-9]/', '_', $config) . '.php'),
+                env: dir_path("$rootPath/.env")
             ));
         }
 

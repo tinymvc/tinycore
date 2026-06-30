@@ -39,7 +39,6 @@ class Tracer implements TracerUtilContract
         E_USER_ERROR => 'User Error',
         E_USER_WARNING => 'User Warning',
         E_USER_NOTICE => 'User Notice',
-        E_STRICT => 'Strict',
         E_RECOVERABLE_ERROR => 'Recoverable Error',
         E_DEPRECATED => 'Deprecated',
         E_USER_DEPRECATED => 'User Deprecated',
@@ -69,14 +68,6 @@ class Tracer implements TracerUtilContract
     {
         // Set the tracer instance as a singleton
         self::$instance = $this;
-
-        // Set default error log file if not provided
-        $this->logFile ??= storage_dir('logs/spark.log');
-
-        $logDirectory = dirname($this->logFile);
-        if (!is_dir($logDirectory)) {
-            @mkdir($logDirectory, 0775, true);
-        }
 
         // Enable error reporting
         error_reporting(E_ALL);
@@ -259,10 +250,12 @@ class Tracer implements TracerUtilContract
      */
     public function log(string $message): void
     {
-        $logFile = $this->logFile;
+        // Set default error log file if not provided
+        $logFile = $this->logFile ?? storage_dir('logs/spark.log');
+        $logDirectory = dirname($logFile);
 
-        if (!is_dir(dirname($logFile))) {
-            return;
+        if (!is_dir($logDirectory)) {
+            @mkdir($logDirectory, 0775, true);
         }
 
         if (is_file($logFile) && !is_writable($logFile)) {
@@ -273,11 +266,11 @@ class Tracer implements TracerUtilContract
             @rename($logFile, "$logFile." . date('YmdHis'));
         }
 
-        if (!is_writable(dirname($this->logFile))) {
+        if (!is_writable(dirname($logFile))) {
             return; // Skip logging if the directory is not writable
         }
 
         $time = date('Y-m-d H:i:s'); // Current timestamp
-        error_log("[$time] $message\n", 3, $this->logFile);
+        error_log("[$time] $message\n", 3, $logFile);
     }
 }

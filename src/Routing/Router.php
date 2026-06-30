@@ -618,27 +618,32 @@ class Router implements RouterContract
                 /** @var \Spark\Http\Middleware $middleware */
                 $middleware = Application::$app->make(Middleware::class);
 
-                // Execute middleware stack - check for early returns (auth failures, redirects, etc.)
-                $middlewareResponse = $middleware->process(
-                    request: $request,
-                    queue: (array) ($route['middleware'] ?? []),
-                    except: (array) ($route['withoutMiddleware'] ?? [])
-                );
-
-                if ($middlewareResponse !== null) {
-                    return $this->parseHttpResponse($middlewareResponse);
-                }
-
-                is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
-
                 // Handle view rendering or instantiate a class for callback if specified
                 if (isset($route['template'])) {
                     $route['callback'] = fn() => view($route['template']);
                 }
 
-                $response = Application::$app->call($route['callback'], $request->getRouteParams());
+                $routeHandlesOptions = $this->routeAllowsMethod($route['method'], 'OPTIONS');
 
-                is_debug_mode() && event('app:routeDispatched');
+                // Execute the matched route through the middleware pipeline.
+                $response = $middleware->process(
+                    request: $request,
+                    queue: (array) ($route['middleware'] ?? []),
+                    except: (array) ($route['withoutMiddleware'] ?? []),
+                    destination: function (Request $request) use ($route, $routeHandlesOptions): Response {
+                        if ($this->isCorsPreflight($request) && !$routeHandlesOptions) {
+                            return new Response('', 204);
+                        }
+
+                        $response = Application::$app->call($route['callback'], $request->getRouteParams());
+
+                        is_debug_mode() && event('app:routeDispatched');
+
+                        return $this->parseHttpResponse($response);
+                    }
+                );
+
+                is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
 
                 // Return the response from the route's callback
                 return $this->parseHttpResponse($response);
@@ -670,7 +675,7 @@ class Router implements RouterContract
      *
      * @return bool True if the route matches the request path and method, false otherwise.
      */
-    private function matchRoute($routeMethod, $routePath, Request $request): bool
+    private function matchRoute(array|string $routeMethod, string $routePath, Request $request): bool
     {
         $requestMethod = strtoupper($request->getMethod());
 
@@ -679,21 +684,22 @@ class Router implements RouterContract
             $requestMethod = 'GET';
         }
 
-        if ($routeMethod !== '*' && !(is_array($routeMethod) && in_array('*', $routeMethod))) {
-            // Convert route method to uppercase
-            $routeMethod = array_map('strtoupper', (array) $routeMethod);
+        // CORS preflight should match the route for the requested method so
+        // route-level CORS middleware can return the preflight response.
+        if ($this->isCorsPreflight($request) && !$this->routeAllowsMethod($routeMethod, 'OPTIONS')) {
+            $requestMethod = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
+        }
 
-            // Check if the request method is allowed for this route
-            if (!in_array($requestMethod, $routeMethod)) {
-                return false;
-            }
+        // Check if the request method is allowed for this route.
+        if (!$this->routeAllowsMethod($routeMethod, $requestMethod)) {
+            return false;
         }
 
         // Escape special characters in the route path
         $pattern = $this->escapeRoutePath($routePath);
 
         // Attempt to match the request path with the route pattern
-        if (preg_match("/^$pattern\$/", $request->getPath(), $matches)) {
+        if (preg_match("#^$pattern/?$#", $request->getPath(), $matches)) {
             array_shift($matches);
 
             // Map matched segments to parameter names
@@ -709,11 +715,39 @@ class Router implements RouterContract
     }
 
     /**
+     * Determine if the request is a CORS preflight request.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    private function isCorsPreflight(Request $request): bool
+    {
+        return strtoupper($request->getMethod()) === 'OPTIONS'
+            && $request->header('Origin') !== null
+            && $request->header('Access-Control-Request-Method') !== null;
+    }
+
+    /**
+     * Determine if the route allows the given HTTP method.
+     *
+     * @param string|array $routeMethod
+     * @param string $method
+     * @return bool
+     */
+    private function routeAllowsMethod(array|string $routeMethod, string $method): bool
+    {
+        if ($routeMethod === '*' || (is_array($routeMethod) && in_array('*', $routeMethod, true))) {
+            return true;
+        }
+
+        return in_array(strtoupper($method), array_map('strtoupper', (array) $routeMethod), true);
+    }
+
+    /**
      * Escapes special characters in the route path for use in regular expressions.
      *
-     * Replaces '/' with '\/' and '*' with '(?:.*)'. Also replaces optional dynamic
-     * parameters (/{param?}/) with optional groups (?:/[^\/]+)? and
-     * required dynamic parameters (/{param}/) with required groups ([^\/]+).
+     * Compiles literal segments, wildcard segments, optional dynamic parameters
+     * ({param?}), and required dynamic parameters ({param}) into a regex path.
      *
      * @param string $routePath The route path to escape.
      *
@@ -729,16 +763,16 @@ class Router implements RouterContract
         }
 
         $segments = array_filter(explode('/', $routePath), 'strlen');
-        $compiledPath = '\/';
+        $compiledPath = '';
 
-        foreach ($segments as $index => $segment) {
+        foreach ($segments as $segment) {
             if ($segment === '*') {
-                $compiledPath .= $index === 0 ? '(?:.*)' : '\/(?:.*)';
+                $compiledPath .= '\/(?:.*)';
                 continue;
             }
 
-            if (preg_match('/^\{([a-zA-Z0-9_]+\?)\}$/', $segment)) {
-                $compiledPath .= $index === 0 ? "($segmentPattern)?" : "(?:\\/($segmentPattern))?";
+            if (preg_match('/^\{([a-zA-Z0-9_]+)\?\}$/', $segment)) {
+                $compiledPath .= "(?:\\/($segmentPattern))?";
                 continue;
             }
 
@@ -747,7 +781,7 @@ class Router implements RouterContract
                 continue;
             }
 
-            $compiledPath .= '\/' . preg_quote($segment, '/');
+            $compiledPath .= '\/' . preg_quote($segment, '#');
         }
 
         return $compiledPath;
