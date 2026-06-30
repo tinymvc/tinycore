@@ -18,14 +18,20 @@ use function array_map;
 use function array_slice;
 use function array_unique;
 use function count;
+use function dirname;
 use function explode;
 use function get_class;
 use function in_array;
 use function is_array;
 use function is_bool;
+use function is_dir;
 use function is_string;
 use function max;
+use function mkdir;
+use function pathinfo;
+use function rtrim;
 use function sprintf;
+use function str_ends_with;
 
 /**
  * A job queue backed by SQLite by default, with Redis support when configured.
@@ -56,14 +62,10 @@ class Queue implements QueueContract
     /** @var string */
     private string $redisPrefix = 'spark:queue';
 
-    /** @var string */
-    private string $connectionName = 'default';
-
     public function __construct(bool|string $log = false)
     {
         $this->connection = $this->resolveDriverConfig();
         $this->driver = strtolower((string) ($this->connection['driver'] ?? 'sqlite'));
-        $this->connectionName = (string) ($this->connection['connection'] ?? 'default');
 
         if ($this->driver === 'redis') {
             $this->initializeRedis();
@@ -82,7 +84,7 @@ class Queue implements QueueContract
     private function initializeSqlite(): void
     {
         try {
-            $path = (string) ($this->connection['path'] ?? storage_dir('queue/jobs.db'));
+            $path = $this->sqliteQueuePath($this->connection);
             $this->pdo = new PDO("sqlite:$path");
             $this->pdo->exec('PRAGMA foreign_keys = ON');
             $this->pdo->exec('PRAGMA journal_mode = WAL');
@@ -97,14 +99,14 @@ class Queue implements QueueContract
     private function initializeRedis(): void
     {
         $redisConfig = RedisConnector::resolveConnectionConfig($this->connection);
-        $this->redis = RedisConnector::make($redisConfig, $this->connectionName);
+        $this->redis = RedisConnector::make($redisConfig, $this->driver);
 
         $prefix = trim((string) ($redisConfig['prefix'] ?? 'spark'));
         if ($prefix === '') {
             $prefix = 'spark';
         }
         $prefix = trim($prefix, ':');
-        $this->redisPrefix = sprintf('%s:queue:%s', $prefix, md5($this->connectionName));
+        $this->redisPrefix = sprintf('%s:queue:%s', $prefix, md5($this->driver));
 
         // Ensure lock keys for failed cleanup never outlive jobs unless explicitly removed.
         $this->deleteNamespaceMetaKeys();
@@ -115,40 +117,51 @@ class Queue implements QueueContract
         $queueConfig = (array) config('queue', []);
 
         $driver = strtolower((string) ($queueConfig['driver'] ?? 'sqlite'));
-        $defaultConnection = 'default';
-
-        if (is_string($queueConfig['default'] ?? null) && $queueConfig['default'] !== '') {
-            $defaultConnection = $queueConfig['default'];
-        } elseif (is_string($queueConfig['connection'] ?? null) && $queueConfig['connection'] !== '') {
-            $defaultConnection = $queueConfig['connection'];
-        }
-
-        $connectionName = $defaultConnection;
-        $connections = (array) ($queueConfig['connections'] ?? $queueConfig['stores'] ?? []);
-
-        if (is_array($connections[$connectionName] ?? null)) {
-            $connection = $connections[$connectionName];
-        } elseif (is_array($queueConfig[$driver] ?? null)) {
-            $connection = $queueConfig[$driver];
-        } elseif (is_array($queueConfig[$connectionName] ?? null) && $connectionName !== 'driver') {
-            $connection = $queueConfig[$connectionName];
-        } else {
-            $connection = $queueConfig;
-        }
-
-        if (!is_array($connection)) {
-            $connection = [];
-        }
-
-        if (!isset($connection['driver'])) {
-            $connection['driver'] = $driver;
-        }
+        $connections = (array) ($queueConfig['connections'] ?? []);
+        $connection = is_array($connections[$driver] ?? null) ? $connections[$driver] : [];
 
         return [
             ...$connection,
-            'connection' => $connectionName,
-            'driver' => strtolower((string) $connection['driver'])
+            'driver' => $driver
         ];
+    }
+
+    /**
+     * Resolves the SQLite queue database file path.
+     */
+    private function sqliteQueuePath(array $config): string
+    {
+        $path = (string) ($config['path'] ?? storage_dir('queue/jobs.db'));
+        if ($path === '') {
+            $path = storage_dir('queue/jobs.db');
+        }
+
+        if ($this->looksLikeDirectoryPath($path)) {
+            $path = $path . DIRECTORY_SEPARATOR . 'jobs.db';
+        }
+
+        $this->ensureDirectory(dirname($path));
+        return $this->normalizePath($path);
+    }
+
+    private function looksLikeDirectoryPath(string $path): bool
+    {
+        return is_dir($path)
+            || str_ends_with($path, '/')
+            || str_ends_with($path, '\\')
+            || pathinfo($path, PATHINFO_EXTENSION) === '';
+    }
+
+    private function ensureDirectory(string $directory): void
+    {
+        if ($directory !== '' && !is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return rtrim(str_replace(['//', '\\\\', '/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
     }
 
     private function isRedis(): bool
@@ -746,6 +759,7 @@ class Queue implements QueueContract
                 'attempts' => $job['attempts'] ?? 0,
                 'created_at' => $job['created_at'] ?? null,
                 'status' => $job['status'] ?? 'pending',
+                'failed_job_id' => $job['failed_job_id'] ?? null,
                 'failed_at' => $job['failed_at'] ?? null,
                 'reserved_at' => $job['reserved_at'] ?? null,
                 'exception' => $job['exception'] ?? null,
@@ -1128,7 +1142,8 @@ class Queue implements QueueContract
 
         $payload = json_decode((string) ($row['payload'] ?? '{}'), true);
         if (is_array($payload)) {
-            $dupe = $this->redisFingerprintKey($queue ?? 'default', $payload, $row['repeat'] ?? null);
+            $repeat = $this->redisNullIfMissing((string) ($row['repeat'] ?? null)) ?? '';
+            $dupe = $this->redisFingerprintKey($queue ?? 'default', $payload, $repeat);
             $this->redis?->del($dupe);
         }
 

@@ -9,9 +9,16 @@ use Spark\Contracts\Utils\LockUtilContract;
 use Spark\Exceptions\Utils\LockUtilException;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
+use function dirname;
 use function is_array;
+use function is_dir;
 use function is_string;
+use function md5;
+use function mkdir;
+use function pathinfo;
+use function rtrim;
 use function sprintf;
+use function str_ends_with;
 
 /**
  * Class Lock
@@ -83,7 +90,7 @@ class Lock implements LockUtilContract, \ArrayAccess
 
     private function initializeSqlite(): void
     {
-        $lockPath = sprintf('%s.lock', cache_dir(md5($this->name)));
+        $lockPath = $this->sqliteLockPath($this->connection);
         try {
             $this->pdo = new PDO("sqlite:$lockPath");
 
@@ -120,29 +127,53 @@ class Lock implements LockUtilContract, \ArrayAccess
         $cacheConfig = (array) config('cache', []);
 
         $driver = strtolower((string) ($cacheConfig['driver'] ?? 'sqlite'));
-        $connectionName = (string) ($cacheConfig['default'] ?? $cacheConfig['connection'] ?? 'default');
-
-        $connections = (array) ($cacheConfig['connections'] ?? $cacheConfig['stores'] ?? []);
-        $driverConfig = null;
-
-        if (is_array($connections[$connectionName] ?? null)) {
-            $driverConfig = $connections[$connectionName];
-        } elseif (is_array($cacheConfig[$driver] ?? null)) {
-            $driverConfig = $cacheConfig[$driver];
-        } else {
-            $driverConfig = $cacheConfig;
-        }
-
-        if (!is_array($driverConfig)) {
-            $driverConfig = [];
-        }
+        $connections = (array) ($cacheConfig['connections'] ?? []);
+        $driverConfig = is_array($connections[$driver] ?? null) ? $connections[$driver] : [];
 
         return [
             'driver' => $driver,
             'name' => $name,
-            'connection' => $connectionName,
             ...$driverConfig
         ];
+    }
+
+    /**
+     * Resolves the SQLite lock database path from cache sqlite config.
+     */
+    private function sqliteLockPath(array $config): string
+    {
+        $path = (string) ($config['lock_path'] ?? $config['path'] ?? storage_dir('cache'));
+        if ($path === '') {
+            $path = storage_dir('cache');
+        }
+
+        if ($this->looksLikeDirectoryPath($path)) {
+            $this->ensureDirectory($path);
+            return $this->normalizePath($path . DIRECTORY_SEPARATOR . md5($this->name) . '.lock');
+        }
+
+        $this->ensureDirectory(dirname($path));
+        return $this->normalizePath($path);
+    }
+
+    private function looksLikeDirectoryPath(string $path): bool
+    {
+        return is_dir($path)
+            || str_ends_with($path, '/')
+            || str_ends_with($path, '\\')
+            || pathinfo($path, PATHINFO_EXTENSION) === '';
+    }
+
+    private function ensureDirectory(string $directory): void
+    {
+        if ($directory !== '' && !is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return rtrim(str_replace(['//', '\\\\', '/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
     }
 
     private function isRedis(): bool

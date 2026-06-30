@@ -815,24 +815,6 @@ if (!function_exists('upload_dir')) {
     }
 }
 
-if (!function_exists('cache_dir')) {
-    /**
-     * Get the cache directory path with an optional appended path.
-     *
-     * This function returns the cache directory path, optionally appending a
-     * specified sub-path to it. The resulting path is normalized with a single
-     * trailing slash.
-     *
-     * @param string $path The sub-path to append to the cache directory path. Default is '/'.
-     *
-     * @return string The full path to the cache directory, including the appended sub-path.
-     */
-    function cache_dir(string $path = '/'): string
-    {
-        return dir_path(config('app.cache_dir') . '/' . ltrim($path, '/'));
-    }
-}
-
 if (!function_exists('views_dir')) {
     /**
      * Get the views directory path with an optional appended path.

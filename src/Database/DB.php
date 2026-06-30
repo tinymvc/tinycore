@@ -8,9 +8,12 @@ use Spark\Database\Contracts\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use function dirname;
 use function func_get_args;
 use function in_array;
 use function is_array;
+use function is_dir;
+use function mkdir;
 use function sprintf;
 
 /**
@@ -92,7 +95,7 @@ class DB implements DBContract
             $config = config('database');
         }
 
-        $this->config = $config;
+        $this->config = $this->resolveConnectionConfig((array) $config);
     }
 
     /**
@@ -116,7 +119,7 @@ class DB implements DBContract
      */
     public function getDriver(): string
     {
-        return $this->config['driver'] ?? 'mysql';
+        return strtolower((string) ($this->config['driver'] ?? 'mysql'));
     }
 
     /**
@@ -174,8 +177,45 @@ class DB implements DBContract
     public function resetConfig(array $config): self
     {
         unset($this->pdo);
-        $this->config = $config;
+        $this->config = $this->resolveConnectionConfig($config);
         return $this;
+    }
+
+    /**
+     * Resolves config/database.php connection shapes into a single PDO config.
+     */
+    private function resolveConnectionConfig(array $config): array
+    {
+        if (is_array($config['connections'] ?? null)) {
+            $driver = strtolower((string) ($config['driver'] ?? 'mysql'));
+            $connectionKey = is_array($config['connections'][$driver] ?? null) ? $driver : 'default';
+            $connection = is_array($config['connections'][$connectionKey] ?? null)
+                ? $config['connections'][$connectionKey]
+                : [];
+
+            $base = $config;
+            unset($base['connections']);
+
+            $config = [...$base, ...$connection];
+        }
+
+        if (isset($config['username']) && !isset($config['user'])) {
+            $config['user'] = $config['username'];
+        }
+
+        if (isset($config['database']) && !isset($config['name']) && ($config['driver'] ?? null) !== 'sqlite') {
+            $config['name'] = $config['database'];
+        }
+
+        if (isset($config['file']) && !isset($config['database']) && ($config['driver'] ?? null) === 'sqlite') {
+            $config['database'] = $config['file'];
+        }
+
+        if (isset($config['path']) && !isset($config['database']) && ($config['driver'] ?? null) === 'sqlite') {
+            $config['database'] = $config['path'];
+        }
+
+        return $config;
     }
 
     /**
@@ -366,6 +406,10 @@ class DB implements DBContract
         // Check if config has a default DSN else. create a new one. 
         $dsn = $this->config['dsn'] ?? $this->buildDsn();
 
+        if ($this->isSQLite()) {
+            $this->ensureSqliteDirectory();
+        }
+
         // Merge PDO default options with config.
         $options = $this->config['options'] ?? [];
         $options[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
@@ -432,6 +476,22 @@ class DB implements DBContract
                 sprintf('charset=%s;', $this->config['charset']) : '',
             ),
         };
+    }
+
+    /**
+     * Creates the parent directory for file-backed SQLite connections.
+     */
+    private function ensureSqliteDirectory(): void
+    {
+        $database = (string) ($this->config['database'] ?? $this->config['path'] ?? $this->config['file'] ?? '');
+        if ($database === '' || $database === ':memory:') {
+            return;
+        }
+
+        $directory = dirname($database);
+        if ($directory !== '' && !is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
     }
 
     /**
