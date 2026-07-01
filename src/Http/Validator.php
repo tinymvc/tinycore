@@ -1213,6 +1213,11 @@ class Validator implements ValidatorContract
     private function getErrorMessagePlaceholder(string $rule, string $field, string $default): string
     {
         $field = strtolower($field); // make the field name in lowercase
+        $field2 = strtolower("$field$rule"); // make the field name in lowercase
+
+        if (isset(self::$errorMessages[$field2])) {
+            return self::$errorMessages[$field2];
+        }
 
         $placeholder = self::$errorMessages[$rule] ?? null;
         if (is_array($placeholder)) {
