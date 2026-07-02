@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Cache;
+namespace Spark\Cache\Contracts;
 
 /**
  * Interface for cache utilities.

@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Exceptions\Cache;
+namespace Spark\Cache\Exceptions;
 
 use Exception;
 
