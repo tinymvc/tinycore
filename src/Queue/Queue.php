@@ -470,6 +470,7 @@ class Queue implements QueueContract
 
             $jobId = $job->getId();
             $attempts = $job->getMetadata('attempts', 0);
+            $maxTries = $job->getTries($tries);
 
             $this->message(
                 sprintf(
@@ -477,7 +478,7 @@ class Queue implements QueueContract
                     $jobId,
                     $job->getDisplayName(),
                     $attempts + 1,
-                    $tries,
+                    $maxTries,
                 ),
             );
 
@@ -510,7 +511,7 @@ class Queue implements QueueContract
                     sprintf('Job #%d failed: %s', $jobId, $e->getMessage()),
                 );
 
-                if ($newAttempts >= $tries) {
+                if ($newAttempts >= $maxTries) {
                     $this->markJobAsFailed($jobId, $e, $newAttempts);
                     $this->callFailedHandler($job, $e->getPrevious() ?? $e);
 
@@ -522,7 +523,8 @@ class Queue implements QueueContract
                         ),
                     );
                 } else {
-                    $retryTime = now()->addSeconds($delay);
+                    $retryDelay = $job->getBackoff($delay, $newAttempts);
+                    $retryTime = now()->addSeconds($retryDelay);
                     $this->retryJob($jobId, $retryTime, $newAttempts);
 
                     $this->message(

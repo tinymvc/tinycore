@@ -9,11 +9,14 @@ use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Carbon;
 use ReflectionMethod;
+use ReflectionProperty;
 use function array_key_exists;
 use function get_class;
 use function is_array;
 use function is_object;
+use function is_numeric;
 use function is_string;
+use function max;
 use function strtolower;
 
 /**
@@ -29,6 +32,9 @@ class Job implements JobContract
 {
     use Macroable, Conditionable;
 
+    /**
+     * Repeat interval constants for scheduling jobs.
+     */
     public const REPEAT_HOURLY = '1 hour';
     public const REPEAT_DAILY = '1 day';
     public const REPEAT_WEEKLY = '1 week';
@@ -46,6 +52,11 @@ class Job implements JobContract
         'quarterly' => self::REPEAT_QUARTERLY,
         'yearly' => self::REPEAT_YEARLY,
     ];
+
+    /**
+     * @var object|false|null The resolved callback object, if applicable.
+     */
+    private object|false|null $resolvedCallbackObject = null;
 
     /**
      * Constructor.
@@ -260,10 +271,8 @@ class Job implements JobContract
 
         try {
             // Instantiate the class if the callback is a class name.
-            $callbackOrClass = is_array($this->callback) ? $this->callback[0] : $this->callback;
-            if (class_exists($callbackOrClass)) {
-                $callbackOrClass = new $callbackOrClass(...$this->parameters);
-            }
+            $callbackOrClass = $this->resolveCallbackObject()
+                ?? (is_array($this->callback) ? $this->callback[0] : $this->callback);
 
             // Determine the appropriate callback to execute.
             if (is_object($callbackOrClass)) {
@@ -288,13 +297,7 @@ class Job implements JobContract
      */
     public function failed(\Throwable $exception): void
     {
-        $callbackOrClass = is_array($this->callback) ? $this->callback[0] : $this->callback;
-
-        if (!is_string($callbackOrClass) || !class_exists($callbackOrClass)) {
-            return;
-        }
-
-        $job = new $callbackOrClass(...$this->parameters);
+        $job = $this->resolveCallbackObject();
         if (!is_object($job) || !method_exists($job, 'failed')) {
             return;
         }
@@ -311,6 +314,89 @@ class Job implements JobContract
             $job,
             $parameterCount === 1 ? [$exception] : [$this, $exception],
         );
+    }
+
+    /**
+     * Gets the maximum number of attempts allowed for this job.
+     */
+    public function getTries(int $default): int
+    {
+        $tries = $this->getCallbackProperty('tries');
+
+        if (!is_numeric($tries)) {
+            return max(1, $default);
+        }
+
+        return max(1, (int) $tries);
+    }
+
+    /**
+     * Gets the retry backoff in seconds for the given failed attempt.
+     */
+    public function getBackoff(int $default, int $attempt): int
+    {
+        $backoff = $this->getCallbackProperty('backoff');
+
+        if (is_array($backoff)) {
+            if ($backoff === []) {
+                return max(0, $default);
+            }
+
+            $values = array_values($backoff);
+            $index = max(0, $attempt - 1);
+            $value = $values[$index] ?? $values[array_key_last($values)];
+
+            return is_numeric($value) ? max(0, (int) $value) : max(0, $default);
+        }
+
+        if (is_numeric($backoff)) {
+            return max(0, (int) $backoff);
+        }
+
+        return max(0, $default);
+    }
+
+    /**
+     * Resolves the application job object when the callback points to one.
+     */
+    private function resolveCallbackObject(): ?object
+    {
+        if ($this->resolvedCallbackObject !== null && $this->resolvedCallbackObject !== false) {
+            return $this->resolvedCallbackObject;
+        }
+
+        $callbackOrClass = is_array($this->callback) ? $this->callback[0] : $this->callback;
+
+        if (is_object($callbackOrClass)) {
+            $this->resolvedCallbackObject = $callbackOrClass;
+            return $this->resolvedCallbackObject;
+        }
+
+        if (is_string($callbackOrClass) && class_exists($callbackOrClass)) {
+            $this->resolvedCallbackObject = new $callbackOrClass(...$this->parameters);
+            return $this->resolvedCallbackObject;
+        }
+
+        $this->resolvedCallbackObject = false;
+        return null;
+    }
+
+    /**
+     * Reads a public property from the application job object.
+     */
+    private function getCallbackProperty(string $property): mixed
+    {
+        $job = $this->resolveCallbackObject();
+        if (!is_object($job) || !property_exists($job, $property)) {
+            return null;
+        }
+
+        $reflection = new ReflectionProperty($job, $property);
+        if (!$reflection->isPublic() || !$reflection->isInitialized($job)) {
+            return null;
+        }
+
+        return $job->{$property};
     }
 
     /**

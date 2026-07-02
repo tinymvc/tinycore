@@ -99,6 +99,16 @@ interface JobContract
     public function failed(\Throwable $exception): void;
 
     /**
+     * Gets the maximum number of attempts allowed for this job.
+     */
+    public function getTries(int $default): int;
+
+    /**
+     * Gets the retry backoff in seconds for the given failed attempt.
+     */
+    public function getBackoff(int $default, int $attempt): int;
+
+    /**
      * Gets the scheduled time of the job.
      *
      * If the job has no schedule, a new Carbon instance with the current
