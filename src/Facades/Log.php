@@ -3,7 +3,7 @@
 namespace Spark\Facades;
 
 use Spark\Contracts\LoggerInterface;
-use Spark\Utils\Tracer;
+use Spark\Tracer;
 
 /**
  * Facade for logging messages at various severity levels.

@@ -28,7 +28,7 @@ use Spark\Utils\Image;
 use Spark\Utils\Lock;
 use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
-use Spark\Utils\Tracer;
+use Spark\Tracer;
 use Spark\Utils\Uploader;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
@@ -2189,7 +2189,7 @@ if (!function_exists('tracer')) {
      * This function returns the Tracer instance, which provides methods
      * for tracing and logging application events.
      *
-     * @return \Spark\Utils\Tracer The Tracer instance.
+     * @return \Spark\Tracer The Tracer instance.
      */
     function tracer(): Tracer
     {

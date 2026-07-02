@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Utils;
+namespace Spark;
 
 use Spark\Console\Prompt;
 use Spark\Contracts\Utils\TracerUtilContract;
