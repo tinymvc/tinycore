@@ -8,11 +8,13 @@ use Spark\Queue\Exceptions\FailedToResolveJobError;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\Carbon;
+use ReflectionMethod;
 use function array_key_exists;
 use function get_class;
 use function is_array;
 use function is_object;
 use function is_string;
+use function strtolower;
 
 /**
  * Class Job
@@ -26,6 +28,24 @@ use function is_string;
 class Job implements JobContract
 {
     use Macroable, Conditionable;
+
+    public const REPEAT_HOURLY = '1 hour';
+    public const REPEAT_DAILY = '1 day';
+    public const REPEAT_WEEKLY = '1 week';
+    public const REPEAT_BIWEEKLY = '2 weeks';
+    public const REPEAT_MONTHLY = '1 month';
+    public const REPEAT_QUARTERLY = '3 months';
+    public const REPEAT_YEARLY = '1 year';
+
+    public const REPEAT_ALIASES = [
+        'hourly' => self::REPEAT_HOURLY,
+        'daily' => self::REPEAT_DAILY,
+        'weekly' => self::REPEAT_WEEKLY,
+        'biweekly' => self::REPEAT_BIWEEKLY,
+        'monthly' => self::REPEAT_MONTHLY,
+        'quarterly' => self::REPEAT_QUARTERLY,
+        'yearly' => self::REPEAT_YEARLY,
+    ];
 
     /**
      * Constructor.
@@ -112,17 +132,7 @@ class Job implements JobContract
      */
     public function repeat(string $repeat): JobContract
     {
-        $repeatSteps = [
-            'daily' => '1 day',
-            'hourly' => '1 hour',
-            'weekly' => '1 week',
-            'biweekly' => '2 weeks',
-            'monthly' => '1 month',
-            'quarterly' => '3 months',
-            'yearly' => '1 year',
-        ];
-
-        $this->repeat = $repeatSteps[$repeat] ?? $repeat;
+        $this->repeat = self::REPEAT_ALIASES[strtolower($repeat)] ?? $repeat;
 
         return $this;
     }
@@ -150,7 +160,7 @@ class Job implements JobContract
      */
     public function repeatHourly(): JobContract
     {
-        $this->repeat = '1 hour';
+        $this->repeat = self::REPEAT_HOURLY;
         return $this;
     }
 
@@ -162,7 +172,7 @@ class Job implements JobContract
      */
     public function repeatDaily(): JobContract
     {
-        $this->repeat = '1 day';
+        $this->repeat = self::REPEAT_DAILY;
         return $this;
     }
 
@@ -174,7 +184,7 @@ class Job implements JobContract
      */
     public function repeatWeekly(): JobContract
     {
-        $this->repeat = '1 week';
+        $this->repeat = self::REPEAT_WEEKLY;
         return $this;
     }
 
@@ -186,7 +196,7 @@ class Job implements JobContract
      */
     public function repeatMonthly(): JobContract
     {
-        $this->repeat = '1 month';
+        $this->repeat = self::REPEAT_MONTHLY;
         return $this;
     }
 
@@ -266,19 +276,41 @@ class Job implements JobContract
 
             Application::$app->call($callback);
         } catch (\Throwable $e) {
-            // If the class has a failed method, call it with the exception.
-            if (
-                is_object($callbackOrClass) &&
-                method_exists($callbackOrClass, 'failed')
-            ) {
-                $callbackOrClass->failed($e); // Call the failed method with the exception.
-            }
-
             throw new FailedToResolveJobError(
                 'Failed to execute the job: ' . $e->getMessage(),
                 previous: $e
             );
         }
+    }
+
+    /**
+     * Call the application job's failure hook after the queue exhausts retries.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $callbackOrClass = is_array($this->callback) ? $this->callback[0] : $this->callback;
+
+        if (!is_string($callbackOrClass) || !class_exists($callbackOrClass)) {
+            return;
+        }
+
+        $job = new $callbackOrClass(...$this->parameters);
+        if (!is_object($job) || !method_exists($job, 'failed')) {
+            return;
+        }
+
+        $method = new ReflectionMethod($job, 'failed');
+        $parameterCount = $method->getNumberOfParameters();
+
+        if ($parameterCount === 0) {
+            $method->invoke($job);
+            return;
+        }
+
+        $method->invokeArgs(
+            $job,
+            $parameterCount === 1 ? [$exception] : [$this, $exception],
+        );
     }
 
     /**
@@ -460,6 +492,53 @@ class Job implements JobContract
     public function getId(): null|string
     {
         return $this->metadata['id'] ?? null;
+    }
+
+    /**
+     * Get the number of attempts made to process the job.
+     *
+     * This method retrieves the number of attempts made to process the job
+     * from its metadata. If no attempts have been made, it returns 0.
+     *
+     * @return int The number of attempts made to process the job.
+     */
+    public function attempts(): int
+    {
+        return $this->metadata['attempts'] ?? 0;
+    }
+
+    /**
+     * Get the time when the job was created.
+     *
+     * This method retrieves the time when the job was created from its metadata.
+     * If the creation time is not available, it returns null.
+     *
+     * @return \Spark\Utils\Carbon|null The time when the job was created, or null if not available.
+     */
+    public function createdAt(): ?Carbon
+    {
+        if (!empty($this->metadata['created_at'])) {
+            return Carbon::parse($this->metadata['created_at']);
+        }
+
+        return null;
+    }
+
+    /**
+     * Get the time when the job failed.
+     *
+     * This method retrieves the time when the job failed from its metadata.
+     * If the job has not failed, it returns null.
+     *
+     * @return \Spark\Utils\Carbon|null The time when the job failed, or null if it has not failed.
+     */
+    public function failedAt(): ?Carbon
+    {
+        if (!empty($this->metadata['failed_at'])) {
+            return Carbon::parse($this->metadata['failed_at']);
+        }
+
+        return null;
     }
 
     /**

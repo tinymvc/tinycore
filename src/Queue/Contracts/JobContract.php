@@ -87,6 +87,18 @@ interface JobContract
     public function handle(): void;
 
     /**
+     * Handles the job failure.
+     *
+     * This method will be called when the job fails to execute.
+     *
+     * @param \Throwable $exception
+     *     The exception that caused the job to fail.
+     *
+     * @return void
+     */
+    public function failed(\Throwable $exception): void;
+
+    /**
      * Gets the scheduled time of the job.
      *
      * If the job has no schedule, a new Carbon instance with the current

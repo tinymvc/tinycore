@@ -3,9 +3,12 @@
 namespace {{ namespace }};
 
 use Spark\Queue\Contracts\JobInterface;
+use Spark\Queue\Dispatchable;
 
 class {{ class }} implements JobInterface
 {
+    use Dispatchable;
+
     /**
      * Execute the job.
      *

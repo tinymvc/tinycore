@@ -512,6 +512,8 @@ class Queue implements QueueContract
 
                 if ($newAttempts >= $tries) {
                     $this->markJobAsFailed($jobId, $e, $newAttempts);
+                    $this->callFailedHandler($job, $e->getPrevious() ?? $e);
+
                     $this->message(
                         sprintf(
                             'Job #%d failed permanently after %d attempts',
@@ -550,6 +552,24 @@ class Queue implements QueueContract
         $this->message(
             sprintf('Queue worker finished. Ran %d job(s), %d failed', $ranJobs, $failedJobs),
         );
+    }
+
+    /**
+     * Calls the failed handler for a job, if it exists.
+     */
+    private function callFailedHandler(JobContract $job, \Throwable $exception): void
+    {
+        try {
+            $job->failed($exception);
+        } catch (\Throwable $failedException) {
+            $this->message(
+                sprintf(
+                    'Failed handler for job #%s threw an exception: %s',
+                    $job->getId() ?? 'unknown',
+                    $failedException->getMessage()
+                )
+            );
+        }
     }
 
     private function message(string $message): void
