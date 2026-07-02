@@ -91,6 +91,7 @@ class Queue implements QueueContract
             $this->pdo->exec('PRAGMA synchronous = NORMAL');
             $this->pdo->exec('PRAGMA cache_size = 10000');
             $this->pdo->exec('PRAGMA temp_store = MEMORY');
+            $this->createJobsTableIfNotExists();
         } catch (PDOException $e) {
             throw new RuntimeException('Failed to connect to the SQLite database: ' . $e->getMessage());
         }
@@ -142,6 +143,71 @@ class Queue implements QueueContract
 
         $this->ensureDirectory(dirname($path));
         return $this->normalizePath($path);
+    }
+
+    /**
+     * Creates the jobs table if it does not exist.
+     */
+    private function createJobsTableIfNotExists(): void
+    {
+        if (!$this->pdo instanceof PDO) {
+            return;
+        }
+
+        try {
+            $this->pdo->exec(
+                "CREATE TABLE IF NOT EXISTS jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    payload TEXT NOT NULL,
+                    queue TEXT DEFAULT NULL,
+                    scheduled_time DATETIME NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    repeat TEXT DEFAULT NULL,
+                    status TEXT NOT NULL,
+                    attempts INTEGER DEFAULT 0,
+                    reserved_at DATETIME DEFAULT NULL
+                )"
+            );
+
+            // Indexes for jobs table
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_status_scheduled ON jobs(status, scheduled_time)"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_queue_status ON jobs(queue, status) WHERE queue IS NOT NULL"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_reserved_at ON jobs(reserved_at) WHERE reserved_at IS NOT NULL"
+            );
+
+            $this->pdo->exec(
+                "CREATE TABLE IF NOT EXISTS failed_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER NOT NULL,
+                    failed_at DATETIME NOT NULL,
+                    exception TEXT NOT NULL,
+                    attempts INTEGER DEFAULT 0,
+                    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
+                )"
+            );
+
+            // Index for failed_jobs table
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_failed_jobs_job_id ON failed_jobs(job_id)"
+            );
+
+            $this->pdo->exec(
+                "CREATE INDEX IF NOT EXISTS idx_failed_jobs_failed_at ON failed_jobs(failed_at)"
+            );
+        } catch (PDOException $e) {
+            throw new RuntimeException('Failed to create jobs table: ' . $e->getMessage());
+        }
     }
 
     private function looksLikeDirectoryPath(string $path): bool

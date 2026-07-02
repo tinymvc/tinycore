@@ -62,10 +62,6 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('route:list', [PrimaryCommandsHandler::class, 'routeList'])
             ->description('Show route list');
 
-        // Add the queue:install command
-        $commands->addCommand('queue:install', [PrimaryCommandsHandler::class, 'installQueue'])
-            ->description('Create the necessary database table for queue jobs');
-
         // Add the queue:work command
         $commands->addCommand('queue:work', [PrimaryCommandsHandler::class, 'runQueueJobs'])
             ->description('Run the queue jobs workers');
