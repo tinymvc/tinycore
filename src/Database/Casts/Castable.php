@@ -7,7 +7,7 @@ use Spark\Contracts\Support\Jsonable;
 use Spark\Database\Contracts\CastsAttributes;
 use Spark\Facades\Hash;
 use Spark\Support\Collection;
-use Spark\Utils\Carbon;
+use Spark\Carbon;
 use function in_array;
 use function is_array;
 use function is_bool;
@@ -221,7 +221,7 @@ trait Castable
      * Cast a value to a date.
      *
      * @param mixed $value The value to cast
-     * @return \Spark\Utils\Carbon|null The date object
+     * @return \Spark\Carbon|null The date object
      */
     protected function asDate(mixed $value): ?Carbon
     {

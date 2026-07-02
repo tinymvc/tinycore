@@ -2,7 +2,7 @@
 
 namespace Spark\Queue\Contracts;
 
-use Spark\Utils\Carbon;
+use Spark\Carbon;
 
 /**
  * Interface for jobs in the queue.

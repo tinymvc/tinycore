@@ -22,7 +22,7 @@ use Spark\DotEnv;
 use Spark\Queue\Job;
 use Spark\Translator;
 use Spark\Utils\Cache;
-use Spark\Utils\Carbon;
+use Spark\Carbon;
 use Spark\Utils\FileManager;
 use Spark\Utils\Image;
 use Spark\Utils\Lock;
@@ -2080,7 +2080,7 @@ if (!function_exists('now')) {
      * which can be used for various date and time operations.
      *
      * @param DateTimeZone|string|null $timezone An optional timezone identifier to set the timezone for the DateTime object. If null, the default timezone will be used.
-     * @return \Spark\Utils\Carbon The current date and time.
+     * @return \Spark\Carbon The current date and time.
      */
     function now(DateTimeZone|string|null $timezone = null): Carbon
     {
@@ -2098,7 +2098,7 @@ if (!function_exists('carbon')) {
      *
      * @param Carbon|DateTimeInterface|float|int|string|null $time The datetime string or Unix timestamp to convert.
      * @param DateTimeZone|string|null $timezone An optional timezone identifier or DateTimeZone instance to set the timezone for the Carbon instance.
-     * @return \Spark\Utils\Carbon A Carbon DateTime instance representing the provided datetime.
+     * @return \Spark\Carbon A Carbon DateTime instance representing the provided datetime.
      */
     function carbon(Carbon|DateTimeInterface|float|int|string|null $time = 'now', DateTimeZone|string|null $timezone = null): Carbon
     {

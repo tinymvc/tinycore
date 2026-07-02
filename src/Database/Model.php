@@ -479,7 +479,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 $data[$key] = $this->castAttributeForStorage($key, $value);
             }
             // Handle Carbon time Object into string
-            elseif ($value instanceof \Spark\Utils\Carbon) {
+            elseif ($value instanceof \Spark\Carbon) {
                 $data[$key] = $value->toDateTimeString();
             }
             // Handle DateTimeInterface Object into string
@@ -710,7 +710,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         // Convert special objects to their string representations for JSON serialization
         foreach ($attributes as &$attribute) {
-            if ($attribute instanceof \Spark\Utils\Carbon) {
+            if ($attribute instanceof \Spark\Carbon) {
                 $attribute = $attribute->toISOUtcString();
             } elseif ($attribute instanceof \DateTimeInterface) {
                 $attribute = $attribute->format(\DateTimeInterface::ATOM);

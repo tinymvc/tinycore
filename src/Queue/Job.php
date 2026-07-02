@@ -7,7 +7,7 @@ use Spark\Foundation\Application;
 use Spark\Queue\Exceptions\FailedToResolveJobError;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use Spark\Utils\Carbon;
+use Spark\Carbon;
 use ReflectionMethod;
 use ReflectionProperty;
 use function array_key_exists;
@@ -599,7 +599,7 @@ class Job implements JobContract
      * This method retrieves the time when the job was created from its metadata.
      * If the creation time is not available, it returns null.
      *
-     * @return \Spark\Utils\Carbon|null The time when the job was created, or null if not available.
+     * @return \Spark\Carbon|null The time when the job was created, or null if not available.
      */
     public function createdAt(): ?Carbon
     {
@@ -616,7 +616,7 @@ class Job implements JobContract
      * This method retrieves the time when the job failed from its metadata.
      * If the job has not failed, it returns null.
      *
-     * @return \Spark\Utils\Carbon|null The time when the job failed, or null if it has not failed.
+     * @return \Spark\Carbon|null The time when the job failed, or null if it has not failed.
      */
     public function failedAt(): ?Carbon
     {

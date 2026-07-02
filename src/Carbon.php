@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Utils;
+namespace Spark;
 
 use DateTime;
 use DateTimeInterface;

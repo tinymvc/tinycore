@@ -3,7 +3,6 @@
 namespace Spark\Queue;
 
 use Spark\Queue\Contracts\JobContract;
-use Spark\Utils\Carbon;
 
 /**
  * Fluent pending dispatch wrapper for class-based queued jobs.
@@ -54,7 +53,7 @@ class PendingDispatch
     /**
      * Schedule the job for a specific time.
      */
-    public function schedule(string|Carbon $scheduledTime): static
+    public function schedule(string|\Spark\Carbon $scheduledTime): static
     {
         $this->job->schedule($scheduledTime);
 

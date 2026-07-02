@@ -12,7 +12,7 @@ use Spark\Queue\Exceptions\FailedToLoadJobsException;
 use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Queue\Exceptions\InvalidStorageFileException;
 use Spark\Support\Traits\Macroable;
-use Spark\Utils\Carbon;
+use Spark\Carbon;
 use Spark\Utils\RedisConnector;
 use function array_map;
 use function array_slice;
