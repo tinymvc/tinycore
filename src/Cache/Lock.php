@@ -1,12 +1,12 @@
 <?php
 
-namespace Spark\Utils;
+namespace Spark\Cache;
 
 use PDO;
 use PDOStatement;
 use RuntimeException;
-use Spark\Contracts\Utils\LockUtilContract;
-use Spark\Exceptions\Utils\LockUtilException;
+use Spark\Contracts\Cache\LockContract;
+use Spark\Exceptions\Cache\LockException;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
 use function dirname;
@@ -25,18 +25,15 @@ use function str_ends_with;
  *
  * Cross-driver lock utility with sqlite (default) and redis backends.
  *
- * @package Spark\Utils
+ * @package Spark\Cache
  */
-class Lock implements LockUtilContract, \ArrayAccess
+class Lock implements LockContract, \ArrayAccess
 {
     use Macroable;
-
-    private const LOCK_OK = 1;
 
     private const REDIS_OWNER_KEY = 'owner';
     private const REDIS_LOCKED_AT_KEY = 'locked_at';
     private const REDIS_EXPIRE_AT_KEY = 'expire_at';
-    private const REDIS_EMPTY_VALUE = '0';
 
     /** @var PDO The PDO connection instance */
     private ?PDO $pdo = null;
@@ -105,7 +102,7 @@ class Lock implements LockUtilContract, \ArrayAccess
 
             $this->createTables();
         } catch (\PDOException $e) {
-            throw new LockUtilException('Failed to connect to SQLite database: ' . $e->getMessage());
+            throw new LockException('Failed to connect to SQLite database: ' . $e->getMessage());
         }
     }
 
@@ -618,7 +615,7 @@ LUA;
     public function withLock(string $key, callable $callback, int $timeout = 10, int $waitTimeout = 5): mixed
     {
         if (!$this->lock($key, $timeout, $waitTimeout)) {
-            throw new LockUtilException("Failed to acquire lock for key: {$key}");
+            throw new LockException("Failed to acquire lock for key: {$key}");
         }
 
         try {

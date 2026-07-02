@@ -1,12 +1,12 @@
 <?php
 
-namespace Spark\Contracts\Utils;
+namespace Spark\Contracts;
 /**
  * Interface that defines the contract for a Tracer utility class.
  * 
  * This interface should be implemented by any class that provides a Tracer utility.
  */
-interface TracerUtilContract
+interface TracerContract
 {
     /**
      * Initializes a new instance of the Tracer utility class,

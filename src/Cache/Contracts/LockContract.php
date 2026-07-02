@@ -1,11 +1,11 @@
 <?php
 
-namespace Spark\Contracts\Utils;
+namespace Spark\Contracts\Cache;
 
 /**
  * Contract for lock utility operations.
  */
-interface LockUtilContract
+interface LockContract
 {
     /**
      * Attempts to acquire a lock for the given key.

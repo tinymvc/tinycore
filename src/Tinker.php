@@ -10,7 +10,7 @@ use Spark\Hash;
 use Spark\Queue\Queue;
 use Spark\Routing\Router;
 use Spark\Translator;
-use Spark\Utils\Cache;
+use Spark\Cache\Cache;
 use Spark\Utils\FileManager;
 use Spark\Http\Client\Http;
 use Spark\Utils\Image;

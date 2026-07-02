@@ -5,7 +5,7 @@ namespace Spark\Foundation\Http\Middlewares;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Exceptions\TooManyRequests;
 use Spark\Http\Request;
-use Spark\Utils\Cache;
+use Spark\Cache\Cache;
 use function count;
 use function is_array;
 use function is_numeric;

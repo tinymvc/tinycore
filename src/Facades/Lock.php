@@ -2,7 +2,7 @@
 
 namespace Spark\Facades;
 
-use Spark\Utils\Lock as BaseLock;
+use Spark\Cache\Lock as BaseLock;
 
 /**
  * Facade for Lock utility.

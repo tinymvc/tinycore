@@ -1,11 +1,11 @@
 <?php
 
-namespace Spark\Contracts\Utils;
+namespace Spark\Contracts\Cache;
 
 /**
  * Interface for cache utilities.
  */
-interface CacheUtilContract
+interface CacheContract
 {
     /**
      * Checks if a cache key exists and optionally erases expired entries.

@@ -3,7 +3,7 @@
 namespace Spark;
 
 use Spark\Console\Prompt;
-use Spark\Contracts\Utils\TracerUtilContract;
+use Spark\Contracts\TracerContract;
 use Spark\Facades\Blade;
 use Spark\Support\Traits\Macroable;
 use Throwable;
@@ -17,7 +17,7 @@ use function in_array;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Tracer implements TracerUtilContract
+class Tracer implements TracerContract
 {
     use Macroable;
 

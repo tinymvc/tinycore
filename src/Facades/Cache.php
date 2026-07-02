@@ -2,7 +2,7 @@
 
 namespace Spark\Facades;
 
-use Spark\Utils\Cache as BaseCache;
+use Spark\Cache\Cache as BaseCache;
 
 /**
  * Facade Cache

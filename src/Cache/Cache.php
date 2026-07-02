@@ -1,12 +1,12 @@
 <?php
 
-namespace Spark\Utils;
+namespace Spark\Cache;
 
 use PDO;
 use PDOStatement;
 use RuntimeException;
-use Spark\Contracts\Utils\CacheUtilContract;
-use Spark\Exceptions\Utils\CacheUtilException;
+use Spark\Contracts\Cache\CacheContract;
+use Spark\Exceptions\Cache\CacheException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
@@ -33,9 +33,9 @@ use function trim;
  *
  * SQLite or Redis based cache with automatic driver detection.
  *
- * @package Spark\Utils
+ * @package Spark\Cache
  */
-class Cache implements CacheUtilContract, \ArrayAccess
+class Cache implements CacheContract, \ArrayAccess
 {
     use Macroable, Conditionable;
 
@@ -814,7 +814,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
             $this->pdo?->commit();
         } catch (\PDOException $e) {
             $this->pdo?->rollBack();
-            throw new CacheUtilException("Failed to store multiple items: " . $e->getMessage());
+            throw new CacheException("Failed to store multiple items: " . $e->getMessage());
         }
 
         return $this;
@@ -1093,7 +1093,7 @@ class Cache implements CacheUtilContract, \ArrayAccess
             $this->pdo?->commit();
         } catch (\PDOException $e) {
             $this->pdo?->rollBack();
-            throw new CacheUtilException('Failed to store items with expiry: ' . $e->getMessage());
+            throw new CacheException('Failed to store items with expiry: ' . $e->getMessage());
         }
 
         return $this;
