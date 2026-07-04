@@ -207,7 +207,7 @@ class Tracer implements TracerContract
             }
 
             // Detailed error output with stack trace if debug mode is enabled.
-            Blade::setPath(__DIR__ . '/../Foundation/resources/views');
+            Blade::setPath(__DIR__ . '/Foundation/resources/views');
 
             echo Blade::render(
                 'tracer',
