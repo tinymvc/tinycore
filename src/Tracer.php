@@ -149,16 +149,7 @@ class Tracer implements TracerContract
             return;
         }
 
-        $fatalErrors = [
-            E_ERROR,
-            E_PARSE,
-            E_CORE_ERROR,
-            E_COMPILE_ERROR,
-            E_USER_ERROR,
-            E_RECOVERABLE_ERROR,
-        ];
-
-        if (!in_array($error['type'], $fatalErrors, true)) {
+        if (!in_array($error['type'], self::FATAL_ERROR_TYPES, true)) {
             return;
         }
 
