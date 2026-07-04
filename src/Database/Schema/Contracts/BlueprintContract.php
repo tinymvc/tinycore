@@ -113,21 +113,13 @@ interface BlueprintContract
      *
      * @return ForeignKeyConstraint
      */
-    public function foreignId(string $name): ForeignKeyConstraint;
-
-    /**
-     * Add a nullable 'foreignId' column to the blueprint.
-     *
-     * @param string $name The name of the column.
-     * @return ForeignKeyConstraint
-     */
-    public function nullableForeignId(string $name): ForeignKeyConstraint;
+    public function foreignId(string $name, bool $nullable = false): ForeignKeyConstraint;
 
     /**
      * Add a 'foreign' column to the blueprint.
      *
      * @param array|string $columns The column(s) to constrain.
-     * @param string|null $table The name of the table the column references.
+     * @param string|null $name The name of the table the column references.
      *
      * @return ForeignKeyConstraint
      */
@@ -136,7 +128,7 @@ interface BlueprintContract
     /**
      * Add a constrained 'foreign' column to the blueprint.
      *
-     * @param string $name The name of the column.
+     * @param string $column The name of the column.
      * @param string|null $table The name of the table the column references.
      *
      * @return ForeignKeyConstraint

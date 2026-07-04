@@ -279,23 +279,13 @@ class Blueprint implements BlueprintContract
      * Add a 'foreignId' column to the blueprint.
      *
      * @param string $name The name of the column.
+     * @param bool $nullable Whether the column is nullable.
      * @return ForeignKeyConstraint
      */
-    public function foreignId(string $name): ForeignKeyConstraint
+    public function foreignId(string $name, bool $nullable = false): ForeignKeyConstraint
     {
-        $this->unsignedBigInteger($name)->required();
-        return $this->foreign($name);
-    }
+        $this->unsignedBigInteger($name)->nullable($nullable);
 
-    /**
-     * Add a nullable 'foreignId' column to the blueprint.
-     *
-     * @param string $name The name of the column.
-     * @return ForeignKeyConstraint
-     */
-    public function nullableForeignId(string $name): ForeignKeyConstraint
-    {
-        $this->unsignedBigInteger($name)->nullable();
         return $this->foreign($name);
     }
 
@@ -303,7 +293,7 @@ class Blueprint implements BlueprintContract
      * Add a 'foreign' constraint to the blueprint.
      *
      * @param array|string $columns The column(s) to constrain.
-     * @param string|null $table The name of the table.
+     * @param string|null $name The name of the table.
      * @return ForeignKeyConstraint
      */
     public function foreign(array|string $columns, ?string $name = null): ForeignKeyConstraint
@@ -724,7 +714,7 @@ class Blueprint implements BlueprintContract
     /**
      * Drop an index from the blueprint.
      *
-     * @param string|array $columns The name(s) of the index(es) to drop.
+     * @param string|array $index The index name or columns.
      * @param string|null $type The type of index to drop.
      * @return self
      */
@@ -739,7 +729,7 @@ class Blueprint implements BlueprintContract
     /**
      * Drop a unique index from the blueprint.
      *
-     * @param string|array $columns The name(s) of the unique index(es) to drop.
+     * @param string|array $index The index name or columns.
      * @return self
      */
     public function dropUnique($index): self
@@ -784,8 +774,7 @@ class Blueprint implements BlueprintContract
     /**
      * Drop a foreign key constraint from the blueprint.
      *
-     * @param string|array $columns The name(s) of the foreign key constraint(s) to drop.
-     * @param string $onTable The name of the table that has the foreign key constraint.
+     * @param string|array $index The index name or columns.
      * @return self
      */
     public function dropForeign($index): self
