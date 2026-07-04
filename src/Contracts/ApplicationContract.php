@@ -144,13 +144,11 @@ interface ApplicationContract
      * Configures the queue system.
      *
      * @param null|array $jobs An array of jobs to add when configuring the queue.
-     * @param bool|string $log Whether queue operations should be logged, or the log file path.
      * @param null|callable $then Optional callback for additional queue setup.
      * @return self
      */
     public function withQueue(
         null|array $jobs = null,
-        bool|string $log = false,
         null|callable $then = null
     ): self;
 
@@ -172,4 +170,19 @@ interface ApplicationContract
      * @return void
      */
     public function handleCommand(): void;
+
+    /**
+     * Register a callback to run after the HTTP response has been sent.
+     *
+     * @param callable $callback The callback to run during application termination.
+     * @return self
+     */
+    public function defer(callable $callback): self;
+
+    /**
+     * Run application termination callbacks.
+     *
+     * @return void
+     */
+    public function terminate(): void;
 }

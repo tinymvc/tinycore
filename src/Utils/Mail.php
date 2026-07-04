@@ -5,9 +5,9 @@ namespace Spark\Utils;
 use PHPMailer\PHPMailer\PHPMailer;
 use Spark\Contracts\Utils\MailUtilContract;
 use Spark\Facades\Blade;
+use Spark\Facades\Log;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use function sprintf;
 
 /**
  * Utility class for sending emails.
@@ -40,26 +40,28 @@ class Mail extends PHPMailer implements MailUtilContract
     {
         // Merge mail config with env config
         $config = [
-            'log_file' => storage_dir('logs/mail.log'),
-            'logging' => false,
             ...config('mail', []),
             ...$config
         ];
 
         $this->config = $config; // Store the configuration for later use
 
+        $from = $config['from'] ?? $config['mailer'] ?? [];
+        $reply = $config['reply'] ?? $config['reply_to'] ?? [];
+        $smtp = $config['smtp'] ?? [];
+
         // Set from configuration
-        if (isset($config['from']['address'])) {
-            $this->setFrom($config['from']['address'], $config['from']['name'] ?? '');
+        if (isset($from['address'])) {
+            $this->setFrom($from['address'], $from['name'] ?? '');
         }
 
-        if (isset($config['reply']['address'])) {
-            $this->addReplyTo($config['reply']['address'], $config['reply']['name'] ?? '');
+        if (isset($reply['address'])) {
+            $this->addReplyTo($reply['address'], $reply['name'] ?? '');
         }
 
         // Set SMTP configuration
-        if (isset($config['smtp']) && ($config['smtp']['enabled'] ?? true)) {
-            $this->configureSmtp($config['smtp']);
+        if (isset($smtp) && ($smtp['enabled'] ?? true)) {
+            $this->configureSmtp($smtp);
         }
     }
 
@@ -76,24 +78,6 @@ class Mail extends PHPMailer implements MailUtilContract
     public static function make(array $config = []): self
     {
         return new self($config);
-    }
-
-    /**
-     * Enable or disable logging of email sending status.
-     * 
-     * This method allows you to enable or disable logging of email sending status.
-     * When logging is enabled, the status of each email sent will be logged to a specified log file.
-     * 
-     * @param bool $enabled Whether to enable or disable logging (default: true).
-     * @param string|null $file The path to the log file (default: null).
-     */
-    public function logging(bool $enabled = true, ?string $file = null): self
-    {
-        if ($file) {
-            $this->config['log_file'] = $file;
-        }
-        $this->config['logging'] = $enabled;
-        return $this;
     }
 
     /**
@@ -386,18 +370,13 @@ class Mail extends PHPMailer implements MailUtilContract
      */
     public function send(): bool
     {
-        $status = false;
-
         try {
-            $status = parent::send();
-            $message = $status ? 'Email sent successfully.' : ($this->ErrorInfo ?: 'Email sending failed.');
-            $this->logEmailStatus($status ? 'Sent' : 'Failed', $message);
+            return parent::send();
         } catch (\Throwable $e) {
-            $status = false;
-            $this->logEmailStatus('Error', $e->getMessage());
+            Log::error('Mail send failed: ' . $e->getMessage());
         }
 
-        return $status;
+        return false;
     }
 
     /**
@@ -432,70 +411,5 @@ class Mail extends PHPMailer implements MailUtilContract
         $this->Body = '';
 
         return $this;
-    }
-
-    /**
-     * Log the email sending status.
-     *
-     * This method logs the status of the email sending operation, including
-     * whether it was successful or not, the recipient addresses, the subject,
-     * and the duration of the operation.
-     *
-     * @param string $status The status of the email sending operation (e.g., 'Sent', 'Failed').
-     * @param string $message The message to log.
-     */
-    private function logEmailStatus(string $status, string $message): void
-    {
-        if (!($this->config['logging'] ?? true) || empty($this->config['log_file'])) {
-            return; // Logging is disabled
-        }
-
-        if (!fm()->ensureDirectoryWritable(dirname($this->config['log_file']))) {
-            return;
-        }
-
-        $fmAddr = static fn(array $addrs) => array_values(array_filter(array_map(
-            static function (array $addr): string {
-                if (!isset($addr[0])) {
-                    return '';
-                }
-
-                $email = $addr[0];
-                $name = $addr[1] ?? '';
-                $label = $name !== '' ? $name : 'Unknown';
-
-                return sprintf('%s <%s>', $label, $email);
-            },
-            $addrs
-        ), static fn(string $line): bool => $line !== ''));
-
-        $context = json_encode([
-            'to' => $fmAddr($this->getToAddresses()),
-            'cc' => $fmAddr($this->getCcAddresses()),
-            'bcc' => $fmAddr($this->getBccAddresses()),
-            'reply_to' => $fmAddr($this->getReplyToAddresses()),
-            'from' => $this->From ? (($this->FromName !== '' ? $this->FromName . ' <' : '') . $this->From . ($this->FromName !== '' ? '>' : '')) : '',
-            'attachments' => array_map(fn($att) => [
-                'path' => $att[0] ?? '',
-                'filename' => $att[1] ?? basename((string) ($att[0] ?? '')),
-                'type' => $att[4] ?? 'application/octet-stream',
-            ], $this->getAttachments()),
-            'subject' => $this->Subject,
-            'body' => $this->Body,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        if ($context === false) {
-            $context = '{}';
-        }
-
-        $logEntry = sprintf(
-            "[%s] status.%s %s %s\n",
-            date('Y-m-d H:i:s'),
-            $status,
-            $message,
-            $context
-        );
-
-        file_put_contents($this->config['log_file'], $logEntry, FILE_APPEND | LOCK_EX);
     }
 }

@@ -12,7 +12,6 @@ use Spark\Routing\Exceptions\InvalidNamedRouteException;
 use Spark\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use function count;
 use function in_array;
 use function is_array;
 use function is_int;

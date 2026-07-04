@@ -190,6 +190,23 @@ if (!function_exists('response')) {
     }
 }
 
+if (!function_exists('defer')) {
+    /**
+     * Defer the execution of a callback until the end of the request lifecycle.
+     *
+     * This function allows you to register a callback that will be executed
+     * after the response has been sent to the client. It is useful for
+     * performing cleanup tasks or other operations that do not need to
+     * block the response.
+     *
+     * @param callable $callback The callback to be executed at the end of the request lifecycle.
+     */
+    function defer(callable $callback): void
+    {
+        Application::$app->defer($callback);
+    }
+}
+
 if (!function_exists('json')) {
     /**
      * Create a JSON response with the given data.

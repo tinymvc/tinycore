@@ -35,14 +35,6 @@ interface QueueContract
     public function pushOnce(JobContract $job, string $queue = 'default'): void;
 
     /**
-     * Enables or disables logging for the queue.
-     *
-     * @param bool|string $log Whether to enable logging or the log file path.
-     * @return void
-     */
-    public function logging(bool|string $log = true): void;
-
-    /**
      * Runs the jobs in the queue.
      *
      * This method will execute the jobs that are scheduled and ready to run.

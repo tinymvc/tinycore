@@ -31,9 +31,11 @@ use Spark\Utils\Vite;
 use Spark\View\Blade;
 use Throwable;
 use function array_key_exists;
+use function get_class;
 use function is_array;
 use function is_object;
 use function is_string;
+use function sprintf;
 
 /**
  * The Application class is the main entry point to the framework.
@@ -55,6 +57,12 @@ class Application extends \Spark\Container implements ApplicationContract
 
     /** @var array Array to store exception handlers. */
     private array $exceptions = [];
+
+    /** @var array An array of callable functions to execute after sending the response. */
+    private array $deferredCallbacks = [];
+
+    /** @var bool Whether the application is currently running termination callbacks. */
+    private bool $terminating = false;
 
     /**
      * Application constructor.
@@ -411,14 +419,13 @@ class Application extends \Spark\Container implements ApplicationContract
      * a logging option, and an optional callback for additional configuration.
      *
      * @param null|array $jobs An array of jobs to be added to the queue.
-     * @param bool|string $log A boolean or string indicating whether to log queue activity, or the log file path.
      * @param null|callable $then An optional callback for additional configuration of the queue.
      * @return self
      */
-    public function withQueue(null|array $jobs = null, bool|string $log = false, null|callable $then = null): self
+    public function withQueue(null|array $jobs = null, null|callable $then = null): self
     {
-        $this->singleton(Queue::class, function () use ($jobs, $log, $then) {
-            $queue = new Queue($log);
+        $this->singleton(Queue::class, function () use ($jobs, $then) {
+            $queue = new Queue();
 
             $jobs && array_map($queue->pushOnce(...), $jobs);
 
@@ -512,13 +519,13 @@ class Application extends \Spark\Container implements ApplicationContract
 
             $this->isDebugMode() && event('app:booted');
 
-            $this->get(Router::class)
+            $response = $this->get(Router::class)
                 ->dispatch(
                     $this->get(Request::class)
-                )
-                ->send();
+                );
 
-            $this->isDebugMode() && event('app:terminated');
+            $response->send();
+            $this->terminate();
         } catch (RouteNotFoundException) {
             abort(error: 404, message: 'Route not found');
         } catch (ItemNotFoundException) {
@@ -539,6 +546,7 @@ class Application extends \Spark\Container implements ApplicationContract
 
                 if ($responseOrNull instanceof Response) {
                     $responseOrNull->send();
+                    $this->terminate();
                     return;
                 }
             }
@@ -572,5 +580,130 @@ class Application extends \Spark\Container implements ApplicationContract
 
         $console = $this->get(Console::class);
         $console->run();
+    }
+
+    /**
+     * Registers a callback to be executed after the response is sent to the client.
+     *
+     * This method allows you to defer the execution of a callback until after the
+     * response has been sent. It is useful for performing background tasks or
+     * cleanup operations without delaying the response to the client.
+     *
+     * @param callable $callback The callback function to execute after sending the response.
+     * @return self Current response instance for method chaining.
+     */
+    public function defer(callable $callback): self
+    {
+        if (empty($this->deferredCallbacks)) {
+            register_shutdown_function([$this, 'terminate']);
+        }
+
+        $this->deferredCallbacks[] = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Execute callbacks registered to run after the response has been sent.
+     *
+     * This method is idempotent so it can safely be called directly by run() and
+     * again by PHP's shutdown handler for responses that exit early.
+     */
+    public function terminate(): void
+    {
+        if ($this->terminating) {
+            return;
+        }
+
+        $this->terminating = true;
+
+        try {
+            $this->finishRequest();
+
+            try {
+                $this->isDebugMode() && event('app:terminated');
+            } catch (Throwable $e) {
+                $this->reportDeferredException($e);
+            }
+
+            $this->runDeferredCallbacks();
+        } finally {
+            $this->terminating = false;
+        }
+    }
+
+    /**
+     * Flush the response to the client before running deferred callbacks.
+     */
+    private function finishRequest(): void
+    {
+        if (function_exists('session_status') && session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+            return;
+        }
+
+        if (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+            return;
+        }
+
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+
+        flush();
+    }
+
+    /**
+     * Run deferred callbacks in registration order.
+     */
+    private function runDeferredCallbacks(): void
+    {
+        while ($callback = array_shift($this->deferredCallbacks)) {
+            try {
+                $this->call($callback);
+            } catch (Throwable $e) {
+                $this->reportDeferredException($e);
+            }
+        }
+    }
+
+    /**
+     * Report a deferred callback exception without interrupting later callbacks.
+     */
+    private function reportDeferredException(Throwable $exception): void
+    {
+        $handler = $this->getExceptionHandler($exception);
+
+        if ($handler !== null) {
+            try {
+                $handler($exception);
+                return;
+            } catch (Throwable $handlerException) {
+                $this->logDeferredException($handlerException);
+            }
+        }
+
+        $this->logDeferredException($exception);
+    }
+
+    /**
+     * Log a deferred callback exception without rendering another response.
+     */
+    private function logDeferredException(Throwable $exception): void
+    {
+        $message = sprintf(
+            'Deferred callback exception: %s: %s in %s on line %d',
+            get_class($exception),
+            $exception->getMessage(),
+            $exception->getFile(),
+            $exception->getLine()
+        );
+
+        Tracer::$instance->log("local.ERROR: $message " . $exception->getTraceAsString());
     }
 }

@@ -6,15 +6,11 @@ use PDO;
 use Spark\Console\Prompt;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueContract;
-use Spark\Queue\Exceptions\InvalidStorageFileException;
 use Spark\Queue\Storage\RedisStorage;
 use Spark\Queue\Storage\SqliteStorage;
 use Spark\Support\Traits\Macroable;
-use function file_put_contents;
 use function implode;
 use function is_array;
-use function is_file;
-use function is_writable;
 use function memory_get_usage;
 use function microtime;
 use function rand;
@@ -31,40 +27,21 @@ class Queue implements QueueContract
 {
     use Macroable;
 
-    private bool|string $log;
-
     /** The queue storage implementation used for job persistence and retrieval. */
     private \Spark\Queue\Contracts\QueueStorageContract $storage;
 
-    public function __construct(bool|string $log = false)
+    public function __construct()
     {
         $connection = $this->resolveDriverConfig();
         $driver = strtolower((string) ($connection['driver'] ?? 'sqlite'));
         $this->storage = $driver === 'redis'
             ? new RedisStorage($connection)
             : new SqliteStorage($connection);
-
-        $this->logging($log);
     }
 
     public function getPdoConnection(): ?PDO
     {
         return $this->storage->getPdoConnection();
-    }
-
-    public function logging(bool|string $log = true): void
-    {
-        $this->log = $log === true ? storage_dir('logs/queue.log') : $log;
-
-        if ($this->log) {
-            if (!is_file($this->log) && !touch($this->log)) {
-                throw new InvalidStorageFileException('Failed to create the queue log file.');
-            } elseif (!is_writable($this->log) && !chmod($this->log, 0666)) {
-                throw new InvalidStorageFileException(
-                    sprintf('The queue log file (%s) is not writable.', $this->log)
-                );
-            }
-        }
     }
 
     /**
@@ -233,13 +210,6 @@ class Queue implements QueueContract
             }
         } while (true);
 
-        $timeUsed = microtime(true) - $startedAt;
-        $memoryUsed = memory_get_usage(true) - $startedMemory;
-
-        if ($ranJobs > 0 || $failedJobs > 0) {
-            $this->addQueueLog($timeUsed, $memoryUsed, $ranJobs, $failedJobs);
-        }
-
         $this->message(sprintf('Queue worker finished. Ran %d job(s), %d failed', $ranJobs, $failedJobs));
     }
 
@@ -313,24 +283,6 @@ class Queue implements QueueContract
     private function message(string $message): void
     {
         echo '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
-    }
-
-    private function addQueueLog(float $timeUsed, int $memoryUsed, int $ranJobs, int $failedJobs): void
-    {
-        if (empty($this->log)) {
-            return;
-        }
-
-        $logEntry = sprintf(
-            "[%s] Finished running %d success and %d failed job(s) in %.4f seconds, using %.2f MB of memory.\n",
-            date('Y-m-d H:i:s'),
-            $ranJobs,
-            $failedJobs,
-            $timeUsed,
-            $memoryUsed / 1024 / 1024
-        );
-
-        file_put_contents($this->log, $logEntry, FILE_APPEND | LOCK_EX);
     }
 
     private function resolveDriverConfig(): array
