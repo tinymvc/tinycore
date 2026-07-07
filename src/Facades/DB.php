@@ -145,16 +145,17 @@ class DB extends Facade
      * Execute a callback within a transaction.
      *
      * @param callable $callback The callback to execute.
-     * @return void
+     * @return mixed The result of the callback.
      *
      * @throws \Throwable Rethrows any exception thrown within the transaction.
      */
-    public static function transaction(callable $callback)
+    public static function transaction(callable $callback): mixed
     {
         try {
             self::connection()->beginTransaction();
-            $callback();
+            $result = $callback();
             self::connection()->commit();
+            return $result;
         } catch (\Throwable $e) {
             self::connection()->rollBack();
             throw $e;
