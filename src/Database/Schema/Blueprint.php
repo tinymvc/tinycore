@@ -7,6 +7,7 @@ use Spark\Database\Schema\Exceptions\InvalidBlueprintArgumentException;
 use Spark\Support\Traits\Macroable;
 use function func_get_args;
 use function is_array;
+use function is_string;
 use function sprintf;
 
 /**
@@ -550,7 +551,7 @@ class Blueprint implements BlueprintContract
      */
     public function primary($columns, ?string $name = null): void
     {
-        $this->primaryKeys[] = ['columns' => (array) $columns, 'name' => $name];
+        $this->primaryKeys[] = ['columns' => $this->normalizeColumns($columns), 'name' => $name];
     }
 
     /**
@@ -561,9 +562,7 @@ class Blueprint implements BlueprintContract
      */
     public function unique(string|array $columns, ?string $name = null): void
     {
-        $columns = is_array($columns) ? $columns : func_get_args();
-        $name = is_array($columns) ? $name : ($columns[1] ?? null);
-        $this->indexes[] = ['type' => 'unique', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
+        $this->addIndex('unique', $columns, $name);
     }
 
     /**
@@ -574,9 +573,7 @@ class Blueprint implements BlueprintContract
      */
     public function index(string|array $columns, ?string $name = null): void
     {
-        $columns = is_array($columns) ? $columns : func_get_args();
-        $name = is_array($columns) ? $name : ($columns[1] ?? null);
-        $this->indexes[] = ['type' => 'index', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
+        $this->addIndex('index', $columns, $name);
     }
 
     /**
@@ -587,9 +584,7 @@ class Blueprint implements BlueprintContract
      */
     public function fullText(string|array $columns, ?string $name = null): void
     {
-        $columns = is_array($columns) ? $columns : func_get_args();
-        $name = is_array($columns) ? $name : ($columns[1] ?? null);
-        $this->indexes[] = ['type' => 'fulltext', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
+        $this->addIndex('fulltext', $columns, $name);
     }
 
     /**
@@ -600,9 +595,7 @@ class Blueprint implements BlueprintContract
      */
     public function spatialIndex(string|array $columns, ?string $name = null): void
     {
-        $columns = is_array($columns) ? $columns : func_get_args();
-        $name = is_array($columns) ? $name : ($columns[1] ?? null);
-        $this->indexes[] = ['type' => 'spatial', 'columns' => $this->normalizeColumns($columns), 'name' => $name];
+        $this->addIndex('spatial', $columns, $name);
     }
 
     /**
@@ -866,18 +859,43 @@ class Blueprint implements BlueprintContract
     }
 
     /**
-     * Normalize columns from Laravel-style variadic calls.
+     * Add an index definition to the blueprint.
      *
-     * @param array $columns
+     * @param string $type The index type.
+     * @param string|array $columns The indexed column(s).
+     * @param string|null $name The explicit index name.
+     * @return void
+     */
+    private function addIndex(string $type, string|array $columns, ?string $name = null): void
+    {
+        $this->indexes[] = [
+            'type' => $type,
+            'columns' => $this->normalizeColumns($columns),
+            'name' => $name,
+        ];
+    }
+
+    /**
+     * Normalize column input into a non-empty list of column names.
+     *
+     * @param string|array $columns
      * @return array
      */
-    private function normalizeColumns(array $columns): array
+    private function normalizeColumns(string|array $columns): array
     {
-        if (isset($columns[1]) && is_string($columns[1])) {
-            return [$columns[0]];
+        $columns = is_array($columns) ? $columns : [$columns];
+
+        if ($columns === []) {
+            throw new InvalidBlueprintArgumentException('At least one column is required');
         }
 
-        return $columns;
+        foreach ($columns as $column) {
+            if (!is_string($column) || trim($column) === '') {
+                throw new InvalidBlueprintArgumentException('Column names must be non-empty strings');
+            }
+        }
+
+        return array_values($columns);
     }
 
     /**
