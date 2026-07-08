@@ -49,7 +49,7 @@ use function sprintf;
  * @method static QueryBuilder when(mixed $value, callable $callback)
  * @method static QueryBuilder unless(mixed $value, callable $callback)
  * @method static int|array insert(array|Arrayable $data, array $config = [])
- * @method static int|array bulkUpdate(array|Arrayable $data, array $config = [])
+ * @method static int|array upsert(array|Arrayable $data, array $config = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $andOr = null, bool $not = false)
  * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [])
  * @method static QueryBuilder whereNull($where, $not = false)
@@ -442,7 +442,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      *
      * @return array The fillable fields of the model.
      */
-    private function getFillableData(): array
+    public function getFillableData(): array
     {
         $data = [];
 
@@ -466,7 +466,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * @param array $data The data to prepare.
      * @return array The prepared data for database insertion or update.
      */
-    private function castDataForStorage(array $data): array
+    public function castDataForStorage(array $data): array
     {
         // Apply mutators, casts, and encode data for saving
         foreach ($data as $key => $value) {
@@ -517,7 +517,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      * 
      * @return void
      */
-    private function castStoredData(): void
+    public function castStoredData(): void
     {
         // Go Through all the properties of this model.
         if ($this->hasAnyCast()) {

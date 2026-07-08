@@ -341,7 +341,7 @@ class QueryBuilder implements QueryBuilderContract
         $startedMemory = memory_get_usage(true);
 
         // Normalize data to always be an array of records
-        $data = !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
+        $data = !array_is_list($data) && !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
 
         $fields = $this->getInsertFields($data);
 
@@ -368,20 +368,20 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Update multiple records into the database with optional configurations.
+     * Upsert single/multiple records into the database with optional configurations.
      *
      * @param array|Arrayable $data
      * @param array $config
      * @return int
      */
-    public function bulkUpdate(array|Arrayable $data, array $config = []): int
+    public function upsert(array|Arrayable $data, array $config = []): int
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
         }
 
         // Transform single records into multiple.
-        if (!(isset($data[0]) && is_array($data[0]))) {
+        if (!array_is_list($data) && !(isset($data[0]) && is_array($data[0]))) {
             $data = [$data];
         }
 
@@ -1582,6 +1582,10 @@ class QueryBuilder implements QueryBuilderContract
             $model = $this->getModelBeingUsed();
             $model->fill($data);
 
+            // Cast the data for storage, including timestamps if applicable
+            $data = $model->castDataForStorage($data);
+
+            // Add timestamps if the model uses them
             $timestamps = $model->getCastedTimestampsForStorage();
             if (!empty($timestamps)) {
                 $data = [...$data, ...$timestamps];
@@ -1615,7 +1619,11 @@ class QueryBuilder implements QueryBuilderContract
 
         // Bind the values for update
         foreach ($setBindings as $placeholder => $val) {
-            $statement->bindValue(":$placeholder", $val, $this->getParameterType($val));
+            $statement->bindValue(
+                param: ":$placeholder",
+                value: $this->castValue($val),
+                type: $this->getParameterType($val)
+            );
         }
 
         // Bind the WHERE clause parameters
@@ -1771,9 +1779,17 @@ class QueryBuilder implements QueryBuilderContract
         // Bind parameters
         foreach ($bindings as $key => $value) {
             if (is_int($key)) {
-                $statement->bindValue($key + 1, $value, $this->getParameterType($value));
+                $statement->bindValue(
+                    param: $key + 1,
+                    value: $this->castValue($value),
+                    type: $this->getParameterType($value)
+                );
             } else {
-                $statement->bindValue($this->normalizeNamedBinding($key), $value, $this->getParameterType($value));
+                $statement->bindValue(
+                    param: $this->normalizeNamedBinding($key),
+                    value: $this->castValue($value),
+                    type: $this->getParameterType($value)
+                );
             }
         }
 
@@ -3119,16 +3135,28 @@ class QueryBuilder implements QueryBuilderContract
                 // binds clause values from a array condition, Ex. "id IN(1, 2, 3, 4)".
                 foreach ($value as $index => $val) {
                     // Add multiple parameter into IN(), Ex. :id_0 => $value, :id_1 => $value;
-                    $statement->bindValue("{$param}_$index", $val);
+                    $statement->bindValue(
+                        param: "{$param}_$index",
+                        value: $this->castValue($val),
+                        type: $this->getParameterType($val)
+                    );
                 }
             } else {
                 // binds clause values from a string condition, Ex. "id = 1".
-                $statement->bindValue($param, $value, $this->getParameterType($value));
+                $statement->bindValue(
+                    param: $param,
+                    value: $this->castValue($value),
+                    type: $this->getParameterType($value)
+                );
             }
         }
 
         foreach ($this->parameters as $key => $param) {
-            $statement->bindValue($key + 1, $param, $this->getParameterType($param));
+            $statement->bindValue(
+                param: $key + 1,
+                value: $this->castValue($param),
+                type: $this->getParameterType($param)
+            );
         }
     }
 
@@ -3195,9 +3223,17 @@ class QueryBuilder implements QueryBuilderContract
 
         foreach ($bindings as $key => $value) {
             if (is_int($key)) {
-                $statement->bindValue($key + 1, $value, $this->getParameterType($value));
+                $statement->bindValue(
+                    param: $key + 1,
+                    value: $this->castValue($value),
+                    type: $this->getParameterType($value)
+                );
             } else {
-                $statement->bindValue($this->normalizeNamedBinding($key), $value, $this->getParameterType($value));
+                $statement->bindValue(
+                    param: $this->normalizeNamedBinding($key),
+                    value: $this->castValue($value),
+                    type: $this->getParameterType($value)
+                );
             }
         }
 
@@ -3362,15 +3398,10 @@ class QueryBuilder implements QueryBuilderContract
             foreach ($fields as $column) {
                 $value = $row[$column] ?? null;
 
-                // Handle array values (for functions/expressions)
-                if (is_array($value)) {
-                    $value = $value['text'] ?? ($value['value'] ?? null);
-                }
-
                 $statement->bindValue(
-                    sprintf(':%s_%s', $column, $serial),
-                    $value,
-                    $this->getParameterType($value)
+                    param: sprintf(':%s_%s', $column, $serial),
+                    value: $this->castValue($value),
+                    type: $this->getParameterType($value)
                 );
             }
         }
@@ -3525,5 +3556,37 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'bindings' => $bindings, 'memory_before' => $startedMemory]);
+    }
+
+    /**
+     * Casts a value to a string representation suitable for database storage.
+     *
+     * @param mixed $value The value to cast.
+     * @return string|null The casted string value or null if the value is empty.
+     */
+    private function castValue(mixed $value): ?string
+    {
+        $value = value($value);
+
+        if (empty($value)) {
+            return null;
+        }
+
+        // instanceof \Spark\Url
+        if ($value instanceof \Spark\Url) {
+            return $value->getUrl();
+        } elseif ($value instanceof \Spark\Carbon) {
+            return $value->toDateTimeString();
+        } elseif ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        } elseif (is_bool($value)) {
+            return $value ? '1' : '0';
+        } elseif ($value instanceof Arrayable) {
+            return json_encode($value->toArray());
+        } elseif (is_array($value)) {
+            return json_encode($value);
+        }
+
+        return (string) $value;
     }
 }
