@@ -2,13 +2,12 @@
 
 namespace Spark\Queue\Contracts;
 
-use PDO;
 use Spark\Carbon;
 use Spark\Queue\Contracts\JobContract;
 
 interface QueueStorageContract
 {
-    public function getPdoConnection(): ?PDO;
+    public function getConnection(): \Redis|\PDO;
 
     public function push(JobContract $job, string $queue = 'default'): void;
 

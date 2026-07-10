@@ -50,7 +50,7 @@ class SqliteStorage implements QueueStorageContract
         }
     }
 
-    public function getPdoConnection(): ?PDO
+    public function getConnection(): PDO
     {
         return $this->pdo;
     }

@@ -12,9 +12,9 @@ interface QueueContract
      *
      * This returns null when the queue is configured to use Redis.
      *
-     * @return \PDO|null The PDO connection instance.
+     * @return \PDO|\Redis The PDO or Redis connection instance.
      */
-    public function getPdoConnection(): ?\PDO;
+    public function getConnection(): \PDO|\Redis;
 
     /**
      * Adds a job to the queue.

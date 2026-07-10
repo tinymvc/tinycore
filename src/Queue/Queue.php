@@ -39,9 +39,9 @@ class Queue implements QueueContract
             : new SqliteStorage($connection);
     }
 
-    public function getPdoConnection(): ?PDO
+    public function getConnection(): PDO|\Redis
     {
-        return $this->storage->getPdoConnection();
+        return $this->storage->getConnection();
     }
 
     /**

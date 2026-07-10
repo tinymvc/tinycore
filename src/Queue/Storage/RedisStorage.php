@@ -2,7 +2,6 @@
 
 namespace Spark\Queue\Storage;
 
-use PDO;
 use Spark\Carbon;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueStorageContract;
@@ -55,9 +54,9 @@ class RedisStorage implements QueueStorageContract
         $this->pruneStaleFingerprintKeys();
     }
 
-    public function getPdoConnection(): ?PDO
+    public function getConnection(): \Redis
     {
-        return null;
+        return $this->redis;
     }
 
     public function push(JobContract $job, string $queue = 'default'): void
