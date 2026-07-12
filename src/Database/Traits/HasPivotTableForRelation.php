@@ -78,7 +78,7 @@ trait HasPivotTableForRelation
     /**
      * Add additional fields to be appended to the relationship.
      * 
-     * @param array $fields The fields to append.
+     * @param array|string $fields The fields to append.
      * @return self
      */
     public function withPivot(array|string $fields): self

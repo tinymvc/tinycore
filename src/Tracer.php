@@ -202,7 +202,7 @@ class Tracer implements TracerContract
             }
 
             // Set HTTP response code to 500 for server error.
-            if (!headers_sent()) {
+            if (!headers_sent() && http_response_code() !== 500) {
                 http_response_code(500);
             }
 
