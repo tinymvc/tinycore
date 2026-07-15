@@ -364,13 +364,14 @@ if (!function_exists('query')) {
      * Create a new query instance.
      *
      * @param string $table The name of the table.
+     * @param string|null $alias Optional alias for the table.
      *
      * @return QueryBuilder The query instance.
      */
-    function query(string $table): QueryBuilder
+    function query(string $table, ?string $alias = null): QueryBuilder
     {
         return get(QueryBuilder::class)
-            ->table($table);
+            ->table($table, $alias);
     }
 }
 

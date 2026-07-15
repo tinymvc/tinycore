@@ -163,11 +163,18 @@ class QueryBuilder implements QueryBuilderContract
      * Sets the table name to be used for the query.
      *
      * @param string $table The table name to set.
+     * @param string|null $alias Optional alias for the table.
      * @return self
      */
-    public function table(string $table): self
+    public function table(string $table, ?string $alias = null): self
     {
+        if (stripos($table, ' as ') !== false && empty($alias)) {
+            [$table, $alias] = array_map('trim', explode(' as ', $table, 2));
+        }
+
         $this->table = $table;
+        $this->query['alias'] = $alias ?: '';
+
         return $this;
     }
 

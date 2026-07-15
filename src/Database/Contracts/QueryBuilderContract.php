@@ -16,9 +16,10 @@ interface QueryBuilderContract
      * Set the table name to be used for the query.
      *
      * @param string $table The table name to use.
+     * @param string|null $alias Optional alias for the table.
      * @return QueryBuilderContract Returns the query builder instance.
      */
-    public function table(string $table): self;
+    public function table(string $table, ?string $alias = null): self;
 
     /**
      * Insert data into the database.
