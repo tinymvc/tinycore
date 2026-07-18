@@ -272,13 +272,11 @@ class FileManager
             return false;
         }
 
-        $finfo = @new \finfo(FILEINFO_MIME_TYPE);
-
-        if (!$finfo) {
+        if (!class_exists(\finfo::class)) {
             return false;
         }
 
-        return $finfo->file($path);
+        return (new \finfo(FILEINFO_MIME_TYPE))->file($path);
     }
 
     /**
