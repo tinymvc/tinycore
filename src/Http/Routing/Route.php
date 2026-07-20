@@ -1,9 +1,9 @@
 <?php
 
-namespace Spark\Routing;
+namespace Spark\Http\Routing;
 
 use Spark\Foundation\Application;
-use Spark\Routing\Contracts\RouteContract;
+use Spark\Http\Routing\Contracts\RouteContract;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 
@@ -14,7 +14,7 @@ use Spark\Support\Traits\Macroable;
  * It allows setting various attributes of the route such as path, method, callback, template, name, and middleware.
  * When the instance is destroyed, it automatically registers the route with the application's router.
  *
- * @package Spark\Routing
+ * @package Spark\Http\Routing
  */
 class Route implements RouteContract
 {
@@ -143,7 +143,7 @@ class Route implements RouteContract
      */
     public function __destruct()
     {
-        /** @var \Spark\Routing\Router $router */
+        /** @var \Spark\Http\Routing\Router $router */
         $router = Application::$app->get(Router::class);
         $router->add(
             path: $this->path,

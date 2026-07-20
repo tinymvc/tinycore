@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Routing\Contracts;
+namespace Spark\Http\Routing\Contracts;
 
 /**
  * Interface RouteResourceContract
@@ -8,7 +8,7 @@ namespace Spark\Routing\Contracts;
  * This interface defines the contract for a resource route in the application.
  * It includes methods for setting various attributes of the resource route such as path, controller, name, middleware, and resource method inclusion/exclusion.
  *
- * @package Spark\Routing\Contracts
+ * @package Spark\Http\Routing\Contracts
  */
 interface RouteResourceContract
 {

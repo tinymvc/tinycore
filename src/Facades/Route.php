@@ -2,10 +2,10 @@
 
 namespace Spark\Facades;
 
-use Spark\Routing\Route as BaseRoute;
-use Spark\Routing\RouteGroup;
-use Spark\Routing\Router;
-use Spark\Routing\RouteResource;
+use Spark\Http\Routing\Route as BaseRoute;
+use Spark\Http\Routing\RouteGroup;
+use Spark\Http\Routing\Router;
+use Spark\Http\Routing\RouteResource;
 
 /**
  * Facade Route

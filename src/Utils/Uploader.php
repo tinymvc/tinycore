@@ -9,6 +9,7 @@ use Spark\Exceptions\Utils\UploaderUtilException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
+use function count;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -63,17 +64,17 @@ class Uploader implements UploaderUtilContract
      * @param null|array $resizes Bulk resize options for images.
      * @param null|int $compress Compression level for images.
      */
-    public function setup(
+    public function __construct(
         null|string $uploadTo = null,
         null|string $uploadDir = null,
         null|array $extensions = [],
         null|bool $multiple = null,
         null|int $maxSize = 2048, // Default to 2MB
-        null|array $resize = null,
+        null|float|array $resize = null,
         null|array $resizes = null,
         null|int $compress = null,
         null|UploaderUtilDriverInterface $driver = null
-    ): self {
+    ) {
         $extensions = $extensions === null ? [] : $extensions;
 
         $this->extensions = array_values(array_unique(array_filter(
@@ -85,10 +86,16 @@ class Uploader implements UploaderUtilContract
         )));
         $this->multiple = $multiple;
         $this->maxSize = $maxSize;
-        $this->resize = isset($resize[0]) ? [$resize[0] => $resize[1]] : $resize;
-        $this->resizes = $resizes;
         $this->compress = $compress;
         $this->driver = $driver;
+
+        // Format the resize option to ensure it is an associative array with width as key and height as value
+        $fmSize = fn($size) => is_array($size) && isset($size[0], $size[1])
+            ? [$size[0] => $size[1]] : (is_numeric($size) ? [$size => $size] : $size);
+
+        // Format the resize and resizes options
+        $this->resize = $fmSize($resize);
+        $this->resizes = collect($resizes)->mapWithKeys($fmSize(...))->all();
 
         $uploadDir ??= config('app.upload_dir');
 
@@ -96,8 +103,45 @@ class Uploader implements UploaderUtilContract
             $uploadDir = dir_path("$uploadDir/$uploadTo");
         }
 
-        // Set the upload directory
-        return $this->setUploadDir($uploadDir);
+        $this->setUploadDir($uploadDir); // Set the upload directory
+    }
+
+    /**
+     * Factory method to create a new instance of the Uploader class.
+     *
+     * @param null|string $uploadTo Upload directory path.
+     * @param null|string $uploadDir Upload directory path.
+     * @param array $extensions Supported file extensions.
+     * @param null|bool $multiple Whether to support multiple file uploads.
+     * @param null|int $maxSize Maximum file size (in KB).
+     * @param null|array $resize Resize options for images.
+     * @param null|array $resizes Bulk resize options for images.
+     * @param null|int $compress Compression level for images.
+     * @param null|UploaderUtilDriverInterface $driver File upload driver.
+     * @return self Returns a new instance of the Uploader class.
+     */
+    public static function make(
+        null|string $uploadTo = null,
+        null|string $uploadDir = null,
+        null|array $extensions = [],
+        null|bool $multiple = null,
+        null|int $maxSize = 2048, // Default to 2MB
+        null|float|array $resize = null,
+        null|array $resizes = null,
+        null|int $compress = null,
+        null|UploaderUtilDriverInterface $driver = null
+    ): self {
+        return new self(
+            uploadTo: $uploadTo,
+            uploadDir: $uploadDir,
+            extensions: $extensions,
+            multiple: $multiple,
+            maxSize: $maxSize,
+            resize: $resize,
+            resizes: $resizes,
+            compress: $compress,
+            driver: $driver
+        );
     }
 
     /**
@@ -160,11 +204,16 @@ class Uploader implements UploaderUtilContract
                     'error' => $files['error'][$key] ?? 0,
                     'size' => $files['size'][$key] ?? 0,
                 ];
-                $uploadedFiles = array_merge($uploadedFiles, (array) $this->processUpload($file));
+                $uploadedFiles = [...$uploadedFiles, ...(array) $this->processUpload($file)];
             }
             return $uploadedFiles;
         } else {
-            return $this->processUpload($files);
+            $uploadedFiles = $this->processUpload($files);
+            if (is_array($uploadedFiles) && count($uploadedFiles) === 1) {
+                return array_shift($uploadedFiles); // Return single file path if only one file is returned
+            }
+
+            return $uploadedFiles; // Return as array if multiple files are returned
         }
     }
 
@@ -242,7 +291,7 @@ class Uploader implements UploaderUtilContract
 
         $tmpName = $file['tmp_name'];
         if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
-            throw new UploaderUtilException(__('Upload error: %s', $file['error'] ?? UPLOAD_ERR_UNKNOWN));
+            throw new UploaderUtilException(__('Upload error: %s', $file['error'] ?? UPLOAD_ERR_OK));
         }
 
         // Validate file size

@@ -9,9 +9,6 @@ use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
 use function is_array;
-use function is_float;
-use function is_int;
-use function is_object;
 use function is_string;
 use function strlen;
 

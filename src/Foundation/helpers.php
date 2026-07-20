@@ -10,7 +10,7 @@ use Spark\Events;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Pipeline;
-use Spark\Routing\Router;
+use Spark\Http\Routing\Router;
 use Spark\Url;
 use Spark\Http\Auth;
 use Spark\Http\Gate;
@@ -327,7 +327,7 @@ if (!function_exists('router')) {
     /**
      * Get the current router instance.
      *
-     * @return \Spark\Routing\Router
+     * @return \Spark\Http\Routing\Router
      */
     function router(): Router
     {
@@ -2057,7 +2057,7 @@ if (!function_exists('uploader')) {
      * @param string|null $uploadDir Optional. The upload directory path. Default is the value of the 'upload_dir' configuration.
      * @param array $extensions Optional. The array of allowed file extensions. Default is an empty array.
      * @param int|null $maxSize Optional. The maximum allowed file size in KB. Default is 2048 (2MB).
-     * @param array|null $resize Optional. The resize configuration array. Default is an empty array.
+     * @param null|array|float $resize Optional. The resize configuration array. Default is an empty array.
      * @param array|null $resizes Optional. The resizes configuration array. Default is an empty array.
      * @param int|null $compress Optional. The compression ratio for images. Default is null.
      * @param UploaderUtilDriverInterface|null $driver Optional. The custom uploader driver instance. Default is null.
@@ -2068,14 +2068,12 @@ if (!function_exists('uploader')) {
         null|string $uploadDir = null,
         array $extensions = [],
         null|int $maxSize = 2048, // Default to 2MB
-        null|array $resize = null,
+        null|array|float $resize = null,
         null|array $resizes = null,
         null|int $compress = null,
         null|UploaderUtilDriverInterface $driver = null
     ): Uploader {
-        $uploader = new Uploader;
-
-        $uploader->setup(
+        $uploader = new Uploader(
             uploadTo: $uploadTo,
             uploadDir: $uploadDir,
             extensions: $extensions,

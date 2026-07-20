@@ -1,10 +1,10 @@
 <?php
 
-namespace Spark\Routing;
+namespace Spark\Http\Routing;
 
 use Spark\Foundation\Application;
-use Spark\Routing\Contracts\RouteGroupContract;
-use Spark\Routing\Exceptions\InvalidGroupAttributeException;
+use Spark\Http\Routing\Contracts\RouteGroupContract;
+use Spark\Http\Routing\Exceptions\InvalidGroupAttributeException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function in_array;
@@ -228,7 +228,7 @@ class RouteGroup implements RouteGroupContract
      * @param array $attributes An associative array of attributes to set.
      * @return self Returns the router instance to allow method chaining.
      *
-     * @throws \Spark\Routing\Exceptions\InvalidGroupAttributeException If an invalid attribute name is provided.
+     * @throws \Spark\Http\Routing\Exceptions\InvalidGroupAttributeException If an invalid attribute name is provided.
      */
     public function withAttributes(array $attributes): self
     {
@@ -263,7 +263,7 @@ class RouteGroup implements RouteGroupContract
     public function __destruct()
     {
         if ($this->callback) {
-            /** @var \Spark\Routing\Router  $router */
+            /** @var \Spark\Http\Routing\Router  $router */
             $router = Application::$app->get(Router::class);
 
             ($this->callback)($router);

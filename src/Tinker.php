@@ -8,7 +8,7 @@ use Spark\Database\DB;
 use Spark\Foundation\Application;
 use Spark\Hash;
 use Spark\Queue\Queue;
-use Spark\Routing\Router;
+use Spark\Http\Routing\Router;
 use Spark\Translator;
 use Spark\Cache\Cache;
 use Spark\Utils\FileManager;

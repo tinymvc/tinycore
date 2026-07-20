@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Routing\Contracts;
+namespace Spark\Http\Routing\Contracts;
 
 /**
  * Interface for defining a group of routes with shared attributes.
@@ -8,7 +8,7 @@ namespace Spark\Routing\Contracts;
  * This interface allows setting middleware, prefixes, namespaces,
  * controllers, templates, HTTP methods, and names for a group of routes.
  * 
- * @package Spark\Routing\Contracts
+ * @package Spark\Http\Routing\Contracts
  */
 interface RouteGroupContract
 {

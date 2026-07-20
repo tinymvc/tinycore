@@ -6,7 +6,7 @@ use Spark\Console\Commands;
 use Spark\Console\Process;
 use Spark\Console\Prompt;
 use Spark\Queue\Queue;
-use Spark\Routing\Router;
+use Spark\Http\Routing\Router;
 use Spark\Utils\FileManager;
 use function in_array;
 use function is_string;

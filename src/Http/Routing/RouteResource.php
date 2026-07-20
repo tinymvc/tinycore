@@ -1,9 +1,9 @@
 <?php
 
-namespace Spark\Routing;
+namespace Spark\Http\Routing;
 
 use Spark\Foundation\Application;
-use Spark\Routing\Contracts\RouteResourceContract;
+use Spark\Http\Routing\Contracts\RouteResourceContract;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function func_get_args;
@@ -15,7 +15,7 @@ use function is_array;
  * This class facilitates the creation of RESTful resource routes.
  * It automatically generates standard CRUD routes based on a given path and controller.
  *
- * @package Spark\Routing
+ * @package Spark\Http\Routing
  */
 class RouteResource implements RouteResourceContract
 {
@@ -165,7 +165,7 @@ class RouteResource implements RouteResourceContract
             $routes = array_diff_key($routes, array_flip($this->except));
         }
 
-        /** @var \Spark\Routing\Router $router */
+        /** @var \Spark\Http\Routing\Router $router */
         $router = Application::$app->get(Router::class);
 
         // Register each route with the router

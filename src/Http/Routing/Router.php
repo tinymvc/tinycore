@@ -1,15 +1,15 @@
 <?php
 
-namespace Spark\Routing;
+namespace Spark\Http\Routing;
 
 use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
-use Spark\Routing\Contracts\RouterContract;
-use Spark\Routing\Exceptions\InvalidNamedRouteException;
-use Spark\Routing\Exceptions\RouteNotFoundException;
+use Spark\Http\Routing\Contracts\RouterContract;
+use Spark\Http\Routing\Exceptions\InvalidNamedRouteException;
+use Spark\Http\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function in_array;
@@ -72,7 +72,7 @@ class Router implements RouterContract
      * @param string $path The path for the GET route.
      * @param callable|string|array $callback The handler or callback for the GET route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function get(string $path, callable|string|array $callback): Route
     {
@@ -85,7 +85,7 @@ class Router implements RouterContract
      * @param string $path The path for the POST route.
      * @param callable|string|array $callback The handler or callback for the POST route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function post(string $path, callable|string|array $callback): Route
     {
@@ -98,7 +98,7 @@ class Router implements RouterContract
      * @param string $path The path for the PUT route.
      * @param callable|string|array $callback The handler or callback for the PUT route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function put(string $path, callable|string|array $callback): Route
     {
@@ -111,7 +111,7 @@ class Router implements RouterContract
      * @param string $path The path for the PATCH route.
      * @param callable|string|array $callback The handler or callback for the PATCH route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function patch(string $path, callable|string|array $callback): Route
     {
@@ -124,7 +124,7 @@ class Router implements RouterContract
      * @param string $path The path for the DELETE route.
      * @param callable|string|array $callback The handler or callback for the DELETE route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function delete(string $path, callable|string|array $callback): Route
     {
@@ -137,7 +137,7 @@ class Router implements RouterContract
      * @param string $path The path for the OPTIONS route.
      * @param callable|string|array $callback The handler or callback for the OPTIONS route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function options(string $path, callable|string|array $callback): Route
     {
@@ -150,7 +150,7 @@ class Router implements RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function any(string $path, callable|string|array $callback): Route
     {
@@ -164,7 +164,7 @@ class Router implements RouterContract
      * @param string $path The path for the route.
      * @param callable|string|array $callback The handler or callback for the route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function match(array $methods, string $path, callable|string|array $callback): Route
     {
@@ -191,7 +191,7 @@ class Router implements RouterContract
      * @param string $path The path for the route.
      * @param string $template The template to use for the route.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function view(string $path, string $template): Route
     {
@@ -209,7 +209,7 @@ class Router implements RouterContract
      * @param string $template The Fireline template to render.
      * @param array $context Optional context data to pass to the Fireline template.
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function fireline(string $path, string $template, array $context = []): Route
     {
@@ -225,7 +225,7 @@ class Router implements RouterContract
      * @param string $to The URL to redirect to.
      * @param int $status The HTTP status code for the redirect (default is 302).
      *
-     * @return \Spark\Routing\Route Returns the router instance to allow method chaining.
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
     public function redirect(string $from, string $to, int $status = 302): Route
     {
@@ -388,7 +388,7 @@ class Router implements RouterContract
      * @param array $only Optional array of actions to include in the resource route.
      * @param array $except Optional array of actions to exclude from the resource route.
      *
-     * @return \Spark\Routing\RouteResource The registered Resource Route instance.
+     * @return \Spark\Http\Routing\RouteResource The registered Resource Route instance.
      */
     public function resource(
         string $path,
@@ -411,7 +411,7 @@ class Router implements RouterContract
      * @param array|callable|null $attrsOrCallback Array of shared attributes or the callback function.
      * @param callable|null $callback Optional callback when first parameter is attributes array.
      *
-     * @return \Spark\Routing\RouteGroup
+     * @return \Spark\Http\Routing\RouteGroup
      */
     public function group(array|callable|null $attrsOrCallback = null, callable|null $callback = null): RouteGroup
     {
@@ -539,7 +539,7 @@ class Router implements RouterContract
      *
      * @return string Returns the route's path.
      *
-     * @throws \Spark\Routing\Exceptions\InvalidNamedRouteException if the route does not exist.
+     * @throws \Spark\Http\Routing\Exceptions\InvalidNamedRouteException if the route does not exist.
      */
     public function route(string $name, null|string|array|Arrayable $context = null): string
     {
@@ -605,7 +605,7 @@ class Router implements RouterContract
      *
      * @return Response The HTTP response object.
      * 
-     * @throws \Spark\Routing\Exceptions\RouteNotFoundException If no matching route is found.
+     * @throws \Spark\Http\Routing\Exceptions\RouteNotFoundException If no matching route is found.
      */
     public function dispatch(Request $request): Response
     {

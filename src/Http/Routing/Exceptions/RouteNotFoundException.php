@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Routing\Exceptions;
+namespace Spark\Http\Routing\Exceptions;
 
 use Spark\Exceptions\NotFoundException;
 
