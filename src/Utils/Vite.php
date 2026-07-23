@@ -10,14 +10,19 @@ use function array_map;
 use function array_unique;
 use function array_values;
 use function explode;
+use function htmlspecialchars;
+use function in_array;
 use function is_array;
 use function is_file;
 use function is_string;
 use function ltrim;
+use function pathinfo;
+use function parse_url;
 use function rtrim;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
+use function strtolower;
 
 /**
  * Class Vite
@@ -42,6 +47,16 @@ class Vite implements ViteUtilContract
     private const DEFAULT_DIST_DIR = 'build';
     private const DEFAULT_PUBLIC_DIR = 'public';
     private const DEV_CHECK_TIMEOUT_SECONDS = 2;
+    private const STYLE_EXTENSIONS = [
+        'css',
+        'less',
+        'pcss',
+        'postcss',
+        'sass',
+        'scss',
+        'styl',
+        'stylus',
+    ];
 
     /**
      * Constructor for the Vite helper class.
@@ -90,6 +105,8 @@ class Vite implements ViteUtilContract
         }
 
         $this->config['scheme'] = $this->normalizeScheme((string) $this->config('scheme'));
+        $this->config['host'] = $this->normalizeHost((string) $this->config('host'));
+        $this->config['port'] = $this->normalizePort($this->config('port'));
         $this->config['base'] = $this->normalizeBasePath((string) $this->config('base'));
 
         $root = is_string($this->config('root')) ? (string) $this->config('root') : '';
@@ -137,10 +154,7 @@ class Vite implements ViteUtilContract
         $firstEntry = $entries[0];
 
         if ($this->isRunning($firstEntry)) {
-            $output .= sprintf(
-                '<script type="module" crossorigin src="%s"></script>',
-                $this->serverUrl('@vite/client')
-            );
+            $output .= $this->scriptTag($this->serverUrl('@vite/client'));
 
             if ($this->requiresReactRefresh($entries)) {
                 $output .= $this->reactRefreshTag($firstEntry);
@@ -169,27 +183,44 @@ class Vite implements ViteUtilContract
             }
 
             $isRunning = $this->isRunning($entrypoint);
-            $jsUrl = $isRunning ? $this->serverUrl($entrypoint) : $this->assetUrl($entrypoint);
-            if ($jsUrl !== '' && !isset($seenJs[$jsUrl])) {
-                $seenJs[$jsUrl] = true;
-                $tags .= sprintf('<script type="module" crossorigin src="%s"></script>', $jsUrl);
-            }
-
             if ($isRunning) {
-                continue;
-            }
+                $url = $this->serverUrl($entrypoint);
 
-            foreach ($this->importsUrls($entrypoint) as $url) {
-                if (!isset($seenPreload[$url])) {
-                    $seenPreload[$url] = true;
-                    $tags .= sprintf('<link rel="modulepreload" href="%s">', $url);
+                if ($this->isStylePath($entrypoint)) {
+                    if (!isset($seenCss[$url])) {
+                        $seenCss[$url] = true;
+                        $tags .= $this->stylesheetTag($url);
+                    }
+                } elseif (!isset($seenJs[$url])) {
+                    $seenJs[$url] = true;
+                    $tags .= $this->scriptTag($url);
                 }
+
+                continue;
             }
 
             foreach ($this->cssUrls($entrypoint) as $url) {
                 if (!isset($seenCss[$url])) {
                     $seenCss[$url] = true;
-                    $tags .= sprintf('<link rel="stylesheet" href="%s">', $url);
+                    $tags .= $this->stylesheetTag($url);
+                }
+            }
+
+            $url = $this->assetUrl($entrypoint);
+            if ($url !== '' && $this->isStylePath($url)) {
+                if (!isset($seenCss[$url])) {
+                    $seenCss[$url] = true;
+                    $tags .= $this->stylesheetTag($url);
+                }
+            } elseif ($url !== '' && !isset($seenJs[$url])) {
+                $seenJs[$url] = true;
+                $tags .= $this->scriptTag($url);
+            }
+
+            foreach ($this->importsUrls($entrypoint) as $url) {
+                if (!isset($seenPreload[$url])) {
+                    $seenPreload[$url] = true;
+                    $tags .= $this->modulePreloadTag($url);
                 }
             }
         }
@@ -209,9 +240,19 @@ class Vite implements ViteUtilContract
         $tag = '';
 
         if ($entry !== '' && $this->isRunning($entry)) {
+            $refreshUrl = json_encode(
+                $this->serverUrl('@react-refresh'),
+                JSON_HEX_TAG
+                    | JSON_HEX_AMP
+                    | JSON_HEX_APOS
+                    | JSON_HEX_QUOT
+                    | JSON_INVALID_UTF8_SUBSTITUTE
+                    | JSON_UNESCAPED_SLASHES
+            );
+
             $tag = <<<HTML
                 <script type="module">
-                    import RefreshRuntime from "{$this->serverUrl('@react-refresh')}";
+                    import RefreshRuntime from {$refreshUrl};
                     RefreshRuntime.injectIntoGlobalHook(window);
                     window.\$RefreshReg$ = () => { };
                     window.\$RefreshSig$ = () => (type) => type;
@@ -268,7 +309,7 @@ class Vite implements ViteUtilContract
 
         $url = $this->isRunning($entry) ? $this->serverUrl($entry) : $this->assetUrl($entry);
 
-        return $url ? sprintf('<script type="module" crossorigin src="%s"></script>', $url) : '';
+        return $url !== '' ? $this->scriptTag($url) : '';
     }
 
     /**
@@ -285,7 +326,7 @@ class Vite implements ViteUtilContract
 
         return array_reduce(
             $this->importsUrls($entry),
-            fn($res, $url) => $res . sprintf('<link rel="modulepreload" href="%s">', $url),
+            fn($res, $url) => $res . $this->modulePreloadTag($url),
             ''
         );
     }
@@ -299,12 +340,14 @@ class Vite implements ViteUtilContract
     public function cssTag(string $entry): string
     {
         if ($this->isRunning($entry)) {
-            return '';
+            return $this->isStylePath($entry)
+                ? $this->stylesheetTag($this->serverUrl($entry))
+                : '';
         }
 
         return array_reduce(
             $this->cssUrls($entry),
-            fn($tags, $url) => $tags . sprintf('<link rel="stylesheet" href="%s">', $url),
+            fn($tags, $url) => $tags . $this->stylesheetTag($url),
             ''
         );
     }
@@ -376,9 +419,10 @@ class Vite implements ViteUtilContract
         }
 
         $manifest = $this->getManifest();
-        $file = $manifest[$entry]['file'] ?? null;
+        $chunk = $manifest[$entry] ?? null;
+        $file = is_array($chunk) ? ($chunk['file'] ?? null) : null;
 
-        return is_string($file) ? $this->distUrl($file) : '';
+        return is_string($file) && $file !== '' ? $this->distUrl($file) : '';
     }
 
     /**
@@ -396,9 +440,15 @@ class Vite implements ViteUtilContract
 
         $manifest = $this->getManifest();
         $urls = [];
-        $seen = [];
+        $seenFiles = [];
+        $seenChunks = [];
+        $chunk = $manifest[$entry] ?? null;
+        $entryFile = is_array($chunk) ? ($chunk['file'] ?? null) : null;
+        if (is_string($entryFile) && $entryFile !== '') {
+            $seenFiles[$entryFile] = true;
+        }
 
-        $this->collectImportsUrls($entry, $manifest, $urls, $seen);
+        $this->collectImportsUrls($entry, $manifest, $urls, $seenFiles, $seenChunks);
 
         return $urls;
     }
@@ -434,9 +484,10 @@ class Vite implements ViteUtilContract
 
         $manifest = $this->getManifest();
         $urls = [];
-        $seen = [];
+        $seenFiles = [];
+        $seenChunks = [];
 
-        $this->collectCssUrls($entry, $manifest, $urls, $seen);
+        $this->collectCssUrls($entry, $manifest, $urls, $seenFiles, $seenChunks);
 
         return $urls;
     }
@@ -497,27 +548,46 @@ class Vite implements ViteUtilContract
      * @param string $entry
      * @param array $manifest
      * @param array $urls
-     * @param array $seen
+     * @param array $seenFiles
+     * @param array $seenChunks
      * @return void
      */
-    private function collectImportsUrls(string $entry, array $manifest, array &$urls, array &$seen): void
-    {
-        if (!isset($manifest[$entry]['imports']) || !is_array($manifest[$entry]['imports'])) {
+    private function collectImportsUrls(
+        string $entry,
+        array $manifest,
+        array &$urls,
+        array &$seenFiles,
+        array &$seenChunks
+    ): void {
+        if (isset($seenChunks[$entry])) {
             return;
         }
 
-        foreach ($manifest[$entry]['imports'] as $import) {
-            if (!is_string($import) || !isset($manifest[$import])) {
+        $seenChunks[$entry] = true;
+        $chunk = $manifest[$entry] ?? null;
+        if (!is_array($chunk) || !isset($chunk['imports']) || !is_array($chunk['imports'])) {
+            return;
+        }
+
+        foreach ($chunk['imports'] as $import) {
+            if (!is_string($import)) {
                 continue;
             }
 
-            $file = $manifest[$import]['file'] ?? null;
-            if (is_string($file) && !isset($seen[$file])) {
-                $seen[$file] = true;
-                $urls[] = $this->distUrl($file);
+            $importedChunk = $manifest[$import] ?? null;
+            if (!is_array($importedChunk)) {
+                continue;
             }
 
-            $this->collectImportsUrls($import, $manifest, $urls, $seen);
+            $this->collectImportsUrls($import, $manifest, $urls, $seenFiles, $seenChunks);
+
+            $file = $importedChunk['file'] ?? null;
+            if (!is_string($file) || $file === '' || $this->isStylePath($file) || isset($seenFiles[$file])) {
+                continue;
+            }
+
+            $seenFiles[$file] = true;
+            $urls[] = $this->distUrl($file);
         }
     }
 
@@ -527,32 +597,50 @@ class Vite implements ViteUtilContract
      * @param string $entry
      * @param array $manifest
      * @param array $urls
-     * @param array $seen
+     * @param array $seenFiles
+     * @param array $seenChunks
      * @return void
      */
-    private function collectCssUrls(string $entry, array $manifest, array &$urls, array &$seen): void
-    {
-        if (!isset($manifest[$entry]) || !is_array($manifest[$entry])) {
+    private function collectCssUrls(
+        string $entry,
+        array $manifest,
+        array &$urls,
+        array &$seenFiles,
+        array &$seenChunks
+    ): void {
+        if (isset($seenChunks[$entry])) {
             return;
         }
 
-        if (isset($manifest[$entry]['css']) && is_array($manifest[$entry]['css'])) {
-            foreach ($manifest[$entry]['css'] as $file) {
-                if (!is_string($file) || isset($seen[$file])) {
+        $seenChunks[$entry] = true;
+        $chunk = $manifest[$entry] ?? null;
+        if (!is_array($chunk)) {
+            return;
+        }
+
+        if (isset($chunk['css']) && is_array($chunk['css'])) {
+            foreach ($chunk['css'] as $file) {
+                if (!is_string($file) || $file === '' || isset($seenFiles[$file])) {
                     continue;
                 }
 
-                $seen[$file] = true;
+                $seenFiles[$file] = true;
                 $urls[] = $this->distUrl($file);
             }
         }
 
-        if (isset($manifest[$entry]['imports']) && is_array($manifest[$entry]['imports'])) {
-            foreach ($manifest[$entry]['imports'] as $import) {
+        if (isset($chunk['imports']) && is_array($chunk['imports'])) {
+            foreach ($chunk['imports'] as $import) {
                 if (is_string($import)) {
-                    $this->collectCssUrls($import, $manifest, $urls, $seen);
+                    $this->collectCssUrls($import, $manifest, $urls, $seenFiles, $seenChunks);
                 }
             }
+        }
+
+        $file = $chunk['file'] ?? null;
+        if (is_string($file) && $file !== '' && $this->isStylePath($file) && !isset($seenFiles[$file])) {
+            $seenFiles[$file] = true;
+            $urls[] = $this->distUrl($file);
         }
     }
 
@@ -614,7 +702,7 @@ class Vite implements ViteUtilContract
     private function requiresReactRefresh(array $entries): bool
     {
         foreach ($entries as $entry) {
-            if (str_contains($entry, '.jsx') || str_contains($entry, '.tsx')) {
+            if (in_array($this->pathExtension($entry), ['jsx', 'tsx'], true)) {
                 return true;
             }
         }
@@ -630,12 +718,38 @@ class Vite implements ViteUtilContract
      */
     private function normalizeScheme(string $scheme): string
     {
-        $scheme = trim($scheme);
-        if ($scheme === '') {
-            return self::DEFAULT_SCHEME;
-        }
+        $scheme = strtolower(trim($scheme));
+        $scheme = str_contains($scheme, '://') ? explode('://', $scheme)[0] : $scheme;
 
-        return str_contains($scheme, '://') ? explode('://', $scheme)[0] : $scheme;
+        return in_array($scheme, ['http', 'https'], true) ? $scheme : self::DEFAULT_SCHEME;
+    }
+
+    /**
+     * Normalize host value.
+     *
+     * @param string $host
+     * @return string
+     */
+    private function normalizeHost(string $host): string
+    {
+        $host = trim($host);
+
+        return $host === '' ? self::DEFAULT_HOST : $host;
+    }
+
+    /**
+     * Normalize port value.
+     *
+     * @param mixed $port
+     * @return int
+     */
+    private function normalizePort(mixed $port): int
+    {
+        $port = filter_var($port, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => 65535],
+        ]);
+
+        return $port === false ? self::DEFAULT_PORT : $port;
     }
 
     /**
@@ -671,5 +785,76 @@ class Vite implements ViteUtilContract
         $path = trim($path, '/');
 
         return $path === '' ? self::DEFAULT_DIST_DIR : $path;
+    }
+
+    /**
+     * Determine whether a path points to a stylesheet supported by Vite.
+     *
+     * @param string $path
+     * @return bool
+     */
+    private function isStylePath(string $path): bool
+    {
+        return in_array($this->pathExtension($path), self::STYLE_EXTENSIONS, true);
+    }
+
+    /**
+     * Get a lowercase extension from a path or URL.
+     *
+     * @param string $path
+     * @return string
+     */
+    private function pathExtension(string $path): string
+    {
+        $urlPath = parse_url($path, PHP_URL_PATH);
+
+        return strtolower(pathinfo(is_string($urlPath) ? $urlPath : $path, PATHINFO_EXTENSION));
+    }
+
+    /**
+     * Generate a module script tag.
+     *
+     * @param string $url
+     * @return string
+     */
+    private function scriptTag(string $url): string
+    {
+        return sprintf(
+            '<script type="module" crossorigin src="%s"></script>',
+            $this->escapeAttribute($url)
+        );
+    }
+
+    /**
+     * Generate a stylesheet link tag.
+     *
+     * @param string $url
+     * @return string
+     */
+    private function stylesheetTag(string $url): string
+    {
+        return sprintf('<link rel="stylesheet" href="%s">', $this->escapeAttribute($url));
+    }
+
+    /**
+     * Generate a module preload link tag.
+     *
+     * @param string $url
+     * @return string
+     */
+    private function modulePreloadTag(string $url): string
+    {
+        return sprintf('<link rel="modulepreload" href="%s">', $this->escapeAttribute($url));
+    }
+
+    /**
+     * Escape an HTML attribute value.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function escapeAttribute(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }
