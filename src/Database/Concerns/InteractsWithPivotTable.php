@@ -1,5 +1,5 @@
 <?php
-namespace Spark\Database\Traits;
+namespace Spark\Database\Concerns;
 
 use function count;
 use function func_get_args;
@@ -15,9 +15,9 @@ use function sprintf;
  * It allows you to specify additional fields and conditions for the pivot table
  * when defining relationships between models.
  * 
- * @package Spark\Database\Traits
+ * @package Spark\Database\Concerns
  */
-trait HasPivotTableForRelation
+trait InteractsWithPivotTable
 {
     /** @var array Fields to be appended to the relationship when retrieving related models. */
     protected array $pivotFields = [];

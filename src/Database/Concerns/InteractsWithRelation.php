@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Database\Traits;
+namespace Spark\Database\Concerns;
 
 use Closure;
 use Spark\Database\Exceptions\InvalidOrmException;
@@ -10,7 +10,7 @@ use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_string;
-use function Spark\Database\Traits\map_pivot_conditions;
+use function Spark\Database\Concerns\map_pivot_conditions;
 
 /**
  * ManageRelation Trait
@@ -19,9 +19,9 @@ use function Spark\Database\Traits\map_pivot_conditions;
  * This trait extends QueryBuilder functionality to work with model relationships.
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
- * @package Spark\Database\Relation
+ * @package Spark\Database\Concerns
  */
-trait ManageRelation
+trait InteractsWithRelation
 {
     /**
      * Eager load relationships.

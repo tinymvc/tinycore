@@ -5,9 +5,9 @@ namespace Spark\Database\Relation;
 use Closure;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
-use Spark\Database\Traits\HasPivotTableForRelation;
-use function Spark\Database\Traits\map_pivot_conditions;
-use function Spark\Database\Traits\map_pivot_fields;
+use Spark\Database\Concerns\InteractsWithPivotTable;
+use function Spark\Database\Concerns\map_pivot_conditions;
+use function Spark\Database\Concerns\map_pivot_fields;
 
 /**
  * Class HasManyThrough
@@ -25,7 +25,7 @@ use function Spark\Database\Traits\map_pivot_fields;
  */
 class HasManyThrough extends Relation
 {
-    use HasPivotTableForRelation;
+    use InteractsWithPivotTable;
 
     /**
      * Create a new HasManyThrough relationship instance.

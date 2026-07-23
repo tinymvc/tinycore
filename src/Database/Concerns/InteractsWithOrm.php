@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Database\Traits;
+namespace Spark\Database\Concerns;
 
 use Closure;
 use Spark\Database\Exceptions\InvalidOrmException;
@@ -28,9 +28,9 @@ use function is_string;
  * Supports hasOne, hasMany, belongsTo, belongsToMany relationships with lazy and eager loading.
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
- * @package Spark\Database\Relation
+ * @package Spark\Database\Concerns
  */
-trait HasRelation
+trait InteractsWithOrm
 {
     /**
      * @var array $relations

@@ -10,7 +10,7 @@ use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Database\Schema\Contracts\WrapperContract;
 use Spark\Database\Schema\Wrapper;
-use Spark\Database\Traits\ManageRelation;
+use Spark\Database\Concerns\InteractsWithRelation;
 use Spark\Exceptions\NotFoundException;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Conditionable;
@@ -85,7 +85,7 @@ use function sprintf;
  */
 class QueryBuilder implements QueryBuilderContract
 {
-    use ManageRelation, Conditionable, Macroable {
+    use InteractsWithRelation, Conditionable, Macroable {
         __call as macroCall;
     }
 

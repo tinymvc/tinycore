@@ -5,10 +5,10 @@ namespace Spark\Database\Relation;
 use Closure;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
-use Spark\Database\Traits\HasPivotTableForRelation;
+use Spark\Database\Concerns\InteractsWithPivotTable;
 use function is_array;
-use function Spark\Database\Traits\map_pivot_conditions;
-use function Spark\Database\Traits\map_pivot_fields;
+use function Spark\Database\Concerns\map_pivot_conditions;
+use function Spark\Database\Concerns\map_pivot_fields;
 
 /**
  * Class BelongsToMany
@@ -22,7 +22,7 @@ use function Spark\Database\Traits\map_pivot_fields;
  */
 class BelongsToMany extends Relation
 {
-    use HasPivotTableForRelation;
+    use InteractsWithPivotTable;
 
     /**
      * Create a new BelongsToMany relationship instance.
