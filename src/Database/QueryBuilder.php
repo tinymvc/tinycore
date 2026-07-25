@@ -75,14 +75,13 @@ use function sprintf;
  */
 class QueryBuilder implements QueryBuilderContract
 {
-    use InteractsWithRelation,
-        Conditionable,
-        Macroable,
-        Query\BuildsWhereClauses,
-        Query\ExecutesWriteQueries,
-        Query\BuildsSelectQueries,
-        Query\RetrievesQueryResults {
-        Macroable::__call as macroCall;
+    use Query\BuildsWhereClauses,
+    Query\ExecutesWriteQueries,
+    Query\BuildsSelectQueries,
+    InteractsWithRelation,
+    Conditionable,
+    Macroable {
+        __call as macroCall;
     }
 
     /**
