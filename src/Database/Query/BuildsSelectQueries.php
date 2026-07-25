@@ -6,6 +6,7 @@ use Closure;
 use PDO;
 use Spark\Database\QueryBuilder;
 use Spark\Support\Collection;
+use Spark\Utils\Paginator;
 use function func_get_args;
 use function func_num_args;
 use function is_array;
