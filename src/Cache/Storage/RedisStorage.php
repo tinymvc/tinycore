@@ -12,6 +12,7 @@ use function is_string;
 use function max;
 use function md5;
 use function sprintf;
+use function strlen;
 use function time;
 use function trim;
 

@@ -33,25 +33,16 @@ class Concurrency
     protected array $results = [];
 
     /**
-     * Maximum number of concurrent processes
-     *
-     * @var int
-     */
-    protected int $maxProcesses = 10;
-
-    /**
      * Create a new Concurrency instance
      *
      * @param int $maxProcesses
      * @throws InvalidArgumentException
      */
-    public function __construct(int $maxProcesses = 10)
+    public function __construct(protected int $maxProcesses = 10)
     {
         if ($maxProcesses < 1) {
             throw new InvalidArgumentException('Maximum processes must be at least 1');
         }
-
-        $this->maxProcesses = $maxProcesses;
     }
 
     /**

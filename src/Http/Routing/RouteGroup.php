@@ -207,7 +207,7 @@ class RouteGroup implements RouteGroupContract
      */
     private function cleanForConcat(string $first, string $second, string $delimiter): string
     {
-        return trim($first . $delimiter . ltrim($second, $delimiter), $delimiter);
+        return trim("$first$delimiter" . ltrim($second, $delimiter), $delimiter);
     }
 
     /**
@@ -228,7 +228,7 @@ class RouteGroup implements RouteGroupContract
      * @param array $attributes An associative array of attributes to set.
      * @return self Returns the router instance to allow method chaining.
      *
-     * @throws \Spark\Http\Routing\Exceptions\InvalidGroupAttributeException If an invalid attribute name is provided.
+     * @throws InvalidGroupAttributeException If an invalid attribute name is provided.
      */
     public function withAttributes(array $attributes): self
     {

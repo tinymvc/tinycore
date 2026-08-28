@@ -539,7 +539,7 @@ class Router implements RouterContract
      *
      * @return string Returns the route's path.
      *
-     * @throws \Spark\Http\Routing\Exceptions\InvalidNamedRouteException if the route does not exist.
+     * @throws InvalidNamedRouteException if the route does not exist.
      */
     public function route(string $name, null|string|array|Arrayable $context = null): string
     {
@@ -605,7 +605,7 @@ class Router implements RouterContract
      *
      * @return Response The HTTP response object.
      * 
-     * @throws \Spark\Http\Routing\Exceptions\RouteNotFoundException If no matching route is found.
+     * @throws RouteNotFoundException If no matching route is found.
      */
     public function dispatch(Request $request): Response
     {
@@ -614,7 +614,7 @@ class Router implements RouterContract
             if ($this->matchRoute($route['method'], $route['path'], $request)) {
                 is_debug_mode() && event('app:routeMatched', $route);
 
-                /** @var \Spark\Http\Middleware $middleware */
+                /** @var Middleware $middleware */
                 $middleware = Application::$app->make(Middleware::class);
 
                 // Handle view rendering or instantiate a class for callback if specified

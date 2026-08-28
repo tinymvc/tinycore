@@ -15,7 +15,7 @@ interface ImageUtilContract
      *
      * @return bool Whether the image was compressed successfully.
      */
-    public function compress(int $quality = 75, $destination = null): bool;
+    public function compress(int $quality = 75, ?string $destination = null): bool;
 
     /**
      * Resizes the image.

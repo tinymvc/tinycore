@@ -193,7 +193,7 @@ class Pipeline
      */
     public function withContext(array $context): self
     {
-        $this->context = array_merge($this->context, $context);
+        $this->context = [...$this->context, ...$context];
         return $this;
     }
 

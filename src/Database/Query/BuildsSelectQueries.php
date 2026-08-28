@@ -745,7 +745,7 @@ trait BuildsSelectQueries
         $result = $this->first($fields);
 
         if ($result === false) {
-            throw new NotFoundException('No results found for the query.');
+            throw new \Spark\Exceptions\NotFoundException('No results found for the query.');
         }
 
         return $result;
@@ -829,7 +829,7 @@ trait BuildsSelectQueries
      * Retrieves all results from the executed query and returns them in a collection.
      *
      * @param null|string|array $fields Optional fields to select.
-     * @return \Spark\Support\Collection Array of query results.
+     * @return Collection Array of query results.
      */
     public function get($fields = null): Collection
     {
@@ -842,7 +842,7 @@ trait BuildsSelectQueries
      * @param int $limit Number of items per page.
      * @param string $keyword URL query parameter name for pagination.
      * @param null|string|array $fields Optional fields to select.
-     * @return \Spark\Utils\Paginator
+     * @return Paginator
      */
     public function paginate(int $limit = 10, string $keyword = 'page', $fields = null): Paginator
     {

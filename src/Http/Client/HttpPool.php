@@ -4,6 +4,7 @@ namespace Spark\Http\Client;
 
 use Spark\Http\Client\Contracts\HttpPoolContract;
 use Spark\Http\Client\Contracts\HttpRequestContract;
+use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
 use function count;
@@ -47,7 +48,7 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param array $params Optional query parameters
-     * @return \Spark\Http\Client\Contracts\HttpRequestContract
+     * @return HttpRequestContract
      */
     public function get(string $url, array $params = []): HttpRequestContract
     {
@@ -59,7 +60,7 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The POST data
-     * @return \Spark\Http\Client\Contracts\HttpRequestContract
+     * @return HttpRequestContract
      */
     public function post(string $url, string|array $data = []): HttpRequestContract
     {
@@ -71,7 +72,7 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The PUT data
-     * @return \Spark\Http\Client\Contracts\HttpRequestContract
+     * @return HttpRequestContract
      */
     public function put(string $url, string|array $data = []): HttpRequestContract
     {
@@ -83,7 +84,7 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The PATCH data
-     * @return \Spark\Http\Client\Contracts\HttpRequestContract
+     * @return HttpRequestContract
      */
     public function patch(string $url, string|array $data = []): HttpRequestContract
     {
@@ -95,7 +96,7 @@ class HttpPool implements HttpPoolContract
      * 
      * @param string $url The target URL
      * @param string|array $data The DELETE data
-     * @return \Spark\Http\Client\Contracts\HttpRequestContract
+     * @return HttpRequestContract
      */
     public function delete(string $url, string|array $data = []): HttpRequestContract
     {
@@ -109,7 +110,7 @@ class HttpPool implements HttpPoolContract
      * @param string $url Target URL
      * @param array $params Query parameters
      * @param string|array $data POST/PUT/PATCH data
-     * @return \Spark\Http\Client\Contracts\HttpRequestContract
+     * @return HttpRequestContract
      */
     private function addRequest(string $method, string $url, array $params = [], string|array $data = []): HttpRequestContract
     {
@@ -125,7 +126,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Get all pending requests.
      * 
-     * @return array<string|int,\Spark\Http\Client\Contracts\HttpRequestContract> Array of HttpPendingRequest objects
+     * @return array<string|int,HttpRequestContract> Array of HttpPendingRequest objects
      */
     public function getPendingRequests(): array
     {
@@ -143,7 +144,7 @@ class HttpPool implements HttpPoolContract
     /**
      * Set the pending requests.
      * 
-     * @param array<string|int,\Spark\Http\Client\Contracts\HttpRequestContract> $requests Array of HttpPendingRequest objects
+     * @param array<string|int,HttpRequestContract> $requests Array of HttpPendingRequest objects
      */
     public function setPendingRequests(array $requests): void
     {
@@ -153,8 +154,8 @@ class HttpPool implements HttpPoolContract
     /**
      * Execute all pending requests concurrently.
      * 
-     * @return array<string|int,\Spark\Http\Client\Contracts\HttpResponseContract> Array of HttpResponse objects
-     * @throws \Spark\Http\Client\Exceptions\HttpException
+     * @return array<string|int,HttpResponseContract> Array of HttpResponse objects
+     * @throws HttpException
      */
     public function executePendingRequests(): array
     {
@@ -164,9 +165,9 @@ class HttpPool implements HttpPoolContract
     /**
      * Execute all pending requests concurrently.
      * 
-     * @param array<string|int,\Spark\Http\Client\Contracts\HttpRequestContract> $requests Array of HttpPendingRequest objects
-     * @return array<string|int,\Spark\Http\Client\Contracts\HttpResponseContract> Array of HttpResponse objects
-     * @throws \Spark\Http\Client\Exceptions\HttpException
+     * @param array<string|int,HttpRequestContract> $requests Array of HttpPendingRequest objects
+     * @return array<string|int,HttpResponseContract> Array of HttpResponse objects
+     * @throws HttpException
      */
     public function execute(array $requests): array
     {

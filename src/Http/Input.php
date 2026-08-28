@@ -476,7 +476,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @template-covariant TValue
      *
      * @param string $key
-     * @return \Spark\Support\Collection<TKey, TValue>
+     * @return Collection<TKey, TValue>
      */
     public function collect(string $key): Collection
     {
@@ -816,7 +816,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Converts the sanitizer data array to a Spark\Support\Collection.
      *
-     * @return \Spark\Support\Collection The collection containing sanitized data.
+     * @return Collection The collection containing sanitized data.
      */
     public function toCollection(): Collection
     {
@@ -849,9 +849,9 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      *
      * @param string $key Key in the data array to convert to Stringable.
      * @param string $default Default value if key is not found.
-     * @return \Spark\Support\Stringable The Stringable instance containing the sanitized string.
+     * @return Stringable The Stringable instance containing the sanitized string.
      */
-    public function str(string $key, string $default = ''): \Spark\Support\Stringable
+    public function str(string $key, string $default = ''): Stringable
     {
         return new Stringable(
             (string) $this->data->get($key, $default)

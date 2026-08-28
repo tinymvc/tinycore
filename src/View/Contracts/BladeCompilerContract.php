@@ -8,8 +8,9 @@ interface BladeCompilerContract
     /**
      * Compiles a Blade template string into a PHP string.
      *
-     * @param string $template The Blade template string to compile.
-     * @return string The compiled PHP string.
+     * @param string $templatePath The path to the Blade template file.
+     * @param string $compiledPath The path to the compiled PHP file.
+     * @return void
      */
     public function compile(string $templatePath, string $compiledPath): void;
 

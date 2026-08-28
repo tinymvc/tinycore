@@ -138,7 +138,7 @@ class Job implements JobContract
      * @param string $repeat
      *   The interval string for repeating the job.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function repeat(string $repeat): JobContract
@@ -154,7 +154,7 @@ class Job implements JobContract
      * @param int $minutes
      *   The number of minutes between each repetition.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function repeatEveryMinutes(int $minutes = 1): JobContract
@@ -166,7 +166,7 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every hour.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function repeatHourly(): JobContract
@@ -178,7 +178,7 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every day.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function repeatDaily(): JobContract
@@ -190,7 +190,7 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every week.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function repeatWeekly(): JobContract
@@ -202,7 +202,7 @@ class Job implements JobContract
     /**
      * Sets the job to repeat every month.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function repeatMonthly(): JobContract
@@ -222,7 +222,7 @@ class Job implements JobContract
      *   The time at which the job should be scheduled. This can be a
      *   Carbon object or a string that can be parsed into a Carbon.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function schedule(string|Carbon $scheduledTime): JobContract
@@ -247,7 +247,7 @@ class Job implements JobContract
      * @param int $seconds
      *   The number of seconds to delay the job execution.
      *
-     * @return \Spark\Queue\Contracts\JobContract
+     * @return JobContract
      *   Returns the current Job instance for method chaining.
      */
     public function delay(int $seconds): JobContract
@@ -599,7 +599,7 @@ class Job implements JobContract
      * This method retrieves the time when the job was created from its metadata.
      * If the creation time is not available, it returns null.
      *
-     * @return \Spark\Carbon|null The time when the job was created, or null if not available.
+     * @return Carbon|null The time when the job was created, or null if not available.
      */
     public function createdAt(): ?Carbon
     {
@@ -616,7 +616,7 @@ class Job implements JobContract
      * This method retrieves the time when the job failed from its metadata.
      * If the job has not failed, it returns null.
      *
-     * @return \Spark\Carbon|null The time when the job failed, or null if it has not failed.
+     * @return Carbon|null The time when the job failed, or null if it has not failed.
      */
     public function failedAt(): ?Carbon
     {

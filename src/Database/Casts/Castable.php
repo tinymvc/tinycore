@@ -221,7 +221,7 @@ trait Castable
      * Cast a value to a date.
      *
      * @param mixed $value The value to cast
-     * @return \Spark\Carbon|null The date object
+     * @return Carbon|null The date object
      */
     protected function asDate(mixed $value): ?Carbon
     {
@@ -264,7 +264,7 @@ trait Castable
      * Cast a value to a collection.
      *
      * @param mixed $value The value to cast
-     * @return \Spark\Support\Collection The collection
+     * @return Collection The collection
      */
     protected function asCollection(mixed $value): Collection
     {
@@ -403,7 +403,7 @@ trait Castable
      * Get an instance of the custom cast class for the given attribute.
      *
      * @param string $key The attribute key
-     * @return \Spark\Database\Contracts\CastsAttributes The cast instance
+     * @return CastsAttributes The cast instance
      * @throws \InvalidArgumentException If the cast is not a valid custom cast class
      */
     protected function getCustomCastInstance(string $key): CastsAttributes

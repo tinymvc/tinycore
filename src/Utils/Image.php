@@ -120,7 +120,7 @@ class Image implements ImageUtilContract
             throw new ImageUtilException("Unable to read required image metadata for: {$this->imageSource}");
         }
 
-        $this->info = array_merge($imageSize, pathinfo($this->imageSource));
+        $this->info = [...$imageSize, ...pathinfo($this->imageSource)];
     }
 
     /**

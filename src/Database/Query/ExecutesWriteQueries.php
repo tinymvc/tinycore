@@ -74,6 +74,28 @@ trait ExecutesWriteQueries
     }
 
     /**
+     * Inserts data into the database while ignoring duplicate entries.
+     *
+     * @param array|Arrayable $data The data to insert (single record or multiple records)
+     * @return int Returns last insert ID.
+     */
+    public function insertOrIgnore(array|Arrayable $data): int
+    {
+        return $this->insert($data, ['ignore' => true]);
+    }
+
+    /**
+     * Inserts data into the database, replacing existing records on conflict.
+     *
+     * @param array|Arrayable $data The data to insert (single record or multiple records)
+     * @return int Returns last insert ID.
+     */
+    public function insertOrReplace(array|Arrayable $data): int
+    {
+        return $this->insert($data, ['replace' => true]);
+    }
+
+    /**
      * Upsert single/multiple records into the database with optional configurations.
      *
      * @param array|Arrayable $data

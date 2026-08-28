@@ -59,7 +59,6 @@ interface ValidatorContract
     /**
      * Returns the first validation error message for a specific field or the first error overall if no field is specified.
      *
-     * @param null|string $field The name of the field to get the first error for, or null to get the first error overall.
      * @return string|null The first error message for the specified field, the first error overall if no field is specified, or null if there are no errors.
      */
     public function getFirstError(): ?string;

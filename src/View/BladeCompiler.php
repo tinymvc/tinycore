@@ -504,7 +504,7 @@ class BladeCompiler implements BladeCompilerContract
         }
 
         // If it contains dynamic content, use ob_start() buffering
-        return "function() { ob_start(); ?>{$content}<?php return ob_get_clean(); }";
+        return "function() { ob_start(); ?>$content<?php return ob_get_clean(); }";
     }
 
     /**

@@ -512,7 +512,7 @@ class Tinker
      */
     private function handleCommand(string $input): bool
     {
-        /** @var \Spark\Console\Commands $spark */
+        /** @var Commands $spark */
         $spark = Application::$app->make(Commands::class);
 
         $commands = [

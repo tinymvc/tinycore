@@ -49,7 +49,7 @@ class Blade implements BladeContract
     /**
      * The Blade compiler instance
      * 
-     * @var \Spark\View\Contracts\BladeCompilerContract
+     * @var BladeCompilerContract
      */
     private BladeCompilerContract $compiler;
 
@@ -218,7 +218,7 @@ class Blade implements BladeContract
     /**
      * Get the Blade compiler instance
      * 
-     * @return \Spark\View\Contracts\BladeCompilerContract
+     * @return BladeCompilerContract
      */
     public function getCompiler(): BladeCompilerContract
     {

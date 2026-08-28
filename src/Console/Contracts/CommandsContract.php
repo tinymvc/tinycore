@@ -81,7 +81,7 @@ interface CommandsContract
     /**
      * Disables a command in the Commands instance.
      *
-     * @param array|string $command
+     * @param array|string $name
      *   The name of the command to disable, or an array of command names to disable.
      *
      * @return $this

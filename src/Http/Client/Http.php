@@ -40,7 +40,7 @@ class Http extends HttpRequest implements HttpContract
      * @param string $url Target URL
      * @param array $params Query parameters
      * @param string|array $data POST/PUT/PATCH/DELETE data
-     * @throws \Spark\Http\Client\Exceptions\HttpException If cURL extension is not loaded
+     * @throws HttpException If cURL extension is not loaded
      */
     public function __construct(
         string $method = 'GET',
@@ -79,7 +79,6 @@ class Http extends HttpRequest implements HttpContract
      * @param string $url Target URL
      * @param array $params Query parameters
      * @param string|array $data Request body data
-     * @param string|int $key Request key
      */
     public function reset(string $method, string $url, array $params = [], string|array $data = []): void
     {
@@ -98,8 +97,8 @@ class Http extends HttpRequest implements HttpContract
      *
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
-     * @return \Spark\Http\Client\Contracts\HttpResponseContract The response data, including body, status code, final URL, and content length.
-     * @throws \Spark\Http\Client\Exceptions\HttpException If cURL initialization fails.
+     * @return HttpResponseContract The response data, including body, status code, final URL, and content length.
+     * @throws HttpException If cURL initialization fails.
      */
     public function send(string $url, array $params = []): HttpResponseContract
     {
@@ -211,7 +210,7 @@ class Http extends HttpRequest implements HttpContract
      * @param callable $callback A callback that receives a Pool instance and returns an array of requests
      * @return array An array of HttpResponse objects, keyed by their index or custom key
      * 
-     * @throws \Spark\Http\Client\Exceptions\HttpException If the callback does not return an array of requests
+     * @throws HttpException If the callback does not return an array of requests
      */
     public function pool(callable $callback): array
     {
@@ -228,7 +227,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets a single cURL option.
      * 
-     * @deprecated Use withOption() instead for fluent interface
      * @param int $key The cURL option constant.
      * @param mixed $value The value for the option.
      * @return self
@@ -242,7 +240,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets the HTTP method for the request.
      * 
-     * @deprecated Use withMethod() instead for consistent naming
      * @param string $method The HTTP method (e.g., 'GET', 'POST').
      * @return self
      */
@@ -255,7 +252,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets multiple cURL options at once.
      * 
-     * @deprecated Use withOptions() instead for fluent interface
      * @param array $options Associative array of cURL options.
      * @return self
      */
@@ -268,7 +264,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets the User-Agent header for the request.
      * 
-     * @deprecated Use withUserAgent() instead for consistency
      * @param string $useragent The User-Agent string.
      * @return self
      */
@@ -281,7 +276,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets the Content-Type header for the request.
      * 
-     * @deprecated Use withContentType() instead for consistency
      * @param string $type The Content-Type string (e.g., 'application/json').
      * @return self
      */
@@ -294,7 +288,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets the Accept header for the request.
      * 
-     * @deprecated Use withAccept() instead for consistency
      * @param string $type The Accept string (e.g., 'application/json').
      * @return self
      */
@@ -307,7 +300,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Adds a custom header to the request.
      * 
-     * @deprecated Use withHeader() instead for consistency
      * @param string $key Header name.
      * @param string $value Header value.
      * @return self
@@ -321,7 +313,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Adds multiple custom headers to the request.
      * 
-     * @deprecated Use withHeaders() instead for consistency
      * @param array $headers Associative array of headers (key => value).
      * @return self
      */
@@ -334,7 +325,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Add Cookies to the request.
      * 
-     * @deprecated Use withCookies() instead for consistency
      * @param array $cookies Associative array of cookies (key => value).
      * @return self
      */
@@ -347,7 +337,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets the cookie jar file path for storing cookies.
      * 
-     * @deprecated Use withCookieJar() instead for consistency
      * @param string $cookieJar The file path to the cookie jar.
      * @return self
      */
@@ -360,7 +349,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets a proxy for the request.
      * 
-     * @deprecated Use withProxy() instead for consistency
      * @param string $proxy The proxy URL (e.g., 'http://proxy.example.com:8080').
      * @param string $proxyAuth Optional proxy authentication in the format 'username:password'.
      * @return self
@@ -396,7 +384,6 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sets the timeout for the request in seconds.
      * 
-     * @deprecated Use withTimeout() instead for consistency
      * @param int $seconds Timeout in seconds.
      * @return self
      */
@@ -424,7 +411,7 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $url Target URL
      * @param array $params Query parameters
-     * @return \Spark\Http\Client\Contracts\HttpResponseContract The response data, including body, status code, final URL, and content length.
+     * @return HttpResponseContract The response data, including body, status code, final URL, and content length.
      */
     public function get(string $url, array $params = []): HttpResponseContract
     {
@@ -437,7 +424,7 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $url Target URL
      * @param array|string $data POST data
-     * @return \Spark\Http\Client\Contracts\HttpResponseContract The response data, including body, status code, final URL, and content length.
+     * @return HttpResponseContract The response data, including body, status code, final URL, and content length.
      */
     public function post(string $url, array|string $data = []): HttpResponseContract
     {

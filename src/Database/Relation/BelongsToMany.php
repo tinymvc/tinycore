@@ -179,7 +179,7 @@ class BelongsToMany extends Relation
         }
 
         if (!empty($records)) {
-            /** @var \Spark\Database\QueryBuilder to insert into pivot table */
+            /** @var QueryBuilder to insert into pivot table */
             $query = $this->newPivotQuery();
             $query->table($this->table)->insert($records);
         }
@@ -205,7 +205,7 @@ class BelongsToMany extends Relation
             throw new \RuntimeException("Parent model's {$this->parentKey} must be set before detaching related models.");
         }
 
-        /** @var \Spark\Database\QueryBuilder to insert into pivot table */
+        /** @var QueryBuilder to insert into pivot table */
         $query = $this->newPivotQuery();
         $query->table($this->table)
             ->where($this->foreignPivotKey, $parentKeyValue);
@@ -249,7 +249,7 @@ class BelongsToMany extends Relation
             $ids = array_fill_keys($ids, []);
         }
 
-        /** @var \Spark\Database\QueryBuilder to insert into pivot table */
+        /** @var QueryBuilder to insert into pivot table */
         $query = $this->newPivotQuery();
 
         // Get currently attached IDs
@@ -327,7 +327,7 @@ class BelongsToMany extends Relation
             $ids = array_fill_keys($ids, []);
         }
 
-        /** @var \Spark\Database\QueryBuilder to insert into pivot table */
+        /** @var QueryBuilder to insert into pivot table */
         $query = $this->newPivotQuery();
 
         $syncIds = array_keys($ids);

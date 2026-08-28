@@ -125,7 +125,7 @@ trait InteractsWithOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Relation\HasOne
+     * @return HasOne
      */
     protected function hasOne(
         string $related,
@@ -159,7 +159,7 @@ trait InteractsWithOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Relation\HasMany
+     * @return HasMany
      */
     protected function hasMany(
         string $related,
@@ -193,7 +193,7 @@ trait InteractsWithOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Relation\BelongsTo
+     * @return BelongsTo
      */
     protected function belongsTo(
         string $related,
@@ -232,7 +232,7 @@ trait InteractsWithOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Relation\BelongsToMany
+     * @return BelongsToMany
      */
     protected function belongsToMany(
         string $related,
@@ -280,7 +280,7 @@ trait InteractsWithOrm
      * @param bool $lazy Whether to enable lazy loading
      * @param Closure|null $callback Custom query callback
      * 
-     * @return \Spark\Database\Relation\HasManyThrough
+     * @return HasManyThrough
      */
     protected function hasManyThrough(
         string $related,

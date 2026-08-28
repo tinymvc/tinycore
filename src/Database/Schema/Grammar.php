@@ -12,7 +12,8 @@ use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_bool;
-use function is_string;
+use function is_float;
+use function is_int;
 use function sprintf;
 
 /**
@@ -475,7 +476,7 @@ class Grammar implements GrammarContract
         return match ($this->driver) {
             'mysql' => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP PRIMARY KEY",
             default => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP CONSTRAINT "
-                . $this->wrapper->wrap($primary['name'] ?? "{$table}_pkey"),
+            . $this->wrapper->wrap($primary['name'] ?? "{$table}_pkey"),
         };
     }
 

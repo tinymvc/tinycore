@@ -7,6 +7,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use function func_get_args;
 use function is_array;
+use function is_string;
 use function sprintf;
 
 /**
@@ -501,7 +502,7 @@ class FileManager
         $items = new FilesystemIterator($from, $options);
 
         foreach ($items as $item) {
-            $target = $to . '/' . $item->getBasename();
+            $target = "$to/" . $item->getBasename();
 
             if ($item->isDir()) {
                 static::copyDirectory($item->getPathname(), $target, $options);
@@ -616,7 +617,7 @@ class FileManager
         $newFilename = $filename;
 
         while (static::exists("$directory/$newFilename")) {
-            $newFilename = $name . '_' . $counter . ($extension ? '.' . $extension : '');
+            $newFilename = "{$name}_$counter" . ($extension ? ".$extension" : '');
             $counter++;
         }
 
@@ -632,7 +633,7 @@ class FileManager
      */
     public static function putAtomic(string $path, mixed $data): bool
     {
-        $tempFile = $path . '.tmp.' . uniqid();
+        $tempFile = "$path.tmp." . uniqid();
 
         if (static::put($tempFile, $data) === false) {
             return false;

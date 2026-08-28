@@ -774,7 +774,7 @@ class Validator implements ValidatorContract
      * 
      * Validates if a file is a valid image by checking its MIME type.
      * 
-     * @param array $file The uploaded file array containing 'tmp_name'.
+     * @param mixed $file The uploaded file array containing 'tmp_name'.
      * @return bool True if the file is a valid image, false otherwise.
      */
     private function validateImage($file): bool

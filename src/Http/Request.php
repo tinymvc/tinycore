@@ -1322,7 +1322,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         if ($this->isPrecognitive() && $this->headers->has('precognition-validate-only')) {
             $rules = collect($rules)
                 ->only(
-                    explode(',', $this->headers->get('precognition-validate-only', ''))
+                    explode(',', $this->headers->get('precognition-validate-only') ?: '')
                 )
                 ->all();
         }

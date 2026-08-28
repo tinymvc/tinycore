@@ -39,7 +39,7 @@ interface RouteGroupContract
     /**
      * Set a namespace for all controllers in the group.
      *
-     * @param string $namespace The namespace to set.
+     * @param callable|string|array $callback The namespace to set.
      * @return self
      */
     public function callback(callable|string|array $callback): self;

@@ -588,7 +588,7 @@ class HttpRequest implements HttpRequestContract
      * Build the cURL handle for this request.
      * 
      * @return resource|\CurlHandle The cURL handle
-     * @throws \Spark\Http\Client\Exceptions\HttpException
+     * @throws HttpException
      */
     public function buildCurlHandle()
     {
@@ -655,8 +655,8 @@ class HttpRequest implements HttpRequestContract
     /**
      * Execute the HTTP request.
      * 
-     * @return \Spark\Http\Client\Contracts\HttpResponseContract
-     * @throws \Spark\Http\Client\Exceptions\HttpException
+     * @return HttpResponseContract
+     * @throws HttpException
      */
     public function execute(): HttpResponseContract
     {
