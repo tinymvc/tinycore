@@ -13,6 +13,7 @@ use function func_get_args;
 use function in_array;
 use function is_array;
 use function is_dir;
+use function is_string;
 use function mkdir;
 use function sprintf;
 
@@ -33,7 +34,7 @@ use function sprintf;
  * @method QueryBuilder min($field, $name = null)
  * @method QueryBuilder sum($field, $name = null)
  * @method QueryBuilder avg($field, $name = null)
- * @method QueryBuilder table(string $table)
+ * @method QueryBuilder table(string $table, ?string $alias = null)
  * @method QueryBuilder prefix(string $prefix)
  * @method QueryBuilder when(mixed $value, callable $callback)
  * @method QueryBuilder unless(mixed $value, callable $callback)
@@ -51,7 +52,7 @@ use function sprintf;
  * @method static QueryBuilder whereIn(string $column, array $values)
  * @method static QueryBuilder when(mixed $value, callable $callback)
  * @method static QueryBuilder unless(mixed $value, callable $callback)
- * @method static QueryBuilder table(string $table)
+ * @method static QueryBuilder table(string $table, ?string $alias = null)
  * @method static QueryBuilder select(array|string $fields = '*', ...$args)
  * @method static QueryBuilder selectRaw(string $sql, array $bindings = [])
  * @method static QueryBuilder from(string $table, ?string $alias = null)
@@ -83,6 +84,9 @@ class DB implements DBContract
      */
     private array $config = [];
 
+    /** @var string The default database driver. */
+    public const DEFAULT_DRIVER = 'mysql';
+
     /**
      * Initializes the database connection.
      *
@@ -96,6 +100,21 @@ class DB implements DBContract
         }
 
         $this->config = $this->resolveConnectionConfig((array) $config);
+    }
+
+    /**
+     * Creates a new database connection instance.
+     *
+     * @param string|array $config The database configuration or driver name.
+     * @return self A new instance of the DB class.
+     */
+    public static function connection(string|array $config = []): self
+    {
+        if (is_string($config)) {
+            $config = config("database.connections.$config", []);
+        }
+
+        return new self($config);
     }
 
     /**
@@ -119,7 +138,7 @@ class DB implements DBContract
      */
     public function getDriver(): string
     {
-        return strtolower((string) ($this->config['driver'] ?? 'mysql'));
+        return strtolower((string) ($this->config['driver'] ??= self::DEFAULT_DRIVER));
     }
 
     /**
@@ -174,8 +193,12 @@ class DB implements DBContract
      * @param array $config The new database configuration.
      * @return static The database instance.
      */
-    public function resetConfig(array $config): self
+    public function reset(array $config = []): self
     {
+        if (empty($config)) {
+            $config = config('database');
+        }
+
         unset($this->pdo);
         $this->config = $this->resolveConnectionConfig($config);
         return $this;
@@ -186,9 +209,13 @@ class DB implements DBContract
      */
     private function resolveConnectionConfig(array $config): array
     {
+        $config['driver'] ??= self::DEFAULT_DRIVER; // Set default driver if not provided.
+
         if (is_array($config['connections'] ?? null)) {
-            $driver = strtolower((string) ($config['driver'] ?? 'mysql'));
-            $connectionKey = is_array($config['connections'][$driver] ?? null) ? $driver : 'default';
+            $driver = strtolower((string) $config['driver']);
+            $connectionKey = $config['default_connection'] ??= (
+                is_array($config['connections'][$driver] ?? null) ? $driver : 'default'
+            );
             $connection = is_array($config['connections'][$connectionKey] ?? null)
                 ? $config['connections'][$connectionKey]
                 : [];
@@ -454,7 +481,7 @@ class DB implements DBContract
      */
     private function buildDsn(): string
     {
-        return match ($this->getDriver()) {
+        return match ($driver = $this->getDriver()) {
             // create a sqlite data source name, sqlite.db filepath.
             'sqlite' => sprintf('sqlite:%s', $this->config['database'] ?? $this->config['path'] ?? $this->config['file'] ?? ':memory:'),
 
@@ -464,8 +491,7 @@ class DB implements DBContract
              * @see https://www.php.net/manual/en/pdo.drivers.php
              **/
             default => sprintf(
-                "%s:%s%s%s%s",
-                $this->config['driver'],
+                "$driver:%s%s%s%s",
                 isset($this->config['host']) ?
                 sprintf('host=%s;', $this->config['host']) : '',
                 isset($this->config['port']) ?

@@ -136,7 +136,7 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Holds the query wrapper instance.
      * 
-     * @var \Spark\Database\Schema\WrapperContract $wrapper The query wrapper.
+     * @var WrapperContract $wrapper The query wrapper.
      */
     private WrapperContract $wrapper;
 
@@ -352,10 +352,9 @@ class QueryBuilder implements QueryBuilderContract
         // Check if the method exists in the related model's scope.
         if ($this->hasRelatedModel()) {
             $scope = sprintf('scope%s', ucfirst($method));
-            $model = $this->getRelatedModel();
 
             // Call the scope method on the model if it exists.
-            if (method_exists($model, $scope)) {
+            if (method_exists($model = $this->getRelatedModel(), $scope)) {
                 return $model->$scope($this, ...$args);
             }
         }

@@ -45,7 +45,7 @@ if (!function_exists('app')) {
      * @param  string|class-string<TClass>|null  $abstract [optional] The abstract name or class name of the service or value to retrieve.
      *                                                      If not provided, the application instance is returned.
      * @param array $parameters [optional] An array of parameters to pass when resolving the service or value.
-     * @return ($abstract is class-string<TClass> ? TClass : ($abstract is null ? \Spark\Foundation\Application : mixed))
+     * @return ($abstract is class-string<TClass> ? TClass : ($abstract is null ? Application : mixed))
      */
     function app(null|string $abstract = null, array $parameters = []): mixed
     {
@@ -146,11 +146,11 @@ if (!function_exists('request')) {
      * @param null|string|array $key The key to retrieve from the request data.
      * @param mixed $default The default value to return if the key does not exist.
      *
-     * @return ($key is null ? \Spark\Http\Request : mixed) The current request instance or the value of the specified key from the request data.
+     * @return ($key is null ? Request : mixed) The current request instance or the value of the specified key from the request data.
      */
     function request(null|string|array $key = null, $default = null): mixed
     {
-        /** @var \Spark\Http\Request $request */
+        /** @var Request $request */
         $request = Application::$app->get(Request::class);
 
         if ($key !== null && is_string($key)) {
@@ -303,9 +303,9 @@ if (!function_exists('session')) {
      * @param mixed $default The default value to return if the key does not exist.
      * @return ($param is null ? Session : mixed) The session instance, the value of the specified key, or the default value if the key does not exist.
      */
-    function session($param = null, $default = null): mixed
+    function session(array|string|null $param = null, mixed $default = null): mixed
     {
-        /** @var \Spark\Http\Session $session */
+        /** @var Session $session */
         $session = get(Session::class);
 
         if (is_array($param)) {
@@ -327,7 +327,7 @@ if (!function_exists('router')) {
     /**
      * Get the current router instance.
      *
-     * @return \Spark\Http\Routing\Router
+     * @return Router
      */
     function router(): Router
     {
@@ -339,10 +339,15 @@ if (!function_exists('database')) {
     /**
      * Get the current database instance.
      *
+     * @param string|null $connection The name of the database connection to use.
      * @return DB The database instance.
      */
-    function database(): DB
+    function database(?string $connection = null): DB
     {
+        if ($connection !== null) {
+            return DB::connection($connection);
+        }
+
         return get(DB::class);
     }
 }
@@ -351,11 +356,12 @@ if (!function_exists('db')) {
     /**
      * Get the current database instance.
      *
+     * @param string|null $connection The name of the database connection to use.
      * @return DB The database instance.
      */
-    function db(): DB
+    function db(?string $connection = null): DB
     {
-        return get(DB::class);
+        return database($connection);
     }
 }
 
@@ -1270,7 +1276,7 @@ if (!function_exists('gate')) {
      */
     function gate(string|null $ability = null, string|array|callable|null $callback = null): Gate
     {
-        /** @var \Spark\Http\Gate $gate */
+        /** @var Gate $gate */
         $gate = get(Gate::class);
 
         if ($ability !== null && func_num_args() === 2 && $callback !== null) {
@@ -1294,11 +1300,11 @@ if (!function_exists('event')) {
      * @param bool $halt
      *   When true, dispatches using "until" semantics and returns the first non-null response.
      *
-     * @return mixed|\Spark\Events
+     * @return mixed|Events
      */
     function event(null|array|string $eventName = null, mixed $payload = [], bool $halt = false): mixed
     {
-        /** @var \Spark\Events $event */
+        /** @var Events $event */
         $event = get(Events::class);
 
         if ($eventName === null) {
@@ -1539,7 +1545,7 @@ if (!function_exists('vite')) {
      */
     function vite(null|string|array $entrypoints = null, null|string|array $buildDirectoryOrConfig = null): Vite
     {
-        /** @var \Spark\Utils\Vite $vite The vite instance */
+        /** @var Vite $vite The vite instance */
         $vite = get(Vite::class);
 
         if ($entrypoints === null && $buildDirectoryOrConfig === null) {
@@ -1590,7 +1596,7 @@ if (!function_exists('validator')) {
      * @param string|array $rules An array of validation rules to apply.
      * @param array|null $attributes An optional array of data to validate.
      * @param array|null $messages An optional array of custom error messages.
-     * @return \Spark\Http\Validator Returns a validator object.
+     * @return Validator Returns a validator object.
      */
     function validator(null|array|string $rules, null|array $attributes = null, null|array $messages = null): Validator
     {
@@ -1800,7 +1806,7 @@ if (!function_exists('abort')) {
             exit; // Exit the script
         }
 
-        /** @var \Spark\View\Blade The Blade view instance */
+        /** @var Blade The Blade view instance */
         $view = get(Blade::class);
 
         $originalPath = $view->getPath();
@@ -1829,7 +1835,46 @@ if (!function_exists('abort')) {
         response($viewHtml, $code)
             ->send();
 
+        Application::$app->terminate();
         exit; // Exit the script
+    }
+}
+
+if (!function_exists('abort_if')) {
+    /**
+     * Abort the current request if a given condition is true.
+     *
+     * @param bool $condition The condition to evaluate.
+     * @param string|int $error The error name of the error view or the HTTP status code.
+     * @param string|null $message An optional message to display in the error view.
+     * @param int|null $code The HTTP status code.
+     *
+     * @return void
+     */
+    function abort_if(bool $condition, string|int $error, ?string $message = null, ?int $code = null): void
+    {
+        if ($condition) {
+            abort($error, $message, $code);
+        }
+    }
+}
+
+if (!function_exists('abort_unless')) {
+    /**
+     * Abort the current request if a given condition is false.
+     *
+     * @param bool $condition The condition to evaluate.
+     * @param string|int $error The error name of the error view or the HTTP status code.
+     * @param string|null $message An optional message to display in the error view.
+     * @param int|null $code The HTTP status code.
+     *
+     * @return void
+     */
+    function abort_unless(bool $condition, string|int $error, ?string $message = null, ?int $code = null): void
+    {
+        if (!$condition) {
+            abort($error, $message, $code);
+        }
     }
 }
 
@@ -1843,11 +1888,11 @@ if (!function_exists('command')) {
      * @param null|string $name The name of the command to add.
      * @param null|string|array|callable $callback The callback to execute for the command
      * @param string $description An optional description for the command.
-     * @return \Spark\Console\Commands The Commands instance.
+     * @return Commands The Commands instance.
      */
     function command(null|string $name = null, null|string|array|callable $callback = null, string $description = ''): Commands
     {
-        /** @var \Spark\Console\Commands $command Retrieve the Commands instance */
+        /** @var Commands $command Retrieve the Commands instance */
         $command = get(Commands::class);
 
         // If arguments are provided, add a new command
@@ -2061,7 +2106,7 @@ if (!function_exists('uploader')) {
      * @param array|null $resizes Optional. The resizes configuration array. Default is an empty array.
      * @param int|null $compress Optional. The compression ratio for images. Default is null.
      * @param UploaderUtilDriverInterface|null $driver Optional. The custom uploader driver instance. Default is null.
-     * @return \Spark\Utils\Uploader The Uploader instance.
+     * @return Uploader The Uploader instance.
      */
     function uploader(
         null|string $uploadTo = null,
@@ -2096,7 +2141,7 @@ if (!function_exists('now')) {
      * which can be used for various date and time operations.
      *
      * @param DateTimeZone|string|null $timezone An optional timezone identifier to set the timezone for the DateTime object. If null, the default timezone will be used.
-     * @return \Spark\Carbon The current date and time.
+     * @return Carbon The current date and time.
      */
     function now(DateTimeZone|string|null $timezone = null): Carbon
     {
@@ -2114,7 +2159,7 @@ if (!function_exists('carbon')) {
      *
      * @param Carbon|DateTimeInterface|float|int|string|null $time The datetime string or Unix timestamp to convert.
      * @param DateTimeZone|string|null $timezone An optional timezone identifier or DateTimeZone instance to set the timezone for the Carbon instance.
-     * @return \Spark\Carbon A Carbon DateTime instance representing the provided datetime.
+     * @return Carbon A Carbon DateTime instance representing the provided datetime.
      */
     function carbon(Carbon|DateTimeInterface|float|int|string|null $time = 'now', DateTimeZone|string|null $timezone = null): Carbon
     {
@@ -2205,7 +2250,7 @@ if (!function_exists('tracer')) {
      * This function returns the Tracer instance, which provides methods
      * for tracing and logging application events.
      *
-     * @return \Spark\Tracer The Tracer instance.
+     * @return Tracer The Tracer instance.
      */
     function tracer(): Tracer
     {
@@ -2305,7 +2350,7 @@ if (!function_exists('concurrency')) {
      * the provided tasks concurrently using the Concurrency class.
      *
      * @param null|array $tasks An optional array of tasks to run concurrently.
-     * @return \Spark\Concurrency|array The Concurrency instance or the results of the concurrent tasks.
+     * @return Concurrency|array The Concurrency instance or the results of the concurrent tasks.
      */
     function concurrency(null|array $tasks = null): mixed
     {

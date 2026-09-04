@@ -16,6 +16,7 @@ use function func_get_args;
  *
  * @method static Database resetConfig(array $config)
  * @method static Database resetPdo()
+ * @method static Database connection(string|array $config = [])
  * @method static false|PDOStatement query(string $query, ...$args)
  * @method static false|PDOStatement prepare(string $statement, array $options = [])
  * @method static PDO getPdo()
@@ -48,11 +49,12 @@ class DB extends Facade
      * Begin a query on a specific table.
      *
      * @param string $table The name of the table to query.
+     * @param string|null $alias The alias for the table.
      * @return QueryBuilder The query builder instance for the specified table.
      */
-    public static function table(string $table): QueryBuilder
+    public static function table(string $table, ?string $alias = null): QueryBuilder
     {
-        return Database::table($table);
+        return Database::table($table, $alias);
     }
 
     /**
@@ -70,10 +72,15 @@ class DB extends Facade
     /**
      * Get the database connection instance.
      *
+     * @param string|array|null $config The database configuration or driver name.
      * @return Database The database connection instance.
      */
-    public static function connection(): Database
+    public static function connection(null|string|array $config = null): Database
     {
+        if ($config !== null) {
+            return Database::connection($config);
+        }
+
         return app(Database::class);
     }
 
