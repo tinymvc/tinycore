@@ -7,6 +7,7 @@ use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Concerns\InteractsWithPivotTable;
 use function is_array;
+use function Spark\Database\Concerns\add_pivot_field_alias;
 use function Spark\Database\Concerns\map_pivot_conditions;
 use function Spark\Database\Concerns\map_pivot_fields;
 
@@ -67,9 +68,9 @@ class BelongsToMany extends Relation
 
         $query->select([
             $relatedInstance->getTable() . ".*",
-            $this->table . '.' . $this->foreignPivotKey,
-            $this->table . '.' . $this->relatedPivotKey,
-            $pivotFields,
+            add_pivot_field_alias($this->table . '.' . $this->foreignPivotKey),
+            add_pivot_field_alias($this->table . '.' . $this->relatedPivotKey),
+            add_pivot_field_alias($pivotFields),
         ]);
 
         $query->from($relatedInstance->getTable());
@@ -102,6 +103,8 @@ class BelongsToMany extends Relation
         if ($this->callback) {
             ($this->callback)($query);
         }
+
+        $query->addMapper($this->wrapPivotFields(...));
 
         return $query;
     }

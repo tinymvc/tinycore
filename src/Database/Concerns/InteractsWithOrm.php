@@ -415,7 +415,18 @@ trait InteractsWithOrm
         }
 
         // For hasMany and belongsToMany, return Collection
-        return $relation->get();
+        $results = $relation->get();
+
+        if (
+            $relation instanceof BelongsToMany ||
+            $relation instanceof HasManyThrough
+        ) {
+            foreach ($results as &$result) {
+                $result->attributes = wrap_pivot_fields_to_array($result->attributes);
+            }
+        }
+
+        return $results;
     }
 
     /**
@@ -733,9 +744,11 @@ trait InteractsWithOrm
         $query = $relatedModel->query()
             ->select([
                 ...$columns,
-                $config['table'] . "." . $config['foreignPivotKey'],
-                $config['table'] . "." . $config['relatedPivotKey'],
-                map_pivot_fields($config['pivotFields'] ?? null, $config['table'], $relatedModel->getTable())
+                add_pivot_field_alias($config['table'] . "." . $config['foreignPivotKey']),
+                add_pivot_field_alias($config['table'] . "." . $config['relatedPivotKey']),
+                add_pivot_field_alias(
+                    map_pivot_fields($config['pivotFields'] ?? null, $config['table'], $relatedModel->getTable())
+                ),
             ])
             ->from($relatedModel->getTable())
             ->join(
@@ -797,8 +810,10 @@ trait InteractsWithOrm
         $query = $relatedModel->query()
             ->select([
                 ...$columns,
-                $throughModel->getTable() . "." . $config['firstKey'],
-                map_pivot_fields($config['pivotFields'] ?? null, $throughModel->getTable(), $relatedModel->getTable())
+                add_pivot_field_alias($throughModel->getTable() . "." . $config['firstKey']),
+                add_pivot_field_alias(
+                    map_pivot_fields($config['pivotFields'] ?? null, $throughModel->getTable(), $relatedModel->getTable())
+                ),
             ])
             ->from($relatedModel->getTable())
             ->join(
@@ -917,7 +932,8 @@ trait InteractsWithOrm
             $related = [];
 
             foreach ($results as $result) {
-                if ($result->{$config['foreignPivotKey']} == $model->{$config['parentKey']}) {
+                if ($result->{add_pivot_prefix($config['foreignPivotKey'])} == $model->{$config['parentKey']}) {
+                    $result->attributes = wrap_pivot_fields_to_array($result->attributes);
                     $related[] = $result;
                 }
             }
@@ -946,7 +962,8 @@ trait InteractsWithOrm
             $related = [];
 
             foreach ($results as $result) {
-                if ($result->{$config['firstKey']} == $model->{$config['localKey']}) {
+                if ($result->{add_pivot_prefix($config['firstKey'])} == $model->{$config['localKey']}) {
+                    $result->attributes = wrap_pivot_fields_to_array($result->attributes);
                     $related[] = $result;
                 }
             }
@@ -1125,5 +1142,18 @@ trait InteractsWithOrm
         }
 
         return $columns;
+    }
+
+    /**
+     * Wrap pivot fields in the model's attributes.
+     * 
+     * This method transforms pivot fields in the model's attributes
+     * into a structured array format for easier access.
+     * 
+     * @return void
+     */
+    public function wrapPivotFields(): void
+    {
+        $this->attributes = wrap_pivot_fields_to_array($this->attributes);
     }
 }

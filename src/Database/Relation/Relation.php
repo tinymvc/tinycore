@@ -192,6 +192,22 @@ abstract class Relation
     }
 
     /**
+     * Wrap pivot fields for the given models.
+     * This method is used to process the pivot fields in the related models
+     * and wrap them into a structured format.
+     * 
+     * @param array $models The array of related model instances.
+     * @return array The array of models with wrapped pivot fields.
+     */
+    public function wrapPivotFields(array $models): array
+    {
+        foreach ($models as $model) {
+            $model->wrapPivotFields();
+        }
+        return $models;
+    }
+
+    /**
      * Proxy method calls to the underlying QueryBuilder.
      * 
      * @param string $method

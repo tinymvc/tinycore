@@ -266,3 +266,77 @@ function map_pivot_fields(array|string|null $fields, string $pivotTable, string 
 
     return $replace($fields);
 }
+
+
+/**
+ * Add an alias to the pivot field for use in queries.
+ * 
+ * @param array|string $field
+ * @return string
+ */
+function add_pivot_field_alias(array|string $field): string
+{
+    if (empty($field)) {
+        return '';
+    }
+
+    if (is_string($field) && strpos($field, ',') !== false) {
+        return add_pivot_field_alias(
+            array_filter(array_map('trim', explode(',', $field)))
+        );
+    }
+
+    if (is_array($field)) {
+        return join(', ', array_map(add_pivot_field_alias(...), $field));
+    }
+
+    $alias = fn(string $field) => trim(
+        strpos($field, '.') === false ? $field : substr($field, strrpos($field, '.') + 1)
+    );
+
+    if (stripos($field, ' as ') !== false) {
+        $parts = explode(' as ', $field, 2);
+        $field = trim($parts[0]);
+        return "$field as " . add_pivot_prefix($alias($parts[1]));
+    }
+
+    return "$field as " . add_pivot_prefix($alias($field));
+}
+
+/**
+ * Add a prefix to the pivot field for use in queries.
+ * 
+ * @param string $field
+ * @return string
+ */
+function add_pivot_prefix(string $field)
+{
+    return "pivot_$field";
+}
+
+/**
+ * Wrap pivot fields into an array structure for easier access.
+ * 
+ * @param array $attributes The attributes to be processed.
+ * @return array The attributes with pivot fields wrapped in a 'pivot' key.
+ */
+function wrap_pivot_fields_to_array(array $attributes = []): array
+{
+    $pivotFields = [];
+
+    foreach ($attributes as $attribute => $value) {
+        $pos = strpos($attribute, 'pivot_');
+        if ($pos === false) {
+            continue;
+        }
+        $pivotFields[substr($attribute, $pos + 6)] = $value;
+
+        unset($attributes[$attribute]);
+    }
+
+    if (!empty($pivotFields)) {
+        $attributes['pivot'] = $pivotFields;
+    }
+
+    return $attributes;
+}
