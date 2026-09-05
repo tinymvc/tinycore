@@ -18,7 +18,7 @@ use function sprintf;
  *
  * @internal Composed into \Spark\Database\QueryBuilder.
  */
-trait ExecutesWriteQueries
+trait BuildsWriteQueries
 {
     /**
      * Inserts data into the database with optional configurations.

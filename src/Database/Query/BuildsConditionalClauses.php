@@ -17,7 +17,7 @@ use function sprintf;
  *
  * @internal Composed into \Spark\Database\QueryBuilder.
  */
-trait BuildsWhereClauses
+trait BuildsConditionalClauses
 {
     /**
      * Add a where clause to the query.
@@ -30,14 +30,14 @@ trait BuildsWhereClauses
      * @param mixed $value
      *   The value to query. If null, the value will be determined
      *   based on the operator given.
-     * @param null|string $andOr
+     * @param null|string $boolean
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @param bool $not
      *   If true, the where clause will be negated.
      *
      * @return self
      */
-    public function where(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null, null|string $andOr = null, bool $not = false): QueryBuilder
+    public function where(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null, null|string $boolean = null, bool $not = false): QueryBuilder
     {
         if ($column instanceof Arrayable) {
             $column = $column->toArray();
@@ -48,11 +48,11 @@ trait BuildsWhereClauses
         if ($column === null || $column === '' || $column === []) {
             return $this;
         } elseif ($column instanceof Closure) {
-            return $this->grouped($column);
+            return $this->grouped($column, $boolean ?? 'AND');
         }
 
-        $hasExplicitBoolean = $andOr !== null;
-        $andOr = $this->normalizeBoolean($andOr ?? 'AND');
+        $hasExplicitBoolean = $boolean !== null;
+        $boolean = $this->normalizeBoolean($boolean ?? 'AND');
 
         // Holds a conditional clause for database.
         $command = '';
@@ -68,15 +68,15 @@ trait BuildsWhereClauses
             $operator = strtoupper((string) ($operator ?? '='));
 
             if ($value === null && in_array($operator, ['=', 'IS'], true)) {
-                return $this->whereNull($column, false, $andOr);
+                return $this->whereNull($column, false, $boolean);
             }
 
             if ($value === null && in_array($operator, ['!=', '<>', 'IS NOT', 'NOT'], true)) {
-                return $this->whereNull($column, true, $andOr);
+                return $this->whereNull($column, true, $boolean);
             }
 
             if (is_array($value) && in_array($operator, ['IN', 'NOT IN'], true)) {
-                return $this->whereInValues($column, $value, $andOr, $operator === 'NOT IN' || $not);
+                return $this->whereInValues($column, $value, $boolean, $operator === 'NOT IN' || $not);
             }
 
             $columnPlaceholder = $this->getWhereSqlColumn($column);
@@ -89,7 +89,7 @@ trait BuildsWhereClauses
 
             $command = sprintf(
                 "%s %s",
-                $andOr,
+                $boolean,
                 $not ? "NOT ($comparison)" : $comparison
             );
 
@@ -104,9 +104,9 @@ trait BuildsWhereClauses
             if (is_string($keys[0])) {
                 $command = sprintf(
                     "%s %s",
-                    $andOr,
+                    $boolean,
                     implode(
-                        " {$andOr} ",
+                        " {$boolean} ",
                         array_map(
                             function ($attr, $value) use ($not) {
 
@@ -135,14 +135,14 @@ trait BuildsWhereClauses
                 );
             } else {
                 if (isset($values[0]) && is_string($values[0])) {
-                    return $this->where($values[0], $values[1] ?? null, $values[2] ?? null, $values[3] ?? $andOr, $not);
+                    return $this->where($values[0], $values[1] ?? null, $values[2] ?? null, $values[3] ?? $boolean, $not);
                 }
 
                 foreach ($values as $value) {
                     if (isset($value[0]) && is_string($value[0])) {
-                        $this->where($value[0], $value[1] ?? null, $value[2] ?? null, $value[3] ?? $andOr, $not);
+                        $this->where($value[0], $value[1] ?? null, $value[2] ?? null, $value[3] ?? $boolean, $not);
                     } else {
-                        $this->where($value, null, null, $andOr, $not);
+                        $this->where($value, null, null, $boolean, $not);
                     }
                 }
 
@@ -154,32 +154,34 @@ trait BuildsWhereClauses
         elseif (is_array($column) && array_is_list($column) && $operator === null && $value === null) {
             foreach ($column as $item) {
                 if (isset($item[0]) && is_string($item[0])) {
-                    $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $item[3] ?? $andOr, $not);
+                    $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $item[3] ?? $boolean, $not);
                 } elseif (isset($item[0]) && is_array($item[0])) {
-                    $this->where($item[0], null, null, $item[3] ?? $andOr, $not);
+                    $this->where($item[0], null, null, $item[3] ?? $boolean, $not);
                 } else {
-                    $this->where($item, null, null, $andOr, $not);
+                    $this->where($item, null, null, $boolean, $not);
                 }
             }
         }
         // Single String where clause.
         elseif (is_string($column) && $operator === null && $value === null) {
             // Simply add a where clause from string.
-            $command = "{$andOr} {$column}";
+            $command = "{$boolean} {$column}";
         } else {
             throw new QueryBuilderInvalidWhereClauseException('Invalid where clause');
         }
 
         // Grouped where clauses.
-        if ($this->where['grouped']) {
-            $command = "$andOr (" . $this->stripBooleanPrefix($command, $andOr);
+        if (($this->where['grouped'] ?? false) === true) {
+            $boolean = $this->where['grouped_boolean'] ?? $boolean; // Use the grouped boolean if set.
+            $command = "$boolean (" . $this->stripBooleanPrefix($command, $boolean);
             $this->where['grouped'] = false;
+            unset($this->where['grouped_boolean']); // Unset the grouped boolean after use.
         }
 
         // Register the where clause into current query builder.
         $this->where['sql'] .= sprintf(
             ' %s ',
-            empty($this->where['sql']) ? $this->stripBooleanPrefix($command, $andOr) : $command
+            empty($this->where['sql']) ? $this->stripBooleanPrefix($command, $boolean) : $command
         );
 
         // Returns the current instance for method chaining.
@@ -211,17 +213,17 @@ trait BuildsWhereClauses
      *   The raw SQL condition to add.
      * @param string|array $bindings
      *   The bindings for the raw SQL condition.
-     * @param string $andOr
+     * @param string $boolean
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @return self
      */
-    public function whereRaw(string $sql, string|array $bindings = [], string $andOr = 'AND'): QueryBuilder
+    public function whereRaw(string $sql, string|array $bindings = [], string $boolean = 'AND'): QueryBuilder
     {
-        $andOr = $this->normalizeBoolean($andOr);
+        $boolean = $this->normalizeBoolean($boolean);
 
         $this->where['sql'] .= sprintf(
             ' %s (%s)',
-            !empty($this->where['sql']) ? $andOr : '',
+            !empty($this->where['sql']) ? $boolean : '',
             $sql
         );
 
@@ -323,11 +325,11 @@ trait BuildsWhereClauses
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNull(string $field, bool $not = false, string $andOr = 'AND'): QueryBuilder
+    public function whereNull(string $field, bool $not = false, string $boolean = 'AND'): QueryBuilder
     {
         $field = $this->wrapper->wrapColumn($field) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
 
-        return $this->where($field, andOr: $andOr);
+        return $this->where($field, boolean: $boolean);
     }
 
     /**
@@ -497,7 +499,7 @@ trait BuildsWhereClauses
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function findInSet(string $field, mixed $key, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function findInSet(string $field, mixed $key, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
         $type = $this->normalizeOperatorPrefix($type);
 
@@ -516,7 +518,7 @@ trait BuildsWhereClauses
         $this->bindings[$columnPlaceholder] = $key;
 
         // Add the condition to the query's WHERE clause
-        return $this->where($where, andOr: $andOr);
+        return $this->where($where, boolean: $boolean);
     }
 
     /**
@@ -576,12 +578,12 @@ trait BuildsWhereClauses
      *   The value to match against the extracted JSON value.
      * @param string $type
      *   Optional type to prepend to the LIKE clause (e.g., 'NOT').
-     * @param string $andOr
+     * @param string $boolean
      *   The logical operator to combine with previous conditions, e.g., 'AND' or 'OR'.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function findInJson(string $field, string $key, mixed $value, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function findInJson(string $field, string $key, mixed $value, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
         $type = $this->normalizeOperatorPrefix($type);
 
@@ -593,7 +595,7 @@ trait BuildsWhereClauses
 
         $this->bindings[$columnPlaceholder] = "%$value%";
 
-        return $this->where($where, andOr: $andOr);
+        return $this->where($where, boolean: $boolean);
     }
 
     /**
@@ -658,14 +660,14 @@ trait BuildsWhereClauses
      *   The value to check for within the JSON array.
      * @param string $type
      *   The type of comparison, e.g., 'NOT'.
-     * @param string $andOr
+     * @param string $boolean
      *   The logical operator to combine with previous conditions, e.g., 'AND' or 'OR'.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereJsonContains(string $field, string $key, mixed $value, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function whereJsonContains(string $field, string $key, mixed $value, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
-        return $this->findInJson($field, $key, $value, $type, $andOr);
+        return $this->findInJson($field, $key, $value, $type, $boolean);
     }
 
     /**
@@ -730,12 +732,12 @@ trait BuildsWhereClauses
      *   The second value of the range.
      * @param string $type
      *   The type of comparison, e.g., 'NOT'.
-     * @param string $andOr
+     * @param string $boolean
      *   The logical operator to combine with previous conditions, e.g., 'AND' or 'OR'.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function between(string $field, mixed $value1, mixed $value2, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function between(string $field, mixed $value1, mixed $value2, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
         $type = $this->normalizeOperatorPrefix($type);
 
@@ -748,7 +750,7 @@ trait BuildsWhereClauses
         $this->bindings[$columnPlaceholder1] = $value1;
         $this->bindings[$columnPlaceholder2] = $value2;
 
-        return $this->where($where, andOr: $andOr);
+        return $this->where($where, boolean: $boolean);
     }
 
     /**
@@ -756,13 +758,13 @@ trait BuildsWhereClauses
      *
      * @param string $field
      * @param array $values
-     * @param string $andOr
+     * @param string $boolean
      * @param bool $not
      * @return self
      */
-    public function whereBetween(string $field, array $values, string $andOr = 'AND', bool $not = false): QueryBuilder
+    public function whereBetween(string $field, array $values, string $boolean = 'AND', bool $not = false): QueryBuilder
     {
-        return $this->between($field, $values[0] ?? null, $values[1] ?? null, $not ? 'NOT ' : '', $andOr);
+        return $this->between($field, $values[0] ?? null, $values[1] ?? null, $not ? 'NOT ' : '', $boolean);
     }
 
     /**
@@ -861,12 +863,12 @@ trait BuildsWhereClauses
      *   The data to match against using the LIKE operator.
      * @param string $type
      *   Optional type to prepend to the LIKE clause (e.g., 'NOT').
-     * @param string $andOr
+     * @param string $boolean
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function like(string $field, mixed $data, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function like(string $field, mixed $data, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
         $type = $this->normalizeOperatorPrefix($type);
 
@@ -875,7 +877,7 @@ trait BuildsWhereClauses
 
         $this->bindings[$columnPlaceholder] = $data;
 
-        return $this->where(column: $where, andOr: $andOr);
+        return $this->where(column: $where, boolean: $boolean);
     }
 
     /**
@@ -932,12 +934,12 @@ trait BuildsWhereClauses
      * @param string $column
      * @param mixed $value
      * @param string $type
-     * @param string $andOr
+     * @param string $boolean
      * @return self
      */
-    public function whereContains(string $column, mixed $value, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function whereContains(string $column, mixed $value, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
-        return $this->like($column, "%{$value}%", $type, $andOr);
+        return $this->like($column, "%{$value}%", $type, $boolean);
     }
 
     /**
@@ -982,12 +984,12 @@ trait BuildsWhereClauses
      * @param string $column
      * @param mixed $value
      * @param string $type
-     * @param string $andOr
+     * @param string $boolean
      * @return self
      */
-    public function whereStartsWith(string $column, mixed $value, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function whereStartsWith(string $column, mixed $value, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
-        return $this->like($column, "{$value}%", $type, $andOr);
+        return $this->like($column, "{$value}%", $type, $boolean);
     }
 
     /**
@@ -1008,12 +1010,12 @@ trait BuildsWhereClauses
      * @param string $column
      * @param mixed $value
      * @param string $type
-     * @param string $andOr
+     * @param string $boolean
      * @return self
      */
-    public function whereEndsWith(string $column, mixed $value, string $type = '', string $andOr = 'AND'): QueryBuilder
+    public function whereEndsWith(string $column, mixed $value, string $type = '', string $boolean = 'AND'): QueryBuilder
     {
-        return $this->like($column, "%{$value}", $type, $andOr);
+        return $this->like($column, "%{$value}", $type, $boolean);
     }
 
     /**
@@ -1034,10 +1036,10 @@ trait BuildsWhereClauses
      * @param string $column
      * @param string $operator
      * @param mixed $value
-     * @param string $andOr
+     * @param string $boolean
      * @return self
      */
-    public function whereDate(string $column, string $operator, $value = null, string $andOr = 'AND'): QueryBuilder
+    public function whereDate(string $column, string $operator, $value = null, string $boolean = 'AND'): QueryBuilder
     {
         if ($value === null) {
             $value = $operator;
@@ -1047,12 +1049,12 @@ trait BuildsWhereClauses
         $placeholder = $this->getWhereSqlColumn($column);
 
         if ($this->database->isMySQL()) {
-            return $this->whereRaw("DATE({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+            return $this->whereRaw("DATE({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         } elseif ($this->database->isSQLite()) {
-            return $this->whereRaw("date({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+            return $this->whereRaw("date({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         }
 
-        return $this->where($column, $operator, $value, $andOr);
+        return $this->where($column, $operator, $value, $boolean);
     }
 
     /**
@@ -1074,10 +1076,10 @@ trait BuildsWhereClauses
      * @param string $column
      * @param string $operator
      * @param mixed $value
-     * @param string $andOr
+     * @param string $boolean
      * @return self
      */
-    public function whereYear(string $column, string $operator, $value = null, string $andOr = 'AND'): QueryBuilder
+    public function whereYear(string $column, string $operator, $value = null, string $boolean = 'AND'): QueryBuilder
     {
         if ($value === null) {
             $value = $operator;
@@ -1087,12 +1089,12 @@ trait BuildsWhereClauses
         $placeholder = $this->getWhereSqlColumn($column);
 
         if ($this->database->isMySQL()) {
-            return $this->whereRaw("YEAR({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+            return $this->whereRaw("YEAR({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         } elseif ($this->database->isSQLite()) {
-            return $this->whereRaw("strftime('%Y', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+            return $this->whereRaw("strftime('%Y', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         }
 
-        return $this->where($column, $operator, $value, $andOr);
+        return $this->where($column, $operator, $value, $boolean);
     }
 
     /**
@@ -1114,10 +1116,10 @@ trait BuildsWhereClauses
      * @param string $column
      * @param string $operator
      * @param mixed $value
-     * @param string $andOr
+     * @param string $boolean
      * @return self
      */
-    public function whereMonth(string $column, string $operator, mixed $value = null, string $andOr = 'AND'): QueryBuilder
+    public function whereMonth(string $column, string $operator, mixed $value = null, string $boolean = 'AND'): QueryBuilder
     {
         if ($value === null) {
             $value = $operator;
@@ -1127,12 +1129,12 @@ trait BuildsWhereClauses
         $placeholder = $this->getWhereSqlColumn($column);
 
         if ($this->database->isMySQL()) {
-            return $this->whereRaw("MONTH({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+            return $this->whereRaw("MONTH({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         } elseif ($this->database->isSQLite()) {
-            return $this->whereRaw("strftime('%m', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $andOr);
+            return $this->whereRaw("strftime('%m', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         }
 
-        return $this->where($column, $operator, $value, $andOr);
+        return $this->where($column, $operator, $value, $boolean);
     }
 
     /**
@@ -1161,13 +1163,17 @@ trait BuildsWhereClauses
      *
      * @param Closure $callback
      *   The callback to call to add the conditions.
+     * 
+     * @param string $boolean
+     *  The boolean operator to use for the grouped conditions. Defaults to 'AND'.
      *
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function grouped(Closure $callback)
+    public function grouped(Closure $callback, string $boolean = 'AND'): QueryBuilder
     {
         $this->where['grouped'] = true;
+        $this->where['grouped_boolean'] = $boolean;
         $callback($this);
         $this->where['sql'] .= ')';
         return $this;
@@ -1200,13 +1206,13 @@ trait BuildsWhereClauses
      *
      * @param string $column
      * @param array $values
-     * @param string $andOr
+     * @param string $boolean
      * @param bool $not
      * @return self
      */
-    private function whereInValues(string $column, array $values, string $andOr = 'AND', bool $not = false): QueryBuilder
+    private function whereInValues(string $column, array $values, string $boolean = 'AND', bool $not = false): QueryBuilder
     {
-        $andOr = $this->normalizeBoolean($andOr);
+        $boolean = $this->normalizeBoolean($boolean);
         $placeholder = $this->getWhereSqlColumn($column);
         $command = $this->compileWhereIn($column, $values, $placeholder, $not);
 
@@ -1216,7 +1222,7 @@ trait BuildsWhereClauses
 
         $this->where['sql'] .= sprintf(
             ' %s ',
-            empty($this->where['sql']) ? $this->stripBooleanPrefix($command, $andOr) : "$andOr $command"
+            empty($this->where['sql']) ? $this->stripBooleanPrefix($command, $boolean) : "$boolean $command"
         );
 
         return $this;

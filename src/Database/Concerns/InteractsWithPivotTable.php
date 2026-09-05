@@ -96,7 +96,7 @@ trait InteractsWithPivotTable
      * @param mixed|null $value The value for the condition (if $column is a string).
      * @return self
      */
-    public function wherePivot(array|string $column, mixed $operator = null, $value = null, null|string $andOr = null): self
+    public function wherePivot(array|string $column, mixed $operator = null, mixed $value = null, null|string $boolean = null): self
     {
         if (is_array($column)) {
             if (array_is_list($column)) {
@@ -106,17 +106,17 @@ trait InteractsWithPivotTable
                             $condition[0],
                             $condition[1] ?? null,
                             $condition[2] ?? null,
-                            $condition[3] ?? $andOr,
+                            $condition[3] ?? $boolean,
                         ];
                     } elseif (is_array($condition) && !array_is_list($condition)) {
-                        $this->wherePivot[] = [$condition, null, null, $andOr];
+                        $this->wherePivot[] = [$condition, null, null, $boolean];
                     }
                 }
 
                 return $this;
             }
 
-            $this->wherePivot[] = [$column, null, null, $andOr];
+            $this->wherePivot[] = [$column, null, null, $boolean];
             return $this;
         }
 
@@ -125,7 +125,7 @@ trait InteractsWithPivotTable
             $operator = '=';
         }
 
-        $this->wherePivot[] = [$column, $operator, $value, $andOr];
+        $this->wherePivot[] = [$column, $operator, $value, $boolean];
         return $this;
     }
 
@@ -137,7 +137,7 @@ trait InteractsWithPivotTable
      * @param mixed|null $value The value for the condition (if $column is a string).
      * @return self
      */
-    public function orWherePivot(array|string $column, mixed $operator = null, $value = null): self
+    public function orWherePivot(array|string $column, mixed $operator = null, mixed $value = null): self
     {
         if (func_num_args() === 2) {
             return $this->wherePivot($column, $operator, null, 'OR');

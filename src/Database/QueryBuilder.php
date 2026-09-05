@@ -75,9 +75,9 @@ use function sprintf;
  */
 class QueryBuilder implements QueryBuilderContract
 {
-    use Query\BuildsWhereClauses,
-    Query\ExecutesWriteQueries,
-    Query\BuildsSelectQueries,
+    use Query\BuildsConditionalClauses,
+    Query\BuildsWriteQueries,
+    Query\BuildsReadQueries,
     InteractsWithRelation,
     Conditionable,
     Macroable {

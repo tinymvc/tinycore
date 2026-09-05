@@ -18,7 +18,7 @@ use function is_string;
  *
  * @internal Composed into \Spark\Database\QueryBuilder.
  */
-trait BuildsSelectQueries
+trait BuildsReadQueries
 {
     /**
      * Specify the fields to include in the SELECT clause.
