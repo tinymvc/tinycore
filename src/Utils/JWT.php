@@ -26,7 +26,7 @@ class JWT
         if (\count($tks) !== 3) {
             throw new \UnexpectedValueException('Wrong number of segments');
         }
-        list($headb64, $payloadb64, $cryptob64) = $tks;
+        [$headb64, $payloadb64, $cryptob64] = $tks;
         if (
             null === ($header = self::jsonDecode(self::urlsafeB64Decode($headb64)))
         ) {
@@ -61,7 +61,7 @@ class JWT
         if (\count($tks) !== 3) {
             throw new \UnexpectedValueException('Wrong number of segments');
         }
-        list($headb64) = $tks;
+        [$headb64] = $tks;
         if (
             null === ($header = self::jsonDecode(self::urlsafeB64Decode($headb64)))
         ) {
@@ -180,6 +180,6 @@ class JWT
             JSON_ERROR_CTRL_CHAR => 'Unexpected control character found',
             JSON_ERROR_SYNTAX => 'Syntax error, malformed JSON'
         ];
-        throw new \DomainException($messages[$errno] ?? 'Unknown JSON error: ' . $errno);
+        throw new \DomainException($messages[$errno] ?? "Unknown JSON error: $errno");
     }
 }

@@ -428,66 +428,6 @@ trait BuildsConditionalClauses
     }
 
     /**
-     * Add a WHERE condition that the given column is in the given array of values.
-     *
-     * @param string $column
-     *   The column name to query.
-     * @param array $values
-     *   The array of values to query.
-     * @return self
-     *   Returns the current instance for method chaining.
-     */
-    public function in(string $column, array $values): QueryBuilder
-    {
-        return $this->whereIn($column, $values);
-    }
-
-    /**
-     * Add a WHERE condition that the given column is not in the given array of values.
-     *
-     * @param string $column
-     *   The column name to query.
-     * @param array $values
-     *   The array of values to query.
-     * @return self
-     *   Returns the current instance for method chaining.
-     */
-    public function notIn(string $column, array $values): QueryBuilder
-    {
-        return $this->whereNotIn($column, $values);
-    }
-
-    /**
-     * Add an OR WHERE condition that the given column is in the given array of values.
-     *
-     * @param string $column
-     *   The column name to query.
-     * @param array $values
-     *   The array of values to query.
-     * @return self
-     *   Returns the current instance for method chaining.
-     */
-    public function orIn(string $column, array $values): QueryBuilder
-    {
-        return $this->orWhereIn($column, $values);
-    }
-
-    /**
-     * Add an OR WHERE condition that the given column is not in the given array of values.
-     *
-     * @param string $column
-     *   The column name to query.
-     * @param array $values
-     *   The array of values to query.
-     * @return self
-     *   Returns the current instance for method chaining.
-     */
-    public function orNotIn(string $column, array $values): QueryBuilder
-    {
-        return $this->orWhereNotIn($column, $values);
-    }
-
-    /**
      * Add a WHERE condition using FIND_IN_SET function.
      *
      * @param string $field

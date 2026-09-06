@@ -114,9 +114,10 @@ class Application extends \Spark\Container implements ApplicationContract
      *
      * @return self A new instance of the application.
      */
-    public static function create(string $path, null|string|array $config = null, null|array $providers = null): self
+    public static function create(string $path, null|string|array $config = 'config', null|array $providers = null): self
     {
         $app = new self($path);
+        $providers ??= require dir_path("$path/bootstrap/providers.php");
 
         return $app->withApp(config: $config, providers: $providers);
     }

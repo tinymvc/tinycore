@@ -13,6 +13,7 @@ use Spark\Http\Auth as BaseAuth;
  * without needing to instantiate the Auth class directly.
  * 
  * @method static ?Model getUser()
+ * @method static mixed user(null|string $key = null, $default = null)
  * @method static \App\Models\User|mixed user(?string $key = null, $default = null)
  * @method static string getLoginRoute()
  * @method static string getRedirectRoute()

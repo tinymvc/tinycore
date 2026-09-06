@@ -499,7 +499,7 @@ class Validator implements ValidatorContract
         }
 
         try {
-            return query($params[0])->where($params[1] ?? $field, $value)->notExists();
+            return query($params[0])->where($params[1] ?? $field, $value)->doesntExist();
         } catch (\Exception $e) {
             // Log error if needed and fail validation
             return false;

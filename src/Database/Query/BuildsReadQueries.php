@@ -950,7 +950,7 @@ trait BuildsReadQueries
      *
      * @return bool True if no records exist, false otherwise.
      */
-    public function notExists(): bool
+    public function doesntExist(): bool
     {
         return !$this->exists();
     }

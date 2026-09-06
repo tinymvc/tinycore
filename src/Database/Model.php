@@ -397,7 +397,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             // If update fails and no record exists, insert a new record.
             if (!$updatedStatus && $forceCreate) {
                 try {
-                    if ($this->query()->where($condition)->notExists()) {
+                    if ($this->query()->where($condition)->doesntExist()) {
                         $createdId = $this->query()->insert($data);
                     }
                 } catch (\Exception $e) {
