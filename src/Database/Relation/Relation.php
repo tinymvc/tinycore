@@ -75,6 +75,8 @@ use Spark\Database\QueryBuilder;
  * @method int delete(mixed $where = null)
  * @method mixed first()
  * @method mixed firstOrFail()
+ * @method mixed firstOrCreate(array $attributes, array $values = [])
+ * @method mixed updateOrInsert(array $attributes, array $values = [])
  * @method mixed last()
  * @method false|Model find($value)
  * @method Model findOrFail($value)
