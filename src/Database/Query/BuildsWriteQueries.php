@@ -400,6 +400,38 @@ trait BuildsWriteQueries
     }
 
     /**
+     * Retrieve the first record matching the attributes or create it if it doesn't exist.
+     *
+     * @param array $attributes Attributes to search by.
+     * @param array $values Values to create with if not found.
+     * @return mixed Returns the found or created record, or false on failure.
+     */
+    public function firstOrCreate(array $attributes, array $values = []): mixed
+    {
+        // Check if record exists
+        $record = (clone $this)->where($attributes)->first();
+
+        if ($record) {
+            return $record;
+        }
+
+        // Insert new record and return it
+        $id = $this->insert([...$attributes, ...$values]);
+
+        if ($id) {
+            $result = ['id' => $id, ...$attributes, ...$values];
+            if ($this->isUsingModel()) {
+                $model = $this->getModelBeingUsed();
+                $model->fill($result);
+                return $model;
+            }
+            return $result;
+        }
+
+        return false;
+    }
+
+    /**
      * Insert a new record and return the model.
      *
      * @param array $data
