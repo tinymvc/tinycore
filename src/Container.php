@@ -9,6 +9,7 @@ use ReflectionParameter;
 use ReflectionUnionType;
 use ReflectionMethod;
 use Spark\Contracts\ContainerContract;
+use Spark\Database\Model;
 use Spark\Exceptions\Container\BuildServiceException;
 use Spark\Exceptions\Container\ClassDoesNotExistsException;
 use Spark\Exceptions\Container\FailedToResolveParameterException;
@@ -21,6 +22,7 @@ use function count;
 use function get_class;
 use function in_array;
 use function is_array;
+use function is_int;
 use function is_object;
 use function is_string;
 
@@ -261,18 +263,19 @@ class Container implements ContainerContract, \ArrayAccess
      *
      * @param array|string|callable $abstract The class name, method name or a closure.
      * @param array $parameters The parameters to pass to the method or closure.
+     * @param array<string, string> $bindingFields Model lookup fields keyed by parameter name.
      *
      * @throws MethodDoesNotExistsException If the class does not exist, the method does not exist, or
      *                   the method parameters cannot be resolved.
      *
      * @return mixed The result of calling the method or closure.
      */
-    public function call(array|string|callable $abstract, array $parameters = []): mixed
+    public function call(array|string|callable $abstract, array $parameters = [], array $bindingFields = []): mixed
     {
         // If it's a closure or function (but not an array callable), just call it with dependencies
         if (is_callable($abstract) && !is_array($abstract)) {
             $reflectionFunction = new ReflectionFunction($abstract);
-            $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters);
+            $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters, $bindingFields);
             return $abstract(...$dependencies); // Call the closure
         }
 
@@ -304,7 +307,7 @@ class Container implements ContainerContract, \ArrayAccess
         $reflectionMethod = new ReflectionMethod($instance, $method);
 
         // Resolve method parameters
-        $dependencies = $this->getReflectorDependencies($reflectionMethod, $parameters);
+        $dependencies = $this->getReflectorDependencies($reflectionMethod, $parameters, $bindingFields);
 
         // Call the method with resolved parameters
         return $reflectionMethod->invokeArgs($instance, $dependencies);
@@ -319,10 +322,11 @@ class Container implements ContainerContract, \ArrayAccess
      *
      * @param ReflectionFunction|ReflectionMethod $reflector The reflected method or function.
      * @param array $parameters The parameters to use for resolving dependencies.
+     * @param array<string, string> $bindingFields Model lookup fields keyed by parameter name.
      *
      * @return array The resolved dependencies.
      */
-    private function getReflectorDependencies(ReflectionFunction|ReflectionMethod $reflector, array $parameters): array
+    private function getReflectorDependencies(ReflectionFunction|ReflectionMethod $reflector, array $parameters, array $bindingFields = []): array
     {
         $methodParams = $reflector->getParameters();
         $dependencies = [];
@@ -348,7 +352,7 @@ class Container implements ContainerContract, \ArrayAccess
             if ($isAssociative) {
                 // For associative arrays, check by parameter name first
                 if (array_key_exists($paramName, $parameters)) {
-                    $dependencies[] = $parameters[$paramName];
+                    $dependencies[] = $this->resolveModelBinding($param, $parameters[$paramName], $bindingFields[$paramName] ?? null);
                 } else {
                     // Try to resolve with default value or throw exception
                     $dependencies[] = $this->resolveParameter($param);
@@ -372,6 +376,39 @@ class Container implements ContainerContract, \ArrayAccess
         }
 
         return $dependencies;
+    }
+
+    /**
+     * Resolve a supplied model identifier using its route field or default primary key.
+     * Existing instances, null values, and non-model parameters pass through unchanged.
+     */
+    private function resolveModelBinding(ReflectionParameter $param, mixed $value, ?string $field): mixed
+    {
+        if (!is_string($value) && !is_int($value)) {
+            return $value;
+        }
+
+        $type = $param->getType();
+        $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
+
+        foreach ($types as $type) {
+            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
+                continue;
+            }
+
+            // Follow the same first-class-type resolution used by resolveParameter().
+            if (is_a($type->getName(), Model::class, true)) {
+                $model = $this->resolveParameter($param);
+
+                if ($model instanceof Model) {
+                    return $model::where($field ?? $model->getPrimaryKey(), $value)->firstOrFail();
+                }
+            }
+
+            break;
+        }
+
+        return $value;
     }
 
     /**

@@ -562,17 +562,17 @@ class Router implements RouterContract
             if (is_array($context)) {
                 foreach ($context as $key => $value) {
                     // Escape the replacement value to prevent regex injection
-                    $pattern = sprintf('/\{%s\??\}/', preg_quote((string) $key, '/'));
+                    $pattern = sprintf('/\{%s(?::[a-zA-Z0-9_]+)?\??\}/', preg_quote((string) $key, '/'));
                     $route = preg_replace($pattern, $escape($value), $route, 1);
                 }
             } else {
                 // Replace the first non-optional dynamic parameter
-                $route = preg_replace('/\{[a-zA-Z0-9_]+\}/', $escape($context), $route, 1);
+                $route = preg_replace('/\{[a-zA-Z0-9_]+(?::[a-zA-Z0-9_]+)?\}/', $escape($context), $route, 1);
             }
         }
 
         // Remove unresolved optional parameters
-        $route = preg_replace('/\/\{[a-zA-Z0-9_]+\?\}/', '', $route);
+        $route = preg_replace('/\/\{[a-zA-Z0-9_]+(?::[a-zA-Z0-9_]+)?\?\}/', '', $route);
 
         // Remove trailing wildcard
         $route = rtrim($route, '*/');
@@ -634,7 +634,13 @@ class Router implements RouterContract
                             return new Response('', 204);
                         }
 
-                        $response = Application::$app->call($route['callback'], $request->getRouteParams());
+                        $bindingFields = [];
+                        preg_match_all('/\{([a-zA-Z0-9_]+):([a-zA-Z0-9_]+)\??\}/', $route['path'], $bindings, PREG_SET_ORDER);
+                        foreach ($bindings as $binding) {
+                            $bindingFields[$binding[1]] = $binding[2];
+                        }
+
+                        $response = Application::$app->call($route['callback'], $request->getRouteParams(), $bindingFields);
 
                         is_debug_mode() && event('app:routeDispatched');
 
@@ -747,6 +753,7 @@ class Router implements RouterContract
      *
      * Compiles literal segments, wildcard segments, optional dynamic parameters
      * ({param?}), and required dynamic parameters ({param}) into a regex path.
+     * Dynamic parameters may specify a model binding field, as in {param:code}.
      *
      * @param string $routePath The route path to escape.
      *
@@ -770,12 +777,12 @@ class Router implements RouterContract
                 continue;
             }
 
-            if (preg_match('/^\{([a-zA-Z0-9_]+)\?\}$/', $segment)) {
+            if (preg_match('/^\{([a-zA-Z0-9_]+)(?::[a-zA-Z0-9_]+)?\?\}$/', $segment)) {
                 $compiledPath .= "(?:\\/($segmentPattern))?";
                 continue;
             }
 
-            if (preg_match('/^\{([a-zA-Z0-9_]+)\}$/', $segment)) {
+            if (preg_match('/^\{([a-zA-Z0-9_]+)(?::[a-zA-Z0-9_]+)?\}$/', $segment)) {
                 $compiledPath .= "\\/($segmentPattern)";
                 continue;
             }
@@ -805,7 +812,8 @@ class Router implements RouterContract
             $parameters = [];
 
             foreach ($names[1] as $index => $name) {
-                $parameters[str_replace('?', '', $name)] = isset($matches[$index]) && $matches[$index] !== '' ? $matches[$index] : null;
+                $name = explode(':', str_replace('?', '', $name), 2)[0];
+                $parameters[$name] = isset($matches[$index]) && $matches[$index] !== '' ? $matches[$index] : null;
             }
 
             return $parameters;
