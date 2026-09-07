@@ -49,6 +49,14 @@ interface HttpRequestContract
     public function withAccept(string $type): self;
 
     /**
+     * Configure retry behavior for failed requests.
+     * @param int $times
+     * @param int $delayMs
+     * @return self
+     */
+    public function withRetry(int $times, int $delayMs = 200): self;
+
+    /**
      * Set the User-Agent header for the request.
      * @param string $userAgent
      * @return self

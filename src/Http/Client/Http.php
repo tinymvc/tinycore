@@ -95,10 +95,14 @@ class Http extends HttpRequest implements HttpContract
     /**
      * Sends an HTTP request to the specified URL with optional parameters.
      *
+     * Retries automatically on cURL failure (see withRetry()/retry()). Never
+     * throws for request failures — after all attempts are exhausted, a
+     * HttpResponse with status 0 is returned instead.
+     *
      * @param string $url The target URL.
      * @param array $params Optional query parameters to include in the request URL.
      * @return HttpResponseContract The response data, including body, status code, final URL, and content length.
-     * @throws HttpException If cURL initialization fails.
+     * @throws HttpException If the download target is invalid.
      */
     public function send(string $url, array $params = []): HttpResponseContract
     {
@@ -106,54 +110,34 @@ class Http extends HttpRequest implements HttpContract
         $this->setParams($params);
 
         $startedAt = microtime(true);
-        $curl = null;
-        $downloadStream = null;
         $downloadPath = $this->download;
         $downloadMode = is_string($downloadPath) && $downloadPath !== '';
-        $downloadFailed = false;
+
+        if ($downloadMode) {
+            $this->prepareDownloadTarget($downloadPath);
+        }
 
         try {
-            $curl = $this->buildCurlHandle();
-            if ($downloadMode) {
-                $directory = dirname($downloadPath);
-                if ($directory !== '' && !is_dir($directory)) {
-                    throw new HttpException("Download directory does not exist: {$directory}");
-                }
+            $data = $this->retry(function () use ($downloadPath, $downloadMode): array {
+                $curl = $this->buildCurlHandle();
+                $downloadStream = null;
 
-                if (is_file($downloadPath)) {
-                    if (!@unlink($downloadPath)) {
-                        throw new HttpException("Unable to remove existing download file: {$downloadPath}");
+                try {
+                    if ($downloadMode) {
+                        $downloadStream = $this->openDownloadStream($downloadPath);
+                        curl_setopt($curl, CURLOPT_FILE, $downloadStream);
+                        curl_setopt($curl, CURLOPT_RETURNTRANSFER, false);
                     }
+
+                    return $this->executeCurlHandle($curl, $downloadMode);
+                } finally {
+                    if (is_resource($downloadStream)) {
+                        fclose($downloadStream);
+                    }
+
+                    $this->closeCurlHandle($curl);
                 }
-
-                $downloadStream = fopen($downloadPath, 'w');
-                if (!is_resource($downloadStream)) {
-                    throw new HttpException("Unable to open download file: {$downloadPath}");
-                }
-
-                curl_setopt($curl, CURLOPT_FILE, $downloadStream);
-                curl_setopt($curl, CURLOPT_RETURNTRANSFER, false);
-            }
-
-            $body = curl_exec($curl);
-
-            if ($body === false && curl_errno($curl)) {
-                $downloadFailed = true;
-                throw new HttpException('cURL Error: ' . curl_error($curl));
-            }
-
-            if (curl_errno($curl)) {
-                $downloadFailed = true;
-                throw new HttpException('cURL Error: ' . curl_error($curl));
-            }
-
-            $response = [
-                'body' => $downloadMode ? '' : (string) $body,
-                'status' => (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
-                'lastUrl' => (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-                'length' => (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-                'headers' => $this->responseHeaders,
-            ];
+            });
 
             $this->triggerHttpRequestEvent(
                 $this->getFullUrl(),
@@ -164,27 +148,54 @@ class Http extends HttpRequest implements HttpContract
                     'body' => $this->getData(),
                     'headers' => $this->getHeaders(),
                 ],
-                $response,
+                $data,
                 $startedAt
             );
 
-            return new HttpResponse(...$response);
-        } finally {
-            if (is_resource($downloadStream)) {
-                fclose($downloadStream);
-            }
-
-            if ($curl !== null) {
-                $this->closeCurlHandle($curl);
-            }
-
-            if ($downloadMode && $downloadFailed && is_file($downloadPath)) {
+            if ($downloadMode && $data['status'] === 0 && is_file($downloadPath)) {
                 @unlink($downloadPath);
             }
 
+            return new HttpResponse(...$data);
+        } finally {
             $this->download = null;
             $this->clearTemporaryUploadFiles();
         }
+    }
+
+    /**
+     * Validate and prepare the download target before any attempt runs.
+     *
+     * @param string $downloadPath
+     * @throws HttpException
+     */
+    private function prepareDownloadTarget(string $downloadPath): void
+    {
+        $directory = dirname($downloadPath);
+        if ($directory !== '' && !is_dir($directory)) {
+            throw new HttpException("Download directory does not exist: {$directory}");
+        }
+
+        if (is_file($downloadPath) && !@unlink($downloadPath)) {
+            throw new HttpException("Unable to remove existing download file: {$downloadPath}");
+        }
+    }
+
+    /**
+     * Open a fresh writable stream for the download target (reopened per attempt).
+     *
+     * @param string $downloadPath
+     * @return resource
+     * @throws HttpException
+     */
+    private function openDownloadStream(string $downloadPath): mixed
+    {
+        $stream = fopen($downloadPath, 'w');
+        if (!is_resource($stream)) {
+            throw new HttpException("Unable to open download file: {$downloadPath}");
+        }
+
+        return $stream;
     }
 
     /**

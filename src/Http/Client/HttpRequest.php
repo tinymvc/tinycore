@@ -26,6 +26,12 @@ class HttpRequest implements HttpRequestContract
 {
     use Macroable;
 
+    /** @var int Number of retry attempts after the initial try. */
+    protected int $retryTimes = 2;
+
+    /** @var int Delay between retry attempts, in milliseconds. */
+    protected int $retryDelayMs = 200;
+
     /** @var array Request headers */
     protected array $headers = [];
 
@@ -142,6 +148,26 @@ class HttpRequest implements HttpRequestContract
     public function withAccept(string $type): self
     {
         return $this->withHeader('Accept', $type);
+    }
+
+    /**
+     * Configure retry behavior for failed requests.
+     *
+     * By default, a request is retried DEFAULT_RETRY_TIMES times (i.e.
+     * DEFAULT_RETRY_TIMES + 1 attempts total) with a 200ms
+     * delay in between. Once all attempts are exhausted, execute()/send()
+     * never throw — they return a HttpResponse with status 0 instead.
+     *
+     * @param int $times Number of retry attempts after the initial try
+     * @param int $delayMs Delay between attempts, in milliseconds
+     * @return self
+     */
+    public function withRetry(int $times, int $delayMs = 200): self
+    {
+        $this->retryTimes = max(0, $times);
+        $this->retryDelayMs = max(0, $delayMs);
+
+        return $this;
     }
 
     /**
@@ -599,11 +625,12 @@ class HttpRequest implements HttpRequestContract
         }
 
         $method = strtoupper($this->method);
+        $options = $this->options; // work on a local copy — buildCurlHandle() may be called
         $userHeaderCallback = null;
 
-        if (array_key_exists(CURLOPT_HEADERFUNCTION, $this->options)) {
-            $userHeaderCallback = $this->options[CURLOPT_HEADERFUNCTION];
-            unset($this->options[CURLOPT_HEADERFUNCTION]);
+        if (array_key_exists(CURLOPT_HEADERFUNCTION, $options)) {
+            $userHeaderCallback = $options[CURLOPT_HEADERFUNCTION];
+            unset($options[CURLOPT_HEADERFUNCTION]);
         }
 
         $defaultOptions = [
@@ -647,44 +674,97 @@ class HttpRequest implements HttpRequestContract
             $defaultOptions[CURLOPT_HTTPHEADER] = $this->headers;
         }
 
-        curl_setopt_array($curl, array_replace($defaultOptions, $this->options));
+        curl_setopt_array($curl, array_replace($defaultOptions, $options));
 
         return $curl;
     }
 
     /**
+     * Run a single cURL exec against a built handle and normalize the result
+     * into a response-data array. This is the shared core used by both
+     * HttpRequest::execute() and Http::send() to avoid duplicating the
+     * exec/error-check/response-building logic.
+     *
+     * @param resource|\CurlHandle $curl
+     * @param bool $downloadMode When true, the body is omitted from the result
+     *                           (it was streamed directly to disk instead).
+     * @return array{body:string,status:int,lastUrl:string,length:int,headers:array}
+     * @throws HttpException on cURL failure
+     */
+    protected function executeCurlHandle(mixed $curl, bool $downloadMode = false): array
+    {
+        $body = curl_exec($curl);
+
+        if (curl_errno($curl)) {
+            throw new HttpException('cURL Error: ' . curl_error($curl));
+        }
+
+        return [
+            'body' => $downloadMode ? '' : (string) $body,
+            'status' => (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
+            'lastUrl' => (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+            'length' => (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
+            'headers' => $this->responseHeaders,
+        ];
+    }
+
+    /**
+     * Run an attempt callback with retry support.
+     *
+     * The callback performs a single request attempt (build handle, execute,
+     * clean up) and returns response-data array, or throws HttpException on
+     * failure. This method never throws: once all attempts are exhausted, it
+     * returns a "failed" response-data array (status 0) instead.
+     *
+     * @param callable():array{body:string,status:int,lastUrl:string,length:int,headers:array} $attempt
+     * @return array{body:string,status:int,lastUrl:string,length:int,headers:array}
+     */
+    protected function retry(callable $attempt): array
+    {
+        $attempts = max(1, $this->retryTimes + 1);
+
+        for ($try = 1; $try <= $attempts; $try++) {
+            try {
+                return $attempt();
+            } catch (HttpException) {
+                if ($try < $attempts && $this->retryDelayMs > 0) {
+                    usleep($this->retryDelayMs * 1000);
+                }
+            }
+        }
+
+        return [
+            'body' => '',
+            'status' => 0,
+            'lastUrl' => $this->getFullUrl(),
+            'length' => 0,
+            'headers' => $this->responseHeaders,
+        ];
+    }
+
+    /**
      * Execute the HTTP request.
-     * 
+     *
+     * Retries automatically on cURL failure (see withRetry()). Never throws:
+     * if every attempt fails, a HttpResponse with status 0 is returned.
+     *
      * @return HttpResponseContract
-     * @throws HttpException
      */
     public function execute(): HttpResponseContract
     {
-        $curl = $this->buildCurlHandle();
-
         try {
-            $body = curl_exec($curl);
+            $data = $this->retry(function (): array {
+                $curl = $this->buildCurlHandle();
 
-            if ($body === false && curl_errno($curl)) {
-                throw new HttpException('cURL error: ' . curl_error($curl));
-            }
+                try {
+                    return $this->executeCurlHandle($curl);
+                } finally {
+                    $this->closeCurlHandle($curl);
+                }
+            });
 
-            if (curl_errno($curl)) {
-                throw new HttpException('cURL Error: ' . curl_error($curl));
-            }
-
-            return new HttpResponse(
-                body: (string) $body,
-                status: (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
-                lastUrl: (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-                length: (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-                headers: $this->responseHeaders,
-            );
+            return new HttpResponse(...$data);
         } finally {
-            if ($curl !== null) {
-                $this->closeCurlHandle($curl);
-            }
-
             $this->clearTemporaryUploadFiles();
         }
     }
