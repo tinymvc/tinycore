@@ -117,15 +117,15 @@ class Blade implements BladeContract
         $this->compiler = new BladeCompiler($this->cachePath);
 
         // Merge shared data with the application context
-        self::$shared = ['app' => Application::$app, ...self::$shared];
+        self::$shared = [...self::$shared, 'app' => Application::$app];
 
         // Add request, session, and errors to shared data if not in CLI
-        if (is_web() && Application::$app->resolved(Request::class)) {
+        if ((is_web() || Application::$app->isTesting()) && Application::$app->resolved(Request::class)) {
             self::$shared = [
+                ...self::$shared,
                 'request' => Application::$app->get(Request::class),
                 'session' => Application::$app->get(Session::class),
                 'errors' => Application::$app->get(Request::class)->errors(),
-                ...self::$shared
             ];
         }
     }
@@ -224,6 +224,13 @@ class Blade implements BladeContract
     public function getCompiler(): BladeCompilerContract
     {
         return $this->compiler;
+    }
+
+    /** Clear shared view data and composers between application tests. */
+    public static function flushState(): void
+    {
+        self::$shared = [];
+        self::$composers = [];
     }
 
     /**

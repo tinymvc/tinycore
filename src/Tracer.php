@@ -22,7 +22,7 @@ class Tracer implements TracerContract
     use Macroable;
 
     /** @var Tracer $instance */
-    public static self $instance;
+    public static ?self $instance = null;
 
     private const LOG_FILE_MAX_SIZE = 10_485_760;
 
@@ -61,13 +61,18 @@ class Tracer implements TracerContract
      * 
      * @param string|null $logFile The path to the error log file. 
      *      Defaults to storage_dir('logs/spark.log').
+     * @param bool $registerHandlers Leave false when a test runner owns PHP error handling.
      * 
      * @return void
      */
-    public function __construct(private ?string $logFile = null)
+    public function __construct(private ?string $logFile = null, bool $registerHandlers = true)
     {
         // Set the tracer instance as a singleton
         self::$instance = $this;
+
+        if (!$registerHandlers) {
+            return;
+        }
 
         // Enable error reporting
         error_reporting(E_ALL);

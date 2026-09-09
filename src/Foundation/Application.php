@@ -50,7 +50,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** @var Application Singleton instance of the application. */
-    public static Application $app;
+    public static ?Application $app = null;
 
     /** @var array Array to store configuration values. */
     private array $config = [];
@@ -63,6 +63,10 @@ class Application extends \Spark\Container implements ApplicationContract
 
     /** @var bool Whether the application is currently running termination callbacks. */
     private bool $terminating = false;
+
+    private bool $testing;
+
+    private bool $booted = false;
 
     /**
      * Application constructor.
@@ -78,10 +82,13 @@ class Application extends \Spark\Container implements ApplicationContract
         // Set the application instance statically.
         self::$app = $this;
 
-        Tracer::start(); // Initialize the tracer
+        // Test processes supply their own environment and retain their error handlers.
+        $this->testing = is_cli() && env('APP_ENV') === 'testing';
+        new Tracer(registerHandlers: !$this->testing);
 
-        // Load environment variables from .env file
-        DotEnv::bootstrap($this->path);
+        if (!$this->testing) {
+            DotEnv::bootstrap($this->path);
+        }
 
         // Register core services for global use
         $this->singleton(Translator::class);
@@ -94,7 +101,7 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(Events::class);
 
         // Bind core services to the container for Http Client
-        if (is_web()) {
+        if (is_web() || $this->testing) {
             $this->singleton(Session::class);
             $this->singleton(InputErrors::class);
             $this->singleton(Request::class);
@@ -119,7 +126,20 @@ class Application extends \Spark\Container implements ApplicationContract
         $app = new self($path);
         $providers ??= require dir_path("$path/bootstrap/providers.php");
 
-        return $app->withApp(config: $config, providers: $providers);
+        $app->withApp(config: $config);
+
+        // Apply test overrides once, before providers register services.
+        if ($app->isTesting() && is_file("$path/tests/config.php")) {
+            $app->mergeConfig(require "$path/tests/config.php");
+        }
+
+        return $app->withApp(providers: $providers);
+    }
+
+    /** Whether this application was bootstrapped for CLI tests. */
+    public function isTesting(): bool
+    {
+        return $this->testing;
     }
 
     /**
@@ -236,7 +256,8 @@ class Application extends \Spark\Container implements ApplicationContract
             $this->mergeConfig(DotEnv::discoverConfig(
                 folder: dir_path("$rootPath/$config"),
                 cache: dir_path("$rootPath/bootstrap/cache/" . preg_replace('/[^a-zA-Z0-9]/', '_', $config) . '.php'),
-                env: dir_path("$rootPath/.env")
+                env: dir_path("$rootPath/.env"),
+                useCache: !$this->testing
             ));
         }
 
@@ -509,50 +530,72 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function run(): void
     {
-        $this->isDebugMode() && event('app:booting');
         try {
-
-            date_default_timezone_set(
-                timezoneId: $this->getConfig('app.timezone', 'UTC')
-            );
-
-            $this->bootServiceProviders();
-
-            $this->isDebugMode() && event('app:booted');
-
-            $response = $this->get(Router::class)
-                ->dispatch(
-                    $this->get(Request::class)
-                );
-
-            $response->send();
+            $this->handle($this->get(Request::class))->send();
             $this->terminate();
-        } catch (RouteNotFoundException) {
-            abort(error: 404, message: 'Route not found');
-        } catch (ItemNotFoundException) {
-            abort(error: 404, message: 'Item not found');
-        } catch (NotFoundException) {
-            abort(error: 404, message: 'Not found');
-        } catch (AuthorizationException) {
-            abort(error: 403, message: 'Forbidden');
-        } catch (InvalidCsrfTokenException) {
-            abort(error: 419, message: 'Page Expired');
-        } catch (TooManyRequests) {
-            abort(error: 429, message: 'Too many requests');
         } catch (Throwable $e) {
-            $handler = $this->getExceptionHandler($e);
-
-            if ($handler !== null) {
-                $responseOrNull = $handler($e);
-
-                if ($responseOrNull instanceof Response) {
-                    $responseOrNull->send();
-                    $this->terminate();
-                    return;
-                }
-            }
-
             Tracer::$instance->handleException($e);
+        }
+    }
+
+    /**
+     * Dispatch a request through providers, routes, and middleware.
+     * Testing captures early responses and lets unexpected exceptions reach the runner.
+     */
+    public function handle(Request $request): Response
+    {
+        self::$app = $this;
+        $this->singleton(Request::class, fn() => $request);
+        $this->get(Request::class);
+        if ($this->booted) {
+            $this->forgetInstance(Response::class);
+            $this->forgetInstance(InputErrors::class);
+            $this->forgetInstance(Auth::class);
+            $this->forgetInstance(Blade::class);
+        }
+
+        try {
+            try {
+                if (!$this->booted) {
+                    $this->isDebugMode() && event('app:booting');
+                    date_default_timezone_set($this->getConfig('app.timezone', 'UTC'));
+                    $this->bootServiceProviders();
+                    $this->booted = true;
+                    $this->isDebugMode() && event('app:booted');
+                }
+
+                return $this->get(Router::class)->dispatch($request);
+            } catch (\Spark\Testing\ResponseException $e) {
+                throw $e;
+            } catch (RouteNotFoundException) {
+                abort(404, 'Route not found');
+            } catch (ItemNotFoundException) {
+                abort(404, 'Item not found');
+            } catch (NotFoundException) {
+                abort(404, 'Not found');
+            } catch (AuthorizationException) {
+                abort(403, 'Forbidden');
+            } catch (InvalidCsrfTokenException) {
+                abort(419, 'Page Expired');
+            } catch (TooManyRequests) {
+                abort(429, 'Too many requests');
+            } catch (Throwable $e) {
+                $handler = $this->getExceptionHandler($e);
+                $response = $handler !== null ? $handler($e) : null;
+
+                if ($response instanceof Response) {
+                    return $response;
+                }
+
+                throw $e;
+            }
+        } catch (\Spark\Testing\ResponseException $e) {
+            return $e->response;
+        } catch (Throwable $e) {
+            if ($this->testing) {
+                $this->deferredCallbacks = [];
+            }
+            throw $e;
         }
     }
 
@@ -595,7 +638,7 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function defer(callable $callback): self
     {
-        if (empty($this->deferredCallbacks)) {
+        if (!$this->testing && empty($this->deferredCallbacks)) {
             register_shutdown_function([$this, 'terminate']);
         }
 
@@ -619,7 +662,9 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->terminating = true;
 
         try {
-            $this->finishRequest();
+            if (!$this->testing) {
+                $this->finishRequest();
+            }
 
             try {
                 $this->isDebugMode() && event('app:terminated');

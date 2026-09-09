@@ -162,6 +162,12 @@ interface ApplicationContract
      */
     public function run(): void;
 
+    /** Dispatch a request and return its response. */
+    public function handle(\Spark\Http\Request $request): \Spark\Http\Response;
+
+    /** Whether this application was created in a CLI testing environment. */
+    public function isTesting(): bool;
+
     /**
      * Runs the command line interface.
      *

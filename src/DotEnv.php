@@ -56,15 +56,16 @@ class DotEnv
      * @param string $folder Path to configuration directory.
      * @param string $cache Path to cached config file.
      * @param string $env Path to environment file.
+     * @param bool $useCache Whether compiled config may be read or written.
      * @return array<string, mixed>
      */
-    public static function discoverConfig(string $folder, string $cache, string $env): array
+    public static function discoverConfig(string $folder, string $cache, string $env, bool $useCache = true): array
     {
         $folder = dir_path($folder);
         $cache = dir_path($cache);
         $env = dir_path($env);
 
-        if (self::isConfigCacheFresh($folder, $cache, $env)) {
+        if ($useCache && self::isConfigCacheFresh($folder, $cache, $env)) {
             $cached = self::loadConfigCache($cache);
 
             if (is_array($cached)) {
@@ -73,7 +74,7 @@ class DotEnv
         }
 
         if (!is_dir($folder)) {
-            if (is_file($cache)) {
+            if ($useCache && is_file($cache)) {
                 unlink($cache);
             }
 
@@ -98,7 +99,9 @@ class DotEnv
             }
         }
 
-        self::writeConfigCache($cache, $config, $files, $env);
+        if ($useCache) {
+            self::writeConfigCache($cache, $config, $files, $env);
+        }
 
         return $config;
     }

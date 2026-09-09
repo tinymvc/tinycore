@@ -67,4 +67,10 @@ interface ResponseContract
      * @return void
      */
     public function send(): void;
+    /** Inspect the prepared body without emitting it. */
+    public function getContent(): string;
+
+    public function getStatusCode(): int;
+
+    public function getHeaders(): array;
 }

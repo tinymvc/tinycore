@@ -492,6 +492,12 @@ class Container implements ContainerContract, \ArrayAccess
         return $this->aliases;
     }
 
+    /** Forget a resolved instance while keeping its service binding. */
+    public function forgetInstance(string $abstract): void
+    {
+        unset($this->instances[$this->resolveAlias($abstract)]);
+    }
+
     /**
      * Forget a binding.
      *

@@ -41,6 +41,11 @@ class Session implements SessionContract
      */
     public static function start(): void
     {
+        if (self::isTesting()) {
+            $_SESSION ??= [];
+            return;
+        }
+
         if (!is_web() || session_status() === PHP_SESSION_ACTIVE || headers_sent()) {
             return;
         }
@@ -57,7 +62,7 @@ class Session implements SessionContract
      */
     public static function isStarted(): bool
     {
-        return session_status() === PHP_SESSION_ACTIVE;
+        return self::isTesting() || session_status() === PHP_SESSION_ACTIVE;
     }
 
     /**
@@ -231,6 +236,10 @@ class Session implements SessionContract
      */
     public static function regenerate(bool $deleteOldSession = false): bool
     {
+        if (self::isTesting()) {
+            return true;
+        }
+
         if (!is_web() || !self::isStarted()) {
             return false;
         }
@@ -245,6 +254,11 @@ class Session implements SessionContract
      */
     public static function destroy(): void
     {
+        if (self::isTesting()) {
+            $_SESSION = [];
+            return;
+        }
+
         if (!is_web() || !self::isStarted()) {
             return;
         }
@@ -365,6 +379,12 @@ class Session implements SessionContract
      */
     public static function close(): void
     {
-        self::isStarted() && session_write_close();
+        !self::isTesting() && self::isStarted() && session_write_close();
+    }
+
+    private static function isTesting(): bool
+    {
+        return isset(\Spark\Foundation\Application::$app)
+            && \Spark\Foundation\Application::$app->isTesting();
     }
 }

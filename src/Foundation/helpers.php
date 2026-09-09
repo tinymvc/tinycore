@@ -1670,6 +1670,10 @@ if (!function_exists('cookie')) {
         $_COOKIE[$name] = $value;
 
         // Set the cookie
+        if (isset(Application::$app) && Application::$app->isTesting()) {
+            return true;
+        }
+
         return setcookie($name, $value, $options);
     }
 }
@@ -1788,14 +1792,14 @@ if (!function_exists('abort')) {
         $code ??= 500; // Default to 500 (Internal Server Error)
 
         // Clear the output buffer
-        if (ob_get_length() > 0) {
+        if (!Application::$app->isTesting() && ob_get_length() > 0) {
             ob_end_clean();
         }
 
         // If the request is an AJAX request or the path starts with /api/, 
         // return a JSON response
         if (
-            is_web()
+            (is_web() || Application::$app->isTesting())
             && Application::$app->resolved(Request::class)
             && request()->expectsJson()
         ) {

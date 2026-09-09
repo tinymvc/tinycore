@@ -399,12 +399,49 @@ class Response implements ResponseContract
      */
     public function send(): void
     {
+        if (isset(\Spark\Foundation\Application::$app) && \Spark\Foundation\Application::$app->isTesting()) {
+            throw new \Spark\Testing\ResponseException($this);
+        }
+
         // If a redirect URL is set, perform the redirect.
         if (isset($this->redirectUrl)) {
             header("Location: {$this->redirectUrl}", true, $this->statusCode);
             exit; // Terminate script execution after redirect
         }
 
+        $this->prepare();
+
+        // Set http response code and headers.
+        http_response_code($this->statusCode);
+        foreach ($this->headers as $key => $value) {
+            header("$key: $value");
+        }
+
+        echo $this->content; // send output to client.
+    }
+
+    /** Return the response body without sending headers or output. */
+    public function getContent(): string
+    {
+        $this->prepare();
+        return $this->content;
+    }
+
+    public function getStatusCode(): int
+    {
+        return $this->statusCode;
+    }
+
+    public function getHeaders(): array
+    {
+        $this->prepare();
+        return isset($this->redirectUrl)
+            ? [...$this->headers, 'Location' => $this->redirectUrl]
+            : $this->headers;
+    }
+
+    private function prepare(): void
+    {
         // Convert content to string if it's an array, Arrayable, or Stringable.
         if (is_array($this->content) || $this->content instanceof Arrayable) {
             $this->setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -414,14 +451,6 @@ class Response implements ResponseContract
         } elseif (!is_string($this->content)) {
             $this->setContent((string) $this->content); // Ensure content is a string
         }
-
-        // Set http response code and headers.
-        http_response_code($this->statusCode);
-        foreach ($this->headers as $key => $value) {
-            header("$key: $value");
-        }
-
-        echo $this->content; // send output to client.
     }
 
     /**
