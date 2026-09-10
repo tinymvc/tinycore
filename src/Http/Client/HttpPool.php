@@ -7,6 +7,7 @@ use Spark\Http\Client\Contracts\HttpRequestContract;
 use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
+use function array_key_exists;
 use function count;
 use function is_object;
 use function is_resource;
@@ -115,6 +116,13 @@ class HttpPool implements HttpPoolContract
     private function addRequest(string $method, string $url, array $params = [], string|array $data = []): HttpRequestContract
     {
         $key = $this->nextKey ?? count($this->pendingRequests);
+        if ($this->nextKey === null) {
+            while (array_key_exists($key, $this->pendingRequests)) {
+                $key++;
+            }
+        } elseif (array_key_exists($key, $this->pendingRequests)) {
+            throw new HttpException("Duplicate pool request key: {$key}");
+        }
         $this->nextKey = null;
 
         $request = new HttpRequest($method, $url, $params, $data, $key);
@@ -139,6 +147,7 @@ class HttpPool implements HttpPoolContract
     public function clearPendingRequests(): void
     {
         $this->pendingRequests = [];
+        $this->nextKey = null;
     }
 
     /**
@@ -175,6 +184,18 @@ class HttpPool implements HttpPoolContract
             return [];
         }
 
+        $requestKeys = [];
+        foreach ($requests as $request) {
+            if (!$request instanceof HttpRequestContract) {
+                throw new HttpException('Every pool entry must implement HttpRequestContract.');
+            }
+            $key = $request->getKey();
+            if (array_key_exists($key, $requestKeys)) {
+                throw new HttpException("Duplicate pool request key: {$key}");
+            }
+            $requestKeys[$key] = true;
+        }
+
         $multiHandle = curl_multi_init();
         if (!$multiHandle) {
             throw new HttpException('Failed to initialize curl_multi.');
@@ -186,17 +207,16 @@ class HttpPool implements HttpPoolContract
 
         try {
             foreach ($requests as $request) {
-                if (!($request instanceof HttpRequestContract)) {
-                    continue;
-                }
-
                 $curl = $request->buildCurlHandle();
-                curl_multi_add_handle($multiHandle, $curl);
 
                 $handleId = is_object($curl) ? spl_object_id($curl) : (int) $curl;
                 $handles[$handleId] = $curl;
                 $requestMap[$handleId] = $request;
                 $keys[$handleId] = $request->getKey();
+                $status = curl_multi_add_handle($multiHandle, $curl);
+                if ($status !== CURLM_OK) {
+                    throw new HttpException('Unable to add cURL handle: ' . curl_multi_strerror($status));
+                }
             }
 
             if (empty($handles)) {
@@ -205,9 +225,11 @@ class HttpPool implements HttpPoolContract
 
             $running = null;
             do {
-                $status = curl_multi_exec($multiHandle, $running);
+                do {
+                    $status = curl_multi_exec($multiHandle, $running);
+                } while ($status === CURLM_CALL_MULTI_PERFORM);
 
-                if ($status !== CURLM_OK && $status !== CURLM_CALL_MULTI_PERFORM) {
+                if ($status !== CURLM_OK) {
                     throw new HttpException('cURL multi execution failed: ' . curl_multi_strerror($status));
                 }
 
@@ -218,6 +240,12 @@ class HttpPool implements HttpPoolContract
                     }
                 }
             } while ($running > 0);
+
+            while ($completed = curl_multi_info_read($multiHandle)) {
+                if ($completed['result'] !== CURLE_OK) {
+                    throw new HttpException('cURL Error: ' . curl_strerror($completed['result']));
+                }
+            }
 
             $responses = [];
             foreach ($handles as $handleId => $curl) {
@@ -250,10 +278,6 @@ class HttpPool implements HttpPoolContract
 
                 if ($curl !== null) {
                     $this->closeCurlHandle($curl);
-                }
-
-                if (isset($requestMap[$handleId]) && method_exists($requestMap[$handleId], 'clearTemporaryUploadFiles')) {
-                    $requestMap[$handleId]->clearTemporaryUploadFiles();
                 }
             }
 

@@ -85,7 +85,7 @@ interface HttpContract
      * @param callable $callback A callback function that receives a Pool instance to add requests to.
      * @return array An array of responses from the executed requests.
      */
-    public function pool(callable $callback): array;
+    public static function pool(callable $callback): array;
 
     /**
      * Sets the HTTP method for the request.

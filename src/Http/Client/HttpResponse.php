@@ -16,7 +16,9 @@ use Spark\Http\Client\Contracts\HttpResponseContract;
  */
 class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \Stringable
 {
-    private ?array $json = null;
+    private mixed $json = null;
+
+    private ?string $jsonBody = null;
 
     /**
      * Sets the response data.
@@ -101,7 +103,12 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function header(string $key, mixed $default = null): mixed
     {
-        return $this->headers[strtolower($key)] ?? $default;
+        foreach ($this->headers as $name => $value) {
+            if (strcasecmp((string) $name, $key) === 0) {
+                return $value;
+            }
+        }
+        return $default;
     }
 
     /**
@@ -113,14 +120,16 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function json(?string $key = null, mixed $default = null): mixed
     {
-        if ($this->json === null) {
-            $decoded = json_decode((string) $this->body, true);
+        $body = $this->body();
+        if ($this->jsonBody !== $body) {
+            $decoded = json_decode($body, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $this->json = [];
             } else {
-                $this->json = $decoded ?? [];
+                $this->json = $decoded;
             }
+            $this->jsonBody = $body;
         }
 
         if ($key === null) {
@@ -148,7 +157,8 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function has(string $key): bool
     {
-        return data_get($this->json(), $key) !== null;
+        $missing = new \stdClass();
+        return data_get($this->json(), $key, $missing) !== $missing;
     }
 
     /**

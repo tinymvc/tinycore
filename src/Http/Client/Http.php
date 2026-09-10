@@ -30,6 +30,8 @@ class Http extends HttpRequest implements HttpContract
      */
     private ?string $download = null;
 
+    private bool $downloadForce = false;
+
     /**
      * The Http constructor.
      * 
@@ -82,13 +84,21 @@ class Http extends HttpRequest implements HttpContract
      */
     public function reset(string $method, string $url, array $params = [], string|array $data = []): void
     {
+        $this->clearTemporaryUploadFiles();
+        $this->attachments = [];
+        $this->isMultipart = false;
+        $this->responseHeaders = [];
+        $this->retryTimes = 2;
+        $this->retryDelayMs = 200;
         $this->setMethod($method);
         $this->setUrl($url);
         $this->setParams($params);
         $this->setData($data);
 
         $this->download = null; // Reset download file
+        $this->downloadForce = false;
         $this->options = []; // Reset cURL options
+        $this->postFieldData = null;
         $this->headers = []; // Reset headers
     }
 
@@ -113,31 +123,48 @@ class Http extends HttpRequest implements HttpContract
         $downloadPath = $this->download;
         $downloadMode = is_string($downloadPath) && $downloadPath !== '';
 
-        if ($downloadMode) {
-            $this->prepareDownloadTarget($downloadPath);
-        }
-
+        $temporaryDownload = null;
         try {
-            $data = $this->retry(function () use ($downloadPath, $downloadMode): array {
+            if ($downloadMode) {
+                $this->prepareDownloadTarget($downloadPath);
+                $temporaryDownload = tempnam(dirname($downloadPath), '.spark_download_');
+                if ($temporaryDownload === false) {
+                    throw new HttpException('Unable to create temporary download file.');
+                }
+            }
+
+            $data = $this->retry(function () use ($temporaryDownload, $downloadMode): array {
                 $curl = $this->buildCurlHandle();
                 $downloadStream = null;
 
                 try {
                     if ($downloadMode) {
-                        $downloadStream = $this->openDownloadStream($downloadPath);
-                        curl_setopt($curl, CURLOPT_FILE, $downloadStream);
+                        $downloadStream = $this->openDownloadStream($temporaryDownload);
                         curl_setopt($curl, CURLOPT_RETURNTRANSFER, false);
+                        if (!curl_setopt($curl, CURLOPT_FILE, $downloadStream)) {
+                            throw new HttpException('Unable to configure download stream.');
+                        }
                     }
 
                     return $this->executeCurlHandle($curl, $downloadMode);
                 } finally {
+                    $this->closeCurlHandle($curl);
                     if (is_resource($downloadStream)) {
                         fclose($downloadStream);
                     }
-
-                    $this->closeCurlHandle($curl);
                 }
             });
+
+            if ($downloadMode && $data['status'] !== 0) {
+                // Publish only a complete transfer. link() also prevents a race
+                // from overwriting a file created after download() was called.
+                $saved = $this->downloadForce
+                    ? @rename($temporaryDownload, $downloadPath)
+                    : @link($temporaryDownload, $downloadPath);
+                if (!$saved) {
+                    throw new HttpException("Unable to save download file: {$downloadPath}");
+                }
+            }
 
             $this->triggerHttpRequestEvent(
                 $this->getFullUrl(),
@@ -152,14 +179,13 @@ class Http extends HttpRequest implements HttpContract
                 $startedAt
             );
 
-            if ($downloadMode && $data['status'] === 0 && is_file($downloadPath)) {
-                @unlink($downloadPath);
-            }
-
             return new HttpResponse(...$data);
         } finally {
+            if (is_string($temporaryDownload) && is_file($temporaryDownload)) {
+                @unlink($temporaryDownload);
+            }
             $this->download = null;
-            $this->clearTemporaryUploadFiles();
+            $this->downloadForce = false;
         }
     }
 
@@ -176,8 +202,8 @@ class Http extends HttpRequest implements HttpContract
             throw new HttpException("Download directory does not exist: {$directory}");
         }
 
-        if (is_file($downloadPath) && !@unlink($downloadPath)) {
-            throw new HttpException("Unable to remove existing download file: {$downloadPath}");
+        if (is_dir($downloadPath) || ((!$this->downloadForce) && (file_exists($downloadPath) || is_link($downloadPath)))) {
+            throw new HttpException("Download target already exists: {$downloadPath}");
         }
     }
 
@@ -190,7 +216,7 @@ class Http extends HttpRequest implements HttpContract
      */
     private function openDownloadStream(string $downloadPath): mixed
     {
-        $stream = fopen($downloadPath, 'w');
+        $stream = @fopen($downloadPath, 'wb');
         if (!is_resource($stream)) {
             throw new HttpException("Unable to open download file: {$downloadPath}");
         }
@@ -223,7 +249,7 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @throws HttpException If the callback does not return an array of requests
      */
-    public function pool(callable $callback): array
+    public static function pool(callable $callback): array
     {
         $pool = new HttpPool();
         $requests = $callback($pool);
@@ -389,6 +415,7 @@ class Http extends HttpRequest implements HttpContract
         }
 
         $this->download = $location;
+        $this->downloadForce = $force;
         return $this;
     }
 
@@ -427,6 +454,7 @@ class Http extends HttpRequest implements HttpContract
     public function get(string $url, array $params = []): HttpResponseContract
     {
         $this->setMethod('GET');
+        $this->setData([]);
         return $this->send($url, $params);
     }
 
