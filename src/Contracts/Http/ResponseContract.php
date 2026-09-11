@@ -67,10 +67,27 @@ interface ResponseContract
      * @return void
      */
     public function send(): void;
+
     /** Inspect the prepared body without emitting it. */
+
+    /**
+     * Retrieves the current content of the response body.
+     *
+     * @return string The current response content.
+     */
     public function getContent(): string;
 
+    /**
+     * Retrieves the current HTTP status code of the response.
+     *
+     * @return int The current HTTP status code.
+     */
     public function getStatusCode(): int;
 
+    /**
+     * Retrieves the current headers set for the response.
+     *
+     * @return array An associative array of headers (key-value pairs).
+     */
     public function getHeaders(): array;
 }

@@ -1328,39 +1328,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         }
 
         if (!$validator->validate($rules, $attributes)) { // Validate the request
-            $errors = $validator->getErrors(); // Get the errors as an array
-
-            // If the request wants a JSON response
-            if ($this->isFirelineRequest()) {
-                $flattenedErrors = $this->flattenValidationErrors($errors);
-                $errorHtml = '<ul>' // Build the error HTML
-                    . collect($flattenedErrors)
-                        ->map(fn($error) => "<li>{$error}</li>")
-                        ->join('') // Join the errors into a string
-                    . '</ul>';
-
-                // Return the errors as a JSON response
-                json(['status' => 'error', 'message' => $errorHtml])->send();
-            } elseif ($this->expectsJson()) {
-                // Validate error message
-                $flattenedErrors = $this->flattenValidationErrors($errors);
-                $message = $validator->getFirstError()
-                    . (count($flattenedErrors) > 1 ? ' (and ' . (count($flattenedErrors) - 1) . ' more errors)' : '');
-
-                // Return the errors as a JSON response
-                json(['message' => $message, 'errors' => $errors], 422)->send();
-            } else {
-                // Store the errors in the session flash data
-                if ($this->header('X-Inertia') && function_exists('inertia')) {
-                    $resp = inertia()->back();
-                } else {
-                    $resp = back();
-                }
-
-                $resp->withErrors($errors) // Attach the error messages
-                    ->withInput($attributes) // Preserve input values
-                    ->send(); // Redirect the user back to the previous page
-            }
+            $this->prepareValidationError(
+                message: $validator->getFirstError(),
+                errors: $validator->getErrors(),
+                attributes: $attributes
+            )->send();
             exit; // Exit the script to prevent further execution
         }
 
@@ -1378,6 +1350,47 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         }
 
         return $this->validated = $validator->validated(); // Return the validated attributes
+    }
+
+    /**
+     * Handle validation errors and return an appropriate response.
+     *
+     * @param string $message The error message to display.
+     * @param array $errors The validation errors.
+     * @param array $attributes The input attributes that were validated.
+     * @return Response The response to return to the client.
+     */
+    public function prepareValidationError(string $message, array $errors, array $attributes = []): Response
+    {
+        // If the request wants a JSON response
+        if ($this->isFirelineRequest()) {
+            $flattenedErrors = $this->flattenValidationErrors($errors);
+            $errorHtml = '<ul>' // Build the error HTML
+                . collect($flattenedErrors)
+                    ->map(fn($error) => "<li>{$error}</li>")
+                    ->join('') // Join the errors into a string
+                . '</ul>';
+
+            // Return the errors as a JSON response
+            return json(['status' => 'error', 'message' => $errorHtml]);
+        } elseif ($this->expectsJson()) {
+            // Validate error message
+            $flattenedErrors = $this->flattenValidationErrors($errors);
+            $message .= (count($flattenedErrors) > 1 ? ' (and ' . (count($flattenedErrors) - 1) . ' more errors)' : '');
+
+            // Return the errors as a JSON response
+            return json(['message' => $message, 'errors' => $errors], 422);
+        } else {
+            // Store the errors in the session flash data
+            if ($this->header('X-Inertia') && function_exists('inertia')) {
+                $resp = inertia()->back();
+            } else {
+                $resp = back();
+            }
+
+            return $resp->withErrors($errors) // Attach the error messages
+                ->withInput($attributes); // Preserve input values
+        }
     }
 
     /**

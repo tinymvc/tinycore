@@ -226,7 +226,11 @@ class Blade implements BladeContract
         return $this->compiler;
     }
 
-    /** Clear shared view data and composers between application tests. */
+    /**
+     * Clear shared view data and composers between application tests
+     * 
+     * @return void
+     */
     public static function flushState(): void
     {
         self::$shared = [];

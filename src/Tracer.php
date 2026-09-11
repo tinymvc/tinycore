@@ -255,7 +255,12 @@ class Tracer implements TracerContract
         }
 
         if (is_file($logFile) && !is_writable($logFile)) {
-            return;
+            if (is_cli()) {
+                return;
+            }
+
+            echo "<p style=\"color: red;font-size: 18px;\">Warning: Log file '$logFile' is not writable.</p>";
+            exit;
         }
 
         if (is_file($logFile) && filesize($logFile) >= self::LOG_FILE_MAX_SIZE) {

@@ -5,6 +5,7 @@ namespace Spark\Http;
 use Closure;
 use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
@@ -399,7 +400,7 @@ class Response implements ResponseContract
      */
     public function send(): void
     {
-        if (isset(\Spark\Foundation\Application::$app) && \Spark\Foundation\Application::$app->isTesting()) {
+        if (isset(Application::$app) && Application::$app->isTesting()) {
             throw new \Spark\Testing\ResponseException($this);
         }
 
@@ -421,17 +422,39 @@ class Response implements ResponseContract
     }
 
     /** Return the response body without sending headers or output. */
+
+    /**
+     * Retrieves the response content as a string.
+     *
+     * This method prepares the response content and returns it as a string.
+     * It does not send any headers or output to the client.
+     *
+     * @return string The response content as a string.
+     */
     public function getContent(): string
     {
         $this->prepare();
         return $this->content;
     }
 
+    /**
+     * Retrieves the HTTP status code of the response.
+     *
+     * @return int The HTTP status code (e.g., 200, 404).
+     */
     public function getStatusCode(): int
     {
         return $this->statusCode;
     }
 
+    /**
+     * Retrieves the headers of the response.
+     *
+     * This method prepares the response and returns an associative array of headers.
+     * If a redirect URL is set, it includes the "Location" header in the returned array.
+     *
+     * @return array An associative array of headers (e.g., ['Content-Type' => 'application/json']).
+     */
     public function getHeaders(): array
     {
         $this->prepare();
@@ -440,6 +463,14 @@ class Response implements ResponseContract
             : $this->headers;
     }
 
+    /**
+     * Prepares the response for sending.
+     *
+     * This method ensures that the response is properly formatted before being sent.
+     * It handles the conversion of content to a string and sets appropriate headers.
+     *
+     * @return void
+     */
     private function prepare(): void
     {
         // Convert content to string if it's an array, Arrayable, or Stringable.

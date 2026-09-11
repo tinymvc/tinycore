@@ -3,6 +3,7 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\SessionContract;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
@@ -382,9 +383,13 @@ class Session implements SessionContract
         !self::isTesting() && self::isStarted() && session_write_close();
     }
 
+    /**
+     * Checks if the application is in testing mode.
+     *
+     * @return bool True if the application is in testing mode, false otherwise.
+     */
     private static function isTesting(): bool
     {
-        return isset(\Spark\Foundation\Application::$app)
-            && \Spark\Foundation\Application::$app->isTesting();
+        return isset(Application::$app) && Application::$app->isTesting();
     }
 }

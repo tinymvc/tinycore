@@ -11,6 +11,7 @@ use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\NotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Foundation\Exceptions\TooManyRequests;
+use Spark\Foundation\Exceptions\ValidationErrorException;
 use Spark\Hash;
 use Spark\DotEnv;
 use Spark\Http\Auth;
@@ -84,8 +85,11 @@ class Application extends \Spark\Container implements ApplicationContract
 
         // Test processes supply their own environment and retain their error handlers.
         $this->testing = is_cli() && env('APP_ENV') === 'testing';
+
+        // Initialize the error and exception handling system for the application.
         new Tracer(registerHandlers: !$this->testing);
 
+        // Load the environment variables from the .env file if not in testing mode
         if (!$this->testing) {
             DotEnv::bootstrap($this->path);
         }
@@ -128,18 +132,27 @@ class Application extends \Spark\Container implements ApplicationContract
 
         $app->withApp(config: $config);
 
-        // Apply test overrides once, before providers register services.
-        if ($app->isTesting() && is_file("$path/tests/config.php")) {
-            $app->mergeConfig(require "$path/tests/config.php");
-        }
-
         return $app->withApp(providers: $providers);
     }
 
-    /** Whether this application was bootstrapped for CLI tests. */
+    /**
+     * Checks if the application is running in testing mode.
+     *
+     * @return bool True if the application is in testing mode, false otherwise.
+     */
     public function isTesting(): bool
     {
         return $this->testing;
+    }
+
+    /**
+     * Checks if the application has been booted.
+     *
+     * @return bool True if the application has been booted, false otherwise.
+     */
+    public function isBooted(): bool
+    {
+        return $this->booted;
     }
 
     /**
@@ -253,6 +266,7 @@ class Application extends \Spark\Container implements ApplicationContract
         if (is_string($config)) {
             $rootPath = rtrim($this->path, '/\\');
             $config = ltrim($config, '/\\');
+
             $this->mergeConfig(DotEnv::discoverConfig(
                 folder: dir_path("$rootPath/$config"),
                 cache: dir_path("$rootPath/bootstrap/cache/" . preg_replace('/[^a-zA-Z0-9]/', '_', $config) . '.php'),
@@ -545,8 +559,7 @@ class Application extends \Spark\Container implements ApplicationContract
     public function handle(Request $request): Response
     {
         self::$app = $this;
-        $this->singleton(Request::class, fn() => $request);
-        $this->get(Request::class);
+
         if ($this->booted) {
             $this->forgetInstance(Response::class);
             $this->forgetInstance(InputErrors::class);
@@ -558,7 +571,11 @@ class Application extends \Spark\Container implements ApplicationContract
             try {
                 if (!$this->booted) {
                     $this->isDebugMode() && event('app:booting');
-                    date_default_timezone_set($this->getConfig('app.timezone', 'UTC'));
+
+                    date_default_timezone_set(
+                        $this->getConfig('app.timezone', 'UTC')
+                    );
+
                     $this->bootServiceProviders();
                     $this->booted = true;
                     $this->isDebugMode() && event('app:booted');
@@ -579,6 +596,12 @@ class Application extends \Spark\Container implements ApplicationContract
                 abort(419, 'Page Expired');
             } catch (TooManyRequests) {
                 abort(429, 'Too many requests');
+            } catch (ValidationErrorException $e) {
+                return $request->prepareValidationError(
+                    message: $e->getMessage(),
+                    errors: $e->getErrors(),
+                    attributes: $e->getAttributes()
+                );
             } catch (Throwable $e) {
                 $handler = $this->getExceptionHandler($e);
                 $response = $handler !== null ? $handler($e) : null;
@@ -599,6 +622,16 @@ class Application extends \Spark\Container implements ApplicationContract
         }
     }
 
+    /**
+     * Retrieves the exception handler for a given exception.
+     *
+     * This method checks if there is a registered handler for the provided
+     * exception type. If a handler is found, it returns the callable handler.
+     * Otherwise, it returns null.
+     *
+     * @param Throwable $exception The exception to find a handler for.
+     * @return callable|null The callable handler for the exception, or null if not found.
+     */
     private function getExceptionHandler(Throwable $exception): ?callable
     {
         foreach ($this->exceptions as $exceptionClass => $handler) {
