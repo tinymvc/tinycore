@@ -76,6 +76,26 @@ class HttpRequest implements HttpRequestContract
     }
 
     /**
+     * Create a new HttpRequest instance.
+     *
+     * @param string $method HTTP method
+     * @param string $url Target URL
+     * @param array $params Query parameters
+     * @param string|array $data POST/PUT/PATCH data
+     * @param string|int $key Request key
+     * @return self
+     */
+    public static function make(
+        string $method = 'GET',
+        string $url = '',
+        array $params = [],
+        string|array $data = [],
+        string|int $key = 0
+    ) {
+        return new static($method, $url, $params, $data, $key);
+    }
+
+    /**
      * Get the request key.
      * 
      * @return string|int
@@ -421,6 +441,7 @@ class HttpRequest implements HttpRequestContract
                 ? (mime_content_type($contents) ?: 'application/octet-stream')
                 : 'application/octet-stream');
             $filename ??= basename($contents);
+
             $this->attachments[$name] = new \CURLFile($contents, $mimeType, $filename);
             $this->isMultipart = true;
 
@@ -446,10 +467,12 @@ class HttpRequest implements HttpRequestContract
             if (($meta['seekable'] ?? false) === true) {
                 rewind($contents);
             }
+
             $tempContents = stream_get_contents($contents);
             if ($tempContents === false) {
                 throw new HttpException('Failed to read upload resource.');
             }
+
             $contents = $tempContents;
         }
 
@@ -459,6 +482,7 @@ class HttpRequest implements HttpRequestContract
 
         $mimeType = $headers['Content-Type'] ?? 'application/octet-stream';
         $filename ??= 'file';
+
         $this->attachments[$name] = new \CURLFile($tempFile, $mimeType, $filename);
         $this->isMultipart = true;
 
@@ -612,9 +636,10 @@ class HttpRequest implements HttpRequestContract
         $query = http_build_query($this->params, '', '&', PHP_QUERY_RFC3986);
         if ($query !== '') {
             $separator = str_contains($url, '?') ? (str_ends_with($url, '?') || str_ends_with($url, '&') ? '' : '&') : '?';
-            $url .= $separator . $query;
+            $url .= "$separator$query";
         }
-        return $url . ($fragment === null ? '' : '#' . $fragment);
+
+        return $url . ($fragment === null ? '' : "#$fragment");
     }
 
     /**
@@ -637,6 +662,7 @@ class HttpRequest implements HttpRequestContract
                 unset($this->attachments[$name]);
             }
         }
+
         foreach ($this->temporaryUploadFiles as $tempFile) {
             if (is_file($tempFile)) {
                 @unlink($tempFile);
@@ -660,17 +686,21 @@ class HttpRequest implements HttpRequestContract
     public function buildCurlHandle()
     {
         $this->responseHeaders = [];
+
         $method = strtoupper($this->method);
         $options = $this->options;
         $headers = $options[CURLOPT_HTTPHEADER] ?? [];
+
         if (!is_array($headers)) {
             throw new HttpException('The cURL HTTP headers option must be an array.');
         }
+
         foreach ($this->headers as $header) {
             $name = trim(explode(':', $header, 2)[0]);
             $headers = array_values(array_filter($headers, fn(string $line): bool =>
                 strcasecmp(trim(explode(':', $line, 2)[0]), $name) !== 0));
         }
+
         $headers = [...$headers, ...$this->headers];
         unset($options[CURLOPT_HTTPHEADER]);
         $userHeaderCallback = null;
@@ -678,6 +708,7 @@ class HttpRequest implements HttpRequestContract
         if (array_key_exists(CURLOPT_HEADERFUNCTION, $options)) {
             $userHeaderCallback = $options[CURLOPT_HEADERFUNCTION];
             unset($options[CURLOPT_HEADERFUNCTION]);
+
             if ($userHeaderCallback !== null && !is_callable($userHeaderCallback)) {
                 throw new HttpException('The cURL header callback must be callable.');
             }
@@ -718,6 +749,7 @@ class HttpRequest implements HttpRequestContract
                 if (!is_array($fields)) {
                     throw new HttpException('Multipart form fields must be an array.');
                 }
+
                 $options[CURLOPT_POSTFIELDS] = array_replace($this->flattenArray($fields), $this->attachments);
                 // cURL must generate the multipart boundary and its Content-Type.
                 $headers = array_values(array_filter($headers, fn(string $header): bool =>
@@ -729,6 +761,7 @@ class HttpRequest implements HttpRequestContract
                         $contentType = trim(explode(':', $header, 2)[1] ?? '');
                     }
                 }
+
                 [$options[CURLOPT_POSTFIELDS], $detectedContentType] = $this->encodePostFields($this->data, $contentType);
                 if ($contentType === null) {
                     $headers[] = "Content-Type: $detectedContentType";
@@ -744,6 +777,7 @@ class HttpRequest implements HttpRequestContract
         if ($curl === false) {
             throw new HttpException('Failed to initialize cURL.');
         }
+
         try {
             if (!curl_setopt_array($curl, array_replace($defaultOptions, $options))) {
                 throw new HttpException('Failed to configure cURL: ' . curl_error($curl));
@@ -753,6 +787,7 @@ class HttpRequest implements HttpRequestContract
             if ($error instanceof \ValueError || $error instanceof \TypeError) {
                 throw new HttpException('Invalid cURL options: ' . $error->getMessage(), 0, $error);
             }
+
             throw $error;
         }
 

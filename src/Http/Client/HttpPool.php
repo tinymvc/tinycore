@@ -123,9 +123,10 @@ class HttpPool implements HttpPoolContract
         } elseif (array_key_exists($key, $this->pendingRequests)) {
             throw new HttpException("Duplicate pool request key: {$key}");
         }
+
         $this->nextKey = null;
 
-        $request = new HttpRequest($method, $url, $params, $data, $key);
+        $request = HttpRequest::make($method, $url, $params, $data, $key);
         $this->pendingRequests[$key] = $request;
 
         return $request;

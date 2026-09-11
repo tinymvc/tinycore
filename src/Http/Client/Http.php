@@ -30,8 +30,6 @@ class Http extends HttpRequest implements HttpContract
      */
     private ?string $download = null;
 
-    private bool $downloadForce = false;
-
     /**
      * The Http constructor.
      * 
@@ -60,20 +58,6 @@ class Http extends HttpRequest implements HttpContract
     }
 
     /**
-     * Creates a new Http instance with the specified method, URL, parameters, and data.
-     * 
-     * @param string $method HTTP method
-     * @param string $url Target URL (optional)
-     * @param array $params Query parameters
-     * @param string|array $data POST/PUT/PATCH/DELETE data
-     * @return self A new Http instance
-     */
-    public static function make(string $method, string $url = '', array $params = [], string|array $data = []): self
-    {
-        return new self($method, $url, $params, $data);
-    }
-
-    /**
      * Resets the current configuration back to default, optionally overriding
      * certain configuration settings.
      * 
@@ -85,18 +69,19 @@ class Http extends HttpRequest implements HttpContract
     public function reset(string $method, string $url, array $params = [], string|array $data = []): void
     {
         $this->clearTemporaryUploadFiles();
+
         $this->attachments = [];
         $this->isMultipart = false;
         $this->responseHeaders = [];
         $this->retryTimes = 2;
         $this->retryDelayMs = 200;
+
         $this->setMethod($method);
         $this->setUrl($url);
         $this->setParams($params);
         $this->setData($data);
 
         $this->download = null; // Reset download file
-        $this->downloadForce = false;
         $this->options = []; // Reset cURL options
         $this->postFieldData = null;
         $this->headers = []; // Reset headers
@@ -155,15 +140,8 @@ class Http extends HttpRequest implements HttpContract
                 }
             });
 
-            if ($downloadMode && $data['status'] !== 0) {
-                // Publish only a complete transfer. link() also prevents a race
-                // from overwriting a file created after download() was called.
-                $saved = $this->downloadForce
-                    ? @rename($temporaryDownload, $downloadPath)
-                    : @link($temporaryDownload, $downloadPath);
-                if (!$saved) {
-                    throw new HttpException("Unable to save download file: {$downloadPath}");
-                }
+            if ($downloadMode && $data['status'] !== 0 && @rename($temporaryDownload, $downloadPath) === false) {
+                throw new HttpException("Unable to save download file: {$downloadPath}");
             }
 
             $this->triggerHttpRequestEvent(
@@ -185,7 +163,6 @@ class Http extends HttpRequest implements HttpContract
                 @unlink($temporaryDownload);
             }
             $this->download = null;
-            $this->downloadForce = false;
         }
     }
 
@@ -202,7 +179,7 @@ class Http extends HttpRequest implements HttpContract
             throw new HttpException("Download directory does not exist: {$directory}");
         }
 
-        if (is_dir($downloadPath) || ((!$this->downloadForce) && (file_exists($downloadPath) || is_link($downloadPath)))) {
+        if (file_exists($downloadPath)) {
             throw new HttpException("Download target already exists: {$downloadPath}");
         }
     }
@@ -415,7 +392,6 @@ class Http extends HttpRequest implements HttpContract
         }
 
         $this->download = $location;
-        $this->downloadForce = $force;
         return $this;
     }
 
