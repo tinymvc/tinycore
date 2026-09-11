@@ -138,7 +138,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $value Header value
      * @return self
      */
-    public function withHeader(string $key, string $value): self
+    public function withHeader(string $key, string $value): static
     {
         $this->headers = array_values(array_filter(
             $this->headers,
@@ -154,7 +154,7 @@ class HttpRequest implements HttpRequestContract
      * @param array $headers Associative array of headers
      * @return self
      */
-    public function withHeaders(array $headers): self
+    public function withHeaders(array $headers): static
     {
         foreach ($headers as $key => $value) {
             $this->withHeader($key, $value);
@@ -168,7 +168,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $type Content-Type value
      * @return self
      */
-    public function withContentType(string $type): self
+    public function withContentType(string $type): static
     {
         return $this->withHeader('Content-Type', $type);
     }
@@ -179,7 +179,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $type Accept value
      * @return self
      */
-    public function withAccept(string $type): self
+    public function withAccept(string $type): static
     {
         return $this->withHeader('Accept', $type);
     }
@@ -196,7 +196,7 @@ class HttpRequest implements HttpRequestContract
      * @param int $delayMs Delay between attempts, in milliseconds
      * @return self
      */
-    public function withRetry(int $times, int $delayMs = 200): self
+    public function withRetry(int $times, int $delayMs = 200): static
     {
         $this->retryTimes = max(0, $times);
         $this->retryDelayMs = max(0, $delayMs);
@@ -210,7 +210,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $userAgent User-Agent value
      * @return self
      */
-    public function withUserAgent(string $userAgent): self
+    public function withUserAgent(string $userAgent): static
     {
         $this->setOption(CURLOPT_USERAGENT, $userAgent);
         return $this;
@@ -222,7 +222,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $token Bearer token
      * @return self
      */
-    public function withToken(string $token): self
+    public function withToken(string $token): static
     {
         return $this->withHeader('Authorization', "Bearer $token");
     }
@@ -234,7 +234,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $password Password
      * @return self
      */
-    public function withBasicAuth(string $username, string $password): self
+    public function withBasicAuth(string $username, string $password): static
     {
         $this->setOption(CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
         $this->setOption(CURLOPT_USERPWD, "$username:$password");
@@ -247,7 +247,7 @@ class HttpRequest implements HttpRequestContract
      * @param array $cookies Associative array of cookies (key => value)
      * @return self
      */
-    public function withCookies(array $cookies): self
+    public function withCookies(array $cookies): static
     {
         $cookieStrings = [];
         foreach ($cookies as $name => $value) {
@@ -265,7 +265,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $cookieJar File path to the cookie jar
      * @return self
      */
-    public function withCookieJar(string $cookieJar): self
+    public function withCookieJar(string $cookieJar): static
     {
         $directory = dirname($cookieJar);
 
@@ -295,7 +295,7 @@ class HttpRequest implements HttpRequestContract
      * @param string $proxyAuth Optional proxy authentication (username:password)
      * @return self
      */
-    public function withProxy(string $proxy, string $proxyAuth = ''): self
+    public function withProxy(string $proxy, string $proxyAuth = ''): static
     {
         $this->setOption(CURLOPT_PROXY, $proxy);
 
@@ -314,7 +314,7 @@ class HttpRequest implements HttpRequestContract
      * @param mixed $value Option value
      * @return self
      */
-    public function withOption(int $option, mixed $value): self
+    public function withOption(int $option, mixed $value): static
     {
         $this->setOption($option, $value);
         return $this;
@@ -326,7 +326,7 @@ class HttpRequest implements HttpRequestContract
      * @param array $options Associative array of cURL options
      * @return self
      */
-    public function withOptions(array $options): self
+    public function withOptions(array $options): static
     {
         foreach ($options as $option => $value) {
             $this->setOption($option, $value);
@@ -340,7 +340,7 @@ class HttpRequest implements HttpRequestContract
      * @param int $seconds Timeout in seconds
      * @return self
      */
-    public function withTimeout(int $seconds): self
+    public function withTimeout(int $seconds): static
     {
         return $this->withOption(CURLOPT_TIMEOUT, $seconds);
     }
@@ -350,7 +350,7 @@ class HttpRequest implements HttpRequestContract
      * 
      * @return self
      */
-    public function withoutVerifying(): self
+    public function withoutVerifying(): static
     {
         $this->setOption(CURLOPT_SSL_VERIFYPEER, false);
         $this->setOption(CURLOPT_SSL_VERIFYHOST, 0);
@@ -362,7 +362,7 @@ class HttpRequest implements HttpRequestContract
      * 
      * @return self
      */
-    public function withVerifying(): self
+    public function withVerifying(): static
     {
         $this->setOption(CURLOPT_SSL_VERIFYPEER, true);
         $this->setOption(CURLOPT_SSL_VERIFYHOST, 2);
@@ -376,7 +376,7 @@ class HttpRequest implements HttpRequestContract
      * @param string|null $contentType The Content-Type header value (auto-detected if null)
      * @return self
      */
-    public function withPostFields(array|string $fields, null|string $contentType = null): self
+    public function withPostFields(array|string $fields, null|string $contentType = null): static
     {
         [$postFields, $contentType] = $this->encodePostFields($fields, $contentType);
         $this->withContentType($contentType);
@@ -430,7 +430,7 @@ class HttpRequest implements HttpRequestContract
      * @param array $headers Additional headers for this file part (optional)
      * @return self
      */
-    public function attach(string $name, mixed $contents, ?string $filename = null, array $headers = []): self
+    public function attach(string $name, mixed $contents, ?string $filename = null, array $headers = []): static
     {
         if (is_string($contents) && is_file($contents)) {
             if (!is_readable($contents)) {
@@ -494,7 +494,7 @@ class HttpRequest implements HttpRequestContract
      *
      * @return self
      */
-    public function asMultipart(): self
+    public function asMultipart(): static
     {
         $this->isMultipart = true;
         return $this;
