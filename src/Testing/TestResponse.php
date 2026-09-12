@@ -3,18 +3,26 @@
 namespace Spark\Testing;
 
 use Spark\Http\Response;
+use function array_key_exists;
+use function is_array;
+use function is_int;
+use function sprintf;
 
+/** A fluent wrapper around a Response for testing. */
 final class TestResponse
 {
+    /** @param Response $response The response to test. */
     public function __construct(public readonly Response $response)
     {
     }
 
+    /** Get the response's content as a string. */
     public function content(): string
     {
         return $this->response->getContent();
     }
 
+    /** Get the response's content as a decoded JSON value. */
     public function json(?string $path = null): mixed
     {
         $data = json_decode($this->content(), true, 512, JSON_THROW_ON_ERROR);
@@ -22,11 +30,16 @@ final class TestResponse
 
     }
 
+    /** Get the response's content as a decoded JSON value, throwing if the path is missing. */
     public function assertStatus(int $status): self
     {
         Assert::assertSame($status, $this->response->getStatusCode(), sprintf(
-            'Expected HTTP %d, got %d. %s', $status, $this->response->getStatusCode(), $this->content()
+            'Expected HTTP %d, got %d. %s',
+            $status,
+            $this->response->getStatusCode(),
+            $this->content()
         ));
+
         return $this;
     }
 
@@ -44,8 +57,10 @@ final class TestResponse
     public function assertHeader(string $name, string $value): self
     {
         $headers = array_change_key_case($this->response->getHeaders(), CASE_LOWER);
+
         Assert::assertArrayHasKey(strtolower($name), $headers);
         Assert::assertSame($value, $headers[strtolower($name)]);
+
         return $this;
     }
 
@@ -103,7 +118,8 @@ final class TestResponse
     public function assertSuccessful(): self
     {
         $status = $this->response->getStatusCode();
-        Assert::assertTrue($status >= 200 && $status < 300, 'Expected a successful response, got HTTP ' . $status . '.');
+
+        Assert::assertTrue($status >= 200 && $status < 300, "Expected a successful response, got HTTP $status.");
         return $this;
     }
 
@@ -144,8 +160,10 @@ final class TestResponse
     public function assertJsonCount(int $count, ?string $path = null): self
     {
         $data = $path === null ? $this->json() : $this->requiredJsonPath($path);
+
         Assert::assertIsArray($data, 'Expected an array or object at JSON path ' . ($path ?? '(root)') . '.');
         Assert::assertCount($count, $data);
+
         return $this;
     }
 
@@ -153,12 +171,15 @@ final class TestResponse
     public function assertJsonValidationErrors(string|array $fields): self
     {
         $this->assertStatus(422);
+
         $errors = $this->requiredJsonPath('errors');
         Assert::assertIsArray($errors);
+
         foreach ((array) $fields as $field) {
             Assert::assertArrayHasKey($field, $errors);
-            Assert::assertNotEmpty($errors[$field], 'No validation errors for ' . $field . '.');
+            Assert::assertNotEmpty($errors[$field], "No validation errors for $field.");
         }
+
         return $this;
     }
 
@@ -181,6 +202,7 @@ final class TestResponse
         if (!is_array($data)) {
             return false;
         }
+
         $matches = true;
         foreach ($fragment as $key => $value) {
             if (!array_key_exists($key, $data) || $data[$key] !== $value) {
@@ -188,20 +210,24 @@ final class TestResponse
                 break;
             }
         }
+
         if ($matches) {
             return true;
         }
+
         foreach ($data as $value) {
             if ($this->containsFragment($value, $fragment)) {
                 return true;
             }
         }
+
         return false;
     }
 
     private function checkStructure(array $structure, mixed $data): void
     {
         Assert::assertIsArray($data, 'Expected a JSON object or array.');
+
         foreach ($structure as $key => $value) {
             if (is_int($key)) {
                 Assert::assertArrayHasKey($value, $data);
@@ -220,7 +246,9 @@ final class TestResponse
     {
         $missing = new \stdClass();
         $value = data_get($this->json(), $path, $missing);
-        Assert::assertNotSame($missing, $value, 'Missing JSON path: ' . $path);
+
+        Assert::assertNotSame($missing, $value, "Missing JSON path: $path");
+
         return $value;
     }
 }

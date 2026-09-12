@@ -2,6 +2,15 @@
 
 namespace Spark\Testing;
 
+use function array_key_exists;
+use function count;
+use function is_array;
+use function is_bool;
+use function is_float;
+use function is_int;
+use function is_object;
+use function is_string;
+
 /** Small, strict assertions that work regardless of PHP's zend.assertions setting. */
 class Assert
 {
@@ -69,7 +78,7 @@ class Assert
 
     public static function assertInstanceOf(string $class, mixed $actual, string $message = ''): void
     {
-        self::check($actual instanceof $class, $message ?: 'Expected an instance of ' . $class . '.');
+        self::check($actual instanceof $class, $message ?: "Expected an instance of $class.");
     }
 
     /** PHP value equality (==); use assertSame when types must match. */
@@ -88,7 +97,8 @@ class Assert
         if ($delta < 0 || !is_finite($delta)) {
             throw new \InvalidArgumentException('Delta must be finite and non-negative.');
         }
-        self::check($expected === $actual || abs($expected - $actual) <= $delta, $message ?: 'Values differ by more than ' . $delta . '.');
+
+        self::check($expected === $actual || abs($expected - $actual) <= $delta, $message ?: "Values differ by more than $delta.");
     }
 
     public static function assertEmpty(mixed $actual, string $message = ''): void
@@ -109,6 +119,7 @@ class Assert
                 return;
             }
         }
+
         self::check(false, $message ?: 'Expected the iterable to contain ' . self::describe($needle) . '.');
     }
 
@@ -119,6 +130,7 @@ class Assert
                 self::check(false, $message ?: 'Unexpected iterable value ' . self::describe($needle) . '.');
             }
         }
+
         self::check(true, '');
     }
 
@@ -184,22 +196,22 @@ class Assert
 
     public static function assertMatchesRegularExpression(string $pattern, string $actual, string $message = ''): void
     {
-        self::check(preg_match($pattern, $actual) === 1, $message ?: 'String does not match ' . $pattern . '.');
+        self::check(preg_match($pattern, $actual) === 1, $message ?: "String does not match $pattern.");
     }
 
     public static function assertFileExists(string $path, string $message = ''): void
     {
-        self::check(is_file($path), $message ?: 'File does not exist: ' . $path);
+        self::check(is_file($path), $message ?: "File does not exist: $path");
     }
 
     public static function assertFileDoesNotExist(string $path, string $message = ''): void
     {
-        self::check(!is_file($path), $message ?: 'File unexpectedly exists: ' . $path);
+        self::check(!is_file($path), $message ?: "File unexpectedly exists: $path");
     }
 
     public static function assertDirectoryExists(string $path, string $message = ''): void
     {
-        self::check(is_dir($path), $message ?: 'Directory does not exist: ' . $path);
+        self::check(is_dir($path), $message ?: "Directory does not exist: $path");
     }
 
     /** Assert one operation throws, then continue testing its returned exception. */
@@ -208,18 +220,22 @@ class Assert
         if (!is_a($class, \Throwable::class, true)) {
             throw new \InvalidArgumentException($class . ' is not a Throwable class.');
         }
+
         try {
             $callback();
         } catch (\Throwable $e) {
             if ($e instanceof AssertionFailed || $e instanceof SkippedTest) {
                 throw $e;
             }
+
             self::assertInstanceOf($class, $e);
             if ($message !== null) {
                 self::assertStringContainsString($message, $e->getMessage());
             }
+
             return $e;
         }
+
         self::fail('Expected exception ' . $class . ' was not thrown.');
     }
 
@@ -236,9 +252,11 @@ class Assert
         if (is_object($value)) {
             return get_debug_type($value) . '#' . spl_object_id($value);
         }
+
         if (is_array($value)) {
             return substr((string) json_encode($value, JSON_PARTIAL_OUTPUT_ON_ERROR), 0, 1000);
         }
+
         return substr(var_export($value, true), 0, 1000);
     }
 }

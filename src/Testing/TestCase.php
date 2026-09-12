@@ -22,7 +22,7 @@ abstract class TestCase extends Assert
     protected function expectException(string $class): void
     {
         if (!is_a($class, Throwable::class, true)) {
-            throw new \InvalidArgumentException($class . ' is not a Throwable class.');
+            throw new \InvalidArgumentException("$class is not a Throwable class.");
         }
         $this->expectedException = $class;
     }
@@ -48,22 +48,28 @@ abstract class TestCase extends Assert
     {
         $before = self::countAssertions();
         $reporting = error_reporting(E_ALL);
+
         $previousHandler = set_error_handler(static function (int $level, string $message, string $file, int $line): bool {
             if (!(error_reporting() & $level)) {
                 return false;
             }
             throw new \ErrorException($message, 0, $level, $file, $line);
         });
+
         $bufferLevel = ob_get_level();
         ob_start();
+
         $output = '';
         $errors = [];
         $skipped = null;
+
         $this->expectedException = $this->expectedMessage = null;
         $this->expectedCode = null;
+
         try {
             $this->setUp();
             $thrown = null;
+
             try {
                 $this->$method();
             } catch (Throwable $e) {
@@ -74,22 +80,27 @@ abstract class TestCase extends Assert
             if ($thrown instanceof AssertionFailed || $thrown instanceof SkippedTest) {
                 throw $thrown;
             }
+
             if ($this->expectedException !== null || $this->expectedMessage !== null || $this->expectedCode !== null) {
                 if ($thrown === null) {
                     self::fail('Expected exception ' . ($this->expectedException ?? '') . ' was not thrown.');
                 }
+
                 if ($this->expectedException !== null) {
                     self::assertInstanceOf($this->expectedException, $thrown);
                 }
             } elseif ($thrown !== null) {
                 throw $thrown;
             }
+
             if ($this->expectedMessage !== null) {
                 if ($thrown === null) {
                     self::fail('Expected an exception message, but no exception was thrown.');
                 }
+
                 self::assertStringContainsString($this->expectedMessage, $thrown->getMessage());
             }
+
             if ($this->expectedCode !== null) {
                 self::assertSame($this->expectedCode, $thrown->getCode());
             }
@@ -104,13 +115,16 @@ abstract class TestCase extends Assert
                 $errors[] = $e;
             }
         }
+
         try {
             if (ob_get_level() <= $bufferLevel) {
                 $errors[] = new AssertionFailed('Test closed an output buffer owned by the runner.');
             }
+
             while (ob_get_level() > $bufferLevel) {
                 $level = ob_get_level();
                 $output = (string) ob_get_clean() . $output;
+
                 if (ob_get_level() === $level) {
                     $errors[] = new AssertionFailed('Test left a non-removable output buffer.');
                     break;
@@ -122,27 +136,38 @@ abstract class TestCase extends Assert
             $this->restoreErrorHandler($previousHandler);
             error_reporting($reporting);
         }
+
         $assertions = self::countAssertions() - $before;
         if ($errors === [] && $skipped === null && $assertions === 0) {
             $errors[] = new AssertionFailed('Test did not make any assertions.');
         }
-        return ['assertions' => $assertions, 'errors' => $errors, 'skipped' => $skipped, 'output' => $output];
+
+        return [
+            'assertions' => $assertions,
+            'errors' => $errors,
+            'skipped' => $skipped,
+            'output' => $output
+        ];
     }
+
     /** Unwind handlers left by a test, restoring the caller's active handler. */
     private function restoreErrorHandler(?callable $previous): void
     {
         while (true) {
             $current = set_error_handler(static fn() => false);
             restore_error_handler();
+
             if ($current === $previous) {
                 return;
             }
+
             if ($current === null) {
                 if ($previous !== null) {
                     set_error_handler($previous);
                 }
                 return;
             }
+
             restore_error_handler();
         }
     }
