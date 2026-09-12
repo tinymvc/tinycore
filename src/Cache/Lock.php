@@ -42,6 +42,7 @@ class Lock implements LockContract, \ArrayAccess
     {
         $connection = $this->resolveDriverConfig($name);
         $driver = strtolower((string) ($connection['driver'] ?? 'sqlite'));
+
         $this->storage = $driver === 'redis'
             ? new RedisStorage($name, $connection)
             : new SqliteStorage($name, $connection, 'lock');

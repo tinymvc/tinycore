@@ -6,6 +6,7 @@ use ReflectionClass;
 use ReflectionMethod;
 use Throwable;
 use function count;
+use function get_class;
 use function in_array;
 use function printf;
 

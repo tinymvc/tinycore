@@ -21,7 +21,7 @@ class Route implements RouteContract
     use Macroable, Conditionable;
 
     /**
-     * Route constructor.
+     * Create a new Route instance.
      *
      * @param string $path The URL path for the route.
      * @param string|array|null $method The HTTP method(s) for the route (e.g., 'GET', 'POST').
@@ -34,7 +34,7 @@ class Route implements RouteContract
     public function __construct(
         private string $path,
         private string|array|null $method = null,
-        private $callback = null,
+        private mixed $callback = null,
         private string|null $template = null,
         private string|null $name = null,
         private string|array $middleware = [],

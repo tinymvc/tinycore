@@ -37,6 +37,12 @@ class Router implements RouterContract
      */
     private array $groupStack = [];
 
+    /**
+     * @var null|array $config
+     * 
+     * Temporary storage for route or group configuration attributes.
+     * This is used to apply attributes to routes or groups before they are finalized.
+     */
     private null|array $config = null;
 
     /**
@@ -174,6 +180,7 @@ class Router implements RouterContract
         if (is_debug_mode()) {
             $validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
             $invalidMethods = array_filter($methods, fn($method) => !in_array($method, $validMethods));
+
             if (!empty($invalidMethods)) {
                 trigger_error(
                     sprintf('Invalid HTTP methods "%s" provided to match(). Valid methods: %s', implode(', ', $invalidMethods), implode(', ', $validMethods)),

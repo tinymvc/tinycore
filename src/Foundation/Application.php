@@ -65,8 +65,10 @@ class Application extends \Spark\Container implements ApplicationContract
     /** @var bool Whether the application is currently running termination callbacks. */
     private bool $terminating = false;
 
+    /** @var bool Whether the application is running in testing mode. */
     private bool $testing;
 
+    /** @var bool Whether the application has been booted. */
     private bool $booted = false;
 
     /**
@@ -130,9 +132,7 @@ class Application extends \Spark\Container implements ApplicationContract
         $app = new self($path);
         $providers ??= require dir_path("$path/bootstrap/providers.php");
 
-        $app->withApp(config: $config);
-
-        return $app->withApp(providers: $providers);
+        return $app->withApp(config: $config, providers: $providers);
     }
 
     /**

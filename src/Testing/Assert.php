@@ -236,7 +236,7 @@ class Assert
             return $e;
         }
 
-        self::fail('Expected exception ' . $class . ' was not thrown.');
+        self::fail("Expected exception $class was not thrown.");
     }
 
     private static function check(bool $condition, string $message): void

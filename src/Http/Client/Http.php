@@ -109,6 +109,7 @@ class Http extends HttpRequest implements HttpContract
         $downloadMode = is_string($downloadPath) && $downloadPath !== '';
 
         $temporaryDownload = null;
+
         try {
             if ($downloadMode) {
                 $this->prepareDownloadTarget($downloadPath);

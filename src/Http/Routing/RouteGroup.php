@@ -28,7 +28,7 @@ class RouteGroup implements RouteGroupContract
      * @param array $group The group attributes.
      * @param callable|string|array|null $callback The callback to define routes within the group.
      */
-    public function __construct(private array $group = [], private $callback = null)
+    public function __construct(private array $group = [], private mixed $callback = null)
     {
     }
 

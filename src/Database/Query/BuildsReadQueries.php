@@ -768,7 +768,7 @@ trait BuildsReadQueries
      * @param null|string|array $fields Optional fields to select.
      * @return self
      */
-    public function latest(string $field = 'created_at', $fields = null): QueryBuilder
+    public function latest(string $field = 'created_at', array|string|null $fields = null): QueryBuilder
     {
         $fields && $this->select($fields);
         return $this->orderDesc($this->withAlias($field));
@@ -781,7 +781,7 @@ trait BuildsReadQueries
      * @param null|string|array $fields Optional fields to select.
      * @return self
      */
-    public function oldest(string $field = 'created_at', $fields = null): QueryBuilder
+    public function oldest(string $field = 'created_at', array|string|null $fields = null): QueryBuilder
     {
         $fields && $this->select($fields);
 
@@ -805,7 +805,7 @@ trait BuildsReadQueries
      * @param null|string|array $fields Optional fields to select.
      * @return array Array of query results.
      */
-    public function all($fields = null): array
+    public function all(array|string|null $fields = null): array
     {
         $fields && $this->select($fields);
 
@@ -831,7 +831,7 @@ trait BuildsReadQueries
      * @param null|string|array $fields Optional fields to select.
      * @return Collection Array of query results.
      */
-    public function get($fields = null): Collection
+    public function get(array|string|null $fields = null): Collection
     {
         return collect($this->all($fields));
     }
@@ -844,7 +844,7 @@ trait BuildsReadQueries
      * @param null|string|array $fields Optional fields to select.
      * @return Paginator
      */
-    public function paginate(int $limit = 10, string $keyword = 'page', $fields = null): Paginator
+    public function paginate(int $limit = 10, string $keyword = 'page', array|string|null $fields = null): Paginator
     {
         $fields && $this->select($fields);
 

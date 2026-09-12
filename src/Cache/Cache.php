@@ -37,6 +37,7 @@ class Cache implements CacheContract, \ArrayAccess
     {
         $connection = $this->resolveDriverConfig($name);
         $driver = strtolower((string) ($connection['driver'] ?? 'sqlite'));
+
         $this->storage = $driver === 'redis'
             ? new RedisStorage($name, $connection)
             : new SqliteStorage($name, $connection, 'cache');
@@ -53,6 +54,24 @@ class Cache implements CacheContract, \ArrayAccess
     public static function make(string $name = 'default'): Cache
     {
         return new self($name);
+    }
+
+    /**
+     * Create a lock instance or acquire a lock on a key.
+     *
+     * @param ?string $key The key to lock.
+     * @param ?callable $callback The callback to execute while the lock is held.
+     * @param int $timeout The timeout for the lock.
+     * @param int $waitTimeout The timeout for waiting for the lock.
+     * @return mixed The result of the callback or the lock instance.
+     */
+    public static function lock(?string $key = null, ?callable $callback = null, int $timeout = 10, int $waitTimeout = 5): mixed
+    {
+        if (\func_num_args() >= 2) {
+            return Lock::make()->withLock($key, $callback, $timeout, $waitTimeout);
+        }
+
+        return Lock::make();
     }
 
     /**

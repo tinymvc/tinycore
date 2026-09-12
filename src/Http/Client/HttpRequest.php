@@ -55,7 +55,7 @@ class HttpRequest implements HttpRequestContract
     protected array|string|null $postFieldData = null;
 
     /**
-     * Constructor.
+     * Create a new HttpRequest instance.
      * 
      * @param string $method HTTP method
      * @param string $url Target URL

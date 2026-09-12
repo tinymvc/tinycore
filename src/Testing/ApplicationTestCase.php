@@ -59,6 +59,7 @@ abstract class ApplicationTestCase extends TestCase
         mkdir($this->storagePath, 0700, true);
 
         \Spark\View\Blade::flushState();
+
         $_ENV['APP_ENV'] = 'testing';
         $_ENV['TEST_STORAGE_PATH'] = $this->storagePath;
         $_GET = $_POST = $_FILES = $_COOKIE = $_SESSION = $_REQUEST = [];
@@ -307,6 +308,7 @@ abstract class ApplicationTestCase extends TestCase
         }
 
         \Spark\View\Blade::flushState();
+
         Application::$app = $this->previousApp;
         Tracer::$instance = $this->previousTracer;
 
@@ -323,7 +325,7 @@ abstract class ApplicationTestCase extends TestCase
         }
 
         foreach ($this->environment as $key => $value) {
-            putenv($key . '=' . $value);
+            putenv("$key=$value");
         }
 
         date_default_timezone_set($this->timezone);
