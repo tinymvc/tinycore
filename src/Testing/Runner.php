@@ -8,11 +8,16 @@ use Throwable;
 use function count;
 use function get_class;
 use function in_array;
-use function printf;
+use function is_string;
+use function sprintf;
+use function strlen;
 
 /** Discover public test* methods in *Test.php files and run them sequentially. */
 final class Runner
 {
+    /** @var bool Whether to use ANSI colors in the output. */
+    private bool $colors = false;
+
     /**
      * Run the test runner.
      * 
@@ -26,7 +31,11 @@ final class Runner
             throw new \LogicException('The test runner is available only in CLI.');
         }
 
-        $start = microtime(true);
+        $start = hrtime(true);
+        $this->colors = function_exists('stream_isatty') && stream_isatty(STDOUT)
+            && getenv('TERM') !== 'dumb'
+            && (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '');
+
         set_error_handler(static function (int $level, string $message, string $file, int $line): bool {
             if (!(error_reporting() & $level)) {
                 return false;
@@ -37,7 +46,7 @@ final class Runner
         try {
             [$suite, $filter, $list, $help] = $this->options($arguments);
             if ($help) {
-                echo "Usage: php tests/run.php [--testsuite Unit|Feature] [--filter text] [--list-tests]\n";
+                echo "Usage: php test [--testsuite Unit|Feature] [--filter text] [--list-tests]\n";
                 return 0;
             }
 
@@ -47,46 +56,55 @@ final class Runner
                 return 1;
             }
 
-            $failed = $assertions = $skipped = 0;
-            foreach ($tests as [$class, $method]) {
-                $name = "$class::$method";
-                if ($list) {
-                    echo "$name\n";
-                    continue;
+            if ($list) {
+                foreach ($tests as [$class, $method]) {
+                    echo "$class::$method\n";
                 }
+                return 0;
+            }
+
+            $failed = $passed = $assertions = $skipped = 0;
+            $currentClass = null;
+            $results = [];
+
+            foreach ($tests as [$class, $method]) {
+                if ($currentClass !== null && $currentClass !== $class) {
+                    $this->reportClass($currentClass, $results);
+                    $results = [];
+                }
+
+                $currentClass = $class;
+                $testStart = hrtime(true);
+                $before = Assert::countAssertions();
+
                 try {
                     $result = (new $class())->runTest($method);
                 } catch (Throwable $e) {
-                    $result = ['assertions' => 0, 'errors' => [$e], 'skipped' => null];
+                    $result = ['errors' => [$e], 'skipped' => null, 'output' => ''];
                 }
 
+                // Include assertions in constructors, even when construction fails.
+                $result['assertions'] = Assert::countAssertions() - $before;
+                $result['duration'] = (hrtime(true) - $testStart) / 1e9;
                 $assertions += $result['assertions'];
-                if (($result['output'] ?? '') !== '') {
-                    echo "OUTPUT $name\n" . $result['output'] . "\n";
+
+                // Cleanup errors take precedence over a skip or successful test body.
+                if ($result['errors'] !== []) {
+                    $result['status'] = 'FAIL';
+                    $failed++;
+                } elseif ($result['skipped'] !== null) {
+                    $result['status'] = 'SKIP';
+                    $skipped++;
+                } else {
+                    $result['status'] = 'PASS';
+                    $passed++;
                 }
 
-                if ($result['errors'] === []) {
-                    if ($result['skipped'] !== null) {
-                        $skipped++;
-                        echo "SKIP $name: " . $result['skipped'] . "\n";
-                    } else {
-                        echo "PASS $name\n";
-                    }
-
-                    continue;
-                }
-
-                $failed++;
-
-                echo "FAIL $name\n";
-                foreach ($result['errors'] as $error) {
-                    $this->report($error);
-                }
+                $results[$method] = $result;
             }
 
-            if (!$list) {
-                printf("\n%d tests, %d assertions, %d failures, %d skipped (%.3fs)\n", count($tests), $assertions, $failed, $skipped, microtime(true) - $start);
-            }
+            $this->reportClass($currentClass, $results);
+            $this->reportSummary($passed, $failed, $skipped, $assertions, (hrtime(true) - $start) / 1e9);
 
             return $failed > 0 ? 1 : 0;
         } catch (Throwable $e) {
@@ -96,6 +114,106 @@ final class Runner
             return 2;
         } finally {
             restore_error_handler();
+        }
+    }
+
+    /** Render only after the class has finished so its badge reflects every result. */
+    private function reportClass(string $class, array $results): void
+    {
+        $statuses = array_column($results, 'status');
+        $status = match (true) {
+            in_array('FAIL', $statuses, true) => 'FAIL',
+            !in_array('PASS', $statuses, true) => 'SKIP',
+            in_array('SKIP', $statuses, true) => 'WARN',
+            default => 'PASS',
+        };
+
+        $color = match ($status) {
+            'PASS' => '30;42',
+            'FAIL' => '97;41',
+            default => '30;43',
+        };
+
+        echo "\n  " . $this->style(" $status ", $color) . " $class\n";
+
+        $columns = getenv('COLUMNS');
+        $width = is_string($columns) && preg_match('/^[0-9]+$/D', $columns) ? max(40, min(160, (int) $columns)) : 80;
+
+        foreach ($results as $method => $result) {
+            $color = match ($result['status']) {
+                'PASS' => '32',
+                'FAIL' => '31',
+                default => '33',
+            };
+
+            $symbol = match ($result['status']) {
+                'PASS' => '✓',
+                'FAIL' => '⨯',
+                default => '-',
+            };
+
+            $name = $this->testName($method);
+            $duration = $this->duration($result['duration']);
+            $length = function_exists('mb_strwidth') ? mb_strwidth($name, 'UTF-8') : strlen($name);
+            $padding = max(2, $width - $length - strlen($duration) - 6);
+
+            echo '  ' . $this->style($symbol, $color) . ' ' . $this->style($name, '90')
+                . str_repeat(' ', $padding) . $this->style($duration, '90') . "\n";
+
+            if ($result['skipped'] !== null) {
+                $this->reportText('Skipped: ' . $result['skipped'], '33');
+            }
+            if (($result['output'] ?? '') !== '') {
+                $this->reportText("OUTPUT $class::$method", '90');
+                $this->reportText($result['output']);
+            }
+            if ($result['errors'] !== []) {
+                $this->reportText("FAIL $class::$method", '31');
+                foreach ($result['errors'] as $error) {
+                    $this->report($error);
+                }
+            }
+        }
+    }
+
+    private function reportSummary(int $passed, int $failed, int $skipped, int $assertions, float $duration): void
+    {
+        $counts = [];
+        foreach ([[$failed, 'failed', '31'], [$skipped, 'skipped', '33'], [$passed, 'passed', '32']] as [$count, $label, $color]) {
+            if ($count > 0) {
+                $counts[] = $this->style("$count $label", $color);
+            }
+        }
+
+        $assertionLabel = $assertions === 1 ? 'assertion' : 'assertions';
+        echo "\n  Tests:    " . implode(', ', $counts) . $this->style(" ($assertions $assertionLabel)", '90') . "\n";
+        echo '  Duration: ' . $this->duration($duration) . "\n\n";
+    }
+
+    private function testName(string $method): string
+    {
+        $name = substr($method, 4);
+        $name = preg_replace('/([A-Z]+)([A-Z][a-z])/', '$1 $2', $name);
+        $name = preg_replace('/([a-z0-9])([A-Z])/', '$1 $2', $name);
+        $name = trim(preg_replace('/[_\s]+/', ' ', $name));
+
+        return $name === '' ? $method : strtolower($name);
+    }
+
+    private function duration(float $seconds): string
+    {
+        return $seconds < 0.001 ? '<0.001s' : sprintf('%.3fs', $seconds);
+    }
+
+    private function style(string $text, string $color): string
+    {
+        return $this->colors ? "\033[{$color}m$text\033[0m" : $text;
+    }
+
+    private function reportText(string $text, string $color = ''): void
+    {
+        foreach (explode("\n", rtrim(str_replace(["\r\n", "\r"], "\n", $text), "\n")) as $line) {
+            echo '      ' . ($color === '' ? $line : $this->style($line, $color)) . "\n";
         }
     }
 
@@ -200,6 +318,7 @@ final class Runner
             }
         }
 
-        printf("  %s: %s\n  %s:%d\n", get_class($error), $error->getMessage(), $file, $line);
+        $this->reportText(get_class($error) . ': ' . $error->getMessage(), '31');
+        $this->reportText("$file:$line", '90');
     }
 }
