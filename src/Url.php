@@ -690,6 +690,11 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
      */
     public function is(string $path): bool
     {
+        if (strpos($path, '*') !== false) {
+            $pattern = '#^' . str_replace('\*', '.*', preg_quote($path, '#')) . '$#';
+            return (bool) preg_match($pattern, $this->getPath());
+        }
+
         return trim($this->getPath(), '/') === trim($path, '/');
     }
 

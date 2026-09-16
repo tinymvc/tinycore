@@ -462,6 +462,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function is(string $path): bool
     {
+        if (strpos($path, '*') !== false) {
+            $pattern = '#^' . str_replace('\*', '.*', preg_quote($path, '#')) . '$#';
+            return (bool) preg_match($pattern, $this->path);
+        }
+
         return trim($this->path, '/') === trim($path, '/');
     }
 
