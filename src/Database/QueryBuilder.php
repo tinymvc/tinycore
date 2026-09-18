@@ -373,8 +373,7 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function applyMapper(array $data): array
     {
-        foreach ($this->dataMapper as $key => $mapper) {
-            unset($this->dataMapper[$key]);
+        while ($mapper = array_shift($this->dataMapper)) {
             $data = $mapper($data);
         }
 
