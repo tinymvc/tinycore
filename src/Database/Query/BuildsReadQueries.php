@@ -282,9 +282,9 @@ trait BuildsReadQueries
                 $operator = '=';
             }
 
-            $this->query['joins'] .= " " . $orOn . " " . $this->wrapper->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
+            $this->query['joins'] .= " $orOn " . $this->wrapper->wrapColumn($field1) . " $operator " . $this->wrapOrValue($field2);
         } else {
-            $this->query['joins'] .= " " . $orOn . " " . $this->wrapJoinOn($field1);
+            $this->query['joins'] .= " $orOn " . $this->wrapJoinOn($field1);
         }
 
         if ($parameters) {
@@ -660,7 +660,7 @@ trait BuildsReadQueries
             . $this->query['alias']
             . $this->query['sql']
             . $this->query['joins']
-            . $this->getWhereSql()
+            . $this->preparedWhereClauseSql()
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
             . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
             . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
@@ -912,7 +912,7 @@ trait BuildsReadQueries
         $sql = "SELECT COUNT(1) FROM $table"
             . $this->query['alias']
             . $this->query['joins']
-            . $this->getWhereSql()
+            . $this->preparedWhereClauseSql()
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
             . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '');
 

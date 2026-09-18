@@ -71,6 +71,8 @@ use Spark\Database\QueryBuilder;
  * @method QueryBuilder latest()
  * @method QueryBuilder oldest()
  * @method QueryBuilder random()
+ * @method QueryBuilder withTrashed()
+ * @method QueryBuilder onlyTrashed()
  * @method QueryBuilder distinct(?string $column = null)
  * @method int delete(mixed $where = null)
  * @method mixed first()

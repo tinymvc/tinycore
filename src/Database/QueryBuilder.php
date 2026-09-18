@@ -337,6 +337,28 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
+     * Include soft deleted records in the query results.
+     *
+     * @return self
+     */
+    public function withTrashed(): self
+    {
+        $this->query['with_trashed'] = true;
+        return $this;
+    }
+
+    /**
+     * Include only soft deleted records in the query results.
+     *
+     * @return self
+     */
+    public function onlyTrashed(): self
+    {
+        $this->query['only_trashed'] = true;
+        return $this;
+    }
+
+    /**
      * Magic method to handle dynamic method calls.
      *
      * @param string $method The name of the method being called.
@@ -569,5 +591,31 @@ class QueryBuilder implements QueryBuilderContract
         }
 
         return (string) $value;
+    }
+
+    /**
+     * Generates the WHERE clause for soft deletes if applicable.
+     *
+     *  @return string The modified WHERE SQL clause with soft delete conditions.
+     */
+    private function preparedWhereClauseSql(): string
+    {
+        $whereSql = $this->getWhereSql();
+
+        if (($model = $this->getModelBeingUsed()) === null || $model->usesSoftDeletes() === false) {
+            return $whereSql;
+        }
+
+        if (isset($this->query['with_trashed']) && $this->query['with_trashed'] === true) {
+            return $whereSql;
+        }
+
+        $not = false; // Default to IS NULL condition for soft deletes (not deleted)
+
+        if (isset($this->query['only_trashed']) && $this->query['only_trashed'] === true) {
+            $not = true;
+        }
+
+        return $model->buildSoftDeleteWhereClause($whereSql, $not);
     }
 }

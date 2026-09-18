@@ -3,6 +3,7 @@
 namespace Spark\Database;
 
 use Spark\Database\Casts\Castable;
+use Spark\Database\Concerns\InteractsWithSoftDeletes;
 use Spark\Database\Contracts\ModelContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Jsonable;
@@ -96,6 +97,8 @@ use function sprintf;
  * @method static QueryBuilder random()
  * @method static QueryBuilder distinct(?string $column = null)
  * @method static QueryBuilder union(QueryBuilder|Closure $query, bool $all = false)
+ * @method static QueryBuilder withTrashed()
+ * @method static QueryBuilder onlyTrashed()
  * @method static mixed first($fields = null)
  * @method static mixed firstOrFail($where = null, $fields = null)
  * @method static mixed last($fields = null)
@@ -124,7 +127,7 @@ use function sprintf;
  */
 abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess, \IteratorAggregate
 {
-    use InteractsWithOrm, Castable, Conditionable, Macroable {
+    use InteractsWithOrm, InteractsWithSoftDeletes, Castable, Conditionable, Macroable {
         __call as macroCall;
         __callStatic as staticMacroCall;
     }

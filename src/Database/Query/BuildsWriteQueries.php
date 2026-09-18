@@ -152,8 +152,7 @@ trait BuildsWriteQueries
         }
 
         // Apply related model condition if necessary
-        if ($this->isUsingModel()) {
-            $model = $this->getModelBeingUsed();
+        if (($model = $this->getModelBeingUsed()) !== null && $model->hasPrimaryValue()) {
             $model->fill($data);
 
             // Cast the data for storage, including timestamps if applicable
@@ -181,10 +180,11 @@ trait BuildsWriteQueries
 
         // Prepare the table name
         $table = $this->getTableName();
+        $whereSql = $this->preparedWhereClauseSql();
 
         // Prepare the SQL update statement
         $setBindings = [];
-        $sql = sprintf("UPDATE $table SET %s %s", $this->compileUpdateSet($data, $setBindings), $this->getWhereSql());
+        $sql = sprintf("UPDATE $table SET %s %s", $this->compileUpdateSet($data, $setBindings), $whereSql);
         $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
@@ -215,11 +215,11 @@ trait BuildsWriteQueries
         // Returns the number of affected rows.
         $count = $statement->rowCount();
 
-        if ($this->isUsingModel()) {
+        if ($model !== null && $model->hasPrimaryValue()) {
             if ($count) {
-                $this->getModelBeingUsed()->trackUpdated();
+                $model->trackUpdated();
             } else {
-                $this->getModelBeingUsed()->restoreOriginal();
+                $model->restoreOriginal();
             }
         }
 
@@ -230,12 +230,14 @@ trait BuildsWriteQueries
      * Deletes records from the database based on specified conditions.
      *
      * @param null|string|array|Arrayable|Closure $where  Optional WHERE clause to specify which records to delete.
-     * @return int Returns the number of affected rows.
+     * @param bool $force  If true, forces the deletion of records without using soft deletes.
+     *
+     *  @return int Returns the number of affected rows.
      */
-    public function delete(null|string|array|Arrayable|Closure $where = null): int
+    public function delete(null|string|array|Arrayable|Closure $where = null, bool $force = false): int
     {
         // Apply related model condition if necessary
-        if ($this->isUsingModel()) {
+        if (($model = $this->getModelBeingUsed()) !== null) {
             $this->applyModelPrimaryCondition();
         }
 
@@ -254,7 +256,19 @@ trait BuildsWriteQueries
         $table = $this->getTableName();
 
         // Prepare the SQL delete statement
-        $sql = "DELETE FROM $table {$this->getWhereSql()}";
+        $whereSql = $this->getWhereSql();
+
+        if (isset($model) && $model->usesSoftDeletes() && !$force) {
+            // Soft delete only: mark currently-active records as deleted.
+            $whereSql = $model->buildSoftDeleteWhereClause($whereSql, not: false);
+
+            $column = $this->wrapper->wrapColumn($model->getSoftDeleteColumn());
+            $sql = "UPDATE $table SET $column = :now $whereSql";
+
+            $this->bind(['now' => now()]);
+        }
+
+        $sql ??= "DELETE FROM $table $whereSql";
         $statement = $this->database->prepare($sql);
 
         if ($statement === false) {
@@ -277,11 +291,72 @@ trait BuildsWriteQueries
         // Returns the number of affected rows.
         $deleted = $statement->rowCount();
 
-        if ($deleted && $this->isModelWithPrimaryBeingUsed()) {
-            $this->getModelBeingUsed()->trackDeleted();
+        if ($deleted && isset($model) && $model->hasPrimaryValue()) {
+            $model->trackDeleted();
         }
 
         return $deleted;
+    }
+
+    /**
+     * Forcefully deletes records from the database, bypassing soft delete functionality.
+     *
+     * @param null|string|array|Arrayable|Closure $where  Optional WHERE clause to specify which records to delete.
+     * @return int Returns the number of affected rows.
+     */
+    public function forceDelete(null|string|array|Arrayable|Closure $where = null): int
+    {
+        return $this->delete($where, force: true);
+    }
+
+    /**
+     * Restore a soft deleted model instance.
+     *
+     * @return bool True if the model instance was restored, false otherwise.
+     */
+    public function restore(): bool
+    {
+        if (($model = $this->getModelBeingUsed()) === null || $model->usesSoftDeletes() === false) {
+            return false; // No model being used or model does not support soft deletes
+        }
+
+        $started = microtime(true); // Start timing the operation
+        $startedMemory = memory_get_usage(true);
+
+        // Apply related model condition if necessary
+        $this->applyModelPrimaryCondition();
+
+        if (!$this->hasWhere()) {
+            return false; // No WHERE condition is set to avoid accidental restoration of all records
+        }
+
+        // Prepare the table name
+        $table = $this->getTableName();
+        $column = $this->wrapper->wrapColumn($model->getSoftDeleteColumn());
+        $whereSql = $model->buildSoftDeleteWhereClause($this->getWhereSql(), not: true);
+
+        $sql = "UPDATE $table SET $column = NULL $whereSql";
+        $statement = $this->database->prepare($sql);
+
+        if ($statement === false) {
+            throw new QueryBuilderException('Failed to prepare statement');
+        }
+
+        // Bind the WHERE clause parameters
+        $this->bindParameters($statement);
+
+        // Execute the statement and reset the WHERE clause
+        if ($statement->execute() === false) {
+            throw new QueryBuilderException('Failed to execute statement');
+        }
+
+        $this->log($started, $startedMemory, $sql, []);
+
+        // Reset current query builder.
+        $this->resetWhere();
+
+        // Returns the number of affected rows.
+        return $statement->rowCount();
     }
 
     /**
@@ -420,8 +495,7 @@ trait BuildsWriteQueries
 
         if ($id) {
             $result = ['id' => $id, ...$attributes, ...$values];
-            if ($this->isUsingModel()) {
-                $model = $this->getModelBeingUsed();
+            if (($model = $this->getModelBeingUsed()) !== null) {
                 $model->fill($result);
                 return $model;
             }
@@ -466,7 +540,7 @@ trait BuildsWriteQueries
         $bindings = ['increment' => $value, ...$this->getBindings()];
         $sql = "UPDATE " . $this->getTableName()
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} + :increment "
-            . $this->getWhereSql();
+            . $this->preparedWhereClauseSql();
 
         $result = $this->executeAffectingStatement($sql, $bindings);
 
@@ -493,7 +567,7 @@ trait BuildsWriteQueries
         $bindings = ['decrement' => $value, ...$this->getBindings()];
         $sql = "UPDATE " . $this->getTableName()
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} - :decrement "
-            . $this->getWhereSql();
+            . $this->preparedWhereClauseSql();
 
         $result = $this->executeAffectingStatement($sql, $bindings);
 
