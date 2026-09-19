@@ -676,17 +676,6 @@ trait InteractsWithRelation
     }
 
     /**
-     * Check if the model being used has a primary key value set.
-     *
-     * @return bool
-     */
-    private function isModelWithPrimaryBeingUsed(): bool
-    {
-        $model = $this->getModelBeingUsed();
-        return $model !== null && $model->hasPrimaryValue();
-    }
-
-    /**
      * Add constraint based on relationship existence.
      * 
      * @param array $relationConfig The relationship configuration
@@ -933,7 +922,7 @@ trait InteractsWithRelation
         $table = $query->getTableName();
         $select = $query->query['select'] ?: 'COUNT(*)';
         $joins = $query->query['joins'] ?? '';
-        $where = $query->getWhereSql();
+        $where = $query->preparedWhereClauseSql();
 
         return [
             'sql' => "SELECT {$select} FROM {$table}{$joins}{$where}",
