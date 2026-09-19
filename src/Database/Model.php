@@ -50,7 +50,7 @@ use function sprintf;
  * @method static QueryBuilder when(mixed $value, callable $callback)
  * @method static QueryBuilder unless(mixed $value, callable $callback)
  * @method static int|array insert(array|Arrayable $data, array $config = [])
- * @method static int|array upsert(array|Arrayable $data, array $config = [])
+ * @method static int|array upsert(array|Arrayable $data, null|array $conflict = null, null|array $update = null)
  * @method static QueryBuilder where(null|string|array|Closure $column = null, ?string $operator = null, mixed $value = null, ?string $boolean = null, bool $not = false)
  * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [])
  * @method static QueryBuilder whereNull($where, $not = false)

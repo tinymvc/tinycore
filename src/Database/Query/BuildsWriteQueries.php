@@ -99,10 +99,11 @@ trait BuildsWriteQueries
      * Upsert single/multiple records into the database with optional configurations.
      *
      * @param array|Arrayable $data
-     * @param array $config
+     * @param null|array $conflict  Optional array of columns to check for conflicts.
+     * @param null|array $update    Optional array of columns to update on conflict.
      * @return int
      */
-    public function upsert(array|Arrayable $data, array $config = []): int
+    public function upsert(array|Arrayable $data, null|array $conflict = null, null|array $update = null): int
     {
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
@@ -114,24 +115,22 @@ trait BuildsWriteQueries
         }
 
         // Add default update close, if provided none.
-        if (!isset($config['conflict'])) {
-            $config['conflict'] = ['id'];
-        }
+        $conflict ??= ['id'];
 
         // Add default update fields, if provided none.
-        if (!isset($config['update'])) {
+        if (empty($update)) {
             // Extract all fields except those are in $config['conflict'].
             $fields = array_filter(
                 $this->getInsertFields($data),
-                fn($field) => !in_array($field, $config['conflict'])
+                fn($field) => !in_array($field, $conflict)
             );
 
             // Add extracted fields to be updated on conflict.
-            $config['update'] = array_merge(...array_map(fn($field) => [$field => $field], $fields));
+            $update = array_merge(...array_map(fn($field) => [$field => $field], $fields));
         }
 
         // Returns to base insert method. integer on success else, 0 on fails.
-        return $this->insert($data, $config);
+        return $this->insert($data, ['conflict' => $conflict, 'update' => $update]);
     }
 
     /**
