@@ -169,7 +169,7 @@ trait BuildsWriteQueries
         // Apply WHERE condition if provided
         $this->where($where);
 
-        // Abort if no WHERE condition is set to avoid accidental updates on all records
+        // Require a WHERE condition or an explicit model trash scope.
         if (!$this->hasAnyCondition()) {
             return 0;
         }
@@ -243,7 +243,7 @@ trait BuildsWriteQueries
         // Apply WHERE condition if provided
         $this->where($where);
 
-        // Abort if no WHERE condition is set to avoid accidental deletion of all records
+        // Require a WHERE condition or an explicit model trash scope.
         if (!$this->hasAnyCondition()) {
             return 0;
         }
@@ -255,12 +255,10 @@ trait BuildsWriteQueries
         $table = $this->getTableName();
 
         // Prepare the SQL delete statement
-        $whereSql = $this->getWhereSql();
+        $whereSql = $this->preparedWhereClauseSql(withTrashedByDefault: $force);
 
         if (isset($model) && $model->usesSoftDeletes() && !$force) {
-            // Soft delete only: mark currently-active records as deleted.
-            $whereSql = $model->buildSoftDeleteWhereClause($whereSql, not: false);
-
+            // Mark the rows selected by the current active/only/with-trashed scope.
             $column = $this->wrapper->wrapColumn($model->getSoftDeleteColumn());
             $sql = "UPDATE $table SET $column = :now $whereSql";
 
@@ -298,7 +296,8 @@ trait BuildsWriteQueries
     }
 
     /**
-     * Forcefully deletes records from the database, bypassing soft delete functionality.
+     * Permanently deletes records, preserving explicit only/without-trashed scopes.
+     * Without an explicit trash scope, both active and archived rows can match.
      *
      * @param null|string|array|Arrayable|Closure $where  Optional WHERE clause to specify which records to delete.
      * @return int Returns the number of affected rows.
@@ -326,13 +325,17 @@ trait BuildsWriteQueries
         $this->applyModelPrimaryCondition();
 
         if (!$this->hasAnyCondition()) {
-            return false; // No WHERE condition is set to avoid accidental restoration of all records
+            return false; // Require a WHERE condition or an explicit model trash scope.
         }
 
         // Prepare the table name
         $table = $this->getTableName();
         $column = $this->wrapper->wrapColumn($model->getSoftDeleteColumn());
-        $whereSql = $model->buildSoftDeleteWhereClause($this->getWhereSql(), not: true);
+        // Restore archived rows only, retaining any explicit active/archive scope.
+        $whereSql = $model->buildSoftDeleteWhereClause(
+            $this->preparedWhereClauseSql(withTrashedByDefault: true),
+            not: true
+        );
 
         $sql = "UPDATE $table SET $column = NULL $whereSql";
         $statement = $this->database->prepare($sql);

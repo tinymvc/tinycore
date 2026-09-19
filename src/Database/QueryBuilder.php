@@ -337,12 +337,18 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Include soft deleted records in the query results.
+     * Include active and soft deleted records, or select active records when false.
      *
+     * @param bool $withTrashed Whether to include soft deleted records.
      * @return self
      */
-    public function withTrashed(): self
+    public function withTrashed(bool $withTrashed = true): self
     {
+        if (!$withTrashed) {
+            return $this->withoutTrashed();
+        }
+
+        unset($this->query['only_trashed'], $this->query['without_trashed']);
         $this->query['with_trashed'] = true;
         return $this;
     }
@@ -354,7 +360,20 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function onlyTrashed(): self
     {
+        unset($this->query['with_trashed'], $this->query['without_trashed']);
         $this->query['only_trashed'] = true;
+        return $this;
+    }
+
+    /**
+     * Select only active records, including for an explicit force delete.
+     *
+     * @return self
+     */
+    public function withoutTrashed(): self
+    {
+        unset($this->query['with_trashed'], $this->query['only_trashed']);
+        $this->query['without_trashed'] = true;
         return $this;
     }
 
@@ -596,9 +615,10 @@ class QueryBuilder implements QueryBuilderContract
     /**
      * Generates the WHERE clause for soft deletes if applicable.
      *
+     * @param bool $withTrashedByDefault Include archived rows unless an explicit scope is selected.
      *  @return string The modified WHERE SQL clause with soft delete conditions.
      */
-    private function preparedWhereClauseSql(): string
+    private function preparedWhereClauseSql(bool $withTrashedByDefault = false): string
     {
         $whereSql = $this->getWhereSql();
 
@@ -606,21 +626,20 @@ class QueryBuilder implements QueryBuilderContract
             return $whereSql;
         }
 
-        if (isset($this->query['with_trashed']) && $this->query['with_trashed'] === true) {
+        if (!empty($this->query['with_trashed'])) {
             return $whereSql;
         }
 
-        $not = false; // Default to IS NULL condition for soft deletes (not deleted)
-
-        if (isset($this->query['only_trashed']) && $this->query['only_trashed'] === true) {
-            $not = true;
+        if ($withTrashedByDefault && empty($this->query['only_trashed']) && empty($this->query['without_trashed'])) {
+            return $whereSql;
         }
 
-        return $model->buildSoftDeleteWhereClause($whereSql, $not);
+        return $model->buildSoftDeleteWhereClause($whereSql, not: !empty($this->query['only_trashed']));
     }
 
     /**
-     * Checks if the query has any conditions applied.
+     * Checks for a WHERE condition or an explicitly selected model trash scope.
+     * The implicit active-only scope does not authorize an unfiltered write.
      *
      * @return bool True if there are any conditions, false otherwise.
      */
@@ -634,6 +653,8 @@ class QueryBuilder implements QueryBuilderContract
             return false;
         }
 
-        return !empty($this->query['with_trashed']) || !empty($this->query['only_trashed']);
+        return !empty($this->query['with_trashed'])
+            || !empty($this->query['only_trashed'])
+            || !empty($this->query['without_trashed']);
     }
 }
