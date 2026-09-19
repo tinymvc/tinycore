@@ -1339,7 +1339,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return $this->macroCall($name, $arguments);
         }
 
-        return $this->query()->$name(...$arguments);
+        return $this->query()->useModel($this)->$name(...$arguments);
     }
 
     /**
