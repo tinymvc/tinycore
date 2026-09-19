@@ -214,7 +214,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $model = new static();
 
         return $query->table($model->getTable())
-            ->fetchModel(static::class);
+            ->fetchModel(static::class)
+            ->useModel($model);
     }
 
     /**
@@ -1338,7 +1339,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return $this->macroCall($name, $arguments);
         }
 
-        return $this->query()->useModel($this)->$name(...$arguments);
+        return $this->query()->$name(...$arguments);
     }
 
     /**

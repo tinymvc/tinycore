@@ -35,8 +35,10 @@ trait InteractsWithSoftDeletes
         $column = $this->getSoftDeleteColumn();
         $boolean = $not ? 'IS NOT NULL' : 'IS NULL';
 
-        return empty($where) ? "WHERE $column $boolean"
-            : "WHERE $column $boolean AND (" . preg_replace('/^WHERE\s+/i', '', $where, 1) . ")";
+        $where = trim($where ?: '');
+
+        return empty($where) ? " WHERE $column $boolean "
+            : " WHERE $column $boolean AND (" . preg_replace('/^WHERE\s+/i', '', $where, 1) . ") ";
     }
 
     /**
