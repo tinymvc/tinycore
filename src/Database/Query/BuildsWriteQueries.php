@@ -170,7 +170,7 @@ trait BuildsWriteQueries
         $this->where($where);
 
         // Abort if no WHERE condition is set to avoid accidental updates on all records
-        if (!$this->hasWhere()) {
+        if (!$this->hasAnyCondition()) {
             return 0;
         }
 
@@ -244,7 +244,7 @@ trait BuildsWriteQueries
         $this->where($where);
 
         // Abort if no WHERE condition is set to avoid accidental deletion of all records
-        if (!$this->hasWhere()) {
+        if (!$this->hasAnyCondition()) {
             return 0;
         }
 
@@ -325,7 +325,7 @@ trait BuildsWriteQueries
         // Apply related model condition if necessary
         $this->applyModelPrimaryCondition();
 
-        if (!$this->hasWhere()) {
+        if (!$this->hasAnyCondition()) {
             return false; // No WHERE condition is set to avoid accidental restoration of all records
         }
 

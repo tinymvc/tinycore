@@ -618,4 +618,22 @@ class QueryBuilder implements QueryBuilderContract
 
         return $model->buildSoftDeleteWhereClause($whereSql, $not);
     }
+
+    /**
+     * Checks if the query has any conditions applied.
+     *
+     * @return bool True if there are any conditions, false otherwise.
+     */
+    private function hasAnyCondition(): bool
+    {
+        if ($this->hasWhere()) {
+            return true;
+        }
+
+        if (($model = $this->getModelBeingUsed()) === null || $model->usesSoftDeletes() === false) {
+            return false;
+        }
+
+        return !empty($this->query['with_trashed']) || !empty($this->query['only_trashed']);
+    }
 }
