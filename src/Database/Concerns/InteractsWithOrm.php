@@ -666,7 +666,7 @@ trait InteractsWithOrm
 
         // Apply nested relationships if any
         if (!empty($config['nested'])) {
-            $query->with(...$config['nested']);
+            $query->with($config['nested']);
         }
 
         $results = $query->all();
@@ -706,7 +706,7 @@ trait InteractsWithOrm
 
         // Apply nested relationships if any
         if (!empty($config['nested'])) {
-            $query->with(...$config['nested']);
+            $query->with($config['nested']);
         }
 
         $results = $query->all();
@@ -771,7 +771,7 @@ trait InteractsWithOrm
 
         // Apply nested relationships if any
         if (!empty($config['nested'])) {
-            $query->with(...$config['nested']);
+            $query->with($config['nested']);
         }
 
         $results = $query->all();
@@ -808,6 +808,8 @@ trait InteractsWithOrm
         );
 
         $query = $relatedModel->query()
+            ->useThroughModel($throughModel)
+            ->withTrashedParents($config['withTrashedParents'] ?? false)
             ->select([
                 ...$columns,
                 add_pivot_field_alias($throughModel->getTable() . "." . $config['firstKey']),
@@ -836,7 +838,7 @@ trait InteractsWithOrm
 
         // Apply nested relationships if any
         if (!empty($config['nested'])) {
-            $query->with(...$config['nested']);
+            $query->with($config['nested']);
         }
 
         $results = $query->all();

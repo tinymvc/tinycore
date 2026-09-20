@@ -15,7 +15,7 @@ class Wrapper implements WrapperContract
     /**
      * @var string $driver The database driver.
      */
-    public function __construct(string $driver)
+    public function __construct(private string $driver)
     {
         $this->wrapper = ['mysql' => ['`', '`'], 'sqlite' => ['"', '"'], 'pgsql' => ['"', '"']][$driver];
     }
@@ -28,7 +28,7 @@ class Wrapper implements WrapperContract
      */
     public function quoteEnumValues(array $values): string
     {
-        $escaped = array_map(fn($v) => "'" . addslashes($v) . "'", $values);
+        $escaped = array_map(fn($v) => "'" . str_replace("'", "''", $this->driver === 'mysql' ? str_replace('\\', '\\\\', $v) : $v) . "'", $values);
         return implode(',', $escaped);
     }
 
@@ -85,9 +85,10 @@ class Wrapper implements WrapperContract
         }
 
         // Validate identifier length (PostgreSQL limit is 63, MySQL is 64)
-        if (strlen($value) > 63) {
+        $limit = match ($this->driver) { 'mysql' => 64, 'pgsql' => 63, default => 255};
+        if (strlen($value) > $limit) {
             throw new \InvalidArgumentException(
-                "Identifier '{$value}' exceeds maximum length of 63 characters"
+                "Identifier '{$value}' exceeds maximum length of $limit characters"
             );
         }
 

@@ -25,7 +25,7 @@ class Schema implements SchemaContract
     private static PDO $connection;
 
     /** @var Grammar The database grammar. */
-    private static Grammar $grammar;
+    private static ?Grammar $grammar = null;
 
     /**
      * Creates a new table in the database.
@@ -224,12 +224,18 @@ class Schema implements SchemaContract
      */
     public static function withoutForeignKeyConstraints(Closure $callback): mixed
     {
-        self::disableForeignKeyConstraints();
+        $pdo = self::getConnection();
+        $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
+        if ($driver === 'pgsql') {
+            throw new \LogicException('PostgreSQL cannot disable foreign keys this way. Use explicitly DEFERRABLE constraints inside a transaction.');
+        }
+        $enabled = (bool) $pdo->query($driver === 'sqlite' ? 'PRAGMA foreign_keys' : 'SELECT @@FOREIGN_KEY_CHECKS')->fetchColumn();
+        self::disableForeignKeyConstraints();
         try {
             return $callback();
         } finally {
-            self::enableForeignKeyConstraints();
+            self::setForeignKeyConstraints($enabled);
         }
     }
 
@@ -267,7 +273,12 @@ class Schema implements SchemaContract
      */
     public static function getConnection(): PDO
     {
-        return self::$connection ??= get(DB::class)->getPdo();
+        $connection = get(DB::class)->getPdo();
+        if (!isset(self::$connection) || self::$connection !== $connection) {
+            self::$connection = $connection;
+            self::$grammar = null;
+        }
+        return $connection;
     }
 
     /**
@@ -281,6 +292,7 @@ class Schema implements SchemaContract
      */
     public static function getGrammar(): Grammar
     {
+        self::getConnection();
         return self::$grammar ??= new Grammar(
             self::getConnection()->getAttribute(PDO::ATTR_DRIVER_NAME)
         );
@@ -296,9 +308,14 @@ class Schema implements SchemaContract
     {
         $grammar = self::getGrammar();
 
+        if ($grammar->getDriver() === 'pgsql') {
+            throw new \LogicException('PostgreSQL does not support toggling all foreign keys. Use explicitly DEFERRABLE constraints inside a transaction.');
+        }
+        if ($grammar->isSQLite() && self::getConnection()->inTransaction()) {
+            throw new \LogicException('SQLite foreign keys must be toggled before starting a transaction.');
+        }
         $sql = match ($grammar->getDriver()) {
             'sqlite' => 'PRAGMA foreign_keys = ' . ($enabled ? 'ON' : 'OFF'),
-            'pgsql' => 'SET CONSTRAINTS ALL ' . ($enabled ? 'IMMEDIATE' : 'DEFERRED'),
             default => 'SET FOREIGN_KEY_CHECKS=' . ($enabled ? '1' : '0'),
         };
 

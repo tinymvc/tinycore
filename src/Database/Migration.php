@@ -9,6 +9,7 @@ use Throwable;
 use function array_slice;
 use function count;
 use function in_array;
+use function is_array;
 use function is_object;
 use function sprintf;
 
@@ -57,9 +58,20 @@ class Migration implements MigrationContract
     private function getAppliedMigrations(): array
     {
         $json = file_get_contents($this->migrationFile);
-        $data = (array) json_decode($json, true);
+        if (trim($json) === '') {
+            return [];
+        }
 
-        return $data['migrations'] ?? [];
+        $data = json_decode($json, true);
+        if (
+            json_last_error() !== JSON_ERROR_NONE || !is_array($data) ||
+            !isset($data['migrations']) || !is_array($data['migrations']) || !array_is_list($data['migrations']) ||
+            count(array_filter($data['migrations'], 'is_string')) !== count($data['migrations'])
+        ) {
+            throw new InvalidMigrationFile('Invalid migration ledger: ' . $this->migrationFile);
+        }
+
+        return $data['migrations'];
     }
 
     /**
@@ -78,7 +90,9 @@ class Migration implements MigrationContract
     {
         $data = ['migrations' => $migrations];
 
-        file_put_contents($this->migrationFile, json_encode($data));
+        if (file_put_contents($this->migrationFile, json_encode($data, JSON_THROW_ON_ERROR), LOCK_EX) === false) {
+            throw new InvalidMigrationFile('Unable to save migration ledger: ' . $this->migrationFile);
+        }
     }
 
     /**
@@ -201,7 +215,7 @@ class Migration implements MigrationContract
                     Prompt::message("Rolled back migration: {$migrationName}", 'success');
 
                     // Remove the rolled back migration from the list
-                    $remainingMigrations = array_slice($remainingMigrations, $index + 1);
+                    $remainingMigrations = array_values(array_filter($remainingMigrations, fn($name) => $name !== $migrationName));
                     $run++;
                 }
             }

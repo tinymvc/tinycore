@@ -158,13 +158,29 @@ class DB extends Facade
      */
     public static function transaction(callable $callback): mixed
     {
+        $connection = self::connection();
+        $nested = $connection->inTransaction();
+        $savepoint = 'spark_' . bin2hex(random_bytes(8));
+        $nested ? $connection->exec("SAVEPOINT $savepoint") : $connection->beginTransaction();
+
         try {
-            self::connection()->beginTransaction();
             $result = $callback();
-            self::connection()->commit();
+            $nested ? $connection->exec("RELEASE SAVEPOINT $savepoint") : $connection->commit();
             return $result;
         } catch (\Throwable $e) {
-            self::connection()->rollBack();
+            // A callback or DDL may already have ended the transaction. Preserve its error.
+            try {
+                if ($connection->inTransaction()) {
+                    if ($nested) {
+                        $connection->exec("ROLLBACK TO SAVEPOINT $savepoint");
+                        $connection->exec("RELEASE SAVEPOINT $savepoint");
+                    } else {
+                        $connection->rollBack();
+                    }
+                }
+            } catch (\Throwable) {
+                // The original failure remains the actionable exception.
+            }
             throw $e;
         }
     }

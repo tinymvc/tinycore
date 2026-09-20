@@ -28,6 +28,17 @@ class HasManyThrough extends Relation
 {
     use InteractsWithPivotTable;
 
+    protected bool $withTrashedParents = false;
+
+    /** Include archived intermediate models while preserving the final model's scope. */
+    public function withTrashedParents(bool $withTrashed = true): self
+    {
+        $this->withTrashedParents = $withTrashed;
+        $this->query()->withTrashedParents($withTrashed);
+
+        return $this;
+    }
+
     /**
      * Create a new HasManyThrough relationship instance.
      * 
@@ -69,7 +80,9 @@ class HasManyThrough extends Relation
         /** @var Model $throughInstance */
         $throughInstance = new ($this->through)();
 
-        $query = $relatedInstance::query();
+        $query = $relatedInstance::query()
+            ->useThroughModel($throughInstance)
+            ->withTrashedParents($this->withTrashedParents);
 
         // Append Pivot Fields
         $pivotFields = map_pivot_fields($this->buildPivotFields(), $throughInstance->getTable(), $relatedInstance->getTable());
@@ -122,6 +135,7 @@ class HasManyThrough extends Relation
      * @return array{
      *     related: string,
      *     through: string,
+     *     withTrashedParents: bool,
      *     firstKey: string|null,
      *     secondKey: string|null,
      *     localKey: string|null,
@@ -137,6 +151,7 @@ class HasManyThrough extends Relation
         return [
             'related' => $this->related,
             'through' => $this->through,
+            'withTrashedParents' => $this->withTrashedParents,
             'firstKey' => $this->firstKey,
             'secondKey' => $this->secondKey,
             'localKey' => $this->localKey,

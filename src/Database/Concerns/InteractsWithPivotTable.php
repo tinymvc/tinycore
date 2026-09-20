@@ -6,7 +6,6 @@ use function func_get_args;
 use function func_num_args;
 use function is_array;
 use function is_string;
-use function sprintf;
 
 /**
  * Trait HasPivotTableForRelation
@@ -180,8 +179,7 @@ trait InteractsWithPivotTable
      */
     public function wherePivotNull(string $column): self
     {
-        $this->wherePivot[] = sprintf('pv.%s IS NULL', $column);
-        return $this;
+        return $this->wherePivot($column, 'IS', null);
     }
 
     /**
@@ -192,8 +190,7 @@ trait InteractsWithPivotTable
      */
     public function wherePivotNotNull(string $column): self
     {
-        $this->wherePivot[] = sprintf('pv.%s IS NOT NULL', $column);
-        return $this;
+        return $this->wherePivot($column, 'IS NOT', null);
     }
 }
 

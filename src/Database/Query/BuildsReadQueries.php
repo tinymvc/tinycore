@@ -68,13 +68,13 @@ trait BuildsReadQueries
      */
     public function value(string $column): mixed
     {
-        $result = $this->first($column);
-
+        $result = (clone $this)->first($column);
         if ($result === false) {
             return null;
         }
 
-        return is_object($result) ? $result->$column : $result[$column];
+        $name = $this->resultColumnName($column);
+        return is_object($result) ? $result->$name : $result[$name];
     }
 
     /**
@@ -86,20 +86,29 @@ trait BuildsReadQueries
      */
     public function pluck(string $column, ?string $key = null): array
     {
-        $fields = array_filter([$column, $key]);
-        $results = $this->select($fields)->all();
-
-        if ($key === null) {
-            return array_map(fn($row) => is_object($row) ? $row->$column : $row[$column], $results);
-        }
-
+        $fields = $key === null ? [$column] : [$column, $key];
+        $results = (clone $this)->select($fields)->all();
+        $column = $this->resultColumnName($column);
+        $key = $key === null ? null : $this->resultColumnName($key);
         $values = [];
         foreach ($results as $row) {
-            $itemKey = is_object($row) ? $row->$key : $row[$key];
-            $values[$itemKey] = is_object($row) ? $row->$column : $row[$column];
+            $value = is_object($row) ? $row->$column : $row[$column];
+            if ($key === null) {
+                $values[] = $value;
+            } else {
+                $itemKey = is_object($row) ? $row->$key : $row[$key];
+                $values[$itemKey] = $value;
+            }
         }
-
         return $values;
+    }
+
+    /** PDO exposes an alias or the unqualified column name in fetched rows. */
+    private function resultColumnName(string $column): string
+    {
+        $parts = preg_split('/\s+as\s+/i', $column);
+        $name = trim(end($parts), " \t\n\r`\"");
+        return str_contains($name, '.') ? substr($name, strrpos($name, '.') + 1) : $name;
     }
 
     /**
@@ -207,11 +216,8 @@ trait BuildsReadQueries
      */
     public function as(string $alias): QueryBuilder
     {
-        if (stripos($alias, 'AS ') === false) {
-            $alias = "AS " . $this->wrapper->wrapColumn($alias);
-        }
-
-        $this->query['alias'] = " $alias ";
+        $alias = trim(preg_replace('/^\s*AS\s+/i', '', $alias), " \t\n\r\0\x0B\"`");
+        $this->query['alias'] = ' AS ' . $this->wrapper->wrapColumn($alias) . ' ';
         return $this;
     }
 
@@ -637,7 +643,8 @@ trait BuildsReadQueries
         if ($column) {
             $this->query['select'] = "DISTINCT {$this->wrapAndEscapeColumns($column)}";
         } else {
-            $this->query['select'] = str_replace('SELECT ', 'SELECT DISTINCT ', $this->query['select'] ?? '*');
+            $select = $this->query['select'] ?: '*';
+            $this->query['select'] = preg_match('/^DISTINCT\s/i', $select) ? $select : "DISTINCT $select";
         }
 
         return $this;
@@ -650,6 +657,10 @@ trait BuildsReadQueries
      */
     public function toSql(): string
     {
+        if ($this->bindings && $this->parameters) {
+            throw new \Spark\Database\Exceptions\QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
+        }
+
         if (empty($this->query['select'])) {
             $this->select();
         }
@@ -663,9 +674,9 @@ trait BuildsReadQueries
             . $this->preparedWhereClauseSql()
             . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
             . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
+            . ($this->query['unions'] ?? '')
             . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
-            . $this->buildLimitOffset()
-            . ($this->query['unions'] ?? '');
+            . $this->buildLimitOffset();
     }
 
     /**
@@ -687,16 +698,18 @@ trait BuildsReadQueries
         }
 
         // Build the union query
-        $unionSql = $query->toSql();
+        $subquery = $this->importSubquery($query->toSql(), $query);
+        $unionSql = $subquery['sql'];
 
         if (!isset($this->query['unions'])) {
             $this->query['unions'] = '';
         }
 
-        $this->query['unions'] .= " {$unionType} ({$unionSql})";
+        $this->query['unions'] .= " {$unionType} SELECT * FROM ({$unionSql}) AS spark_union";
 
         // Merge bindings
-        $this->bindings = [...$this->bindings, ...$query->getBindings()];
+        $this->bindings = [...$this->bindings, ...$subquery['bindings']];
+        $this->parameters = [...$this->parameters, ...$subquery['parameters']];
 
         return $this;
     }
@@ -853,31 +866,10 @@ trait BuildsReadQueries
             $this->select();
         }
 
-        $paginator = new Paginator(limit: $limit, keyword: $keyword);
+        $paginator = new Paginator(total: $this->count(), limit: $limit, keyword: $keyword);
 
-        // Count total records from existing command only for serverside database driver.
-        if ($this->database->isMySQL()) {
-            $this->query['select'] = "SQL_CALC_FOUND_ROWS {$this->query['select']}";
-        }
-
-        // Set pagination count to limit database records, and execute query.
-        $this->limit(
-            ceil($limit * ($paginator->keywordValue() - 1)),
-            $limit
-        )
+        $this->limit((int) ($limit * ($paginator->keywordValue() - 1)), $limit)
             ->executeSelectQuery();
-
-        // Get total record count, from sqlite database and update it to paginator class.
-        if ($this->database->isMySQL()) {
-            // Get number of records from exisitng query command.
-            $total = $this->database->prepare('SELECT FOUND_ROWS()');
-            $total->execute();
-
-            // Update number of items into paginator class.
-            $paginator->total = $total->fetch(PDO::FETCH_COLUMN);
-        } else {
-            $paginator->total = $this->count();
-        }
 
         // Set database records into paginator class.
         $paginator->setData(
@@ -907,14 +899,14 @@ trait BuildsReadQueries
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
 
-        $table = $this->getTableName(); // Get the table name with prefix if exists.
+        $query = clone $this;
+        unset($query->query['offset'], $query->query['limit']);
+        // Count result groups/distinct rows, while retaining SELECT/HAVING bindings.
+        if (empty($query->query['select']) || $query->query['select'] === '*') {
+            $query->query['select'] = $query->getTableReference() . '.*';
+        }
 
-        $sql = "SELECT COUNT(1) FROM $table"
-            . $this->query['alias']
-            . $this->query['joins']
-            . $this->preparedWhereClauseSql()
-            . (isset($this->query['group']) ? ' GROUP BY ' . trim($this->query['group']) : '')
-            . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '');
+        $sql = 'SELECT COUNT(*) FROM (' . $query->toSql() . ') AS spark_count';
 
         // Create sql command to count rows.
         $statement = $this->database->prepare($sql);
@@ -938,11 +930,14 @@ trait BuildsReadQueries
      */
     public function exists(): bool
     {
-        $query = clone $this; // Clone the current query builder to avoid modifying the original query.
+        $query = clone $this;
+        $sql = 'SELECT EXISTS(' . $query->toSql() . ')';
 
-        return $query->selectRaw('EXISTS(SELECT 1)')
-            ->fetchColumn()
-            ->first() == 1;
+        $statement = $this->database->prepare($sql);
+        $this->bindParameters($statement);
+        $statement->execute();
+
+        return (bool) $statement->fetchColumn();
     }
 
     /**
@@ -1048,9 +1043,18 @@ trait BuildsReadQueries
     private function buildLimitOffset(): string
     {
         if (isset($this->query['offset']) && isset($this->query['limit'])) {
-            return ' LIMIT ' . $this->query['offset'] . ", " . $this->query['limit'];
+            return ' LIMIT ' . $this->query['limit'] . ' OFFSET ' . $this->query['offset'];
         } elseif (isset($this->query['limit'])) {
             return ' LIMIT ' . $this->query['limit'];
+        }
+
+        if (isset($this->query['offset'])) {
+            $limit = match ($this->database->getDriver()) {
+                'sqlite' => ' LIMIT -1',
+                'mysql' => ' LIMIT 18446744073709551615',
+                default => '',
+            };
+            return "$limit OFFSET " . $this->query['offset'];
         }
 
         return '';

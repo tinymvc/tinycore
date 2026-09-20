@@ -710,7 +710,29 @@ trait InteractsWithRelation
     private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null, string $function = 'count', string $column = '*'): array
     {
         $relatedModel = new $relationConfig['related'];
-        $relatedTable = $relatedModel->getTable();
+        $query = $relatedModel->query();
+
+        if ($query->getTableName() === $this->getTableName()) {
+            static $selfRelation = 0;
+
+            $query->as('spark_relation_' . ++$selfRelation);
+        }
+
+        if ($relationConfig['type'] === 'hasManyThrough') {
+            $query->withTrashedParents($relationConfig['withTrashedParents'] ?? false);
+        }
+        // Resolve callback aliases before constructing correlations and aggregate columns.
+        if (isset($relationConfig['callback'])) {
+            $relationConfig['callback']($query);
+        }
+
+        $callback && $callback($query);
+
+        // OR branches in user constraints must not bypass the parent correlation.
+        if ($query->hasWhere()) {
+            $query->where['sql'] = '(' . trim($query->where['sql']) . ')';
+        }
+        $relatedTable = $query->getAlias() ?: $relatedModel->getTable();
 
         // Build the aggregate expression
         $aggregateExpression = $this->buildAggregateExpression($function, $column, $relatedTable);
@@ -718,25 +740,25 @@ trait InteractsWithRelation
         switch ($relationConfig['type']) {
             case 'hasOne':
             case 'hasMany':
-                $query = $relatedModel->query()
+                $query
                     ->select($aggregateExpression)
                     ->whereRaw(
                         $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey']) . " = " .
-                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
+                        $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
                     );
                 break;
 
             case 'belongsTo':
-                $query = $relatedModel->query()
+                $query
                     ->select($aggregateExpression)
                     ->whereRaw(
                         $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['ownerKey']) . " = " .
-                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey'])
+                        $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey'])
                     );
                 break;
 
             case 'belongsToMany':
-                $query = $relatedModel->query()
+                $query
                     ->select($aggregateExpression)
                     ->join(
                         $relationConfig['table'],
@@ -746,7 +768,7 @@ trait InteractsWithRelation
                     )
                     ->whereRaw(
                         $this->wrapper->wrapTable($relationConfig['table']) . "." . $this->wrapper->wrapColumn($relationConfig['foreignPivotKey']) . " = " .
-                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['parentKey'])
+                        $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['parentKey'])
                     )
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
@@ -761,8 +783,9 @@ trait InteractsWithRelation
             case 'hasManyThrough':
                 $throughModel = new $relationConfig['through'];
                 $throughTable = $throughModel->getTable();
+                $query->useThroughModel($throughModel);
 
-                $query = $relatedModel->query()
+                $query
                     ->select($aggregateExpression)
                     ->join(
                         $throughTable,
@@ -772,7 +795,7 @@ trait InteractsWithRelation
                     )
                     ->whereRaw(
                         $this->wrapper->wrapTable($throughTable) . "." . $this->wrapper->wrapColumn($relationConfig['firstKey']) . " = " .
-                        $this->getTableName() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
+                        $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
                     )
                     ->unless(
                         empty($relationConfig['wherePivot'] ??= []),
@@ -786,10 +809,6 @@ trait InteractsWithRelation
 
             default:
                 throw new InvalidOrmException("Unsupported relationship type: {$relationConfig['type']}");
-        }
-
-        if ($callback) {
-            $callback($query);
         }
 
         // Get the built SQL from the query
@@ -857,6 +876,12 @@ trait InteractsWithRelation
     {
         $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, $function, $column);
 
+        if ($subquery['parameters'] && $this->parameters) {
+            throw new \Spark\Database\Exceptions\QueryBuilderException(
+                'Use named bindings for relationship aggregates composed with other positional SQL fragments.'
+            );
+        }
+
         // Modify the select to include the aggregate subquery
         $currentSelect = $this->query['select'] ?: '*';
         $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) AS {$this->wrapper->wrapColumn($alias)}";
@@ -919,16 +944,13 @@ trait InteractsWithRelation
      */
     private function getSubquerySQL(QueryBuilder $query): array
     {
-        $table = $query->getTableName();
+        $table = $query->getTableName() . $query->query['alias'];
         $select = $query->query['select'] ?: 'COUNT(*)';
         $joins = $query->query['joins'] ?? '';
         $where = $query->preparedWhereClauseSql();
 
-        return [
-            'sql' => "SELECT {$select} FROM {$table}{$joins}{$where}",
-            'bindings' => $query->getBindings(),
-            'parameters' => $query->getParameters()
-        ];
+        $sql = "SELECT {$select} FROM {$table}{$joins}{$where}";
+        return $this->importSubquery($sql, $query);
     }
 
     /**
@@ -958,11 +980,13 @@ trait InteractsWithRelation
                 $nestedRelation = $parts[1];
 
                 if (!isset($parsed[$parentRelation])) {
-                    $parsed[$parentRelation] = ['constraints' => null, 'nested' => []];
+                    $parsed[$parentRelation] = ['constraints' => null, 'nested' => [], 'columns' => null];
                 }
 
                 // Avoid duplicates in nested array
-                if (!in_array($nestedRelation, $parsed[$parentRelation]['nested'])) {
+                if ($constraints instanceof Closure) {
+                    $parsed[$parentRelation]['nested'][$nestedRelation] = $constraints;
+                } elseif (!in_array($nestedRelation, $parsed[$parentRelation]['nested'], true)) {
                     $parsed[$parentRelation]['nested'][] = $nestedRelation;
                 }
             } else {
@@ -976,6 +1000,10 @@ trait InteractsWithRelation
 
                 if (!isset($parsed[$name])) {
                     $parsed[$name] = ['constraints' => null, 'nested' => [], 'columns' => $columns];
+                }
+
+                if ($columns !== null) {
+                    $parsed[$name]['columns'] = $columns;
                 }
 
                 // Set constraints if provided (don't override if already set)

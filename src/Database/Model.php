@@ -201,7 +201,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function __construct()
     {
-        $this->hasPrimaryValue() && $this->castStoredData();
+        $this->castStoredData();
     }
 
     /**
@@ -363,10 +363,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         // Fill the model with the given data.
         foreach ($data as $key => $value) {
+            // fill() receives application values, not database ciphertext/custom storage values.
+            if ($this->hasCast($key) && !$this->isCustomCast($key) && $this->getCastType($key) !== 'encrypted') {
+                $value = $this->castAttribute($key, $value);
+            }
             $this->updateAttributeValue($key, $value);
         }
-
-        $this->castStoredData(); // Apply casting to the data.
 
         return $this;
     }
@@ -399,6 +401,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         if ($this->hasPrimaryValue()) {
             $condition = [$this->getPrimaryKey() => $this->primaryValue()];
             $updatedStatus = (bool) $this->query()->update($data, $condition);
+            if (!$updatedStatus && $this->query()->where($condition)->exists()) {
+                $this->tracking['__hash'] = $this->makeHash();
+                return true;
+            }
 
             // If update fails and no record exists, insert a new record.
             if (!$updatedStatus && $forceCreate) {
@@ -1051,7 +1057,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         // If the model is dirty, it must have changes and the current 
         // hash should differ from the original hash.
-        return $dirty && !$this->wasUpdated() && $currentHash !== $originalHash;
+        return $dirty && $currentHash !== $originalHash;
     }
 
     /**
@@ -1268,7 +1274,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         $method2 = sprintf('%sAttribute', Str::camel($name));
-        return ($this->{$method2})->get($value);
+        return ($this->{$method2}())->get($value);
     }
 
     /**
@@ -1301,7 +1307,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         }
 
         $method2 = sprintf('%sAttribute', Str::camel($name));
-        return ($this->{$method2})->set($value);
+        return ($this->{$method2}())->set($value);
     }
 
     /**
@@ -1367,8 +1373,8 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     protected function makeHash(): string
     {
-        $data = $this->castDataForStorage($this->getFillableData());
-        return md5(json_encode($data));
+        // Storage casts can be nondeterministic (encryption/hashing) or have side effects.
+        return md5(serialize($this->getFillableData()));
     }
 
     /**
@@ -1380,6 +1386,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     protected function updateAttributeValue(string $key, mixed $value): void
     {
+        if (isset($this->tracking['__hash']) && $this->tracking['__hash'] === $this->makeHash()) {
+            $this->clearOriginal();
+        }
+
         // Only track changes if the model has a primary key and an original hash exists (i.e., it exists in the database).
         if (
             $this->hasPrimaryValue() && isset($this->tracking['__hash']) &&

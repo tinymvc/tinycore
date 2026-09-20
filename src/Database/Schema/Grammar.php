@@ -15,6 +15,7 @@ use function is_bool;
 use function is_float;
 use function is_int;
 use function sprintf;
+use function strlen;
 
 /**
  * Class Grammar
@@ -242,7 +243,7 @@ class Grammar implements GrammarContract
             'after' => $this->isMySQL() ? "AFTER " . $this->wrapper->wrapColumn($value) : '',
             'charset' => $this->isMySQL() ? "CHARACTER SET $value" : '',
             'collation' => $this->isMySQL() ? "COLLATE $value" : '',
-            'comment' => $this->isMySQL() ? "COMMENT '$value'" : '',
+            'comment' => $this->isMySQL() ? 'COMMENT ' . $this->quoteLiteral($value) : '',
             'on_update_current_timestamp' => $this->isMySQL() ? 'ON UPDATE CURRENT_TIMESTAMP' : '',
             'default_current_timestamp' => 'DEFAULT CURRENT_TIMESTAMP',
             default => ''
@@ -274,7 +275,7 @@ class Grammar implements GrammarContract
         $sql .= ' (' . $this->wrapper->columnize($fk->references) . ')';
 
         // SQLite only supports RESTRICT, NO ACTION, SET NULL, CASCADE
-        $allowedActions = ['RESTRICT', 'NO ACTION', 'SET NULL', 'CASCADE'];
+        $allowedActions = ['RESTRICT', 'NO ACTION', 'SET NULL', 'SET DEFAULT', 'CASCADE'];
 
         if (isset($fk->onDelete)) {
             $action = strtoupper($fk->onDelete);
@@ -309,17 +310,17 @@ class Grammar implements GrammarContract
         // Database-specific syntax adjustments
         return match (true) {
             $type === 'unique' => "CREATE UNIQUE INDEX {$this->wrapper->wrap($indexName)} ON "
-            . $this->wrapper->wrapTable($table) . " ({$columns});",
+                . $this->wrapper->wrapTable($table) . " ({$columns});",
             $type === 'fulltext' && $this->isMySQL() => "CREATE FULLTEXT INDEX {$this->wrapper->wrap($indexName)} ON "
-            . $this->wrapper->wrapTable($table) . " ({$columns});",
+                . $this->wrapper->wrapTable($table) . " ({$columns});",
             $type === 'spatial' && $this->isMySQL() => "CREATE SPATIAL INDEX {$this->wrapper->wrap($indexName)} ON "
-            . $this->wrapper->wrapTable($table) . " ({$columns});",
+                . $this->wrapper->wrapTable($table) . " ({$columns});",
             $type === 'spatial' && $this->isPostgreSQL() => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
-            . $this->wrapper->wrapTable($table) . " USING gist ({$columns});",
+                . $this->wrapper->wrapTable($table) . " USING gist ({$columns});",
             $this->isPostgreSQL() => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
-            . $this->wrapper->wrapTable($table) . " USING btree ({$columns});",
+                . $this->wrapper->wrapTable($table) . " USING btree ({$columns});",
             default => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
-            . $this->wrapper->wrapTable($table) . " ({$columns});",
+                . $this->wrapper->wrapTable($table) . " ({$columns});",
         };
     }
 
@@ -476,7 +477,7 @@ class Grammar implements GrammarContract
         return match ($this->driver) {
             'mysql' => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP PRIMARY KEY",
             default => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP CONSTRAINT "
-            . $this->wrapper->wrap($primary['name'] ?? "{$table}_pkey"),
+                . $this->wrapper->wrap($primary['name'] ?? "{$table}_pkey"),
         };
     }
 
@@ -573,6 +574,9 @@ class Grammar implements GrammarContract
             $value = json_encode($value);
         }
 
+        if ($this->isMySQL()) {
+            $value = str_replace('\\', '\\\\', (string) $value);
+        }
         return "'" . str_replace("'", "''", (string) $value) . "'";
     }
 
@@ -650,10 +654,14 @@ class Grammar implements GrammarContract
      */
     private function limitIdentifier(string $name): string
     {
-        return substr($name, 0, match ($this->driver) {
+        $limit = match ($this->driver) {
             'mysql' => 64,
             'pgsql' => 63,
-            default => 255
-        });
+            default => 255,
+        };
+        if (strlen($name) <= $limit) {
+            return $name;
+        }
+        return substr($name, 0, $limit - 13) . '_' . substr(hash('sha256', $name), 0, 12);
     }
 }

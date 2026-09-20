@@ -828,7 +828,13 @@ class Blueprint implements BlueprintContract
         }
 
         foreach ($this->drops as $drop) {
-            $statements[] = $grammar->compileDrop($this->table, $drop);
+            if ($grammar->isSQLite() && $drop['type'] === 'column') {
+                foreach ($drop['names'] as $name) {
+                    $statements[] = $grammar->compileDropColumn($this->table, [$name]);
+                }
+            } else {
+                $statements[] = $grammar->compileDrop($this->table, $drop);
+            }
         }
 
         foreach ($this->renames as $rename) {

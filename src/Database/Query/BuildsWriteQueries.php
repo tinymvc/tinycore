@@ -54,6 +54,10 @@ trait BuildsWriteQueries
         // Generate the SQL statement
         $sql = $this->compileInsert($data, $config, $fields);
 
+        if ($this->database->isPostgreSQL()) {
+            $sql .= ' RETURNING *';
+        }
+
         // Prepare the statement
         $statement = $this->database->prepare($sql);
         if ($statement === false) {
@@ -70,7 +74,16 @@ trait BuildsWriteQueries
 
         $this->log($started, $startedMemory, $sql, $data);
 
-        return (int) $this->database->getPdo()->lastInsertId();
+        if ($this->database->isPostgreSQL()) {
+            $key = $this->getModelBeingUsed()?->getPrimaryKey() ?? 'id';
+            $id = 0;
+            while ($row = $statement->fetch(PDO::FETCH_ASSOC)) {
+                $id = is_numeric($row[$key] ?? null) ? (int) $row[$key] : 0;
+            }
+            return $id;
+        }
+
+        return $statement->rowCount() === 0 ? 0 : (int) $this->database->getPdo()->lastInsertId();
     }
 
     /**
@@ -92,6 +105,9 @@ trait BuildsWriteQueries
      */
     public function insertOrReplace(array|Arrayable $data): int
     {
+        if ($this->database->isPostgreSQL()) {
+            throw new QueryBuilderException('PostgreSQL has no REPLACE operation; use upsert() with explicit conflict columns.');
+        }
         return $this->insert($data, ['replace' => true]);
     }
 
@@ -179,7 +195,7 @@ trait BuildsWriteQueries
 
         // Prepare the table name
         $table = $this->getTableName();
-        $whereSql = $this->preparedWhereClauseSql();
+        $whereSql = $this->preparedWhereClauseSql(forWrite: true);
 
         // Prepare the SQL update statement
         $setBindings = [];
@@ -255,14 +271,15 @@ trait BuildsWriteQueries
         $table = $this->getTableName();
 
         // Prepare the SQL delete statement
-        $whereSql = $this->preparedWhereClauseSql(withTrashedByDefault: $force);
+        $whereSql = $this->preparedWhereClauseSql(withTrashedByDefault: $force, forWrite: true);
 
         if (isset($model) && $model->usesSoftDeletes() && !$force) {
             // Mark the rows selected by the current active/only/with-trashed scope.
             $column = $this->wrapper->wrapColumn($model->getSoftDeleteColumn());
-            $sql = "UPDATE $table SET $column = :now $whereSql";
+            $placeholder = $this->getWhereSqlColumn('spark_deleted_at');
+            $sql = "UPDATE $table SET $column = :$placeholder $whereSql";
 
-            $this->bind(['now' => now()]);
+            $this->bind([$placeholder => now()]);
         }
 
         $sql ??= "DELETE FROM $table $whereSql";
@@ -333,8 +350,9 @@ trait BuildsWriteQueries
         $column = $this->wrapper->wrapColumn($model->getSoftDeleteColumn());
         // Restore archived rows only, retaining any explicit active/archive scope.
         $whereSql = $model->buildSoftDeleteWhereClause(
-            $this->preparedWhereClauseSql(withTrashedByDefault: true),
-            not: true
+            $this->preparedWhereClauseSql(withTrashedByDefault: true, forWrite: true),
+            not: true,
+            column: "$table.$column"
         );
 
         $sql = "UPDATE $table SET $column = NULL $whereSql";
@@ -542,7 +560,7 @@ trait BuildsWriteQueries
         $bindings = ['increment' => $value, ...$this->getBindings()];
         $sql = "UPDATE " . $this->getTableName()
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} + :increment "
-            . $this->preparedWhereClauseSql();
+            . $this->preparedWhereClauseSql(forWrite: true);
 
         $result = $this->executeAffectingStatement($sql, $bindings);
 
@@ -569,7 +587,7 @@ trait BuildsWriteQueries
         $bindings = ['decrement' => $value, ...$this->getBindings()];
         $sql = "UPDATE " . $this->getTableName()
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} - :decrement "
-            . $this->preparedWhereClauseSql();
+            . $this->preparedWhereClauseSql(forWrite: true);
 
         $result = $this->executeAffectingStatement($sql, $bindings);
 
@@ -590,7 +608,7 @@ trait BuildsWriteQueries
         $sets = [];
 
         foreach ($data as $column => $value) {
-            $placeholder = $this->makeParameterName("set_$column");
+            $placeholder = $this->getWhereSqlColumn("set_$column");
             $sets[] = $this->wrapper->wrapColumn($column) . " = :$placeholder";
             $bindings[$placeholder] = $value;
         }
@@ -676,7 +694,7 @@ trait BuildsWriteQueries
     private function getInsertCommand(array $config): string
     {
         if (isset($config['replace']) && $config['replace'] === true) {
-            return $this->database->isMySQL() ? 'REPLACE' : 'INSERT';
+            return $this->database->isMySQL() ? 'REPLACE' : ($this->database->isSQLite() ? 'INSERT OR REPLACE' : 'INSERT');
         }
         return 'INSERT';
     }
@@ -748,8 +766,16 @@ trait BuildsWriteQueries
         if (empty($config['update'])) {
             // For PostgreSQL with ignore but no update, use DO NOTHING
             if ($this->database->isPostgreSQL() && isset($config['ignore']) && $config['ignore'] === true) {
-                $conflictColumns = $this->wrapper->columnize($config['conflict'] ?? ['id']);
-                return "ON CONFLICT ($conflictColumns) DO NOTHING";
+                return 'ON CONFLICT DO NOTHING';
+            }
+
+            if (!empty($config['conflict'])) {
+                if ($this->database->isMySQL()) {
+                    $column = $this->wrapper->wrapColumn($config['conflict'][0]);
+                    return "ON DUPLICATE KEY UPDATE $column = $column";
+                }
+                $columns = $this->wrapper->columnize($config['conflict']);
+                return "ON CONFLICT ($columns) DO NOTHING";
             }
             return '';
         }

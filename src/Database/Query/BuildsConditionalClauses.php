@@ -153,9 +153,9 @@ trait BuildsConditionalClauses
         // List of where clauses.
         elseif (is_array($column) && array_is_list($column) && $operator === null && $value === null) {
             foreach ($column as $item) {
-                if (isset($item[0]) && is_string($item[0])) {
+                if (is_array($item) && isset($item[0]) && is_string($item[0])) {
                     $this->where($item[0], $item[1] ?? null, $item[2] ?? null, $item[3] ?? $boolean, $not);
-                } elseif (isset($item[0]) && is_array($item[0])) {
+                } elseif (is_array($item) && isset($item[0]) && is_array($item[0])) {
                     $this->where($item[0], null, null, $item[3] ?? $boolean, $not);
                 } else {
                     $this->where($item, null, null, $boolean, $not);
@@ -446,13 +446,12 @@ trait BuildsConditionalClauses
         // Get the SQL column placeholder for binding.
         $columnPlaceholder = $this->getWhereSqlColumn($field);
 
-        // Construct the FIND_IN_SET condition
-        if ($this->database->isDriver('sqlite')) {
-            $where = $this->wrapper->wrapColumn($field) . " {$type}LIKE :$columnPlaceholder";
-            $key = "%$key%"; // SQLite uses LIKE for partial matches.
-        } else {
-            $where = "{$type}FIND_IN_SET (:$columnPlaceholder, {$this->wrapper->wrapColumn($field)})";
-        }
+        $fieldSql = $this->wrapper->wrapColumn($field);
+        $where = match ($this->database->getDriver()) {
+            'mysql' => "{$type}FIND_IN_SET(:$columnPlaceholder, $fieldSql)",
+            'pgsql' => "{$type}(:$columnPlaceholder = ANY(string_to_array($fieldSql, ',')))",
+            default => "{$type}(instr(',' || $fieldSql || ',', ',' || :$columnPlaceholder || ',') > 0)",
+        };
 
         // Bind the key to the placeholder
         $this->bindings[$columnPlaceholder] = $key;
@@ -530,9 +529,24 @@ trait BuildsConditionalClauses
         // Get the SQL column placeholder for binding.
         $columnPlaceholder = $this->getWhereSqlColumn("{$field}_{$key}");
 
-        // Construct the JSON condition
-        $where = "JSON_EXTRACT({$this->wrapper->wrapColumn($field)}, '$.{$key}') {$type}LIKE :$columnPlaceholder";
+        // Bind the JSON path as data, including quotes in application-provided keys.
+        $pathPlaceholder = $this->getWhereSqlColumn($columnPlaceholder . '_path');
+        $fieldSql = $this->wrapper->wrapColumn($field);
 
+        if ($this->database->isPostgreSQL()) {
+            $expression = "($fieldSql::jsonb #>> string_to_array(:$pathPlaceholder, '.'))";
+            $path = $key;
+        } else {
+            $expression = "JSON_EXTRACT($fieldSql, :$pathPlaceholder)";
+            if ($this->database->isMySQL()) {
+                $expression = "JSON_UNQUOTE($expression)";
+            }
+            $path = "\$.$key";
+        }
+
+        $where = "$expression {$type}LIKE :$columnPlaceholder";
+
+        $this->bindings[$pathPlaceholder] = $path;
         $this->bindings[$columnPlaceholder] = "%$value%";
 
         return $this->where($where, boolean: $boolean);
@@ -994,7 +1008,7 @@ trait BuildsConditionalClauses
             return $this->whereRaw("date({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         }
 
-        return $this->where($column, $operator, $value, $boolean);
+        return $this->whereRaw("CAST({$this->wrapper->wrapColumn($column)} AS DATE) $operator :$placeholder", [$placeholder => $value], $boolean);
     }
 
     /**
@@ -1031,10 +1045,10 @@ trait BuildsConditionalClauses
         if ($this->database->isMySQL()) {
             return $this->whereRaw("YEAR({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         } elseif ($this->database->isSQLite()) {
-            return $this->whereRaw("strftime('%Y', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
+            return $this->whereRaw("CAST(strftime('%Y', {$this->wrapper->wrapColumn($column)}) AS INTEGER) $operator :$placeholder", [$placeholder => $value], $boolean);
         }
 
-        return $this->where($column, $operator, $value, $boolean);
+        return $this->whereRaw("EXTRACT(YEAR FROM {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
     }
 
     /**
@@ -1071,10 +1085,10 @@ trait BuildsConditionalClauses
         if ($this->database->isMySQL()) {
             return $this->whereRaw("MONTH({$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
         } elseif ($this->database->isSQLite()) {
-            return $this->whereRaw("strftime('%m', {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
+            return $this->whereRaw("CAST(strftime('%m', {$this->wrapper->wrapColumn($column)}) AS INTEGER) $operator :$placeholder", [$placeholder => $value], $boolean);
         }
 
-        return $this->where($column, $operator, $value, $boolean);
+        return $this->whereRaw("EXTRACT(MONTH FROM {$this->wrapper->wrapColumn($column)}) $operator :$placeholder", [$placeholder => $value], $boolean);
     }
 
     /**
@@ -1112,11 +1126,25 @@ trait BuildsConditionalClauses
      */
     public function grouped(Closure $callback, string $boolean = 'AND'): QueryBuilder
     {
-        $this->where['grouped'] = true;
-        $this->where['grouped_boolean'] = $boolean;
-        $callback($this);
-        $this->where['sql'] .= ')';
-        return $this;
+        $boolean = $this->normalizeBoolean($boolean);
+        $previous = $this->where;
+        $bindings = $this->bindings;
+        $parameters = $this->parameters;
+
+        $this->where = ['sql' => ''];
+
+        try {
+            $callback($this);
+            $group = trim($this->where['sql']);
+        } catch (\Throwable $e) {
+            $this->bindings = $bindings;
+            $this->parameters = $parameters;
+            throw $e;
+        } finally {
+            $this->where = $previous;
+        }
+
+        return $group === '' ? $this : $this->whereRaw("($group)", [], $boolean);
     }
 
     /**

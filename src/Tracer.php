@@ -173,7 +173,7 @@ class Tracer implements TracerContract
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
         // Log the error message unless it's from Tinker context
-        !$this->isFromTinkerContext($file) && $this->log("$type: $message in $file on line $line"); // Log the error message
+        !$this->isFromTinkerContext($file) && $this->log("$type: $message in $file on line $line" . $this->traceString($trace)); // Log the error message
 
         if (is_cli()) {
             // Format and output the error message
@@ -247,20 +247,20 @@ class Tracer implements TracerContract
     public function log(string $message): void
     {
         // Set default error log file if not provided
-        $logFile = $this->logFile ?? storage_dir('logs/spark.log');
-        $logDirectory = dirname($logFile);
+        $logDirectory = dirname($logFile = $this->logFile ??= storage_dir('logs/spark.log'));
 
-        if (!is_dir($logDirectory)) {
-            @mkdir($logDirectory, 0775, true);
-        }
-
-        if (is_file($logFile) && !is_writable($logFile)) {
+        if (!is_writable($logDirectory) || (is_file($logFile) && !is_writable($logFile))) {
             if (is_cli()) {
-                return;
+                echo "Warning: Log file '$logFile' is not writable.\n";
+                exit;
             }
 
             echo "<p style=\"color: red;font-size: 18px;\">Warning: Log file '$logFile' is not writable.</p>";
-            exit;
+            exit; // Stop execution if the log file is not writable
+        }
+
+        if (!is_dir($logDirectory)) {
+            @mkdir($logDirectory, 0775, true);
         }
 
         if (is_file($logFile) && filesize($logFile) >= self::LOG_FILE_MAX_SIZE) {
@@ -273,5 +273,29 @@ class Tracer implements TracerContract
 
         $time = date('Y-m-d H:i:s'); // Current timestamp
         error_log("[$time] $message\n", 3, $logFile);
+    }
+
+    /**
+     * Converts a stack trace array into a formatted string.
+     *
+     * @param array $trace The stack trace array.
+     * 
+     * @return string Formatted stack trace string.
+     */
+    private function traceString(array $trace): string
+    {
+        if (empty($trace)) {
+            return '';
+        }
+
+        $traceOutput = "\nStack trace:\n";
+        foreach ($trace as $index => $frame) {
+            $frameFile = $frame['file'] ?? '[internal function]';
+            $frameLine = $frame['line'] ?? 'n/a';
+            $frameFunction = $frame['function'] ?? 'unknown';
+            $traceOutput .= "#$index $frameFile($frameLine): $frameFunction()\n";
+        }
+
+        return $traceOutput;
     }
 }

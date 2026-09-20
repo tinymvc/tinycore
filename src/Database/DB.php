@@ -111,7 +111,11 @@ class DB implements DBContract
     public static function connection(string|array $config = []): self
     {
         if (is_string($config)) {
-            $config = config("database.connections.$config", []);
+            $name = $config;
+            $config = config("database.connections.$name");
+            if (!is_array($config) || $config === []) {
+                throw new InvalidDatabaseConfigException("Undefined database connection: $name");
+            }
         }
 
         return new self($config);
@@ -226,6 +230,7 @@ class DB implements DBContract
             $config = [...$base, ...$connection];
         }
 
+        $config['driver'] = strtolower((string) $config['driver']);
         if (isset($config['username']) && !isset($config['user'])) {
             $config['user'] = $config['username'];
         }
@@ -498,7 +503,7 @@ class DB implements DBContract
                 sprintf('port=%s;', $this->config['port']) : '',
                 isset($this->config['name']) ?
                 sprintf('dbname=%s;', $this->config['name']) : '',
-                isset($this->config['charset']) ?
+                isset($this->config['charset']) && $driver === 'mysql' ?
                 sprintf('charset=%s;', $this->config['charset']) : '',
             ),
         };

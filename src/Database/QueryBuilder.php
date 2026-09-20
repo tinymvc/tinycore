@@ -164,11 +164,14 @@ class QueryBuilder implements QueryBuilderContract
     public function table(string $table, ?string $alias = null): self
     {
         if (stripos($table, ' as ') !== false && empty($alias)) {
-            [$table, $alias] = array_map('trim', explode(' as ', $table, 2));
+            [$table, $alias] = preg_split('/\s+as\s+/i', $table, 2);
         }
 
         $this->table = $table;
-        $this->query['alias'] = $alias ?: '';
+        $this->query['alias'] = '';
+        if ($alias !== null && trim($alias) !== '') {
+            $this->as($alias);
+        }
 
         return $this;
     }
@@ -191,7 +194,7 @@ class QueryBuilder implements QueryBuilderContract
     public function getAlias(): null|string
     {
         if (isset($this->query['alias']) && !empty($this->query['alias'])) {
-            return trim(str_ireplace('as ', '', $this->query['alias']));
+            return trim(preg_replace('/^\s*AS\s+/i', '', $this->query['alias']), " \t\n\r\0\x0B\"`");
         }
 
         return null;
@@ -432,6 +435,26 @@ class QueryBuilder implements QueryBuilderContract
         return $this->wrapper->wrapTable($this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
     }
 
+    /** Quoted reference used by read predicates and correlated subqueries. */
+    private function getTableReference(): string
+    {
+        return $this->hasAlias() ? $this->wrapper->wrapTable($this->getAlias()) : $this->getTableName();
+    }
+
+    /** @internal Bind the intermediate model of a has-many-through read. */
+    public function useThroughModel(Model $model): self
+    {
+        $this->query['through_model'] = $model;
+        return $this;
+    }
+
+    /** Include archived intermediate models, independently of the final related model. */
+    public function withTrashedParents(bool $withTrashed = true): self
+    {
+        $this->query['with_trashed_parents'] = $withTrashed;
+        return $this;
+    }
+
     /**
      * Executes a SELECT query with the built query parts.
      *
@@ -580,17 +603,58 @@ class QueryBuilder implements QueryBuilderContract
         event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'bindings' => $bindings, 'memory_before' => $startedMemory]);
     }
 
+    /** Import bindings without allowing independently built queries to overwrite each other. */
+    private function importSubquery(string $sql, QueryBuilder $query): array
+    {
+        static $serial = 0;
+
+        $prefix = 'spark_sub_' . ++$serial . '_';
+        $bindings = [];
+        $names = [];
+
+        foreach ($query->getBindings() as $name => $value) {
+            $name = ltrim($name, ':');
+            if (is_array($value)) {
+                foreach ($value as $index => $item) {
+                    $names["{$name}_$index"] = "{$prefix}{$name}_$index";
+                    $bindings["{$prefix}{$name}_$index"] = $item;
+                }
+            } else {
+                $names[$name] = "$prefix$name";
+                $bindings["$prefix$name"] = $value;
+            }
+        }
+
+        // Skip quoted strings/identifiers and comments; do not rewrite PostgreSQL :: casts.
+        $pattern = <<<'REGEX'
+~' (?: '' | [^'] )* ' (*SKIP)(*F)
+| " (?: "" | [^"] )* " (*SKIP)(*F)
+| ` [^`]* ` (*SKIP)(*F)
+| -- [^\r\n]* (*SKIP)(*F)
+| /\* .*? \*/ (*SKIP)(*F)
+| (?<!:) : ([a-zA-Z_][a-zA-Z0-9_]*) ~xs
+REGEX;
+
+        $sql = preg_replace_callback($pattern, fn($match) => ':' . ($names[$match[1]] ?? $match[1]), $sql);
+
+        return [
+            'sql' => $sql,
+            'bindings' => $bindings,
+            'parameters' => $query->getParameters()
+        ];
+    }
+
     /**
      * Casts a value to a string representation suitable for database storage.
      *
      * @param mixed $value The value to cast.
-     * @return string|null The casted string value or null if the value is empty.
+     * @return string|null The casted string value, preserving zero/false/empty strings; null stays null.
      */
     private function castValue(mixed $value): ?string
     {
         $value = value($value);
 
-        if (empty($value)) {
+        if ($value === null) {
             return null;
         }
 
@@ -616,11 +680,21 @@ class QueryBuilder implements QueryBuilderContract
      * Generates the WHERE clause for soft deletes if applicable.
      *
      * @param bool $withTrashedByDefault Include archived rows unless an explicit scope is selected.
+     * @param bool $forWrite Writes target the physical table and do not emit read aliases or joins.
      *  @return string The modified WHERE SQL clause with soft delete conditions.
      */
-    private function preparedWhereClauseSql(bool $withTrashedByDefault = false): string
+    private function preparedWhereClauseSql(bool $withTrashedByDefault = false, bool $forWrite = false): string
     {
         $whereSql = $this->getWhereSql();
+
+        $through = $this->query['through_model'] ?? null;
+        if (!$forWrite && $through instanceof Model && empty($this->query['with_trashed_parents'])) {
+            $whereSql = $through->buildSoftDeleteWhereClause(
+                where: $whereSql,
+                not: false,
+                column: $this->wrapper->wrapTable($through->getTable()) . '.' . $this->wrapper->wrapColumn($through->getSoftDeleteColumn())
+            );
+        }
 
         if (($model = $this->getModelBeingUsed()) === null || $model->usesSoftDeletes() === false) {
             return $whereSql;
@@ -634,7 +708,11 @@ class QueryBuilder implements QueryBuilderContract
             return $whereSql;
         }
 
-        return $model->buildSoftDeleteWhereClause($whereSql, not: !empty($this->query['only_trashed']));
+        return $model->buildSoftDeleteWhereClause(
+            where: $whereSql,
+            not: !empty($this->query['only_trashed']),
+            column: ($forWrite ? $this->getTableName() : $this->getTableReference()) . '.' . $this->wrapper->wrapColumn($model->getSoftDeleteColumn())
+        );
     }
 
     /**

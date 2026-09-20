@@ -24,15 +24,16 @@ trait InteractsWithSoftDeletes
      *
      * @param string $where The existing WHERE clause.
      * @param bool $not Whether to include the NOT NULL condition. true=deleted, false=not deleted
+     * @param string|null $column Quoted, qualified SQL column supplied by the query builder.
      * @return string The modified WHERE clause.
      */
-    public function buildSoftDeleteWhereClause(string $where, bool $not = true): string
+    public function buildSoftDeleteWhereClause(string $where, bool $not = true, ?string $column = null): string
     {
         if (!$this->usesSoftDeletes()) {
             return $where; // No modification needed if soft deletes are not used
         }
 
-        $column = $this->getSoftDeleteColumn();
+        $column ??= $this->getSoftDeleteColumn();
         $boolean = $not ? 'IS NOT NULL' : 'IS NULL';
 
         $where = trim($where ?: '');
