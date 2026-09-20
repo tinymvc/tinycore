@@ -240,39 +240,72 @@ class Tracer implements TracerContract
 
     /**
      * Logs a message to the error log file.
-     * Rotates the log file when it reaches 10 MB.
+     * Rotates the log file when it reaches 10 MB and the directory is writable.
      *
      * @param string $message The message to log.
      */
     public function log(string $message): void
     {
-        // Set default error log file if not provided
-        $logDirectory = dirname($logFile = $this->logFile ??= storage_dir('logs/spark.log'));
+        $logFile = dir_path($this->logFile ??= storage_dir('logs/spark.log'));
+        $entry = '[' . date('Y-m-d H:i:s') . "] $message\n";
 
-        if (!is_writable($logDirectory) || (is_file($logFile) && !is_writable($logFile))) {
-            if (is_cli()) {
-                echo "Warning: Log file '$logFile' is not writable.\n";
-                exit;
+        try {
+            if ($this->appendLogEntry($logFile, $entry)) {
+                return;
+            }
+        } catch (Throwable) {
+            // Logging must not replace the original error with a filesystem error.
+        }
+
+        @error_log("[Spark] Unable to write log file '$logFile'. $entry");
+
+        if (str_contains($logFile, storage_dir()) && !is_writable(storage_dir())) {
+            if (is_web()) {
+                echo <<<HTML
+                    <div style="background-color: #f8d7da; color: #721c24; padding: 20px; border-radius: 5px; font-family: Arial, sans-serif;">
+                        <h2>Storage Directory Not Writable</h2>
+                        <p>Please ensure that the bootstrap/cache and /storage directories are writable in this application.</p>
+                    </div>
+                HTML;
+            } else {
+                Prompt::message("Storage directory is not writable. ", 'danger');
+            }
+            exit;
+        }
+    }
+
+    /**
+     * Permission checks are advisory; always check the actual write as well.
+     */
+    private function appendLogEntry(string $logFile, string $entry): bool
+    {
+        $logDirectory = dirname($logFile);
+        clearstatcache();
+
+        // Another request may create the directory between the check and mkdir.
+        if (!is_dir($logDirectory) && !@mkdir($logDirectory, 0775, true) && !is_dir($logDirectory)) {
+            return false;
+        }
+
+        if (is_file($logFile)) {
+            if (!is_writable($logFile)) {
+                return false;
             }
 
-            echo "<p style=\"color: red;font-size: 18px;\">Warning: Log file '$logFile' is not writable.</p>";
-            exit; // Stop execution if the log file is not writable
+            // Appending only needs a writable file; rotation also needs its directory.
+            if (is_writable($logDirectory) && @filesize($logFile) >= self::LOG_FILE_MAX_SIZE) {
+                $archive = "$logFile." . date('YmdHis');
+                if (file_exists($archive)) {
+                    $archive .= '.' . uniqid();
+                }
+                @rename($logFile, $archive);
+            }
+        } elseif (file_exists($logFile) || !is_writable($logDirectory)) {
+            return false;
         }
 
-        if (!is_dir($logDirectory)) {
-            @mkdir($logDirectory, 0775, true);
-        }
-
-        if (is_file($logFile) && filesize($logFile) >= self::LOG_FILE_MAX_SIZE) {
-            @rename($logFile, "$logFile." . date('YmdHis'));
-        }
-
-        if (!is_writable(dirname($logFile))) {
-            return; // Skip logging if the directory is not writable
-        }
-
-        $time = date('Y-m-d H:i:s'); // Current timestamp
-        error_log("[$time] $message\n", 3, $logFile);
+        // Suppress filesystem warnings to avoid re-entering the tracer's error handler.
+        return @file_put_contents($logFile, $entry, FILE_APPEND | LOCK_EX) === strlen($entry);
     }
 
     /**
