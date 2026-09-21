@@ -24,6 +24,7 @@ class Tracer implements TracerContract
     /** @var Tracer $instance */
     public static ?self $instance = null;
 
+    /** @var int */
     private const LOG_FILE_MAX_SIZE = 10_485_760;
 
     /** @var array<int, string> */
@@ -43,7 +44,7 @@ class Tracer implements TracerContract
         E_DEPRECATED => 'Deprecated',
         E_USER_DEPRECATED => 'User Deprecated',
     ];
-
+    /** @var array<int, string> */
     private const FATAL_ERROR_TYPES = [
         E_ERROR,
         E_PARSE,
@@ -173,7 +174,9 @@ class Tracer implements TracerContract
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
         // Log the error message unless it's from Tinker context
-        !$this->isFromTinkerContext($file) && $this->log("$type: $message in $file on line $line" . $this->traceString($trace)); // Log the error message
+        if (!$this->isFromTinkerContext($file)) {
+            $this->log("$type: $message in $file on line $line" . $this->traceString($trace));
+        }
 
         if (is_cli()) {
             // Format and output the error message
@@ -202,13 +205,25 @@ class Tracer implements TracerContract
 
         if (is_debug_mode()) {
             // Clear any previous output
-            if (ob_get_length()) {
-                ob_end_clean();
-            }
+            ob_get_length() && ob_end_clean();
 
             // Set HTTP response code to 500 for server error.
             if (!headers_sent() && http_response_code() !== 500) {
                 http_response_code(500);
+            }
+
+            if (\Spark\Foundation\Application::$app->get(\Spark\Http\Request::class)->expectsJson()) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'message' => "$type: $message",
+                    'file' => $file,
+                    'line' => $line,
+                    'trace' => array_map(
+                        fn($frame) => \sprintf('%s(%d): %s()', $frame['file'] ?? '[internal function]', $frame['line'] ?? 'n/a', $frame['function'] ?? 'unknown'),
+                        $trace
+                    ),
+                ]);
+                exit;
             }
 
             // Detailed error output with stack trace if debug mode is enabled.
@@ -261,12 +276,10 @@ class Tracer implements TracerContract
 
         if (str_contains($logFile, storage_dir()) && !is_writable(storage_dir())) {
             if (is_web()) {
-                echo <<<HTML
-                    <div style="background-color: #f8d7da; color: #721c24; padding: 20px; border-radius: 5px; font-family: Arial, sans-serif;">
-                        <h2>Storage Directory Not Writable</h2>
-                        <p>Please ensure that the bootstrap/cache and /storage directories are writable in this application.</p>
-                    </div>
-                HTML;
+                ob_get_length() && ob_end_clean(); // Clear any previous output to avoid mixed content
+                ob_start();
+                include __DIR__ . '/Foundation/resources/storage-not-writable.php';
+                echo ob_get_clean();
             } else {
                 Prompt::message("Storage directory is not writable. ", 'danger');
             }
@@ -295,9 +308,6 @@ class Tracer implements TracerContract
             // Appending only needs a writable file; rotation also needs its directory.
             if (is_writable($logDirectory) && @filesize($logFile) >= self::LOG_FILE_MAX_SIZE) {
                 $archive = "$logFile." . date('YmdHis');
-                if (file_exists($archive)) {
-                    $archive .= '.' . uniqid();
-                }
                 @rename($logFile, $archive);
             }
         } elseif (file_exists($logFile) || !is_writable($logDirectory)) {
@@ -321,7 +331,7 @@ class Tracer implements TracerContract
             return '';
         }
 
-        $traceOutput = "\nStack trace:\n";
+        $traceOutput = "\n[Stack trace]:\n";
         foreach ($trace as $index => $frame) {
             $frameFile = $frame['file'] ?? '[internal function]';
             $frameLine = $frame['line'] ?? 'n/a';
