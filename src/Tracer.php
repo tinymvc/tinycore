@@ -222,7 +222,7 @@ class Tracer implements TracerContract
                         fn($frame) => \sprintf('%s(%d): %s()', $frame['file'] ?? '[internal function]', $frame['line'] ?? 'n/a', $frame['function'] ?? 'unknown'),
                         $trace
                     ),
-                ]);
+                ], JSON_UNESCAPED_SLASHES);
                 exit;
             }
 
