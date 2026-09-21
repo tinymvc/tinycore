@@ -3,15 +3,6 @@
 @section('title', "$type: $message")
 
 @section('content')
-    @php
-        if (!function_exists('clear_error_trace_file')) {
-            function clear_error_trace_file($path): string
-            {
-                return '@' . ltrim(str_replace(dirname(root_dir()), '', $path), DIRECTORY_SEPARATOR);
-            }
-        }
-    @endphp
-
     <div class="error-container">
         <div class="error-header">
             <div class="error-icon">
@@ -29,7 +20,7 @@
                 <div class="error-location">
                     <div class="location-item">
                         <span class="location-label">File:</span>
-                        <span class="location-value">{!! clear_error_trace_file($file) !!}</span>
+                        <span class="location-value">{!! '@' . remove_root_dir($file, root_dir()) !!}</span>
                     </div>
                     <div class="location-item">
                         <span class="location-label">Line:</span>
@@ -74,7 +65,7 @@
                                 <div class="frame-number">#{!! $index + 1 !!}</div>
                                 <div class="frame-details">
                                     <div class="frame-location">
-                                        <span class="frame-file">{!! clear_error_trace_file($file) !!}</span>
+                                        <span class="frame-file">{!! '@' . remove_root_dir($file, root_dir()) !!}</span>
                                         @if ($line)
                                             <span class="frame-line">:{!! $line !!}</span>
                                         @endif

@@ -216,13 +216,18 @@ class Tracer implements TracerContract
                 header('Content-Type: application/json');
                 echo json_encode([
                     'message' => "$type: $message",
-                    'file' => $file,
+                    'file' => '@' . remove_root_dir($file, root_dir()),
                     'line' => $line,
                     'trace' => array_map(
-                        fn($frame) => \sprintf('%s(%d): %s()', $frame['file'] ?? '[internal function]', $frame['line'] ?? 'n/a', $frame['function'] ?? 'unknown'),
+                        fn($frame) => \sprintf(
+                            '%s(%d): %s()',
+                            '@' . remove_root_dir($frame['file'] ?? '[internal function]', root_dir()),
+                            $frame['line'] ?? 'n/a',
+                            $frame['function'] ?? 'unknown'
+                        ),
                         $trace
                     ),
-                ], JSON_UNESCAPED_SLASHES);
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
                 exit;
             }
 

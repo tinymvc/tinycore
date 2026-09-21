@@ -750,6 +750,24 @@ if (!function_exists('root_dir')) {
     }
 }
 
+if (!function_exists('remove_root_dir')) {
+    /**
+     * Remove the root directory from a given path.
+     *
+     * This function takes a file path and removes the root directory portion
+     * of the path, returning the relative path. It trims any leading or trailing
+     * directory separators from the resulting path.
+     *
+     * @param string $path The full file path from which to remove the root directory.
+     * @param string $root The root directory to remove. If null, the default root directory is used.
+     * @return string The relative path with the root directory removed.
+     */
+    function remove_root_dir(string $path, string $root): string
+    {
+        return trim(str_replace(dirname($root), '', $path), DIRECTORY_SEPARATOR);
+    }
+}
+
 if (!function_exists('resource_dir')) {
     /**
      * Get the resources directory path with an optional appended path.
