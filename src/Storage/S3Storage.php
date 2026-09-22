@@ -386,6 +386,7 @@ class S3Storage
             'X-Amz-Date' => $dateTime,
             'X-Amz-Expires' => (string) $expires,
             'X-Amz-SignedHeaders' => 'host',
+            'response-content-disposition' => 'attachment; filename="' . basename($key) . '"',
         ];
 
         if ($this->sessionToken !== null) {
