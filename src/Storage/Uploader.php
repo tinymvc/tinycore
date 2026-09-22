@@ -1,14 +1,14 @@
 <?php
 
-namespace Spark\Utils;
+namespace Spark\Storage;
 
+use Spark\Utils\Image;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\UploaderUtilContract;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
 use Spark\Exceptions\Utils\UploaderUtilException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use function array_key_exists;
 use function count;
 use function in_array;
 use function is_array;
@@ -21,7 +21,7 @@ use function strlen;
  * Handles file uploads with options for validating file extensions, setting a maximum file size, 
  * supporting multiple files, resizing and compressing images, and storing files in a specific directory.
  * 
- * @package Spark\Utils
+ * @package Spark\Storage
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
 class Uploader implements UploaderUtilContract
@@ -49,6 +49,9 @@ class Uploader implements UploaderUtilContract
     /** @var null|int Compression level for images. */
     public null|int $compress;
 
+    /** @var ?string Base directory stripped from driver destinations and returned paths. */
+    private ?string $relativeTo = null;
+
     /** @var ?UploaderUtilDriverInterface File upload driver. */
     private ?UploaderUtilDriverInterface $driver;
 
@@ -63,6 +66,7 @@ class Uploader implements UploaderUtilContract
      * @param null|array $resize Resize options for images.
      * @param null|array $resizes Bulk resize options for images.
      * @param null|int $compress Compression level for images.
+     * @param ?string $relativeTo Base directory stripped from driver destinations and returned paths.
      */
     public function __construct(
         null|string $uploadTo = null,
@@ -73,7 +77,8 @@ class Uploader implements UploaderUtilContract
         null|float|array $resize = null,
         null|array $resizes = null,
         null|int $compress = null,
-        null|UploaderUtilDriverInterface $driver = null
+        null|UploaderUtilDriverInterface $driver = null,
+        null|string $relativeTo = null
     ) {
         $extensions = $extensions === null ? [] : $extensions;
 
@@ -88,6 +93,7 @@ class Uploader implements UploaderUtilContract
         $this->maxSize = $maxSize;
         $this->compress = $compress;
         $this->driver = $driver;
+        $this->relativeTo = $relativeTo;
 
         // Format the resize option to ensure it is an associative array with width as key and height as value
         $fmSize = fn($size) => is_array($size) && isset($size[0], $size[1])
@@ -98,8 +104,9 @@ class Uploader implements UploaderUtilContract
         $this->resizes = collect($resizes)->mapWithKeys($fmSize(...))->all();
 
         $uploadDir ??= config('app.upload_dir');
+        $this->relativeTo ??= $uploadDir;
 
-        if ($uploadTo) {
+        if ($uploadTo !== null && $uploadTo !== '') {
             $uploadDir = dir_path("$uploadDir/$uploadTo");
         }
 
@@ -117,6 +124,7 @@ class Uploader implements UploaderUtilContract
      * @param null|array $resize Resize options for images.
      * @param null|array $resizes Bulk resize options for images.
      * @param null|int $compress Compression level for images.
+     * @param ?string $relativeTo Base directory stripped from driver destinations and returned paths.
      * @param null|UploaderUtilDriverInterface $driver File upload driver.
      * @return self Returns a new instance of the Uploader class.
      */
@@ -129,7 +137,8 @@ class Uploader implements UploaderUtilContract
         null|float|array $resize = null,
         null|array $resizes = null,
         null|int $compress = null,
-        null|UploaderUtilDriverInterface $driver = null
+        null|UploaderUtilDriverInterface $driver = null,
+        null|string $relativeTo = null
     ): self {
         return new self(
             uploadTo: $uploadTo,
@@ -140,7 +149,8 @@ class Uploader implements UploaderUtilContract
             resize: $resize,
             resizes: $resizes,
             compress: $compress,
-            driver: $driver
+            driver: $driver,
+            relativeTo: $relativeTo
         );
     }
 
@@ -191,12 +201,25 @@ class Uploader implements UploaderUtilContract
         }
 
         if ($this->multiple) {
+            if (
+                !is_array($files['name']) || !isset($files['tmp_name']) || !is_array($files['tmp_name'])
+                || array_keys($files['name']) !== array_keys($files['tmp_name'])
+            ) {
+                throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+            }
+            foreach (['error', 'size', 'type'] as $field) {
+                if (isset($files[$field]) && !is_array($files[$field])) {
+                    throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+                }
+            }
+            // Validate every shape before storing any files; runtime failures can still be partial.
+            foreach ($files['name'] as $key => $name) {
+                if (!is_string($name) || !is_string($files['tmp_name'][$key])) {
+                    throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+                }
+            }
             $uploadedFiles = [];
             foreach ($files['name'] as $key => $name) {
-                if (!array_key_exists($key, $files['tmp_name'])) {
-                    continue;
-                }
-
                 $file = [
                     'name' => $name,
                     'type' => $files['type'][$key] ?? '',
@@ -230,7 +253,7 @@ class Uploader implements UploaderUtilContract
         if (is_array($file)) {
             $result = true;
             foreach ($file as $f) {
-                $result = $result && $this->delete($f);
+                $result = $this->delete($f) && $result;
             }
             return $result;
         }
@@ -239,7 +262,7 @@ class Uploader implements UploaderUtilContract
             return $this->driver->delete($file);
         }
 
-        return fm()->delete(upload_dir($file));
+        return (new LocalStorage($this->relativeTo ?? upload_dir()))->delete(StoragePath::normalize($file));
     }
 
     /**
@@ -254,7 +277,7 @@ class Uploader implements UploaderUtilContract
             return array_map($this->removeUploadDir(...), $files);
         }
 
-        $baseDir = rtrim(str_replace('\\', '/', upload_dir()), '/');
+        $baseDir = rtrim(str_replace('\\', '/', $this->relativeTo ?? upload_dir()), '/');
         $normalizedPath = str_replace('\\', '/', $files);
 
         if (str_starts_with($normalizedPath, "$baseDir/")) {
@@ -285,7 +308,7 @@ class Uploader implements UploaderUtilContract
      */
     protected function processUpload(array $file): array|string
     {
-        if (!isset($file['tmp_name'], $file['name'])) {
+        if (!isset($file['tmp_name'], $file['name']) || !is_string($file['name'])) {
             throw new UploaderUtilException(__('Invalid file data.'));
         }
 
@@ -294,8 +317,17 @@ class Uploader implements UploaderUtilContract
             throw new UploaderUtilException(__('Upload error: %s', $file['error'] ?? UPLOAD_ERR_OK));
         }
 
-        // Validate file size
-        if (isset($this->maxSize) && ((int) ($file['size'] ?? 0) > ($this->maxSize * 1024))) {
+        if (!is_string($tmpName) || !is_uploaded_file($tmpName)) {
+            throw new UploaderUtilException(__('The source is not a valid HTTP upload. Use Disk::putFile() for local files.'));
+        }
+
+        $actualSize = filesize($tmpName);
+        if ($actualSize === false) {
+            throw new UploaderUtilException(__('Cannot read uploaded file size.'));
+        }
+
+        // Validate the actual size, not a caller-supplied size field.
+        if (isset($this->maxSize) && ($actualSize > ($this->maxSize * 1024))) {
             throw new UploaderUtilException(__('File size exceeds the maximum limit.'));
         }
 
@@ -350,7 +382,12 @@ class Uploader implements UploaderUtilContract
                     }
 
                     foreach ($uploadedFiles as $uploadedFile) {
-                        $this->delete($uploadedFile);
+                        try {
+                            $this->delete($uploadedFile);
+                        } catch (\Throwable) {
+                            // Continue rollback and preserve the original upload error.
+                            // A failed remote cleanup may require application reconciliation.
+                        }
                     }
 
                     throw new UploaderUtilException(__('Failed to upload file using driver: %s', $e->getMessage()), previous: $e);

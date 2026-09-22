@@ -29,7 +29,7 @@ use Spark\Cache\Lock;
 use Spark\Utils\Mail;
 use Spark\Utils\Paginator;
 use Spark\Tracer;
-use Spark\Utils\Uploader;
+use Spark\Storage\Uploader;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
 
@@ -2117,6 +2117,14 @@ if (!function_exists('paginator')) {
         $paginator->setData($data);
 
         return $paginator;
+    }
+}
+
+if (!function_exists('disk')) {
+    /** Resolve the default or a named disk from config/disk.php. */
+    function disk(?string $name = null): \Spark\Storage\Disk
+    {
+        return \Spark\Storage\Disk::disk($name);
     }
 }
 

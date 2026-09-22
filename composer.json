@@ -21,12 +21,13 @@
         "voku/portable-ascii": "Required to use Str::slug() with non-English strings (^2.0).",
         "ramsey/uuid": "Required to use Str::uuid() (^4.7).",
         "doctrine/inflector": "Required to use Str::plural() and Stringable::plural() (^2.0).",
-        "ext-curl": "Required for the HTTP client.",
+        "ext-curl": "Required for the HTTP client and S3 disks.",
         "ext-fileinfo": "Required for upload and file MIME detection.",
         "ext-gd": "Required for image manipulation.",
         "ext-pdo_sqlite": "Required for the default sqlite cache, lock, and queue drivers.",
         "ext-redis": "Required for redis cache, lock, and queue drivers.",
-        "phpmailer/phpmailer": "Required for the Mail utility and Mail facade (^6.9)."
+        "phpmailer/phpmailer": "Required for the Mail utility and Mail facade (^6.9).",
+        "ext-simplexml": "Required for listing and copying files on S3-compatible disks."
     },
     "authors": [
         {
