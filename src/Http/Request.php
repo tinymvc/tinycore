@@ -1518,10 +1518,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * This method retrieves the Auth service instance from the application container.
      *
+     * @param ?string $guard The guard to use for authentication.
      * @return \Spark\Http\Auth The Auth service instance.
      */
-    public function auth(): Auth
+    public function auth(?string $guard = null): Auth
     {
+        if ($guard !== null) {
+            return app(Auth::class)->guard($guard);
+        }
         return app(Auth::class);
     }
 
@@ -1535,12 +1539,13 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * @param null|string $key The specific attribute of the user to retrieve (optional).
      * @param mixed $default The default value to return if no user is authenticated or the key does not exist (optional).
+     * @param ?string $guard The guard to check against.
      *
      * @return ($key is null ? \App\Models\User : mixed) The authenticated user object, a specific attribute value, or the default value.
      */
-    public function user(null|string $key = null, $default = null): mixed
+    public function user(null|string $key = null, $default = null, ?string $guard = null): mixed
     {
-        return $this->auth()->user($key, $default);
+        return $this->auth($guard)->user($key, $default);
     }
 
     /**
@@ -1550,11 +1555,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * by utilizing the Auth service. It returns true if a user is logged in,
      * and false if no user is authenticated.
      *
+     * @param ?string $guard The guard to check against.
      * @return bool True if the user is authenticated, false otherwise.
      */
-    public function isAuthenticated(): bool
+    public function isAuthenticated(?string $guard = null): bool
     {
-        return $this->auth()->isLogged();
+        return $this->auth($guard)->isLogged();
     }
 
     /**
@@ -1564,10 +1570,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * by utilizing the Auth service. It returns true if no user is logged in,
      * and false if a user is authenticated.
      *
+     * @param ?string $guard The guard to check against.
      * @return bool True if the user is not authenticated, false otherwise.
      */
-    public function isNotAuthenticated(): bool
+    public function isNotAuthenticated(?string $guard = null): bool
     {
-        return $this->auth()->isGuest();
+        return $this->auth($guard)->isGuest();
     }
 }

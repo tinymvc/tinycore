@@ -8,6 +8,7 @@ use Spark\Facades\Blade;
 use Spark\Support\Traits\Macroable;
 use Throwable;
 use function in_array;
+use function sprintf;
 
 /**
  * Class tracer
@@ -44,6 +45,7 @@ class Tracer implements TracerContract
         E_DEPRECATED => 'Deprecated',
         E_USER_DEPRECATED => 'User Deprecated',
     ];
+
     /** @var array<int, string> */
     private const FATAL_ERROR_TYPES = [
         E_ERROR,
@@ -203,47 +205,47 @@ class Tracer implements TracerContract
             exit(1);
         }
 
-        if (is_debug_mode()) {
-            // Clear any previous output
-            ob_get_length() && ob_end_clean();
+        if (!is_debug_mode()) {
+            abort(500, 'Internal Server Error');
+        }
 
-            // Set HTTP response code to 500 for server error.
-            if (!headers_sent() && http_response_code() !== 500) {
-                http_response_code(500);
-            }
+        // Clear any previous output
+        ob_get_length() && ob_end_clean();
 
-            if (\Spark\Foundation\Application::$app->get(\Spark\Http\Request::class)->expectsJson()) {
-                header('Content-Type: application/json');
-                echo json_encode([
-                    'message' => "$type: $message",
-                    'file' => '@' . remove_root_dir($file, root_dir()),
-                    'line' => $line,
-                    'trace' => array_map(
-                        fn($frame) => \sprintf(
-                            '%s(%d): %s()',
-                            '@' . remove_root_dir($frame['file'] ?? '[internal function]', root_dir()),
-                            $frame['line'] ?? 'n/a',
-                            $frame['function'] ?? 'unknown'
-                        ),
-                        $trace
+        // Set HTTP response code to 500 for server error.
+        if (!headers_sent() && http_response_code() !== 500) {
+            http_response_code(500);
+        }
+
+        if (\Spark\Foundation\Application::$app->get(\Spark\Http\Request::class)->expectsJson()) {
+            header('Content-Type: application/json');
+            echo json_encode([
+                'message' => "$type: $message",
+                'file' => '@' . remove_root_dir($file, root_dir()),
+                'line' => $line,
+                'trace' => array_map(
+                    fn($frame) => sprintf(
+                        '%s(%d): %s()',
+                        '@' . remove_root_dir($frame['file'] ?? '[internal function]', root_dir()),
+                        $frame['line'] ?? 'n/a',
+                        $frame['function'] ?? 'unknown'
                     ),
-                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-                exit;
-            }
-
-            // Detailed error output with stack trace if debug mode is enabled.
-            Blade::setPath(__DIR__ . '/Foundation/resources/views');
-
-            echo Blade::render(
-                'tracer',
-                compact('type', 'message', 'file', 'line', 'trace')
-            );
-
-            // End the script to prevent further execution
+                    $trace
+                ),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
             exit;
         }
 
-        abort(500, 'Internal Server Error');
+        // Detailed error output with stack trace if debug mode is enabled.
+        Blade::setPath(__DIR__ . '/Foundation/resources/views');
+
+        echo Blade::render(
+            'tracer',
+            compact('type', 'message', 'file', 'line', 'trace')
+        );
+
+        // End the script to prevent further execution
+        exit;
     }
 
     /**
@@ -267,7 +269,7 @@ class Tracer implements TracerContract
     public function log(string $message): void
     {
         $logFile = dir_path($this->logFile ??= storage_dir('logs/spark.log'));
-        $entry = '[' . date('Y-m-d H:i:s') . "] $message\n";
+        $entry = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message);
 
         try {
             if ($this->appendLogEntry($logFile, $entry)) {

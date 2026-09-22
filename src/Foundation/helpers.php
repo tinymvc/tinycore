@@ -1142,10 +1142,15 @@ if (!function_exists('auth')) {
      * The authentication manager is responsible for authenticating users, and
      * managing the currently authenticated user.
      *
+     * @param ?string $guard The guard to use for authentication.
      * @return Auth The application's authentication manager.
      */
-    function auth(): Auth
+    function auth(?string $guard = null): Auth
     {
+        if ($guard !== null) {
+            return get(Auth::class)->guard($guard);
+        }
+
         return get(Auth::class);
     }
 }
@@ -1161,12 +1166,12 @@ if (!function_exists('user')) {
      *
      * @param null|string $key The key to retrieve from the user's data.
      * @param mixed $default The default value to return if the key does not exist.
-     *
+     * @param ?string $guard The guard to check against.
      * @return ($key is null ? \App\Models\User : mixed) The user object, or the value of the provided key from the user's data.
      */
-    function user(null|string $key = null, $default = null): mixed
+    function user(null|string $key = null, $default = null, ?string $guard = null): mixed
     {
-        return auth()->user($key, $default);
+        return auth($guard)->user($key, $default);
     }
 }
 
@@ -1177,11 +1182,12 @@ if (!function_exists('is_guest')) {
      * This function checks if the user is not set in the current application request,
      * indicating that the request is made by a guest (unauthenticated) user.
      *
+     * @param ?string $guard The guard to check against.
      * @return bool True if the request is made by a guest user, false otherwise.
      */
-    function is_guest(): bool
+    function is_guest(?string $guard = null): bool
     {
-        return auth()->isGuest();
+        return auth($guard)->isGuest();
     }
 }
 
@@ -1192,11 +1198,12 @@ if (!function_exists('is_logged')) {
      * This function checks if the user is set in the current application request,
      * indicating that the request is made by an authenticated (logged-in) user.
      * 
+     * @param ?string $guard The guard to check against.
      * @return bool True if the request is made by an authenticated user, false otherwise.
      */
-    function is_logged(): bool
+    function is_logged(?string $guard = null): bool
     {
-        return auth()->isLogged();
+        return auth($guard)->isLogged();
     }
 }
 

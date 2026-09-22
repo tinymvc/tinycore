@@ -6,6 +6,7 @@ use ArrayAccess;
 use Spark\Contracts\Http\AuthContract;
 use Spark\Contracts\Http\AuthDriverContract;
 use Spark\Database\Model;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\JWT;
 use Throwable;
@@ -78,6 +79,43 @@ class Auth implements AuthContract, ArrayAccess
         ];
 
         $this->checkId(); // Check and set the authentication ID from the session
+    }
+
+    /**
+     * Registers the Auth instance in the application container.
+     *
+     * This method allows you to register the Auth instance with a specific model,
+     * configuration, and alias in the application container for easy access throughout
+     * the application.
+     *
+     * @param string $model The fully qualified class name of the user model.
+     * @param array $config Configuration array for customizing session key, cache
+     *                      settings, and route redirections.
+     * @param string $guard The alias to use when registering the Auth instance in the container.
+     */
+    public static function register(string $model, array $config, string $guard): void
+    {
+        Application::$app->singleton(
+            abstract: "auth.$guard",
+            concrete: fn() => new self($model, $config)
+        );
+    }
+
+    /**
+     * Retrieves the Auth instance for a specific alias from the application container.
+     *
+     * This method allows you to retrieve the Auth instance that was registered with a specific
+     * guard in the application container. If no guard is provided, it defaults to 'default'.
+     *
+     * @param string $guard The alias of the Auth instance to retrieve.
+     * @return AuthContract The Auth instance associated with the specified alias.
+     */
+    public static function guard(string $guard): AuthContract
+    {
+        if ($guard === 'default') {
+            return Application::$app->make(static::class);
+        }
+        return Application::$app->make("auth.$guard");
     }
 
     /**

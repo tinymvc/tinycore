@@ -1051,6 +1051,8 @@ class BladeCompiler implements BladeCompilerContract
             'json' => 'echo \Spark\Support\Js::from(%s);',
             'case' => 'case %s:',
             'vite' => 'echo vite(%s);',
+            'auth' => 'if(is_logged(%s)):',
+            'guest' => 'if(is_guest(%s)):',
             'method' => 'echo method(%s);',
             'checked' => "echo (%s) ? 'checked' : '';",
             'disabled' => "echo (%s) ? 'disabled' : '';",
