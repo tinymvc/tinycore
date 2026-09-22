@@ -97,7 +97,7 @@ class Auth implements AuthContract, ArrayAccess
     {
         Application::$app->singleton(
             abstract: "auth.$guard",
-            concrete: fn() => new self($model, $config)
+            concrete: fn() => new static($model, $config)
         );
     }
 
@@ -108,9 +108,9 @@ class Auth implements AuthContract, ArrayAccess
      * guard in the application container. If no guard is provided, it defaults to 'default'.
      *
      * @param string $guard The alias of the Auth instance to retrieve.
-     * @return AuthContract The Auth instance associated with the specified alias.
+     * @return Auth The Auth instance associated with the specified alias.
      */
-    public static function guard(string $guard): AuthContract
+    public static function guard(string $guard): Auth
     {
         if ($guard === 'default') {
             return Application::$app->make(static::class);
