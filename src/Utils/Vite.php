@@ -23,6 +23,9 @@ use function sprintf;
 use function str_contains;
 use function str_starts_with;
 use function strtolower;
+use function preg_match;
+use function preg_replace;
+use function trim;
 
 /**
  * Class Vite
@@ -243,11 +246,11 @@ class Vite implements ViteUtilContract
             $refreshUrl = json_encode(
                 $this->serverUrl('@react-refresh'),
                 JSON_HEX_TAG
-                    | JSON_HEX_AMP
-                    | JSON_HEX_APOS
-                    | JSON_HEX_QUOT
-                    | JSON_INVALID_UTF8_SUBSTITUTE
-                    | JSON_UNESCAPED_SLASHES
+                | JSON_HEX_AMP
+                | JSON_HEX_APOS
+                | JSON_HEX_QUOT
+                | JSON_INVALID_UTF8_SUBSTITUTE
+                | JSON_UNESCAPED_SLASHES
             );
 
             $tag = <<<HTML
@@ -277,20 +280,63 @@ class Vite implements ViteUtilContract
             return $isRunning;
         }
 
-        if ($this->hasManifest()) {
-            return $this->config['running'] = false;
+        // Local/debug: check the dev server FIRST, even if a build manifest exists.
+        if ($this->isLocalEnvironment()) {
+            return $this->config['running'] = $this->pingDevServer() || $this->hasManifest();
         }
 
+        // No manifest in production-like env: last resort, probe the dev server.
+        return $this->config['running'] = $this->hasManifest() || $this->pingDevServer();
+    }
+
+    /**
+     * Determine if we are in a local/development environment.
+     */
+    private function isLocalEnvironment(): bool
+    {
+        // app.debug enabled
+        if (config('app.debug') === true) {
+            return true;
+        }
+
+        // Check the Vite host and the current request host (e.g. Herd: app.test)
+        $hosts = [
+            (string) $this->config('host'),
+            (string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''),
+        ];
+
+        foreach ($hosts as $host) {
+            // strip port, keep IPv6 like [::1] intact
+            $host = strtolower(preg_replace('/:\d+$/', '', trim($host)));
+            $host = trim($host, '[]');
+
+            if ($host === '') {
+                continue;
+            }
+
+            if (
+                in_array($host, ['localhost', '127.0.0.1', '::1', '0.0.0.0'], true)
+                || preg_match('/\.(test|local|localhost|localdomain|internal)$/', $host)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Ping the Vite dev server.
+     */
+    private function pingDevServer(): bool
+    {
         try {
-            return $this->config['running'] = http(
-                'GET',
-                $this->serverUrl('@vite/client'),
-                [],
-                [],
-                [CURLOPT_TIMEOUT => self::DEV_CHECK_TIMEOUT_SECONDS, CURLOPT_CONNECTTIMEOUT => 1]
+            return http(
+                url: $this->serverUrl('@vite/client'),
+                options: [CURLOPT_TIMEOUT => self::DEV_CHECK_TIMEOUT_SECONDS, CURLOPT_CONNECTTIMEOUT => 1]
             )->ok();
         } catch (Throwable) {
-            return $this->config['running'] = false;
+            return false;
         }
     }
 

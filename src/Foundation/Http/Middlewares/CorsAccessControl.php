@@ -32,11 +32,14 @@ use function trim;
 abstract class CorsAccessControl implements MiddlewareInterface
 {
     /**
-     * CORS settings.
+     * Constructor for the CORS middleware.
      *
-     * @var array
+     * @param null|array $config Optional configuration array for CORS settings.
      */
-    protected array $config = [];
+    public function __construct(protected null|array $config = null)
+    {
+        $this->config ??= config('cors', []);
+    }
 
     /**
      * Handle CORS requests by setting appropriate headers.
@@ -56,6 +59,10 @@ abstract class CorsAccessControl implements MiddlewareInterface
 
         // If an origin is present, proceed with CORS header setup
         if ($origin !== null) {
+            if (!$this->shouldHandlePath($request)) {
+                return $next($request); // Skip CORS handling for this path
+            }
+
             $allowedOrigin = $this->determineAllowedOrigin($origin);
 
             // If origin is not allowed, do nothing and continue.
@@ -128,6 +135,24 @@ abstract class CorsAccessControl implements MiddlewareInterface
             'methods' => array_values(array_filter(array_map('strtoupper', $methods))),
             'headers' => $this->normalizeHeaderList($headers),
         ];
+    }
+
+    /**
+     * Determine if CORS should be applied to the current request path.
+     *
+     * When no paths are configured, CORS applies to every path.
+     * Otherwise the path must match one of the configured patterns
+     * (wildcards supported, e.g. "api/*"), using CsrfProtection::skip().
+     */
+    private function shouldHandlePath(Request $request): bool
+    {
+        $paths = (array) ($this->config['paths'] ?? []);
+
+        if ($paths === []) {
+            return true;
+        }
+
+        return CsrfProtection::skip($request, $paths);
     }
 
     /**

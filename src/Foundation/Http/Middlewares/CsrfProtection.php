@@ -3,8 +3,8 @@
 namespace Spark\Foundation\Http\Middlewares;
 
 use Spark\Contracts\Http\MiddlewareInterface;
+use Spark\Facades\Hash;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
-use Spark\Hash;
 use Spark\Http\Request;
 use function is_string;
 
@@ -39,7 +39,7 @@ abstract class CsrfProtection implements MiddlewareInterface
      */
     public function handle(Request $request, \Closure $next): mixed
     {
-        if ($this->skip($request)) {
+        if ($this->skip($request, $this->except)) {
             return $next($request);
         }
 
@@ -119,19 +119,20 @@ abstract class CsrfProtection implements MiddlewareInterface
      *
      * @param Request $request
      *
+     * @param array $except The list of URLs to exclude from CSRF verification.
      * @return bool
      */
-    protected function skip(Request $request): bool
+    public static function skip(Request $request, array $except = []): bool
     {
         // If the except property is empty, return false
-        if (empty($this->except)) {
+        if (empty($except)) {
             return false;
         }
 
         $path = trim($request->getPath(), '/');
 
         // Iterate over the except array
-        foreach ($this->except as $url) {
+        foreach ($except as $url) {
             if (!is_string($url)) {
                 continue;
             }
@@ -178,10 +179,8 @@ abstract class CsrfProtection implements MiddlewareInterface
     protected function checkCsrfToken(): void
     {
         if (empty(session('csrf_token'))) {
-            /** @var \Spark\Hash $hash The Hash instance */
-            $hash = app(Hash::class);
-            $token = $hash->random(32);
-            $encrypted = $hash->encrypt($token);
+            $token = Hash::random(32);
+            $encrypted = Hash::encrypt($token);
 
             // Set the CSRF token as a cookie
             cookie(

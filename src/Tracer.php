@@ -176,7 +176,7 @@ class Tracer implements TracerContract
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
         // Log the error message unless it's from Tinker context
-        if (!$this->isFromTinkerContext($file)) {
+        if (!($isFromTinker = $this->isFromTinkerContext($file))) {
             $this->log("$type: $message in $file on line $line" . $this->traceString($trace));
         }
 
@@ -198,7 +198,7 @@ class Tracer implements TracerContract
                 }
             }
 
-            if ($this->isFromTinkerContext($file)) {
+            if ($isFromTinker) {
                 return; // Skip further output in Tinker context
             }
 
