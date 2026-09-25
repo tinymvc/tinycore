@@ -2,13 +2,16 @@
 
 namespace Spark\Foundation\Console;
 
+use Spark\Cache\Cache;
 use Spark\Console\Commands;
 use Spark\Console\Process;
 use Spark\Console\Prompt;
 use Spark\Queue\Queue;
 use Spark\Http\Routing\Router;
 use Spark\Utils\FileManager;
+use Spark\Utils\RedisConnector;
 use function in_array;
+use function is_array;
 use function is_string;
 use function sprintf;
 use function strlen;
@@ -318,7 +321,65 @@ class PrimaryCommandsHandler
             }
         }
 
+        $this->clearRedisCacheAndLocks();
+
         Prompt::message("All cache contents cleared.", "success");
+    }
+
+
+    /**
+     * Flush Redis-backed cache entries and locks, if either is configured
+     * to use the redis driver.
+     *
+     * @return void
+     */
+    private function clearRedisCacheAndLocks(): void
+    {
+        $cacheConfig = (array) config('cache', []);
+        $cacheDriver = strtolower((string) ($cacheConfig['driver'] ?? 'sqlite'));
+
+        $lockConfig = (array) config('lock', []);
+        $lockDriver = strtolower((string) ($lockConfig['driver'] ?? $cacheDriver));
+
+        if ($cacheDriver !== 'redis' && $lockDriver !== 'redis') {
+            return;
+        }
+
+        // Flush cached values via the public Cache API.
+        if ($cacheDriver === 'redis') {
+            Cache::make()->flush();
+        }
+
+        // Locks live under their own namespace, so flush them separately.
+        if ($lockDriver === 'redis') {
+            $connections = (array) ($cacheConfig['connections'] ?? []);
+            $driverConfig = is_array($connections['redis'] ?? null) ? $connections['redis'] : [];
+
+            $connection = RedisConnector::resolveConnectionConfig(
+                RedisConnector::mergeConfig(['driver' => 'redis', 'name' => 'default'], $driverConfig)
+            );
+
+            $redis = RedisConnector::make($connection, 'default');
+
+            $prefix = trim((string) ($connection['prefix'] ?? 'spark'), ':');
+            if ($prefix === '') {
+                $prefix = 'spark';
+            }
+
+            $pattern = "$prefix:lock:*";
+            $cursor = 0;
+
+            do {
+                $keys = $redis->scan($cursor, $pattern);
+                if ($keys === false) {
+                    break;
+                }
+
+                if (!empty($keys)) {
+                    $redis->del($keys);
+                }
+            } while ($cursor > 0);
+        }
     }
 
     /**

@@ -2120,11 +2120,11 @@ if (!function_exists('paginator')) {
     }
 }
 
-if (!function_exists('disk')) {
-    /** Resolve the default or a named disk from config/disk.php. */
-    function disk(?string $name = null): \Spark\Storage\Disk
+if (!function_exists('storage')) {
+    /** Resolve the default or a named storage from config/storage.php. */
+    function storage(?string $name = null): \Spark\Storage\Storage
     {
-        return \Spark\Storage\Disk::disk($name);
+        return \Spark\Storage\Storage::disk($name);
     }
 }
 

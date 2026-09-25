@@ -5,24 +5,25 @@ namespace Spark\Storage;
 use InvalidArgumentException;
 use RuntimeException;
 use Spark\Contracts\Utils\UploaderUtilDriverInterface;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function is_array;
 use function strlen;
 
 /** A named local or S3 disk. All paths are relative to the selected disk. */
-class Disk implements Contracts\DiskContract
+class Storage implements Contracts\StorageContract
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     private LocalStorage|S3Storage $storage;
     private LocalStorage|S3UploaderDriver $driver;
 
-    /** Pass explicit config for an on-demand disk, or resolve config/disk.php. */
+    /** Pass explicit config for an on-demand disk, or resolve config/storage.php. */
     public function __construct(?string $name = null, ?array $config = null)
     {
         if ($config === null) {
-            $name ??= config('disk.default', 'local');
-            $config = config("disk.disks.$name");
+            $name ??= config('storage.default', 'local');
+            $config = config("storage.disks.$name");
             if (!is_array($config)) {
                 throw new InvalidArgumentException("Disk [$name] is not configured.");
             }
@@ -294,7 +295,7 @@ class Disk implements Contracts\DiskContract
         ?int $compress = null,
     ): Uploader {
         $uploadTo = StoragePath::normalize($uploadTo, true);
-        $staging = storage_dir('temp/disk-uploads');
+        $staging = storage_dir('temp/storage-uploads');
 
         if (!is_dir($staging) && !@mkdir($staging, 0700, true) && !is_dir($staging)) {
             throw new RuntimeException('Cannot create the private disk upload staging directory.');

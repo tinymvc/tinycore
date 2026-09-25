@@ -7,6 +7,7 @@ use Spark\Cache\Contracts\CacheStorageContract;
 use Spark\Cache\Exceptions\LockException;
 use Spark\Cache\Storage\RedisStorage;
 use Spark\Cache\Storage\SqliteStorage;
+use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
 use function gethostname;
@@ -26,7 +27,7 @@ use function uniqid;
  */
 class Lock implements LockContract, \ArrayAccess
 {
-    use Macroable;
+    use Macroable, Conditionable;
 
     private string $owner;
 

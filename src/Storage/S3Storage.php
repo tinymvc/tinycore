@@ -8,6 +8,8 @@ use SimpleXMLElement;
 use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Http;
 use Spark\Http\Client\HttpRequest;
+use Spark\Support\Traits\Conditionable;
+use Spark\Support\Traits\Macroable;
 use function count;
 use function in_array;
 use function is_array;
@@ -21,6 +23,8 @@ use function strlen;
  */
 class S3Storage
 {
+    use Macroable, Conditionable;
+
     private const MAX_UPLOAD_SIZE = 5 * 1024 ** 3;
     private const CONCURRENCY = 5;
 

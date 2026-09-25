@@ -2,11 +2,13 @@
 
 namespace Spark\Facades;
 
+use Spark\Storage\Storage as StorageInstance;
+
 /**
- * Static access to the default disk. disk($name) selects another configured disk.
+ * Static access to the default storage. storage($name) selects another configured storage.
  *
- * @method static \Spark\Storage\Disk disk(?string $name = null)
- * @method static \Spark\Storage\Disk build(array $config)
+ * @method static StorageInstance disk(?string $name = null)
+ * @method static StorageInstance build(array $config)
  * @method static bool put(string $path, string $contents)
  * @method static string putFile(string $directory, string $localPath)
  * @method static string putFileAs(string $directory, string $localPath, string $name)
@@ -26,21 +28,10 @@ namespace Spark\Facades;
  * @method static bool move(string $from, string $to)
  * @method static \Spark\Storage\Uploader uploader(string $uploadTo = '', array $extensions = [], ?bool $multiple = null, ?int $maxSize = 2048, null|float|array $resize = null, ?array $resizes = null, ?int $compress = null)
  */
-class Disk extends Facade
+class Storage extends Facade
 {
-    // Selecting a named/on-demand disk must not construct the default disk first.
-    public static function disk(?string $name = null): \Spark\Storage\Disk
-    {
-        return \Spark\Storage\Disk::disk($name);
-    }
-
-    public static function build(array $config): \Spark\Storage\Disk
-    {
-        return \Spark\Storage\Disk::build($config);
-    }
-
     protected static function getFacadeAccessor(): string
     {
-        return \Spark\Storage\Disk::class;
+        return StorageInstance::class;
     }
 }

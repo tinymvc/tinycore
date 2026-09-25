@@ -11,7 +11,7 @@ use Spark\Storage\Uploader;
  * Paths are disk-relative keys. Failures throw; missing-file deletion succeeds.
  * URL construction does not grant access. path() is local-only and temporaryUrl() is S3-only.
  */
-interface DiskContract
+interface StorageContract
 {
     public function put(string $path, string $contents): bool;
 
