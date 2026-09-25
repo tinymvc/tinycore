@@ -282,11 +282,16 @@ class Vite implements ViteUtilContract
 
         // Local/debug: check the dev server FIRST, even if a build manifest exists.
         if ($this->isLocalEnvironment()) {
-            return $this->config['running'] = $this->pingDevServer() || $this->hasManifest();
+            return $this->config['running'] = $this->pingDevServer();
+        }
+
+        // Production-like: prefer the build manifest, no network probing.
+        if ($this->hasManifest()) {
+            return $this->config['running'] = false;
         }
 
         // No manifest in production-like env: last resort, probe the dev server.
-        return $this->config['running'] = $this->hasManifest() || $this->pingDevServer();
+        return $this->config['running'] = $this->pingDevServer();
     }
 
     /**
@@ -294,35 +299,19 @@ class Vite implements ViteUtilContract
      */
     private function isLocalEnvironment(): bool
     {
-        // app.debug enabled
-        if (config('app.debug') === true) {
+        // Check if the request is coming from a local environment based on the host.
+        $host = trim((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
+
+        // strip port, keep IPv6 like [::1] intact
+        $host = strtolower(preg_replace('/:\d+$/', '', $host));
+        $host = trim($host, '[]');
+
+        if ($host === '') {
             return true;
         }
 
-        // Check the Vite host and the current request host (e.g. Herd: app.test)
-        $hosts = [
-            (string) $this->config('host'),
-            (string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''),
-        ];
-
-        foreach ($hosts as $host) {
-            // strip port, keep IPv6 like [::1] intact
-            $host = strtolower(preg_replace('/:\d+$/', '', trim($host)));
-            $host = trim($host, '[]');
-
-            if ($host === '') {
-                continue;
-            }
-
-            if (
-                in_array($host, ['localhost', '127.0.0.1', '::1', '0.0.0.0'], true)
-                || preg_match('/\.(test|local|localhost|localdomain|internal)$/', $host)
-            ) {
-                return true;
-            }
-        }
-
-        return false;
+        return in_array($host, ['localhost', '127.0.0.1', '::1', '0.0.0.0'], true)
+            || preg_match('/\.(test|local|localhost|localdomain|internal)$/', $host);
     }
 
     /**
@@ -333,7 +322,8 @@ class Vite implements ViteUtilContract
         try {
             return http(
                 url: $this->serverUrl('@vite/client'),
-                options: [CURLOPT_TIMEOUT => self::DEV_CHECK_TIMEOUT_SECONDS, CURLOPT_CONNECTTIMEOUT => 1]
+                options: [CURLOPT_TIMEOUT => self::DEV_CHECK_TIMEOUT_SECONDS, CURLOPT_CONNECTTIMEOUT => 1],
+                retry: 0
             )->ok();
         } catch (Throwable) {
             return false;

@@ -2060,6 +2060,7 @@ if (!function_exists('http')) {
      * @param array $params Optional. The query parameters for the request.
      * @param array $headers Optional. The headers for the request.
      * @param array $options Optional. Additional options for the HTTP request.
+     * @param int $retry Optional. The number of times to retry the request in case of failure. Default is 0 (no retries).
      * @return ($url is null ? \Spark\Http\Client\Contracts\HttpContract : \Spark\Http\Client\Contracts\HttpResponseContract) The HTTP instance or the response from the request.
      */
     function http(
@@ -2067,11 +2068,13 @@ if (!function_exists('http')) {
         null|string $url = null,
         array $params = [],
         array $headers = [],
-        array $options = []
+        array $options = [],
+        int $retry = 0
     ): \Spark\Http\Client\Contracts\HttpContract|\Spark\Http\Client\Contracts\HttpResponseContract {
         $http = \Spark\Http\Client\Http::make($method);
         $http->withHeaders($headers);
         $http->withOptions($options);
+        $http->withRetry($retry);
 
         if ($url !== null) {
             return $http->send($url, $params);
