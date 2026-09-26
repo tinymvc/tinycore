@@ -64,6 +64,73 @@ trait InteractsWithRelation
     }
 
     /**
+     * Add an existence check for one or more relationships (adds boolean column(s)), like Laravel's withExists().
+     * 
+     * Accepts a single relation name, multiple relation names, or an associative
+     * array mapping relation names to constraint closures:
+     * - withExists('posts')
+     * - withExists('posts as has_posts')
+     * - withExists(['posts', 'comments'])
+     * - withExists(['posts as has_posts', 'comments as has_comments'])
+     * - withExists(['posts' => fn($q) => $q->where('published', 1)])
+     * 
+     * @param array|string $relations
+     * @param Closure|null $callback Optional callback, only used when $relations is a single string
+     * @return QueryBuilder
+     */
+    public function withExists(array|string $relations, ?Closure $callback = null): QueryBuilder
+    {
+        if (is_string($relations)) {
+            $relations = [$relations => $callback];
+        }
+
+        foreach ($relations as $name => $constraint) {
+            // Handle numeric keys (plain relation name strings, possibly with " as ")
+            if (is_numeric($name)) {
+                $name = $constraint;
+                $constraint = null;
+            }
+
+            $relationCallback = $constraint instanceof Closure ? $constraint : null;
+
+            $this->addSingleExists($name, $relationCallback);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Resolve and add a single withExists() subquery, handling "relation as alias" syntax.
+     * 
+     * @param string $relation The relation name, optionally in "relation as alias" form
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return void
+     */
+    private function addSingleExists(string $relation, ?Closure $callback = null): void
+    {
+        $alias = null;
+
+        // Check for alias in relation string (e.g., "posts as has_posts")
+        if (str_contains($relation, ' as ')) {
+            [$relation, $alias] = explode(' as ', $relation, 2);
+            $relation = trim($relation);
+            $alias = trim($alias);
+        }
+
+        $aliasBase = $relation;
+
+        [$relation, $callback] = $this->normalizeAggregateRelation($relation, $callback);
+
+        $model = $this->getRelatedModel();
+        $relationConfig = $model->getRelationshipConfig($relation);
+
+        // Create alias, e.g. "posts" -> "posts_exists"
+        $alias ??= (string) str("$aliasBase-exists")->snake();
+
+        $this->addExistsSubquery($relationConfig, $alias, $callback);
+    }
+
+    /**
      * Eager load relationships with filters.
      * 
      * This method allows you to eager load a relationship with specific filters applied.
@@ -951,6 +1018,31 @@ trait InteractsWithRelation
 
         $sql = "SELECT {$select} FROM {$table}{$joins}{$where}";
         return $this->importSubquery($sql, $query);
+    }
+
+    /**
+     * Add an EXISTS(...) subquery for a relationship to the main query's select.
+     * 
+     * @param array $relationConfig The relationship configuration
+     * @param string $alias The alias for the exists column
+     * @param Closure|null $callback Optional callback to add constraints to the relationship query
+     * @return void
+     */
+    private function addExistsSubquery(array $relationConfig, string $alias, ?Closure $callback = null): void
+    {
+        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, 'count', '*');
+
+        if ($subquery['parameters'] && $this->parameters) {
+            throw new \Spark\Database\Exceptions\QueryBuilderException(
+                'Use named bindings for relationship aggregates composed with other positional SQL fragments.'
+            );
+        }
+
+        $currentSelect = $this->query['select'] ?: '*';
+        $this->query['select'] = $currentSelect . ", EXISTS({$subquery['sql']}) AS " . $this->wrapper->wrapColumn($alias);
+
+        $this->bindings = [...$this->bindings, ...$subquery['bindings']];
+        $this->parameters = [...$this->parameters, ...$subquery['parameters']];
     }
 
     /**

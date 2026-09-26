@@ -49,6 +49,41 @@ trait BuildsReadQueries
     }
 
     /**
+     * Adds a subquery to the SELECT clause with an alias.
+     *
+     * @param string|QueryBuilder|Closure $subquery The subquery to include in the SELECT clause.
+     * @param string $alias The alias for the subquery result.
+     * @return self The current instance for method chaining.
+     */
+    public function selectSub(string|QueryBuilder|Closure $subquery, string $alias): QueryBuilder
+    {
+        if ($subquery instanceof Closure) {
+            $newQuery = new QueryBuilder($this->database);
+            $newQuery->table($this->table);
+
+            $subquery($newQuery);
+            $subquery = $newQuery;
+        }
+
+        // If the subquery is a QueryBuilder instance, convert it to SQL and merge its bindings and parameters.
+        if ($subquery instanceof QueryBuilder) {
+            $subquery = $this->importSubquery($subquery->toSql(), $subquery);
+            $subquerySql = $subquery['sql'];
+
+            $this->bindings = [...$this->bindings, ...$subquery['bindings']];
+            $this->parameters = [...$this->parameters, ...$subquery['parameters']];
+        } else {
+            $subquerySql = $subquery;
+        }
+
+        // Add the alias to the subquery
+        $this->query['select'] = (!empty($this->query['select']) ? $this->query['select'] . ', ' : '')
+            . "($subquerySql) AS " . $this->wrapper->wrapColumn($alias);
+
+        return $this;
+    }
+
+    /**
      * Select a single column from the database.
      * 
      * @param string $column The name of the column to select.

@@ -555,6 +555,11 @@ trait BuildsWriteQueries
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
 
+        // Apply related model condition if necessary
+        if (($model = $this->getModelBeingUsed()) !== null) {
+            $this->applyModelPrimaryCondition();
+        }
+
         $this->where($where);
 
         $bindings = ['increment' => $value, ...$this->getBindings()];
@@ -563,6 +568,12 @@ trait BuildsWriteQueries
             . $this->preparedWhereClauseSql(forWrite: true);
 
         $result = $this->executeAffectingStatement($sql, $bindings);
+
+        // Apply related model condition if necessary
+        if (isset($model) && $model->hasPrimaryValue() && $result > 0) {
+            $model->fill([$column => ($model->{$column} ?: 0) + $value]);
+            $model->trackUpdated();
+        }
 
         $this->log($started, $startedMemory, $sql, $bindings);
 
@@ -582,6 +593,11 @@ trait BuildsWriteQueries
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
 
+        // Apply related model condition if necessary
+        if (($model = $this->getModelBeingUsed()) !== null) {
+            $this->applyModelPrimaryCondition();
+        }
+
         $this->where($where);
 
         $bindings = ['decrement' => $value, ...$this->getBindings()];
@@ -590,6 +606,12 @@ trait BuildsWriteQueries
             . $this->preparedWhereClauseSql(forWrite: true);
 
         $result = $this->executeAffectingStatement($sql, $bindings);
+
+        // Apply related model condition if necessary
+        if (isset($model) && $model->hasPrimaryValue() && $result > 0) {
+            $model->fill([$column => ($model->{$column} ?: 0) - $value]);
+            $model->trackUpdated();
+        }
 
         $this->log($started, $startedMemory, $sql, $bindings);
 

@@ -428,6 +428,98 @@ trait BuildsConditionalClauses
     }
 
     /**
+     * Add a WHERE condition that the given column is in the result of a subquery.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @param string $boolean
+     *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @param bool $not
+     *   Whether to use NOT IN instead of IN.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false): QueryBuilder
+    {
+        if ($subquery instanceof Closure) {
+            $newQuery = new QueryBuilder($this->database);
+            $newQuery->table($this->table);
+
+            $subquery($newQuery);
+            $subquery = $newQuery;
+        }
+
+        if ($subquery instanceof QueryBuilder) {
+            $subquery = $this->importSubquery($subquery->toSql(), $subquery);
+            $subquerySql = $subquery['sql'];
+
+            $this->bindings = [...$this->bindings, ...$subquery['bindings']];
+            $this->parameters = [...$this->parameters, ...$subquery['parameters']];
+        } else {
+            $subquerySql = $subquery;
+        }
+
+        return $this->whereRaw(
+            sprintf(
+                "%s %s (%s)",
+                $this->wrapper->wrapColumn($column),
+                $not ? 'NOT IN' : 'IN',
+                $subquerySql
+            ),
+            boolean: $boolean
+        );
+    }
+
+    /**
+     * Add a WHERE condition that the given column is not in the result of a subquery.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the NOT IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @param string $boolean
+     *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereNotInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereInSub($column, $subquery, $boolean, not: true);
+    }
+
+    /**
+     * Add an OR WHERE condition that the given column is in the result of a subquery.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orWhereInSub(string $column, string|QueryBuilder|Closure $subquery): QueryBuilder
+    {
+        return $this->whereInSub($column, $subquery, 'OR');
+    }
+
+    /**
+     * Add an OR WHERE condition that the given column is not in the result of a subquery.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the NOT IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orWhereNotInSub(string $column, string|QueryBuilder|Closure $subquery): QueryBuilder
+    {
+        return $this->whereInSub($column, $subquery, 'OR', not: true);
+    }
+
+    /**
      * Add a WHERE condition using FIND_IN_SET function.
      *
      * @param string $field
