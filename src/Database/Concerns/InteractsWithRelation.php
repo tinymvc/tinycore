@@ -202,6 +202,19 @@ trait InteractsWithRelation
     }
 
     /**
+     * Adds a where clause to filter by the model's primary key.
+     *
+     * @param string|int|array $value The value(s) of the primary key to filter by.
+     * @return QueryBuilder The current query builder instance.
+     */
+    public function whereKey(string|int|array $value): QueryBuilder
+    {
+        $model = $this->getRelatedModel();
+
+        return $this->where([$model->getPrimaryKey() => $value]);
+    }
+
+    /**
      * Deletes the model from the database by its primary key value.
      *
      * @param string|int|array $value The unique identifier(s) of the model(s) to delete.
@@ -677,7 +690,7 @@ trait InteractsWithRelation
      */
     private function getRelatedModel(): Model
     {
-        $model = $this->query['fetch'][1] ?? null;
+        $model = $this->query['model'] ?? $this->query['fetch'][1] ?? null;
 
         if (is_string($model) && class_exists($model)) {
             $model = new $model;

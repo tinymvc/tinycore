@@ -517,6 +517,7 @@ trait BuildsWriteQueries
             $result = ['id' => $id, ...$attributes, ...$values];
             if (($model = $this->getModelBeingUsed()) !== null) {
                 $model->fill($result);
+                $model->trackCreated();
                 return $model;
             }
             return $result;
@@ -536,7 +537,13 @@ trait BuildsWriteQueries
         $id = $this->insert($data);
 
         if ($id) {
-            return ['id' => $id, ...$data]; // Return the newly created record with ID
+            $result = ['id' => $id, ...$data];
+            if (($model = $this->getModelBeingUsed()) !== null) {
+                $model->fill($result);
+                $model->trackCreated();
+                return $model;
+            }
+            return $result;
         }
 
         return false;

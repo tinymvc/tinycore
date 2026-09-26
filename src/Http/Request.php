@@ -751,6 +751,22 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
+     * Retrieves the Bearer token from the Authorization header.
+     * 
+     * @return ?string The Bearer token, or null if not present.
+     */
+    public function bearerToken(): ?string
+    {
+        $authorizationHeader = $this->header('authorization');
+
+        if ($authorizationHeader && preg_match('/Bearer\s(\S+)/', $authorizationHeader, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
      * Get the User-Agent string from the request headers.
      * 
      * @return ?string The User-Agent string, or null if not present.
@@ -1046,6 +1062,45 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function safe(string $key, array $allowedTags = []): null|string
     {
         return $this->input()->safe($key, $allowedTags);
+    }
+
+    /**
+     * Retrieves a sanitized request value as an integer.
+     * 
+     * @param string $key The key to retrieve the sanitized integer value for.
+     * @param int $default The default value to return if the key does not exist or is not a valid integer.
+     * 
+     * @return int The sanitized integer value associated with the given key, or the default value if the key does not exist or is invalid.
+     */
+    public function integer(string $key, int $default = 0): int
+    {
+        return $this->input()->number($key) ?: $default;
+    }
+
+    /**
+     * Retrieves a sanitized request value as a float.
+     * 
+     * @param string $key The key to retrieve the sanitized float value for.
+     * @param float $default The default value to return if the key does not exist or is not a valid float.
+     * 
+     * @return float The sanitized float value associated with the given key, or the default value if the key does not exist or is invalid.
+     */
+    public function float(string $key, float $default = 0.0): float
+    {
+        return $this->input()->float($key) ?: $default;
+    }
+
+    /**
+     * Retrieves a sanitized request value as a boolean.
+     * 
+     * @param string $key The key to retrieve the sanitized boolean value for.
+     * @param bool $default The default value to return if the key does not exist or is not a valid boolean.
+     * 
+     * @return bool The sanitized boolean value associated with the given key, or the default value if the key does not exist or is invalid.
+     */
+    public function boolean(string $key, bool $default = false): bool
+    {
+        return $this->input()->boolean($key) ?: $default;
     }
 
     /**
@@ -1440,17 +1495,25 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * This method returns the validated data from the request as a Sanitizer instance.
      * It assumes that the validate() method has been called previously to perform validation.
+     * 
+     * @param string|null $key Optional key to retrieve a specific value from the validated data.
+     * @param mixed $default Default value to return if the key does not exist.
      *
-     * @return \Spark\Http\Input
-     *   The validated data as a Sanitizer instance.
+     * @return ($key is null ? \Spark\Http\Input : mixed)
+     *   The validated data as a Sanitizer instance, or 
+     *   the value associated with the given key.
      *
      * @throws \RuntimeException
      *   If no data has been validated yet.
      */
-    public function validated(): Input
+    public function validated(?string $key = null, $default = null): Input
     {
         if (!isset($this->validated) || $this->validated->isEmpty()) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
+        }
+
+        if ($key !== null) {
+            return $this->validated->get($key, $default);
         }
 
         return $this->validated;

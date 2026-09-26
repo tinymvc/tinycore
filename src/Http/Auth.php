@@ -174,7 +174,7 @@ class Auth implements AuthContract, ArrayAccess
                 // Only validate the JWT that selected this identity, not a session fallback.
                 if (
                     $this->authenticatedJwt !== null && empty($this->config['jwt_token_table'])
-                    && !hash_equals($this->makeJwtHash($user), $this->authenticatedJwt->jti)
+                    && !hash_equals($this->makeJwtFingerprint($user), $this->authenticatedJwt->jti)
                 ) {
                     $this->user = null;
                     $this->logout();
@@ -375,13 +375,13 @@ class Auth implements AuthContract, ArrayAccess
      * @param array $payload Optional associative array of additional payload data to include in the token.
      * @return string The generated JWT token as a string.
      */
-    public function getJwtToken(Model $user, array $payload = []): string
+    public function makeToken(Model $user, array $payload = []): string
     {
         $expire = $this->config['jwt_expire'] ?? '3 months';
 
         $payload = [
             'sub' => $user->id,
-            'jti' => $this->makeJwtHash($user), // Stateless credential fingerprint
+            'jti' => $this->makeJwtFingerprint($user), // Stateless credential fingerprint
             'prv' => sha1($this->model),
             'iss' => request()->getRootUrl(),
             'iat' => time(),
@@ -401,7 +401,7 @@ class Auth implements AuthContract, ArrayAccess
      * @param array $payload Optional associative array of additional payload data to include in the token.
      * @return string The generated JWT token as a string.
      */
-    public function createJwtToken(array $payload = []): string
+    public function createToken(array $payload = []): string
     {
         $user = $this->getUser();
 
@@ -410,7 +410,7 @@ class Auth implements AuthContract, ArrayAccess
         }
 
         if (empty($this->config['jwt_token_table'])) {
-            return $this->getJwtToken($user, $payload);
+            return $this->makeToken($user, $payload);
         }
 
         $payload['jti'] ??= bin2hex(random_bytes(32));
@@ -421,14 +421,17 @@ class Auth implements AuthContract, ArrayAccess
         ) {
             throw new \InvalidArgumentException('JWT requires a non-empty string jti and a future integer exp.');
         }
+
         // Encode before storing so an invalid payload cannot leave an unusable token row.
-        $token = $this->getJwtToken($user, $payload);
+        $token = $this->makeToken($user, $payload);
+
         query($this->config['jwt_token_table'])->insert([
             'user_id' => $user->id,
             'token_hash' => $payload['jti'],
             'expire_at' => carbon($payload['exp']),
             'created_at' => now(),
         ]);
+
         return $token;
     }
 
@@ -465,16 +468,22 @@ class Auth implements AuthContract, ArrayAccess
      * This method deletes the specified JWT token from the configured token table for the authenticated user.
      * It returns true if the token was successfully revoked, or false if the token was not found.
      *
-     * @param string $tokenHash The hash of the JWT token to revoke.
+     * @param ?string $tokenHash The hash of the JWT token to revoke.
      * @return bool True if the token was successfully revoked, false otherwise.
      * @throws \RuntimeException If no authenticated user is found or if the JWT token table is not configured.
      */
-    public function revokeToken(string $tokenHash): bool
+    public function revokeToken(?string $tokenHash = null): bool
     {
         $user = $this->getUser();
 
         if (!isset($user)) {
             throw new \RuntimeException('No authenticated user found to revoke token.');
+        }
+
+        $tokenHash ??= $this->token();
+
+        if (empty($tokenHash)) {
+            throw new \InvalidArgumentException('Token hash must be provided to revoke a token.');
         }
 
         if (empty($this->config['jwt_token_table'])) {
@@ -524,6 +533,7 @@ class Auth implements AuthContract, ArrayAccess
                 ->where(['user_id' => $id, 'token_hash' => $this->authenticatedJwt->jti])
                 ->delete();
         }
+
         $this->authenticatedJwt = null;
 
         // If session channel is not enabled, skip clearing session and user properties
@@ -797,11 +807,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     protected function getJwtPayload(): ?object
     {
-        $authHeader = request()->header('authorization');
-
-        if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-            $token = $matches[1];
-
+        if (!empty($token = request()->bearerToken())) {
             try {
                 $payload = JWT::decode($token, config('app.key'));
                 if ($this->validateJwt($payload)) {
@@ -845,9 +851,12 @@ class Auth implements AuthContract, ArrayAccess
         if (
             !is_array($issuer) || !isset($issuer['scheme'], $issuer['host'])
             || isset($issuer['user']) || isset($issuer['pass'])
-        )
+        ) {
             return false;
+        }
+
         $port = static fn(array $url) => $url['port'] ?? (strtolower($url['scheme']) === 'https' ? 443 : 80);
+
         return strtolower($issuer['scheme']) === strtolower($origin['scheme'])
             && strtolower($issuer['host']) === strtolower($origin['host'])
             && $port($issuer) === $port($origin);
@@ -859,16 +868,17 @@ class Auth implements AuthContract, ArrayAccess
      * Changing the user's ID, email, or stored password invalidates this fingerprint.
      * Registered tokens use independent random identifiers instead.
      *
-     * @param Model $user The user model for which to generate the JWT hash.
-     * @return string The generated JWT hash as a string.
+     * @param Model $user The user model for which to generate the JWT fingerprint.
+     * @return string The generated JWT fingerprint as a string.
      */
-    protected function makeJwtHash(Model $user): string
+    protected function makeJwtFingerprint(Model $user): string
     {
         $data = json_encode([
             'id' => intval($user->id ?? 0),
             'email' => $user->email ?? null,
             'password' => $user->password ?? null,
         ]);
+
         return hash('sha256', $data);
     }
 

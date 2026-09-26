@@ -11,7 +11,7 @@ use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\NotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Foundation\Exceptions\TooManyRequests;
-use Spark\Foundation\Exceptions\ValidationErrorException;
+use Spark\Foundation\Exceptions\ValidationException;
 use Spark\Hash;
 use Spark\DotEnv;
 use Spark\Http\Auth;
@@ -596,7 +596,7 @@ class Application extends \Spark\Container implements ApplicationContract
                 abort(419, 'Page Expired');
             } catch (TooManyRequests) {
                 abort(429, 'Too many requests');
-            } catch (ValidationErrorException $e) {
+            } catch (ValidationException $e) {
                 return $request->prepareValidationError(
                     message: $e->getMessage(),
                     errors: $e->getErrors(),

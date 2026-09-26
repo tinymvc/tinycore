@@ -1005,13 +1005,20 @@ class Validator implements ValidatorContract
      * 
      * Returns the sanitized data after validation has been performed.
      * Throws an exception if no data has been validated yet.
+     * 
+     * @param string|null $key Optional key to retrieve a specific value from the validated data.
+     * @param mixed $default Default value to return if the key does not exist.
      *
-     * @return Input
+     * @return ($key is null ? \Spark\Http\Input : mixed)
      */
-    public function validated(): Input
+    public function validated(?string $key = null, $default = null): Input
     {
         if (!isset($this->cleanData)) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
+        }
+
+        if ($key !== null) {
+            return $this->cleanData->get($key, $default);
         }
 
         return $this->cleanData;

@@ -520,6 +520,57 @@ trait BuildsConditionalClauses
     }
 
     /**
+     * Add a WHERE condition that compares two columns.
+     *
+     * @param string $firstColumn
+     *   The first column name to compare.
+     * @param string $operator
+     *   The operator to use for comparison. If null, the operator will be '='.
+     * @param string|null $secondColumn
+     *   The second column name to compare. If null, the operator will be '=' and the second column will be the same as the first column.
+     * @param string $boolean
+     *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereColumn(string $firstColumn, string $operator, ?string $secondColumn = null, string $boolean = 'AND'): QueryBuilder
+    {
+        if ($secondColumn === null) {
+            $secondColumn = $operator;
+            $operator = '=';
+        }
+
+        $firstColumnSql = $this->wrapper->wrapColumn($firstColumn);
+        $secondColumnSql = $this->wrapper->wrapColumn($secondColumn);
+
+        $where = sprintf(
+            "%s %s %s",
+            $firstColumnSql,
+            strtoupper($operator),
+            $secondColumnSql
+        );
+
+        return $this->where($where, boolean: $boolean);
+    }
+
+    /**
+     * Add an OR WHERE condition that compares two columns.
+     *
+     * @param string $firstColumn
+     *   The first column name to compare.
+     * @param string $operator
+     *   The operator to use for comparison. If null, the operator will be '='.
+     * @param string|null $secondColumn
+     *   The second column name to compare. If null, the operator will be '=' and the second column will be the same as the first column.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orWhereColumn(string $firstColumn, string $operator, ?string $secondColumn = null): QueryBuilder
+    {
+        return $this->whereColumn($firstColumn, $operator, $secondColumn, 'OR');
+    }
+
+    /**
      * Add a WHERE condition using FIND_IN_SET function.
      *
      * @param string $field
