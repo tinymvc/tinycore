@@ -70,10 +70,10 @@ class Auth implements AuthContract, ArrayAccess
             'cookie_enabled' => true,
             'cookie_name' => 'auth',
             'cookie_expire' => '6 months',
-            'jwt_expire' => '6 months',
+            'jwt_expire' => '3 months',
+            'jwt_token_table' => null, // Table name for storing JWT tokens if needed
             'channels' => ['session', 'jwt', 'basic'],
-            'validate_jwt_hash' => false,
-            'use_remember_token' => false,
+            'use_remember_token' => false, // Strick security for remember token from cookies
             'driver' => null,
             ...$config
         ];
@@ -169,14 +169,14 @@ class Auth implements AuthContract, ArrayAccess
                 // If JWT authentication is enabled and JWT hash validation is configured, validate the JWT hash
                 if (
                     in_array('jwt', $this->config['channels']) &&
-                    isset($this->config['__jwt_hash']) && $this->config['validate_jwt_hash']
+                    empty($this->config['jwt_token_table']) && (
+                        !empty($payload = $this->getJwtPayload()) && isset($payload->jti) &&
+                        !hash_equals($this->makeJwtHash($user), $payload->jti)
+                    )
                 ) {
-                    $jwtHash = $this->makeJwtHash($user);
-                    if ($jwtHash !== $this->config['__jwt_hash']) {
-                        $this->user = null; // Set user to null to indicate invalid JWT hash
-                        $this->logout(); // Logout if JWT hash does not match
-                        return null; // Return null if JWT validation fails
-                    }
+                    $this->user = null; // Set user to null to indicate invalid JWT hash
+                    $this->logout(); // Logout if JWT hash does not match
+                    return null; // Return null if JWT validation fails
                 }
 
                 $this->user = $user; // Set the user property if a valid user is found
@@ -375,7 +375,7 @@ class Auth implements AuthContract, ArrayAccess
      */
     public function getJwtToken(Model $user, array $payload = []): string
     {
-        $expire = $this->config['jwt_expire'] ?? '6 months';
+        $expire = $this->config['jwt_expire'] ?? '3 months';
 
         $payload = [
             'sub' => $user->id,
@@ -399,7 +399,7 @@ class Auth implements AuthContract, ArrayAccess
      * @param array $payload Optional associative array of additional payload data to include in the token.
      * @return string The generated JWT token as a string.
      */
-    public function createJwtToken(array $payload): string
+    public function createJwtToken(array $payload = []): string
     {
         $user = $this->getUser();
 
@@ -407,7 +407,87 @@ class Auth implements AuthContract, ArrayAccess
             throw new \RuntimeException('No authenticated user found to create JWT token.');
         }
 
+        if (!empty($this->config['jwt_token_table'])) {
+            $expire = $this->config['jwt_expire'] ?? '3 months';
+            $payload['jti'] ??= $this->makeJwtHash($user);
+
+            query($this->config['jwt_token_table'])->insert([
+                'user_id' => $user->id,
+                'token_hash' => $payload['jti'],
+                'expire_at' => now()->modify("+$expire"),
+                'created_at' => now(),
+            ]);
+        }
+
         return $this->getJwtToken($user, $payload);
+    }
+
+    /**
+     * Retrieves all JWT tokens associated with the currently logged in user.
+     *
+     * This method fetches all JWT tokens from the configured token table for the authenticated user.
+     * It returns a collection of tokens, including their hash, expiration time, and creation time.
+     *
+     * @return \Spark\Support\Collection A collection of JWT tokens for the authenticated user.
+     * @throws \RuntimeException If no authenticated user is found or if the JWT token table is not configured.
+     */
+    public function tokens(): \Spark\Support\Collection
+    {
+        $user = $this->getUser();
+
+        if (!isset($user)) {
+            throw new \RuntimeException('No authenticated user found to retrieve tokens.');
+        }
+
+        if (empty($this->config['jwt_token_table'])) {
+            throw new \RuntimeException('JWT token table is not configured.');
+        }
+
+        return query($this->config['jwt_token_table'])
+            ->where('user_id', $user->id)
+            ->fetchAssoc()
+            ->get(['token_hash', 'expire_at', 'created_at']);
+    }
+
+    /**
+     * Revokes a specific JWT token for the currently logged in user.
+     *
+     * This method deletes the specified JWT token from the configured token table for the authenticated user.
+     * It returns true if the token was successfully revoked, or false if the token was not found.
+     *
+     * @param string $tokenHash The hash of the JWT token to revoke.
+     * @return bool True if the token was successfully revoked, false otherwise.
+     * @throws \RuntimeException If no authenticated user is found or if the JWT token table is not configured.
+     */
+    public function revokeToken(string $tokenHash): bool
+    {
+        $user = $this->getUser();
+
+        if (!isset($user)) {
+            throw new \RuntimeException('No authenticated user found to revoke token.');
+        }
+
+        if (empty($this->config['jwt_token_table'])) {
+            throw new \RuntimeException('JWT token table is not configured.');
+        }
+
+        return query($this->config['jwt_token_table'])
+            ->where(['user_id' => $user->id, 'token_hash' => $tokenHash])
+            ->delete() > 0;
+    }
+
+    /**
+     * Retrieves the unique identifier (jti) of the currently authenticated JWT token.
+     *
+     * This method extracts the 'jti' claim from the JWT payload, which serves as a unique identifier
+     * for the token. If no valid JWT token is present, it returns null.
+     *
+     * @return ?string The unique identifier of the JWT token, or null if not available.
+     */
+    public function token(): ?string
+    {
+        $payload = $this->getJwtPayload();
+        return isset($payload, $payload->jti) ? $payload->jti : null;
     }
 
     /**
@@ -428,6 +508,12 @@ class Auth implements AuthContract, ArrayAccess
         // Erase the cache for the logged in user.
         $this->clearCache($id);
 
+        // Revoke the JWT token if JWT authentication is enabled and a token table is configured.
+        if (in_array('jwt', $this->config['channels']) && !empty($this->config['jwt_token_table'])) {
+            !empty($token = $this->token()) && $this->revokeToken($token);
+        }
+
+        // If session channel is not enabled, skip clearing session and user properties
         if (!in_array('session', $this->config['channels'])) {
             $this->user = null;
             $this->id = 0;
@@ -662,6 +748,43 @@ class Auth implements AuthContract, ArrayAccess
      */
     protected function checkJwtAuth(): ?int
     {
+        $payload = $this->getJwtPayload();
+        if (isset($payload, $payload->sub)) {
+            $id = intval($payload->sub);
+
+            if (!empty($this->config['jwt_token_table'])) {
+                $tokenExpire = query($this->config['jwt_token_table'])
+                    ->where(['user_id' => $id, 'token_hash' => $payload->jti])
+                    ->value('expire_at') ?: null;
+
+                if (!isset($tokenExpire)) {
+                    return null; // Return null if the token does not exist in the database
+                }
+
+                if (carbon($tokenExpire)->isPast()) {
+                    query($this->config['jwt_token_table'])
+                        ->where(['user_id' => $id, 'token_hash' => $payload->jti])
+                        ->delete(); // Delete the expired token from the database
+
+                    return null; // Return null if the token has expired
+                }
+            }
+
+            return $id;
+        }
+
+        return null;
+    }
+
+    /**
+     * Retrieves the JWT payload, if it exists.
+     *
+     * This method returns the JWT payload that was stored temporarily during the authentication process.
+     *
+     * @return ?object The JWT payload if it exists, or null if not found.
+     */
+    protected function getJwtPayload(): ?object
+    {
         $authHeader = request()->header('authorization');
 
         if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
@@ -670,10 +793,7 @@ class Auth implements AuthContract, ArrayAccess
             try {
                 $payload = JWT::decode($token, config('app.key'));
                 if ($this->validateJwt($payload)) {
-                    if (isset($this->config['validate_jwt_hash']) && $this->config['validate_jwt_hash']) {
-                        $this->config['__jwt_hash'] = $payload->jti ?? null; // Store the JWT hash for later validation
-                    }
-                    return intval($payload->sub); // Return user ID from JWT payload if valid
+                    return $payload; // Return the JWT payload if valid
                 }
             } catch (Throwable $e) {
                 // Ignore decryption errors
@@ -718,11 +838,12 @@ class Auth implements AuthContract, ArrayAccess
      */
     protected function makeJwtHash(Model $user): string
     {
-        return md5(json_encode([
-            'id' => $user->id ?? 0,
+        $data = json_encode([
+            'id' => intval($user->id ?? 0),
             'email' => $user->email ?? null,
             'password' => $user->password ?? null,
-        ]));
+        ]);
+        return hash('sha256', $data);
     }
 
     /**
@@ -748,6 +869,7 @@ class Auth implements AuthContract, ArrayAccess
 
             $user = $this->model::select('id, password')
                 ->where('username', $username)
+                ->orWhere('email', $username)
                 ->fetchAssoc()
                 ->first();
 
