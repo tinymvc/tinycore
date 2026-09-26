@@ -28,6 +28,7 @@ use function sprintf;
  * It includes CRUD operations, data decoding, and dynamic method invocation.
  *
  * @method static QueryBuilder with($relations)
+ * @method static QueryBuilder withExists(array|string $relations, ?Closure $callback = null)
  * @method static QueryBuilder withFiltered(string $relation, string|array $filters)
  * @method static QueryBuilder has(string $relation, string $operator = '>=', int $count = 1)
  * @method static QueryBuilder doesntHave(string $relation)
@@ -74,6 +75,7 @@ use function sprintf;
  * @method static int delete(mixed $where = null)
  * @method static int truncate()
  * @method static QueryBuilder select(array|string $fields = '*')
+ * @method static QueryBuilder selectSub(string|QueryBuilder|Closure $subquery, string $alias)
  * @method static QueryBuilder selectRaw(string $sql, array $bindings = [])
  * @method static QueryBuilder column(string $column)
  * @method static QueryBuilder max($field, $name = null)
@@ -100,6 +102,8 @@ use function sprintf;
  * @method static QueryBuilder withTrashed(bool $withTrashed = true)
  * @method static QueryBuilder onlyTrashed()
  * @method static QueryBuilder withoutTrashed()
+ * @method static QueryBuilder whereInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false)
+ * @method static QueryBuilder whereNotInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND')
  * @method static int forceDelete(null|string|array|Arrayable|Closure $where = null)
  * @method static mixed first($fields = null)
  * @method static mixed firstOrFail($where = null, $fields = null)
