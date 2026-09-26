@@ -30,6 +30,17 @@ use Spark\Storage\Storage as StorageInstance;
  */
 class Storage extends Facade
 {
+    /** Factories must not resolve an unrelated default disk first. */
+    public static function disk(?string $name = null): StorageInstance
+    {
+        return StorageInstance::disk($name);
+    }
+
+    public static function build(array $config): StorageInstance
+    {
+        return StorageInstance::build($config);
+    }
+
     protected static function getFacadeAccessor(): string
     {
         return StorageInstance::class;

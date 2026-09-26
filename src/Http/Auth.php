@@ -13,6 +13,8 @@ use Throwable;
 use function in_array;
 use function intval;
 use function is_array;
+use function is_int;
+use function is_object;
 use function is_string;
 
 /**
@@ -45,6 +47,9 @@ class Auth implements AuthContract, ArrayAccess
     /** @var int The ID of the currently logged in user. */
     protected int $id;
 
+    /** Payload that actually selected the current identity through the JWT channel. */
+    protected ?object $authenticatedJwt = null;
+
     /**
      * Constructor for the Auth class.
      *
@@ -73,7 +78,7 @@ class Auth implements AuthContract, ArrayAccess
             'jwt_expire' => '3 months',
             'jwt_token_table' => null, // Table name for storing JWT tokens if needed
             'channels' => ['session', 'jwt', 'basic'],
-            'use_remember_token' => false, // Strick security for remember token from cookies
+            'use_remember_token' => false, // Validate remember tokens from cookies
             'driver' => null,
             ...$config
         ];
@@ -166,17 +171,14 @@ class Auth implements AuthContract, ArrayAccess
             }
 
             if (isset($user, $user->id)) {
-                // If JWT authentication is enabled and JWT hash validation is configured, validate the JWT hash
+                // Only validate the JWT that selected this identity, not a session fallback.
                 if (
-                    in_array('jwt', $this->config['channels']) &&
-                    empty($this->config['jwt_token_table']) && (
-                        !empty($payload = $this->getJwtPayload()) && isset($payload->jti) &&
-                        !hash_equals($this->makeJwtHash($user), $payload->jti)
-                    )
+                    $this->authenticatedJwt !== null && empty($this->config['jwt_token_table'])
+                    && !hash_equals($this->makeJwtHash($user), $this->authenticatedJwt->jti)
                 ) {
-                    $this->user = null; // Set user to null to indicate invalid JWT hash
-                    $this->logout(); // Logout if JWT hash does not match
-                    return null; // Return null if JWT validation fails
+                    $this->user = null;
+                    $this->logout();
+                    return null;
                 }
 
                 $this->user = $user; // Set the user property if a valid user is found
@@ -327,6 +329,7 @@ class Auth implements AuthContract, ArrayAccess
             return; // If a driver is set, use it to handle login
         }
 
+        $this->authenticatedJwt = null;
         $this->user = $user;
         $this->id = $user->id;
 
@@ -371,7 +374,6 @@ class Auth implements AuthContract, ArrayAccess
      * @param Model $user The user model for whom the JWT token is to be generated.
      * @param array $payload Optional associative array of additional payload data to include in the token.
      * @return string The generated JWT token as a string.
-     * @throws \InvalidArgumentException If the payload does not contain an 'id' key.
      */
     public function getJwtToken(Model $user, array $payload = []): string
     {
@@ -379,9 +381,9 @@ class Auth implements AuthContract, ArrayAccess
 
         $payload = [
             'sub' => $user->id,
-            'jti' => $this->makeJwtHash($user), // Generate a unique hash for the JWT token
+            'jti' => $this->makeJwtHash($user), // Stateless credential fingerprint
             'prv' => sha1($this->model),
-            'iss' => request()->getUrl(),
+            'iss' => request()->getRootUrl(),
             'iat' => time(),
             'exp' => strtotime("+$expire"),
             ...$payload
@@ -407,19 +409,27 @@ class Auth implements AuthContract, ArrayAccess
             throw new \RuntimeException('No authenticated user found to create JWT token.');
         }
 
-        if (!empty($this->config['jwt_token_table'])) {
-            $expire = $this->config['jwt_expire'] ?? '3 months';
-            $payload['jti'] ??= $this->makeJwtHash($user);
-
-            query($this->config['jwt_token_table'])->insert([
-                'user_id' => $user->id,
-                'token_hash' => $payload['jti'],
-                'expire_at' => now()->modify("+$expire"),
-                'created_at' => now(),
-            ]);
+        if (empty($this->config['jwt_token_table'])) {
+            return $this->getJwtToken($user, $payload);
         }
 
-        return $this->getJwtToken($user, $payload);
+        $payload['jti'] ??= bin2hex(random_bytes(32));
+        $payload['exp'] ??= strtotime('+' . ($this->config['jwt_expire'] ?? '3 months'));
+        if (
+            !is_string($payload['jti']) || $payload['jti'] === ''
+            || !is_int($payload['exp']) || $payload['exp'] <= time()
+        ) {
+            throw new \InvalidArgumentException('JWT requires a non-empty string jti and a future integer exp.');
+        }
+        // Encode before storing so an invalid payload cannot leave an unusable token row.
+        $token = $this->getJwtToken($user, $payload);
+        query($this->config['jwt_token_table'])->insert([
+            'user_id' => $user->id,
+            'token_hash' => $payload['jti'],
+            'expire_at' => carbon($payload['exp']),
+            'created_at' => now(),
+        ]);
+        return $token;
     }
 
     /**
@@ -508,10 +518,13 @@ class Auth implements AuthContract, ArrayAccess
         // Erase the cache for the logged in user.
         $this->clearCache($id);
 
-        // Revoke the JWT token if JWT authentication is enabled and a token table is configured.
-        if (in_array('jwt', $this->config['channels']) && !empty($this->config['jwt_token_table'])) {
-            !empty($token = $this->token()) && $this->revokeToken($token);
+        // Do not call getUser()/revokeToken() here: a missing user may be logging out.
+        if ($id > 0 && $this->authenticatedJwt !== null && !empty($this->config['jwt_token_table'])) {
+            query($this->config['jwt_token_table'])
+                ->where(['user_id' => $id, 'token_hash' => $this->authenticatedJwt->jti])
+                ->delete();
         }
+        $this->authenticatedJwt = null;
 
         // If session channel is not enabled, skip clearing session and user properties
         if (!in_array('session', $this->config['channels'])) {
@@ -739,10 +752,8 @@ class Auth implements AuthContract, ArrayAccess
     /**
      * Checks if the user is authenticated via a JWT token.
      *
-     * This method checks for a JWT token in the Authorization header of the request.
-     * If a valid token is found, it decrypts the token and verifies that it contains
-     * a valid user ID and expiration time. If the token is valid, the user ID will
-     * be set in the session.
+     * Verifies the bearer token and, when configured, its registered token row.
+     * Returns the selected identity without writing a browser session.
      *
      * @return ?int The user ID if authenticated via JWT, or null if not authenticated.
      */
@@ -770,6 +781,7 @@ class Auth implements AuthContract, ArrayAccess
                 }
             }
 
+            $this->authenticatedJwt = $payload;
             return $id;
         }
 
@@ -779,7 +791,7 @@ class Auth implements AuthContract, ArrayAccess
     /**
      * Retrieves the JWT payload, if it exists.
      *
-     * This method returns the JWT payload that was stored temporarily during the authentication process.
+     * Decodes and validates the bearer header without loading its user or token row.
      *
      * @return ?object The JWT payload if it exists, or null if not found.
      */
@@ -806,7 +818,7 @@ class Auth implements AuthContract, ArrayAccess
     /**
      * Validates the JWT payload to ensure it contains the necessary claims and is not expired.
      *
-     * This method checks that the JWT payload contains the required claims (sub, iat, exp, iss, prv)
+     * This method checks that the JWT payload contains the required claims (sub, iat, exp, iss, prv, jti)
      * and that the token is not expired. It also verifies that the 'prv' claim matches a hash of the user model.
      *
      * @param mixed $payload The decoded JWT payload to validate.
@@ -815,23 +827,37 @@ class Auth implements AuthContract, ArrayAccess
     protected function validateJwt(mixed $payload): bool
     {
         if (
-            isset($payload, $payload->sub, $payload->iat, $payload->exp, $payload->iss, $payload->prv) &&
-            carbon($payload->iat)->isPast() && carbon($payload->exp)->isFuture() &&
-            intval($payload->sub) > 0 && $payload->prv === sha1($this->model) &&
-            url($payload->iss)->matches(request()->getRootUrl())
+            !is_object($payload)
+            || !isset($payload->sub, $payload->iat, $payload->exp, $payload->iss, $payload->prv, $payload->jti)
+            || (!is_int($payload->sub) && !is_string($payload->sub))
+            || !preg_match('/^[1-9][0-9]*$/', (string) $payload->sub)
+            || !is_int($payload->iat) || !is_int($payload->exp)
+            || $payload->iat > time() || $payload->exp <= time()
+            || !is_string($payload->jti) || $payload->jti === ''
+            || !is_string($payload->iss) || $payload->prv !== sha1($this->model)
         ) {
-            return true;
+            return false;
         }
 
-        return false;
+        // Issuers are origins, not route patterns. Accept older tokens containing a path.
+        $issuer = parse_url($payload->iss);
+        $origin = parse_url(request()->getRootUrl());
+        if (
+            !is_array($issuer) || !isset($issuer['scheme'], $issuer['host'])
+            || isset($issuer['user']) || isset($issuer['pass'])
+        )
+            return false;
+        $port = static fn(array $url) => $url['port'] ?? (strtolower($url['scheme']) === 'https' ? 443 : 80);
+        return strtolower($issuer['scheme']) === strtolower($origin['scheme'])
+            && strtolower($issuer['host']) === strtolower($origin['host'])
+            && $port($issuer) === $port($origin);
     }
 
     /**
-     * Generates a unique hash for the JWT token based on the user's ID, email, and password.
+     * Generates a deterministic credential fingerprint for stateless JWTs.
      *
-     * This method creates a hash using the user's ID, email, and password to provide an additional
-     * layer of security for the JWT token. The hash is included in the JWT payload and can be used
-     * to validate that the token has not been tampered with.
+     * Changing the user's ID, email, or stored password invalidates this fingerprint.
+     * Registered tokens use independent random identifiers instead.
      *
      * @param Model $user The user model for which to generate the JWT hash.
      * @return string The generated JWT hash as a string.
@@ -894,6 +920,7 @@ class Auth implements AuthContract, ArrayAccess
     public function checkId(): void
     {
         $this->id = 0; // Default to 0 (not logged in)
+        $this->authenticatedJwt = null;
 
         if ($this->hasDriver()) {
             $this->id = $this->getDriver()->checkId();

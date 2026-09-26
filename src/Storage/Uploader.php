@@ -318,7 +318,7 @@ class Uploader implements UploaderUtilContract
         }
 
         if (!is_string($tmpName) || !is_uploaded_file($tmpName)) {
-            throw new UploaderUtilException(__('The source is not a valid HTTP upload. Use Disk::putFile() for local files.'));
+            throw new UploaderUtilException(__('The source is not a valid HTTP upload. Use Storage::putFile() for local files.'));
         }
 
         $actualSize = filesize($tmpName);
