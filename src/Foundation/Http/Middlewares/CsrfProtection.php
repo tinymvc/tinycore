@@ -105,7 +105,7 @@ abstract class CsrfProtection implements MiddlewareInterface
 
         // Decrypt the token using the Hash facade
         try {
-            $decryptedToken = get(Hash::class)->decrypt($token);
+            $decryptedToken = Hash::decrypt($token);
         } catch (\Throwable $e) {
             return null;
         }
