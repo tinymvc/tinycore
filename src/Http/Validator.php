@@ -166,6 +166,7 @@ class Validator implements ValidatorContract
                     'min', 'minimum' => isset($ruleParams[0]) ? $this->compareMin($value, $ruleParams[0], $is_numeric_field) : true,
                     'max', 'maximum' => isset($ruleParams[0]) ? $this->compareMax($value, $ruleParams[0], $is_numeric_field) : true,
                     'length', 'size' => isset($ruleParams[0]) ? $this->compareSize($value, $ruleParams[0], $is_numeric_field) : true,
+                    'gt', 'gte', 'lt', 'lte', 'ls' => $this->compareField($value, $ruleParams, $inputData, $ruleName),
                     'equal', 'same', 'same_as' => isset($ruleParams[0]) ? $this->validateEqual($value, $inputData[$ruleParams[0]] ?? null) : true,
                     'confirmed' => $value == ($inputData["{$field}_confirmation"] ?? null),
                     'in' => $this->validateIn($value, $ruleParams),
@@ -176,9 +177,8 @@ class Validator implements ValidatorContract
                     'not_exists' => $this->validateNotExists($value, $ruleParams, $this->fieldColumn((string) $field)),
                     'boolean', 'bool' => in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false', 'TRUE', 'FALSE', 'on', 'off', 'yes', 'no', 'YES', 'NO'], true),
                     'float', 'decimal' => is_numeric($value),
-                    'alpha' => is_string($value) && preg_match('/^[\pL]+$/u', $value) === 1,
-                    'alpha_num', 'alphanumeric' => is_string($value) && preg_match('/^[\pL\pN]+$/u', $value) === 1,
-                    'alpha_dash' => is_string($value) && preg_match('/^[a-zA-Z0-9_-]+$/', $value) === 1,
+                    'alpha', 'alpha_num', 'alphanumeric', 'alpha_dash' => $this->validateAlphabetic($value, $ruleName, $ruleParams),
+                    'ascii' => is_string($value) && Str::isAscii($value),
                     'digits' => isset($ruleParams[0]) ? is_scalar($value) && ctype_digit((string) $value) && strlen((string) $value) == (int) $ruleParams[0] : true,
                     'digits_between' => isset($ruleParams[0], $ruleParams[1]) ? is_scalar($value) && ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] && strlen((string) $value) <= (int) $ruleParams[1] : true,
                     'min_digits' => isset($ruleParams[0]) ? is_scalar($value) && ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] : true,
@@ -323,7 +323,7 @@ class Validator implements ValidatorContract
                 foreach ($fieldRules as $rule) {
                     $name = $rule['name'];
                     $parameters = $rule['parameters'];
-                    if (isset($parameters[0]) && $keys !== [] && in_array($name, ['required_if', 'required_unless', 'same', 'equal', 'same_as'], true)) {
+                    if (isset($parameters[0]) && is_scalar($parameters[0]) && $keys !== [] && in_array($name, ['required_if', 'required_unless', 'same', 'equal', 'same_as', 'gt', 'gte', 'lt', 'lte', 'ls'], true)) {
                         $segments = $this->fieldSegments(trim($parameters[0]));
 
                         $index = 0;
@@ -534,6 +534,30 @@ class Validator implements ValidatorContract
     }
 
     /**
+     * Validate Unicode letters, marks, and optional numbers/dashes.
+     * The ascii option restricts input through Str's portable-ascii integration.
+     */
+    private function validateAlphabetic(mixed $value, string $rule, array $params): bool
+    {
+        if (!is_string($value) && ($rule === 'alpha' || !is_numeric($value))) {
+            return false;
+        }
+
+        $value = (string) $value;
+        if (in_array('ascii', $params, true) && !Str::isAscii($value)) {
+            return false;
+        }
+
+        $characters = match ($rule) {
+            'alpha' => '\\pL\\pM',
+            'alpha_num', 'alphanumeric' => '\\pL\\pM\\pN',
+            'alpha_dash' => '\\pL\\pM\\pN_-',
+        };
+
+        return preg_match("/\\A[$characters]+\\z/u", $value) === 1;
+    }
+
+    /**
      * Validate 'in' rule with better type handling
      */
     private function validateIn($value, array $allowedValues): bool
@@ -659,6 +683,66 @@ class Validator implements ValidatorContract
             // Log error if needed and fail validation
             return false;
         }
+    }
+
+    /**
+     * Compare compatible field values: numbers, text lengths, array counts, or file sizes.
+     * Numeric parameters also act as literal thresholds when no such field exists.
+     */
+    private function compareField(mixed $value, array $params, array $inputData, string $rule): bool
+    {
+        $field = $params[0] ?? null;
+        if (count($params) !== 1 || (!is_string($field) && !is_int($field) && !is_float($field)) || $field === '') {
+            return false;
+        }
+
+        if (array_key_exists((string) $field, $inputData)) {
+            $other = $inputData[(string) $field];
+        } elseif (is_numeric($field) && is_numeric($value)) {
+            $other = $field;
+        } else {
+            return false;
+        }
+
+        if (is_numeric($value) || is_numeric($other)) {
+            if (!is_numeric($value) || !is_numeric($other)) {
+                return false;
+            }
+            // Keep integer values and numeric strings intact instead of casting to float.
+            $left = $value;
+            $right = $other;
+        } elseif (is_string($value) && is_string($other)) {
+            $left = mb_strlen($value, 'UTF-8');
+            $right = mb_strlen($other, 'UTF-8');
+        } elseif (is_array($value) && is_array($other)) {
+            $isFile = array_key_exists('tmp_name', $value);
+            $otherIsFile = array_key_exists('tmp_name', $other);
+            if ($isFile || $otherIsFile) {
+                if (!$isFile || !$otherIsFile || !$this->isUploadedFile($value) || !$this->isUploadedFile($other)) {
+                    return false;
+                }
+                if (!is_file($value['tmp_name']) || !is_file($other['tmp_name'])) {
+                    return false;
+                }
+                $left = filesize($value['tmp_name']);
+                $right = filesize($other['tmp_name']);
+                if ($left === false || $right === false) {
+                    return false;
+                }
+            } else {
+                $left = count($value);
+                $right = count($other);
+            }
+        } else {
+            return false;
+        }
+
+        return match ($rule) {
+            'gt' => $left > $right,
+            'gte' => $left >= $right,
+            'lt', 'ls' => $left < $right,
+            'lte' => $left <= $right,
+        };
     }
 
     /** 
@@ -1283,6 +1367,10 @@ class Validator implements ValidatorContract
             'min', 'minimum' => __($this->getErrorMessagePlaceholder('min', $field, 'The %s field must be at least %s characters long.'), [$prettyField, $params[0] ?? 0]),
             'max', 'maximum' => __($this->getErrorMessagePlaceholder('max', $field, 'The %s field must not exceed %s characters.'), [$prettyField, $params[0] ?? 0]),
             'length', 'size' => __($this->getErrorMessagePlaceholder('length', $field, 'The %s field must be %s characters.'), [$prettyField, $params[0] ?? 0]),
+            'gt' => __($this->getErrorMessagePlaceholder('gt', $field, 'The %s field must be greater than %s.'), [$prettyField, is_scalar($params[0] ?? null) ? (string) $params[0] : 'the comparison field']),
+            'gte' => __($this->getErrorMessagePlaceholder('gte', $field, 'The %s field must be greater than or equal to %s.'), [$prettyField, is_scalar($params[0] ?? null) ? (string) $params[0] : 'the comparison field']),
+            'lt', 'ls' => __($this->getErrorMessagePlaceholder($rule, $field, 'The %s field must be less than %s.'), [$prettyField, is_scalar($params[0] ?? null) ? (string) $params[0] : 'the comparison field']),
+            'lte' => __($this->getErrorMessagePlaceholder('lte', $field, 'The %s field must be less than or equal to %s.'), [$prettyField, is_scalar($params[0] ?? null) ? (string) $params[0] : 'the comparison field']),
             'equal', 'same', 'same_as' => __($this->getErrorMessagePlaceholder('equal', $field, 'The %s field must be equal to %s field.'), [$prettyField, __(Str::headline($params[0] ?? ''))]),
             'confirmed' => __($this->getErrorMessagePlaceholder('confirmed', $field, 'The %s field must be confirmed.'), $prettyField),
             'in' => __($this->getErrorMessagePlaceholder('in', $field, 'The %s field must be one of the following values: %s.'), [$prettyField, implode(', ', $params)]),
@@ -1293,9 +1381,10 @@ class Validator implements ValidatorContract
             'not_exists' => __($this->getErrorMessagePlaceholder('not_exists', $field, 'The %s field must not exist in the %s table.'), [$prettyField, $params[0] ?? '']),
             'boolean', 'bool' => __($this->getErrorMessagePlaceholder('boolean', $field, 'The %s field must be true or false.'), $prettyField),
             'float', 'decimal' => __($this->getErrorMessagePlaceholder('float', $field, 'The %s field must be a decimal number.'), $prettyField),
-            'alpha' => __($this->getErrorMessagePlaceholder('alpha', $field, 'The %s field must contain only letters.'), $prettyField),
-            'alpha_num', 'alphanumeric' => __($this->getErrorMessagePlaceholder('alpha_num', $field, 'The %s field must contain only letters and numbers.'), $prettyField),
-            'alpha_dash' => __($this->getErrorMessagePlaceholder('alpha_dash', $field, 'The %s field must contain only letters, numbers, dashes, and underscores.'), $prettyField),
+            'alpha' => __($this->getErrorMessagePlaceholder('alpha', $field, in_array('ascii', $params, true) ? 'The %s field must contain only ASCII letters.' : 'The %s field must contain only letters.'), $prettyField),
+            'alpha_num', 'alphanumeric' => __($this->getErrorMessagePlaceholder('alpha_num', $field, in_array('ascii', $params, true) ? 'The %s field must contain only ASCII letters and numbers.' : 'The %s field must contain only letters and numbers.'), $prettyField),
+            'alpha_dash' => __($this->getErrorMessagePlaceholder('alpha_dash', $field, in_array('ascii', $params, true) ? 'The %s field must contain only ASCII letters, numbers, dashes, and underscores.' : 'The %s field must contain only letters, numbers, dashes, and underscores.'), $prettyField),
+            'ascii' => __($this->getErrorMessagePlaceholder('ascii', $field, 'The %s field must contain only ASCII characters.'), $prettyField),
             'digits' => __($this->getErrorMessagePlaceholder('digits', $field, 'The %s field must be %s digits.'), [$prettyField, $params[0] ?? 0]),
             'digits_between' => __($this->getErrorMessagePlaceholder('digits_between', $field, 'The %s field must be between %s and %s digits.'), [$prettyField, $params[0] ?? 0, $params[1] ?? 0]),
             'min_digits' => __($this->getErrorMessagePlaceholder('min_digits', $field, 'The %s field must be at least %s digits.'), [$prettyField, $params[0] ?? 0]),
