@@ -1250,7 +1250,7 @@ class Validator implements ValidatorContract
      *
      * @return ($key is null ? \Spark\Http\Input : mixed)
      */
-    public function validated(?string $key = null, $default = null): Input
+    public function validated(?string $key = null, $default = null): mixed
     {
         if (!isset($this->cleanData)) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');

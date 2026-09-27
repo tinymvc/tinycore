@@ -68,5 +68,5 @@ interface ValidatorContract
      *
      * @return InputContract An instance of InputContract containing the validated data.
      */
-    public function validated(): \Spark\Http\Input;
+    public function validated(): mixed;
 }
