@@ -94,6 +94,7 @@ use Spark\Database\QueryBuilder;
  * @method mixed last()
  * @method false|Model find($value)
  * @method Model findOrFail($value)
+ * @method QueryBuilder whereKey(string|int|array $value)
  * @method int destroy($value)
  * @method array all()
  * @method \Spark\Support\Collection get()

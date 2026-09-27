@@ -164,10 +164,8 @@ class QueryBuilder implements QueryBuilderContract
     {
         $this->query['lock'] = $value;
 
-        if ($value !== null && empty($this->query['lock_model_primary'])) {
-            if (($model = $this->getModelBeingUsed()) !== null && $model->hasPrimaryValue()) {
-                $this->applyModelPrimaryCondition(forRead: true);
-            }
+        if ($value !== null && empty($this->query['model_primary'])) {
+            $this->applyModelPrimaryCondition();
         }
 
         return $this;
@@ -609,7 +607,7 @@ class QueryBuilder implements QueryBuilderContract
         $this->bindings = [];
         $this->parameters = [];
 
-        unset($this->query['lock'], $this->query['lock_model_primary']);
+        unset($this->query['lock'], $this->query['model_primary'], $this->query['primary_key_columns']);
     }
 
     /**
@@ -740,9 +738,18 @@ REGEX;
     {
         $whereSql = $this->getWhereSql();
 
+        if (!empty($this->query['primary_key_columns'])) {
+            $reference = $forWrite ? $this->getTableName() : $this->getTableReference();
+            $columns = [];
+            foreach ($this->query['primary_key_columns'] as $marker => $key) {
+                $columns[$marker] = "$reference." . $this->wrapper->wrapColumn($key);
+            }
+            $whereSql = strtr($whereSql, $columns);
+        }
+
         // Keep the instance key outside user OR conditions and resolve aliases at compile time.
-        if (isset($this->query['lock_model_primary'])) {
-            [$key, $placeholder] = $this->query['lock_model_primary'];
+        if (isset($this->query['model_primary'])) {
+            [$key, $placeholder] = $this->query['model_primary'];
 
             $column = ($forWrite ? $this->getTableName() : $this->getTableReference()) . '.' . $this->wrapper->wrapColumn($key);
             $condition = "$column = :$placeholder";
@@ -786,7 +793,7 @@ REGEX;
      */
     private function hasAnyCondition(): bool
     {
-        if ($this->hasWhere() || isset($this->query['lock_model_primary'])) {
+        if ($this->hasWhere() || isset($this->query['model_primary'])) {
             return true;
         }
 

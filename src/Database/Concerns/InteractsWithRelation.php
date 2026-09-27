@@ -178,11 +178,7 @@ trait InteractsWithRelation
      */
     public function find(string|int $value): false|Model
     {
-        $model = $this->getRelatedModel();
-
-        return $this
-            ->where([$model->getPrimaryKey() => $value])
-            ->first();
+        return $this->whereKey($value)->first();
     }
 
     /**
@@ -194,11 +190,7 @@ trait InteractsWithRelation
      */
     public function findOrFail(string|int $value): Model
     {
-        $model = $this->getRelatedModel();
-
-        return $this
-            ->where([$model->getPrimaryKey() => $value])
-            ->firstOrFail();
+        return $this->whereKey($value)->firstOrFail();
     }
 
     /**
@@ -211,7 +203,34 @@ trait InteractsWithRelation
     {
         $model = $this->getRelatedModel();
 
-        return $this->where([$model->getPrimaryKey() => $value]);
+        return $this->wherePrimaryKey($model->getPrimaryKey(), $value);
+    }
+
+    /**
+     * Bind a primary-key condition, deferring its table qualifier until compilation.
+     * Reads may use aliases/joins; writes target the physical table.
+     */
+    private function wherePrimaryKey(string $key, string|int|array $value): QueryBuilder
+    {
+        if (is_array($value) && $value === []) {
+            return $this->whereRaw('0 = 1');
+        }
+
+        $placeholder = $this->getWhereSqlColumn('spark_primary_key');
+
+        // NUL-delimited internal markers cannot be mistaken for SQL identifiers or parameters.
+        $marker = "\0spark_primary_key_" . \count($this->query['primary_key_columns'] ?? []) . "\0";
+        $this->query['primary_key_columns'][$marker] = $key;
+
+        if (is_array($value)) {
+            $value = array_values($value);
+            $parameters = implode(', ', array_map(fn($index) => ":{$placeholder}_$index", array_keys($value)));
+            $sql = "$marker IN ($parameters)";
+        } else {
+            $sql = "$marker = :$placeholder";
+        }
+
+        return $this->whereRaw($sql, [$placeholder => $value]);
     }
 
     /**
@@ -223,7 +242,7 @@ trait InteractsWithRelation
     public function destroy(string|int|array $value): int
     {
         $model = $this->getRelatedModel();
-        $deleted = $this->delete([$model->getPrimaryKey() => $value]);
+        $deleted = $this->whereKey($value)->delete();
 
         if ($deleted) {
             $model->trackDeleted();
@@ -675,8 +694,8 @@ trait InteractsWithRelation
      */
     public function useModel(Model $model): QueryBuilder
     {
-        if (isset($this->query['lock_model_primary'])) {
-            unset($this->bindings[$this->query['lock_model_primary'][1]], $this->query['lock_model_primary']);
+        if (isset($this->query['model_primary'])) {
+            unset($this->bindings[$this->query['model_primary'][1]], $this->query['model_primary']);
         }
 
         $this->query['model'] = $model;
@@ -748,26 +767,26 @@ trait InteractsWithRelation
     }
 
     /**
-     * Apply conditions based on the related model.
+     * Scope an instance write or locked read to its original primary key.
+     * Keep this outside user OR groups so they cannot select another record.
      *
-     * @param bool $forRead Scope a locked model read independently of user conditions.
      * @return void
      */
-    private function applyModelPrimaryCondition(bool $forRead = false): void
+    private function applyModelPrimaryCondition(): void
     {
         $model = $this->getModelBeingUsed();
-        if (!$model) {
+        if (!$model || isset($this->query['model_primary'])) {
             return;
         }
 
-        if ($model->hasPrimaryValue()) {
-            if ($forRead) {
-                $placeholder = $this->getWhereSqlColumn('spark_lock_primary');
-                $this->bindings[$placeholder] = $model->primaryValue();
-                $this->query['lock_model_primary'] = [$model->getPrimaryKey(), $placeholder];
-            } else {
-                $this->where([$model->getPrimaryKey() => $model->primaryValue()]);
-            }
+        $key = $model->getPrimaryKey();
+        $value = $model->getOriginal($key);
+
+        if ($value !== null && $value !== '') {
+            $placeholder = $this->getWhereSqlColumn('spark_model_primary');
+
+            $this->bindings[$placeholder] = $value;
+            $this->query['model_primary'] = [$key, $placeholder];
         }
     }
 
