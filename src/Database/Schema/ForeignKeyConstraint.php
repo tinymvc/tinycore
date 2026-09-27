@@ -53,22 +53,16 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
     public string $onUpdate;
 
     /**
-     * The explicit constraint name.
-     *
-     * @var string|null
-     */
-    public ?string $name = null;
-
-    /**
      * Create a new foreign key constraint.
      *
      * @param  string|array  $columns
+     * @param string|null $name
+     * @param Column|null $column
      * @return void
      */
-    public function __construct(string|array $columns, ?string $name = null)
+    public function __construct(string|array $columns, public ?string $name = null, private ?Column $column = null)
     {
         $this->columns = (array) $columns;
-        $this->name = $name;
     }
 
     /**
@@ -244,5 +238,65 @@ class ForeignKeyConstraint implements ForeignKeyConstraintContract
     public function restrictOnUpdate(): self
     {
         return $this->onUpdate('restrict');
+    }
+
+    /**
+     * Set the column to be nullable.
+     *
+     * @param bool $nullable
+     * @return $this
+     */
+    public function nullable(bool $nullable = true): self
+    {
+        if ($this->column) {
+            $this->column->nullable($nullable);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Set the column to be required.
+     *
+     * @param bool $required
+     * @return $this
+     */
+    public function required(bool $required = true): self
+    {
+        if ($this->column) {
+            $this->column->required($required);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Set the column to have a default value.
+     *
+     * @param mixed $value
+     * @return $this
+     */
+    public function default(mixed $value): self
+    {
+        if ($this->column) {
+            $this->column->default($value);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Set the column to be after another column.
+     *
+     * @param string $column
+     * @return $this
+     */
+    public function after(string $column): self
+    {
+        if ($this->column) {
+            $this->column->after($column);
+        }
+
+        return $this;
     }
 }

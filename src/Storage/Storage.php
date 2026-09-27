@@ -179,6 +179,26 @@ class Storage implements Contracts\StorageContract
         return $this->storage->temporaryUrl(StoragePath::normalize($path), $seconds);
     }
 
+    public function temporaryUploadUrl(string $key, int $expires = 300, ?string $contentType = null, ?string $acl = null): string
+    {
+        if (!$this->storage instanceof S3Storage) {
+            throw new RuntimeException('Temporary URLs are supported only by S3 disks.');
+        }
+
+        return $this->storage->temporaryUploadUrl(StoragePath::normalize($key), $expires, $contentType, $acl);
+    }
+
+    /** Download an S3 object to a local path; the destination directory must exist. */
+    public function downloadFile(string $key, string $localPath): bool
+    {
+        if (!$this->storage instanceof S3Storage) {
+            throw new RuntimeException('Download to local path is supported only by S3 disks.');
+        }
+
+        \Spark\Utils\FileManager::ensureDirectoryExists(dirname($localPath));
+        return $this->storage->downloadFile(StoragePath::normalize($key), $localPath);
+    }
+
     public function size(string $path): int
     {
         return $this->storage->metadata(StoragePath::normalize($path))['size'];
@@ -313,5 +333,11 @@ class Storage implements Contracts\StorageContract
             driver: $this->driver,
             relativeTo: $staging
         );
+    }
+
+    /** Return the underlying storage implementation for advanced operations. */
+    public function storage(): LocalStorage|S3Storage
+    {
+        return $this->storage;
     }
 }

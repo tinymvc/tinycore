@@ -499,7 +499,7 @@ class Response implements ResponseContract
 
         // return UTC string for Carbon instances
         if ($data instanceof \Spark\Carbon) {
-            return $data->toISOUtcString();
+            return $data->toIsoUtcString();
         }
 
         if ($data instanceof \DateTimeInterface) {

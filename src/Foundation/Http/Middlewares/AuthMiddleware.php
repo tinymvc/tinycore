@@ -1,5 +1,7 @@
 <?php
 
+namespace Spark\Foundation\Http\Middlewares;
+
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Http\Auth;
 use Spark\Http\Request;

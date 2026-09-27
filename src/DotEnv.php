@@ -35,6 +35,25 @@ use function ltrim;
 class DotEnv
 {
     /**
+     * @param string $envPath Path to the .env file
+     * @param string $compilePath Path to the compiled cache file
+     */
+    public function __construct(
+        protected string $envPath,
+        protected string $compilePath,
+    ) {
+    }
+
+    /**
+     * Static helper to load environment variables from a .env file with caching.
+     */
+    public static function loadFrom(string $envPath, string $compilePath): array
+    {
+        $env = new self($envPath, $compilePath);
+        return $env->load();
+    }
+
+    /**
      * Bootstrap environment variables for a framework root directory.
      *
      * @param string $basePath
@@ -273,25 +292,6 @@ class DotEnv
             'path' => $env,
             'mtime' => $modifiedAt,
         ];
-    }
-
-    /**
-     * @param string $envPath Path to the .env file
-     * @param string $compilePath Path to the compiled cache file
-     */
-    public function __construct(
-        protected string $envPath,
-        protected string $compilePath,
-    ) {
-    }
-
-    /**
-     * Static helper to load environment variables from a .env file with caching.
-     */
-    public static function loadFrom(string $envPath, string $compilePath): array
-    {
-        $env = new self($envPath, $compilePath);
-        return $env->load();
     }
 
     /**

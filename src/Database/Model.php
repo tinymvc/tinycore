@@ -733,7 +733,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         // Convert special objects to their string representations for JSON serialization
         foreach ($attributes as &$attribute) {
             if ($attribute instanceof \Spark\Carbon) {
-                $attribute = $attribute->toISOUtcString();
+                $attribute = $attribute->toIsoUtcString();
             } elseif ($attribute instanceof \DateTimeInterface) {
                 $attribute = $attribute->format(\DateTimeInterface::ATOM);
             } elseif ($attribute instanceof \Spark\Url) {
@@ -1586,5 +1586,18 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function getAttribute(string $name, $default = null): mixed
     {
         return $this->attributes[$name] ?? value($default);
+    }
+
+    /**
+     * Check if this model is the same as another model.
+     *
+     * @param Model $model The model to compare with.
+     * @return bool True if the models are the same, false otherwise.
+     */
+    public function is(Model $model): bool
+    {
+        return $this->getTable() === $model->getTable() &&
+            $this->getPrimaryKey() === $model->getPrimaryKey() &&
+            $this->primaryValue() === $model->primaryValue();
     }
 }

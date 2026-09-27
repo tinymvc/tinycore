@@ -225,6 +225,8 @@ abstract class ApplicationTestCase extends TestCase
     /** Data is supplied as parsed input, including for JSON requests. */
     protected function request(string $method, string $uri, array $data = [], array $headers = [], bool $json = false): TestResponse
     {
+        $this->app->forgetInstance(Request::class);
+
         $saved = [$_SERVER, $_GET, $_POST, $_FILES, $_REQUEST];
 
         try {

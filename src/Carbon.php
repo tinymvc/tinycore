@@ -330,7 +330,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      * 
      * @return string The formatted date and time string in ISO 8601 format
      */
-    public function toISOString(): string
+    public function toIsoString(): string
     {
         return $this->format(DateTimeInterface::ATOM);
     }
@@ -340,7 +340,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      * 
      * @return string The formatted date and time string in ISO 8601 format with microseconds and UTC timezone
      */
-    public function toISOUtcString(): string
+    public function toIsoUtcString(): string
     {
         return $this->utc()->format(self::ISO8601_UTC);
     }
@@ -1081,6 +1081,28 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     }
 
     /**
+     * Shift the timezone of the DateTime instance without changing the local time
+     * 
+     * This method changes the timezone of the DateTime instance while keeping the same
+     * wall-clock (local) time — the underlying instant (UTC timestamp) changes instead.
+     * 
+     * @param string|DateTimeZone $timezone The timezone to shift to
+     * @return self A new DateTime instance with the shifted timezone
+     */
+    public function shiftTimezone(string|DateTimeZone $timezone): self
+    {
+        $timezone = self::resolveTimezone($timezone);
+
+        // Capture current wall-clock values before changing timezone.
+        $format = $this->dateTime->format('Y-m-d H:i:s.u');
+
+        $new = clone $this;
+        $new->dateTime = new DateTime($format, $timezone);
+
+        return $new;
+    }
+
+    /**
      * Convert the DateTime instance to UTC timezone
      * 
      * This method returns a new DateTime instance with the timezone set to UTC.
@@ -1318,13 +1340,19 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      * 
      * This method applies a modification to the DateTime instance based on the provided string modifier.
      * 
-     * @param string $modifier The modification string (e.g., '+1 day', '-2 hours')
+     * @param Closure|string $modifier The modification string (e.g., '+1 day', '-2 hours')
      * @return self A new DateTime instance with the modification applied
      */
-    public function modify(string $modifier): self
+    public function modify(\Closure|string $modifier): self
     {
         $new = clone $this;
-        $new->dateTime->modify($modifier);
+
+        if ($modifier instanceof \Closure) {
+            $modifier($new->dateTime);
+        } else {
+            $new->dateTime->modify($modifier);
+        }
+
         return $new;
     }
 }

@@ -280,12 +280,11 @@ class Blueprint implements BlueprintContract
      * Add a 'foreignId' column to the blueprint.
      *
      * @param string $name The name of the column.
-     * @param bool $nullable Whether the column is nullable.
      * @return ForeignKeyConstraint
      */
-    public function foreignId(string $name, bool $nullable = false): ForeignKeyConstraint
+    public function foreignId(string $name): ForeignKeyConstraint
     {
-        $this->unsignedBigInteger($name)->nullable($nullable);
+        $this->unsignedBigInteger($name);
 
         return $this->foreign($name);
     }
@@ -299,7 +298,7 @@ class Blueprint implements BlueprintContract
      */
     public function foreign(array|string $columns, ?string $name = null): ForeignKeyConstraint
     {
-        $constraint = new ForeignKeyConstraint($columns, $name);
+        $constraint = new ForeignKeyConstraint($columns, $name, end($this->columns));
 
         $this->foreignKeys[] = $constraint;
         return $constraint;
@@ -549,7 +548,7 @@ class Blueprint implements BlueprintContract
      * @param string|array $columns The column(s) to set as primary key.
      * @return void
      */
-    public function primary($columns, ?string $name = null): void
+    public function primary(array|string $columns, ?string $name = null): void
     {
         $this->primaryKeys[] = ['columns' => $this->normalizeColumns($columns), 'name' => $name];
     }
@@ -858,7 +857,7 @@ class Blueprint implements BlueprintContract
      */
     private function addColumn(string $type, string $name, array $parameters = []): Column
     {
-        $column = new Column($name, $type, $parameters);
+        $column = new Column($name, $type, $parameters, $this);
         $this->columns[] = $column;
 
         return $column;

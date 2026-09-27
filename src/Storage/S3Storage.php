@@ -204,6 +204,76 @@ class S3Storage
         return is_array($key) ? $results : $results[$key];
     }
 
+    /**
+     * Delete every object under a key prefix. Paginates internally; returns the
+     * total number of objects deleted. Empty prefix would delete the whole bucket,
+     * so it is rejected — use deleteFile() for exact keys instead.
+     */
+    public function deleteDirectory(string $prefix): int
+    {
+        if ($prefix === '') {
+            throw new InvalidArgumentException('deleteDirectory requires a non-empty prefix; refusing to clear the whole bucket.');
+        }
+
+        $deleted = 0;
+        $marker = '';
+
+        do {
+            $page = $this->listFiles(1000, $prefix, $marker);
+
+            if ($page['files']) {
+                $this->deleteFile(array_column($page['files'], 'key'));
+                $deleted += count($page['files']);
+            }
+
+            $marker = $page['next_marker'] ?? '';
+        } while ($page['is_truncated']);
+
+        return $deleted;
+    }
+
+    /** Move (rename) an object within the bucket — same-bucket copy, then delete the source. */
+    public function moveFile(string $from, string $to, ?string $acl = null): bool
+    {
+        $this->objectUrl($from);
+        $this->objectUrl($to);
+
+        if ($from === $to) {
+            return $this->exists($from);
+        }
+
+        $this->copyFile($from, $to, $acl);
+        $this->deleteFile($from);
+
+        return true;
+    }
+
+    /**
+     * Stream an object directly to a local file, without buffering the whole
+     * body in memory. Use for large files where getFile() would risk OOM.
+     */
+    public function downloadFile(string $key, string $destinationPath): bool
+    {
+        $this->objectUrl($key);
+
+        $handle = @fopen($destinationPath, 'wb');
+        if ($handle === false) {
+            throw new RuntimeException("Cannot open destination for writing: {$destinationPath}");
+        }
+
+        try {
+            $response = $this->request('GET', $key)
+                ->withOptions([CURLOPT_FILE => $handle])
+                ->execute();
+
+            $this->checkResponse($response, 200, 'Download file');
+
+            return true;
+        } finally {
+            fclose($handle);
+        }
+    }
+
     /** Return one page. Pass next_marker back unchanged; V2 uses opaque continuation tokens. */
     public function listFiles(int $limit = 100, string $prefix = '', string $marker = ''): array
     {
@@ -402,6 +472,63 @@ class S3Storage
         $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $canonical = implode("\n", [
             'GET',
+            parse_url($url, PHP_URL_PATH),
+            $queryString,
+            'host:' . $this->host($url) . "\n",
+            'host',
+            'UNSIGNED-PAYLOAD',
+        ]);
+
+        $signingKey = 'AWS4' . $this->secretKey;
+        foreach ([$date, $this->region, 's3', 'aws4_request'] as $part) {
+            $signingKey = hash_hmac('sha256', $part, $signingKey, true);
+        }
+
+        $signature = hash_hmac('sha256', "AWS4-HMAC-SHA256\n{$dateTime}\n{$scope}\n" . hash('sha256', $canonical), $signingKey);
+
+        return "$url?$queryString&X-Amz-Signature=$signature";
+    }
+
+    /**
+     * Short-lived presigned PUT URL for direct client uploads; sign the origin, never a CDN URL.
+     * The client must PUT the raw file body with no additional headers beyond what's signed here.
+     * 
+     * @param string $key Destination object key.
+     * @param int $expires Seconds until the URL expires (1–604800).
+     * @param string|null $contentType Optional Content-Type the client's PUT request must match.
+     * @param string|null $acl Optional canned ACL ('private' or 'public-read') the PUT must set.
+     * @return string The presigned upload URL.
+     */
+    public function temporaryUploadUrl(string $key, int $expires = 300, ?string $contentType = null, ?string $acl = null): string
+    {
+        if ($expires < 1 || $expires > 604800) {
+            throw new InvalidArgumentException('Upload expiry must be between 1 and 604800 seconds.');
+        }
+
+        if ($acl !== null && !in_array($acl, ['private', 'public-read'], true)) {
+            throw new InvalidArgumentException('This client supports null, private, or public-read ACLs.');
+        }
+
+        $dateTime = gmdate('Ymd\THis\Z');
+        $date = substr($dateTime, 0, 8);
+        $scope = "{$date}/{$this->region}/s3/aws4_request";
+        $query = [
+            'X-Amz-Algorithm' => 'AWS4-HMAC-SHA256',
+            'X-Amz-Credential' => "{$this->accessKey}/{$scope}",
+            'X-Amz-Date' => $dateTime,
+            'X-Amz-Expires' => (string) $expires,
+            'X-Amz-SignedHeaders' => 'host',
+        ];
+
+        if ($this->sessionToken !== null) {
+            $query['X-Amz-Security-Token'] = $this->sessionToken;
+        }
+        ksort($query);
+
+        $url = $this->objectUrl($key);
+        $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        $canonical = implode("\n", [
+            'PUT',
             parse_url($url, PHP_URL_PATH),
             $queryString,
             'host:' . $this->host($url) . "\n",

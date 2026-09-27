@@ -113,7 +113,7 @@ interface BlueprintContract
      *
      * @return ForeignKeyConstraint
      */
-    public function foreignId(string $name, bool $nullable = false): ForeignKeyConstraint;
+    public function foreignId(string $name): ForeignKeyConstraint;
 
     /**
      * Add a 'foreign' column to the blueprint.
@@ -243,11 +243,11 @@ interface BlueprintContract
     /**
      * Add a 'primary' index to the blueprint.
      *
-     * @param array $columns The columns to be indexed.
+     * @param string|array $columns The columns to be indexed.
      *
      * @return void
      */
-    public function primary($columns, ?string $name = null): void;
+    public function primary(string|array $columns, ?string $name = null): void;
 
     /**
      * Add a 'unique' index to the blueprint.

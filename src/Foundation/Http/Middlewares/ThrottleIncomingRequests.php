@@ -63,17 +63,17 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
      */
     private function authorizeCurrentRequest(Request $request, int $duration, int $attempts, string $suffix): bool
     {
-        $ip = (string) $request->ip() ?: '127.0.0.1';
+        $user = ((string) $request->ip() ?: '127.0.0.1') . ':' . ((string) $request->useragent() ?: 'unknown');
         $path = trim($request->getPath(), '/');
 
-        $cache = new Cache('th:requests');
-        $identifier = md5("{$request->getMethod()}|{$path}|{$ip}|{$suffix}");
-        $key = "{$duration}m:{$attempts}:{$identifier}";
+        $storage = Cache::make('th:requests');
+        $identifier = md5($request->getMethod() . "|$path|$user|$suffix");
+        $key = "{$duration}m:$attempts:$identifier";
 
         $now = time();
         $windowStart = $now - ($duration * 60);
 
-        $timestamps = $cache->retrieve($key, eraseExpired: true);
+        $timestamps = $storage->retrieve($key, eraseExpired: true);
         if (!is_array($timestamps)) {
             $timestamps = [];
         }
@@ -91,7 +91,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
 
         $timestamps[] = $now;
 
-        $cache->store($key, $timestamps, sprintf('+%d minutes', $duration));
+        $storage->store($key, $timestamps, sprintf('+%d minutes', $duration));
 
         return true;
     }

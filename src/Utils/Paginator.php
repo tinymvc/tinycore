@@ -55,6 +55,20 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
     }
 
     /**
+     * Creates a new Paginator instance.
+     * 
+     * @param int $total Total number of items.
+     * @param int $limit Number of items per page.
+     * @param string $keyword The URL parameter keyword for the page.
+     * 
+     * @return self
+     */
+    public static function make(int $total = 0, int $limit = 10, string $keyword = 'page'): self
+    {
+        return new self($total, $limit, $keyword);
+    }
+
+    /**
      * Resets the paginator and recalculates pagination values.
      * 
      * @return self
@@ -464,24 +478,165 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
     }
 
     /**
-     * Converts the paginator instance to an array.
+     * Converts the paginator instance to an array, matching Laravel's
+     * standard paginator structure.
      * 
      * @return array
      */
     public function toArray(): array
     {
         return [
-            'pages' => $this->pages(),
-            'page' => $this->page(),
-            'offset' => $this->offset(),
-            'limit' => $this->limit(),
-            'first_item' => $this->firstItem(),
-            'last_item' => $this->lastItem(),
-            'total' => $this->total(),
-            'keyword' => $this->keyword(),
-            'links' => $this->generateLinks(),
+            'current_page' => $this->currentPage(),
             'data' => $this->data(),
+            'first_page_url' => $this->url(1),
+            'from' => $this->firstItem() ?: null,
+            'last_page' => $this->lastPage(),
+            'last_page_url' => $this->url($this->lastPage()),
+            'links' => $this->generateLinks(),
+            'next_page_url' => $this->nextPageUrl(),
+            'path' => $this->path(),
+            'per_page' => $this->perPage(),
+            'prev_page_url' => $this->previousPageUrl(),
+            'to' => $this->lastItem() ?: null,
+            'total' => $this->total(),
         ];
+    }
+
+    /**
+     * Get the base path for the paginator's generated URLs (without query string).
+     * 
+     * @return string
+     */
+    public function path(): string
+    {
+        return home_url(request()->getPath());
+    }
+
+    /**
+     * Get the last page number.
+     * 
+     * @return int
+     */
+    public function lastPage(): int
+    {
+        return max(1, $this->pages());
+    }
+
+    /**
+     * Get the number of items per page.
+     * 
+     * @return int
+     */
+    public function perPage(): int
+    {
+        return $this->limit();
+    }
+
+    /**
+     * Get the current page number.
+     * 
+     * @return int
+     */
+    public function currentPage(): int
+    {
+        return $this->page();
+    }
+
+    /**
+     * Determine if there are more pages after the current page.
+     * 
+     * @return bool
+     */
+    public function hasMorePages(): bool
+    {
+        return $this->page() < $this->pages();
+    }
+
+    /**
+     * Determine if the paginator is on the first page.
+     * 
+     * @return bool
+     */
+    public function onFirstPage(): bool
+    {
+        return $this->page() <= 1;
+    }
+
+    /**
+     * Determine if the paginator is on the last page.
+     * 
+     * @return bool
+     */
+    public function onLastPage(): bool
+    {
+        return !$this->hasMorePages();
+    }
+
+    /**
+     * Determine if there are enough items to justify pagination links.
+     * 
+     * @return bool
+     */
+    public function hasPages(): bool
+    {
+        return $this->pages() > 1;
+    }
+
+    /**
+     * Get the URL for a given page number.
+     * 
+     * @param int $page The page number.
+     * @return string
+     */
+    public function url(int $page): string
+    {
+        if ($page < 1) {
+            $page = 1;
+        }
+
+        return $this->getAnchor($page);
+    }
+
+    /**
+     * Get the URL for the previous page, or null if on the first page.
+     * 
+     * @return string|null
+     */
+    public function previousPageUrl(): ?string
+    {
+        return $this->onFirstPage() ? null : $this->url($this->page() - 1);
+    }
+
+    /**
+     * Get the URL for the next page, or null if on the last page.
+     * 
+     * @return string|null
+     */
+    public function nextPageUrl(): ?string
+    {
+        return $this->hasMorePages() ? $this->url($this->page() + 1) : null;
+    }
+
+    /**
+     * Get the number of the first page (always 1, provided for API parity).
+     * 
+     * @return int
+     */
+    public function firstPage(): int
+    {
+        return 1;
+    }
+
+    /**
+     * Apply the given callback to each item and return a new collection of results,
+     * without mutating the paginator's own data (alias of Laravel's through()).
+     * 
+     * @param callable $callback
+     * @return array
+     */
+    public function through(callable $callback): array
+    {
+        return array_map($callback, $this->data());
     }
 
     /**

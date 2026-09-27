@@ -29,14 +29,16 @@ class Column implements ColumnContract
      * @param string $name The name of the column
      * @param string $type The type of the column
      * @param array $parameters Additional parameters for the column
+     * @param Blueprint|null $blueprint The blueprint to which this column belongs
      */
-    public function __construct(private string $name, private string $type, private array $parameters = [])
+    public function __construct(private string $name, private string $type, private array $parameters = [], private ?Blueprint $blueprint = null)
     {
     }
 
     /**
      * Marks the column as nullable.
      *
+     * @param bool $value Whether the column is nullable
      * @return self
      */
     public function nullable(bool $value = true): self
@@ -62,6 +64,7 @@ class Column implements ColumnContract
     /**
      * Marks the column as required.
      *
+     * @param bool $value Whether the column is required
      * @return self
      */
     public function required(bool $value = true): self
@@ -172,6 +175,66 @@ class Column implements ColumnContract
     public function useCurrentOnUpdate()
     {
         $this->modifiers[] = 'on_update_current_timestamp';
+        return $this;
+    }
+
+    /**
+     * Adds an index to the column.
+     *
+     * @param string|null $name The name of the index
+     * @return self
+     */
+    public function index(?string $name = null): self
+    {
+        if ($this->blueprint) {
+            $this->blueprint->index($this->name, $name);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Adds a primary key to the column.
+     *
+     * @param string|null $name The name of the primary key
+     * @return self
+     */
+    public function primary(?string $name = null): self
+    {
+        if ($this->blueprint) {
+            $this->blueprint->primary($this->name, $name);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Adds a unique index to the column.
+     *
+     * @param string|null $name The name of the unique index
+     * @return self
+     */
+    public function fullText(?string $name = null): self
+    {
+        if ($this->blueprint) {
+            $this->blueprint->fullText($this->name, $name);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Adds a spatial index to the column.
+     *
+     * @param string|null $name The name of the spatial index
+     * @return self
+     */
+    public function spatialIndex(?string $name = null): self
+    {
+        if ($this->blueprint) {
+            $this->blueprint->spatialIndex($this->name, $name);
+        }
+
         return $this;
     }
 
