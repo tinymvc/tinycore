@@ -1506,7 +1506,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @throws \RuntimeException
      *   If no data has been validated yet.
      */
-    public function validated(?string $key = null, $default = null): Input
+    public function validated(?string $key = null, $default = null): mixed
     {
         if (!isset($this->validated) || $this->validated->isEmpty()) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
