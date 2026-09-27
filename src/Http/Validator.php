@@ -12,7 +12,6 @@ use function in_array;
 use function intval;
 use function is_array;
 use function is_bool;
-use function is_float;
 use function is_int;
 use function is_scalar;
 use function is_string;
@@ -71,6 +70,8 @@ class Validator implements ValidatorContract
 
     /**
      * Validates input data against specified rules.
+     * Sometimes skips absent fields; nullable skips non-presence rules for null.
+     * Neither rule makes a supplied empty value satisfy required or filled.
      *
      * @param array<string,mixed> $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
@@ -82,20 +83,31 @@ class Validator implements ValidatorContract
     {
         $validData = [];
         $this->errors = [];
+        unset($this->cleanData);
 
         foreach ($rules as $field => $fieldRules) {
             $fieldRules = $this->normalizeFieldRules($fieldRules);
             $value = $inputData[$field] ?? null;
             $fieldExists = array_key_exists($field, $inputData);
             $valid = true;
+            $ruleNames = array_map(fn($rule) => strtolower(trim(explode(':', $rule, 2)[0])), $fieldRules);
+            $nullable = in_array('nullable', $ruleNames, true);
+
+            // Sometimes makes the entire rule set conditional on the field being supplied.
+            if (!$fieldExists && in_array('sometimes', $ruleNames, true)) {
+                continue;
+            }
 
             if (empty($fieldRules)) {
-                $validData[$field] = $value;
+                if ($fieldExists) {
+                    $validData[$field] = $value;
+                }
                 continue;
             }
 
             // Check if field has numeric validation rules
             $is_numeric_field = $this->hasNumericValidation($fieldRules);
+            $has_valid_value = $this->hasValidValue($value);
 
             // Loop through field rules
             foreach ($fieldRules as $rule) {
@@ -103,7 +115,7 @@ class Validator implements ValidatorContract
                     continue;
                 }
 
-                $rule = strtolower(trim($rule));
+                $rule = trim($rule);
                 if ($rule === '') {
                     continue;
                 }
@@ -113,33 +125,40 @@ class Validator implements ValidatorContract
                 $ruleParams = [];
                 if (str_contains($rule, ':')) {
                     [$ruleName, $ruleParams] = array_map('trim', explode(':', $rule, 2));
+                    $ruleName = strtolower($ruleName);
                     $ruleParams = array_map('trim', explode(',', $ruleParams));
                 }
 
-                // Check if value is valid
-                $has_valid_value = $this->hasValidValue($value, $is_numeric_field);
+                if (in_array($ruleName, ['sometimes', 'nullable'], true)) {
+                    continue;
+                }
 
-                // If the value is absent/empty and this rule is not one of the rules that should
-                // run on empty values, skip validation (Laravel-like behavior).
-                $canRunOnEmpty = in_array($ruleName, [
+                // Presence rules still run on missing, null, and blank values.
+                $implicit = in_array($ruleName, [
                     'required',
                     'required_if',
                     'required_unless',
                     'present',
                     'filled',
-                    'prohibited',
-                    'nullable'
+                    'accepted',
+                    'declined',
                 ], true);
 
-                if (!$has_valid_value && !$canRunOnEmpty) {
+                // Null and empty arrays are supplied values, not missing fields.
+                if (!$implicit && (!$fieldExists || (is_string($value) && trim($value) === '') || ($nullable && $value === null))) {
+                    continue;
+                }
+
+                // Do not query the database after another rule has rejected this field.
+                if (!$valid && in_array($ruleName, ['unique', 'exists', 'not_exists'], true)) {
                     continue;
                 }
 
                 // Apply validation rule
-                $valid = match ($ruleName) {
+                $ruleValid = match ($ruleName) {
                     'required' => $has_valid_value,
-                    'required_if' => $this->validateRequiredIf($ruleParams, $inputData, $has_valid_value),
-                    'required_unless' => $this->validateRequiredUnless($ruleParams, $inputData, $has_valid_value),
+                    'required_if' => $this->validateRequiredIf($ruleParams, $inputData, $has_valid_value, $rules),
+                    'required_unless' => $this->validateRequiredUnless($ruleParams, $inputData, $has_valid_value, $rules),
                     'email', 'mail' => filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
                     'url', 'link' => filter_var($value, FILTER_VALIDATE_URL) !== false,
                     'number', 'numeric', 'int', 'integer' => is_numeric($value),
@@ -161,12 +180,12 @@ class Validator implements ValidatorContract
                     'alpha' => is_string($value) && preg_match('/^[\pL]+$/u', $value) === 1,
                     'alpha_num', 'alphanumeric' => is_string($value) && preg_match('/^[\pL\pN]+$/u', $value) === 1,
                     'alpha_dash' => is_string($value) && preg_match('/^[a-zA-Z0-9_-]+$/', $value) === 1,
-                    'digits' => isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) == (int) $ruleParams[0] : true,
-                    'digits_between' => isset($ruleParams[0], $ruleParams[1]) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] && strlen((string) $value) <= (int) $ruleParams[1] : true,
-                    'min_digits' => isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] : true,
-                    'max_digits' => isset($ruleParams[0]) ? ctype_digit((string) $value) && strlen((string) $value) <= (int) $ruleParams[0] : true,
+                    'digits' => isset($ruleParams[0]) ? is_scalar($value) && ctype_digit((string) $value) && strlen((string) $value) == (int) $ruleParams[0] : true,
+                    'digits_between' => isset($ruleParams[0], $ruleParams[1]) ? is_scalar($value) && ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] && strlen((string) $value) <= (int) $ruleParams[1] : true,
+                    'min_digits' => isset($ruleParams[0]) ? is_scalar($value) && ctype_digit((string) $value) && strlen((string) $value) >= (int) $ruleParams[0] : true,
+                    'max_digits' => isset($ruleParams[0]) ? is_scalar($value) && ctype_digit((string) $value) && strlen((string) $value) <= (int) $ruleParams[0] : true,
                     'date' => $this->validateDate($value),
-                    'date_format' => isset($ruleParams[0]) ? $this->validateDateFormat((string) $value, $ruleParams[0]) : true,
+                    'date_format' => isset($ruleParams[0]) ? is_string($value) && $this->validateDateFormat((string) $value, $ruleParams[0]) : true,
                     'before' => isset($ruleParams[0]) ? $this->validateBefore($value, $ruleParams[0]) : true,
                     'after' => isset($ruleParams[0]) ? $this->validateAfter($value, $ruleParams[0]) : true,
                     'between' => $this->validateBetween($value, $ruleParams, $is_numeric_field),
@@ -178,16 +197,15 @@ class Validator implements ValidatorContract
                     'uuid' => is_string($value) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $value) === 1,
                     'lowercase' => is_string($value) && $value === strtolower($value),
                     'uppercase' => is_string($value) && $value === strtoupper($value),
-                    'starts_with' => isset($ruleParams[0]) && $ruleParams[0] !== '' && str_starts_with((string) $value, $ruleParams[0]),
-                    'ends_with' => isset($ruleParams[0]) && $ruleParams[0] !== '' && str_ends_with((string) $value, $ruleParams[0]),
-                    'contains' => isset($ruleParams[0]) && $ruleParams[0] !== '' && str_contains((string) $value, $ruleParams[0]),
-                    'not_contains' => isset($ruleParams[0]) && $ruleParams[0] !== '' && !str_contains((string) $value, $ruleParams[0]),
-                    'nullable' => true, // Always passes, allows null values
-                    'present' => array_key_exists($field, $inputData), // Field must be present but can be empty
+                    'starts_with' => isset($ruleParams[0]) && $ruleParams[0] !== '' && is_scalar($value) && str_starts_with((string) $value, $ruleParams[0]),
+                    'ends_with' => isset($ruleParams[0]) && $ruleParams[0] !== '' && is_scalar($value) && str_ends_with((string) $value, $ruleParams[0]),
+                    'contains' => isset($ruleParams[0]) && $ruleParams[0] !== '' && is_scalar($value) && str_contains((string) $value, $ruleParams[0]),
+                    'not_contains' => isset($ruleParams[0]) && $ruleParams[0] !== '' && is_scalar($value) && !str_contains((string) $value, $ruleParams[0]),
+                    'present' => $fieldExists, // Field must be present but can be empty
                     'filled' => $fieldExists ? $has_valid_value : true, // Field must be present and not empty if present
-                    'accepted' => $fieldExists ? $this->validateAccepted($value) : true,
-                    'declined' => $fieldExists ? $this->validateDeclined($value) : true,
-                    'prohibited' => !$fieldExists, // Field must be absent
+                    'accepted' => $this->validateAccepted($value),
+                    'declined' => $this->validateDeclined($value),
+                    'prohibited' => !$has_valid_value, // Field must be absent or empty
                     'file' => is_array($value) && $this->isUploadedFile($value),
                     'image' => $this->validateImage($value),
                     'mimes' => $this->validateMimes($value, $ruleParams),
@@ -199,8 +217,14 @@ class Validator implements ValidatorContract
                 };
 
                 // Add error if rule validation fails
-                if (!$valid) {
+                if (!$ruleValid) {
+                    $valid = false;
                     $this->addError($field, $ruleName, $ruleParams, $value);
+
+                    // Once a presence requirement fails, further checks cannot fix it.
+                    if ($implicit) {
+                        break;
+                    }
                 }
             }
 
@@ -247,111 +271,75 @@ class Validator implements ValidatorContract
     }
 
     /**
-     * Validate required_if rule
-     * 
-     * The field is required if another field equals a specific value.
-     * 
-     * @param array $params Array containing [field_name, expected_value, ...]
-     * @param array $inputData All input data
-     * @param bool $hasValidValue Whether the field has a valid value
-     * @return bool True if validation passes
+     * Require a value only when the other field exists and matches a listed value.
      */
-    private function validateRequiredIf(array $params, array $inputData, bool $hasValidValue): bool
+    private function validateRequiredIf(array $params, array $inputData, bool $hasValidValue, array $rules): bool
     {
         if (count($params) < 2) {
-            return false; // Need at least field name and value
-        }
-
-        $otherField = $params[0];
-        $expectedValues = array_slice($params, 1); // Support multiple values
-        $otherValue = $inputData[$otherField] ?? null;
-
-        // Check if other field matches any of the expected values
-        $shouldBeRequired = false;
-        foreach ($expectedValues as $expectedValue) {
-            if ($this->validateEqual($otherValue, $expectedValue)) {
-                $shouldBeRequired = true;
-                break;
-            }
-        }
-
-        // If field should be required, check if it has valid value
-        if ($shouldBeRequired) {
-            return $hasValidValue;
-        }
-
-        // If field is not required, it's always valid
-        return true;
-    }
-
-    /**
-     * Validate required_unless rule
-     * 
-     * The field is required unless another field equals a specific value.
-     * 
-     * @param array $params Array containing [field_name, expected_value, ...]
-     * @param array $inputData All input data
-     * @param bool $hasValidValue Whether the field has a valid value
-     * @return bool True if validation passes
-     */
-    private function validateRequiredUnless(array $params, array $inputData, bool $hasValidValue): bool
-    {
-        if (count($params) < 2) {
-            return false; // Need at least field name and value
-        }
-
-        $otherField = $params[0];
-        $expectedValues = array_slice($params, 1); // Support multiple values
-        $otherValue = $inputData[$otherField] ?? null;
-
-        // Check if other field matches any of the expected values
-        $shouldNotBeRequired = false;
-        foreach ($expectedValues as $expectedValue) {
-            if ($this->validateEqual($otherValue, $expectedValue)) {
-                $shouldNotBeRequired = true;
-                break;
-            }
-        }
-
-        // If field should not be required, it's always valid
-        if ($shouldNotBeRequired) {
-            return true;
-        }
-
-        // If field should be required, check if it has valid value
-        return $hasValidValue;
-    }
-
-    /**
-     * Check if a value is considered "valid" (not empty)
-     */
-    private function hasValidValue($value, bool $is_numeric_field = false): bool
-    {
-        if ($value === null) {
             return false;
         }
 
-        if (is_bool($value)) {
-            return true;
+        return !array_key_exists($params[0], $inputData)
+            || !$this->matchesDependentValues($params, $inputData, $rules)
+            || $hasValidValue;
+    }
+
+    /**
+     * Require a value unless the other field matches, including missing/null fields.
+     */
+    private function validateRequiredUnless(array $params, array $inputData, bool $hasValidValue, array $rules): bool
+    {
+        if (count($params) < 2) {
+            return false;
         }
 
-        if (is_int($value) || is_float($value)) {
-            return true;
+        return $this->matchesDependentValues($params, $inputData, $rules) || $hasValidValue;
+    }
+
+    /**
+     * Compare conditional rule values without treating null or booleans as strings.
+     */
+    private function matchesDependentValues(array $params, array $inputData, array $rules): bool
+    {
+        $otherValue = $inputData[$params[0]] ?? null;
+        $expectedValues = array_slice($params, 1);
+        $otherRules = $this->normalizeFieldRules($rules[$params[0]] ?? []);
+        $otherRuleNames = array_map(fn($rule) => strtolower(trim(explode(':', $rule, 2)[0])), $otherRules);
+
+        if (is_bool($otherValue) || array_intersect(['boolean', 'bool'], $otherRuleNames)) {
+            $expectedValues = array_map(fn($value) => match ($value) {
+                'true' => true,
+                'false' => false,
+                default => $value,
+            }, $expectedValues);
         }
 
-        if (is_string($value)) {
-            return trim($value) !== '';
+        if ($otherValue === null) {
+            $expectedValues = array_map(fn($value) => is_string($value) && strtolower($value) === 'null' ? null : $value, $expectedValues);
         }
 
-        if (is_array($value)) {
-            return !empty($value);
+        return in_array($otherValue, $expectedValues, is_bool($otherValue) || $otherValue === null);
+    }
+
+    /**
+     * Determine whether a value satisfies required/filled (zero and false are not empty).
+     */
+    private function hasValidValue(mixed $value): bool
+    {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return false;
         }
 
-        if ($is_numeric_field) {
-            return is_numeric($value);
+        if (is_countable($value) && count($value) === 0) {
+            return false;
         }
 
-        return false;
+        // PHP represents an unselected upload as a non-empty array.
+        if (is_array($value) && isset($value['tmp_name'], $value['error'])) {
+            return $value['error'] !== UPLOAD_ERR_NO_FILE && $value['tmp_name'] !== '';
+        }
+
+        return true;
     }
 
     /**
@@ -1051,36 +1039,12 @@ class Validator implements ValidatorContract
 
     private function validateAccepted(mixed $value): bool
     {
-        if (is_bool($value)) {
-            return $value === true;
-        }
-
-        if (is_int($value) || is_float($value)) {
-            return (int) $value === 1;
-        }
-
-        if (is_string($value)) {
-            return in_array(strtolower($value), ['1', 'true', 'on', 'yes'], true);
-        }
-
-        return false;
+        return in_array($value, ['yes', 'on', 1, '1', true, 'true'], true);
     }
 
     private function validateDeclined(mixed $value): bool
     {
-        if (is_bool($value)) {
-            return $value === false;
-        }
-
-        if (is_int($value) || is_float($value)) {
-            return (int) $value === 0;
-        }
-
-        if (is_string($value)) {
-            return in_array(strtolower($value), ['0', 'false', 'off', 'no'], true);
-        }
-
-        return false;
+        return in_array($value, ['no', 'off', 0, '0', false, 'false'], true);
     }
 
     /**
