@@ -3,6 +3,7 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\ValidatorContract;
+use Spark\Support\Arr;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
@@ -72,6 +73,7 @@ class Validator implements ValidatorContract
      * Validates input data against specified rules.
      * Sometimes skips absent fields; nullable skips non-presence rules for null.
      * Neither rule makes a supplied empty value satisfy required or filled.
+     * Nested fields use dot notation; a * segment validates each array item.
      *
      * @param array<string,mixed> $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
@@ -84,6 +86,18 @@ class Validator implements ValidatorContract
         $validData = [];
         $this->errors = [];
         unset($this->cleanData);
+
+        [$rules, $wildcardFields] = $this->expandFieldRules($rules, $inputData);
+        $inputData = $this->flattenInputData($inputData);
+        $parentFields = [];
+
+        foreach (array_keys($rules) as $field) {
+            $segments = $this->fieldSegments((string) $field);
+            while (count($segments) > 1) {
+                array_pop($segments);
+                $parentFields[implode('.', $segments)] = true;
+            }
+        }
 
         foreach ($rules as $field => $fieldRules) {
             $fieldRules = $this->normalizeFieldRules($fieldRules);
@@ -100,7 +114,7 @@ class Validator implements ValidatorContract
 
             if (empty($fieldRules)) {
                 if ($fieldExists) {
-                    $validData[$field] = $value;
+                    $this->setValidatedField($validData, (string) $field, $value);
                 }
                 continue;
             }
@@ -172,9 +186,9 @@ class Validator implements ValidatorContract
                     'in' => $this->validateIn($value, $ruleParams),
                     'not_in' => !$this->validateIn($value, $ruleParams),
                     'regex' => $this->validateRegex($value, $ruleParams),
-                    'unique' => $this->validateUnique($value, $ruleParams, $field),
-                    'exists' => $this->validateExists($value, $ruleParams, $field),
-                    'not_exists' => $this->validateNotExists($value, $ruleParams, $field),
+                    'unique' => $this->validateUnique($value, $ruleParams, $this->fieldColumn((string) $field)),
+                    'exists' => $this->validateExists($value, $ruleParams, $this->fieldColumn((string) $field)),
+                    'not_exists' => $this->validateNotExists($value, $ruleParams, $this->fieldColumn((string) $field)),
                     'boolean', 'bool' => in_array($value, [true, false, 1, 0, '1', '0', 'true', 'false', 'TRUE', 'FALSE', 'on', 'off', 'yes', 'no', 'YES', 'NO'], true),
                     'float', 'decimal' => is_numeric($value),
                     'alpha' => is_string($value) && preg_match('/^[\pL]+$/u', $value) === 1,
@@ -211,7 +225,9 @@ class Validator implements ValidatorContract
                     'mimes' => $this->validateMimes($value, $ruleParams),
                     'min_value' => isset($ruleParams[0]) ? is_numeric($value) && (float) $value >= (float) $ruleParams[0] : true,
                     'max_value' => isset($ruleParams[0]) ? is_numeric($value) && (float) $value <= (float) $ruleParams[0] : true,
-                    'distinct' => $this->validateDistinct($value),
+                    'distinct' => isset($wildcardFields[$field])
+                        ? $this->validateDistinctItem((string) $field, $value, $wildcardFields[$field], $inputData, $ruleParams)
+                        : $this->validateDistinct($value),
                     'password' => is_scalar($value) && $this->validatePassword((string) $value, $ruleParams),
                     default => true // Default to true if rule is not recognized
                 };
@@ -230,12 +246,172 @@ class Validator implements ValidatorContract
 
             // Store valid data if field passed all rules
             if ($valid && array_key_exists($field, $inputData)) {
-                $validData[$field] = $value;
+                // Let child rules select the validated keys of an explicitly validated array.
+                if (is_array($value) && isset($parentFields[$field]) && array_intersect(['array', 'list'], $ruleNames)) {
+                    continue;
+                }
+                $this->setValidatedField($validData, (string) $field, $value);
             }
         }
 
         // Return validated data or false if there are errors
         return empty($this->errors) ? $this->cleanData = new Input($validData) : false;
+    }
+
+    /** Split field paths while preserving escaped literal dots. */
+    private function fieldSegments(string $field): array
+    {
+        $segments = [''];
+        $index = 0;
+        $escaped = false;
+
+        foreach (str_split($field) as $character) {
+            if ($character === '.' && !$escaped) {
+                $segments[++$index] = '';
+                continue;
+            }
+
+            $segments[$index] .= $character;
+            $escaped = $character === '\\' && !$escaped;
+        }
+
+        return $segments;
+    }
+
+    private function escapeFieldSegment(string|int $segment): string
+    {
+        return strtr((string) $segment, ['\\' => '\\\\', '.' => '\\.', '*' => '\\*']);
+    }
+
+    private function unescapeFieldSegment(string $segment): string
+    {
+        return strtr($segment, ['\\\\' => '\\', '\\.' => '.', '\\*' => '*']);
+    }
+
+    /** Keep array containers as well as leaves, so array and presence rules still work. */
+    private function flattenInputData(array $data, array $path = []): array
+    {
+        $result = [];
+        foreach ($data as $key => $value) {
+            $segments = [...$path, $this->escapeFieldSegment($key)];
+            $result[implode('.', $segments)] = $value;
+            if (is_array($value)) {
+                $result += $this->flattenInputData($value, $segments);
+            }
+        }
+        return $result;
+    }
+
+    /** Resolve wildcard segments from existing arrays, retaining missing explicit children. */
+    private function expandFieldPaths(array $segments, mixed $data, array $path = [], array $keys = []): array
+    {
+        if ($segments === []) {
+            return [implode('.', $path) => $keys];
+        }
+
+        $segment = array_shift($segments);
+        if ($segment === '*') {
+            $result = [];
+            foreach (is_array($data) ? $data : [] as $key => $value) {
+                $key = $this->escapeFieldSegment($key);
+                $result += $this->expandFieldPaths($segments, $value, [...$path, $key], [...$keys, $key]);
+            }
+            return $result;
+        }
+
+        $key = $this->unescapeFieldSegment($segment);
+        $value = is_array($data) ? ($data[$key] ?? null) : null;
+
+        return $this->expandFieldPaths($segments, $value, [...$path, $segment], $keys);
+    }
+
+    /** Expand item rules and their sibling references without rewriting literal rule values. */
+    private function expandFieldRules(array $rules, array $inputData): array
+    {
+        $expanded = $wildcardFields = [];
+        foreach ($rules as $field => $fieldRules) {
+            $fieldRules = $this->normalizeFieldRules($fieldRules);
+            $paths = $this->expandFieldPaths($this->fieldSegments((string) $field), $inputData);
+
+            foreach ($paths as $path => $keys) {
+                $resolvedRules = [];
+                foreach ($fieldRules as $rule) {
+                    [$name, $parameters] = array_pad(explode(':', $rule, 2), 2, null);
+                    if ($parameters !== null && $keys !== [] && in_array(strtolower(trim($name)), ['required_if', 'required_unless', 'same', 'equal', 'same_as'], true)) {
+                        $parameters = explode(',', $parameters);
+                        $segments = $this->fieldSegments(trim($parameters[0]));
+
+                        $index = 0;
+                        foreach ($segments as &$segment) {
+                            if ($segment === '*') {
+                                $segment = $keys[$index++] ?? '*';
+                            }
+                        }
+                        unset($segment);
+
+                        $parameters[0] = implode('.', $segments);
+                        $rule = "$name:" . implode(',', $parameters);
+                    }
+
+                    $resolvedRules[] = $rule;
+                }
+
+                $expanded[$path] = array_merge($expanded[$path] ?? [], $resolvedRules);
+                if ($keys !== []) {
+                    $wildcardFields[$path] ??= array_keys($paths);
+                }
+            }
+        }
+
+        return [$expanded, $wildcardFields];
+    }
+
+    /** Rebuild the original array shape instead of returning flattened field names. */
+    private function setValidatedField(array &$data, string $field, mixed $value): void
+    {
+        if (!str_contains($field, '\\')) {
+            Arr::set($data, $field, $value);
+            return;
+        }
+
+        $target = &$data;
+        foreach ($this->fieldSegments($field) as $segment) {
+            $key = $this->unescapeFieldSegment($segment);
+            if (!is_array($target)) {
+                $target = [];
+            }
+
+            $target = &$target[$key];
+        }
+
+        $target = $value;
+    }
+
+    private function fieldColumn(string $field): string
+    {
+        $segments = $this->fieldSegments($field);
+
+        return $this->unescapeFieldSegment(end($segments));
+    }
+
+    /** Compare a wildcard item against the other items matched by the same rule. */
+    private function validateDistinctItem(string $field, mixed $value, array $fields, array $inputData, array $params): bool
+    {
+        foreach ($fields as $otherField) {
+            if ((string) $otherField === $field || !array_key_exists($otherField, $inputData)) {
+                continue;
+            }
+
+            $other = $inputData[$otherField];
+            if (in_array('ignore_case', $params, true) && is_string($value) && is_string($other)) {
+                if (mb_strtolower($value) === mb_strtolower($other)) {
+                    return false;
+                }
+            } elseif (in_array('strict', $params, true) ? $value === $other : $value == $other) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -1088,6 +1264,7 @@ class Validator implements ValidatorContract
      */
     private function addError(string $field, string $rule, array $params = [], $value = null): void
     {
+        $field = $this->unescapeFieldSegment($field);
         $prettyField = __(Str::headline($field));
 
         if (
