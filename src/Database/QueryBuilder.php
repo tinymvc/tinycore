@@ -14,6 +14,7 @@ use Spark\Support\Traits\Macroable;
 use function func_get_args;
 use function is_array;
 use function is_bool;
+use function is_string;
 use function sprintf;
 
 /**
@@ -152,6 +153,56 @@ class QueryBuilder implements QueryBuilderContract
     {
         $this->wrapper = new Wrapper($database->getDriver());
         $this->prefix ??= ''; // Set default prefix if not already set
+    }
+
+    /**
+     * Set a SELECT lock. False requests a shared lock; null removes the lock.
+     * Custom clauses are raw SQL and must not contain untrusted input.
+     * Execute the read and subsequent writes within the same transaction.
+     */
+    public function lock(bool|string|null $value = true): self
+    {
+        $this->query['lock'] = $value;
+
+        if ($value !== null && empty($this->query['lock_model_primary'])) {
+            if (($model = $this->getModelBeingUsed()) !== null && $model->hasPrimaryValue()) {
+                $this->applyModelPrimaryCondition(forRead: true);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Request an exclusive lock on the selected rows until the transaction ends.
+     * On an existing model instance, the query also filters by its primary key.
+     */
+    public function lockForUpdate(): QueryBuilder
+    {
+        return $this->lock(true);
+    }
+
+    /** Request a shared lock on the selected rows until the transaction ends. */
+    public function sharedLock(): QueryBuilder
+    {
+        return $this->lock(false);
+    }
+
+    /** Compile the SELECT lock for the current database driver. */
+    private function compileLock(): string
+    {
+        $lock = $this->query['lock'] ?? null;
+
+        // SQLite has no SELECT row-lock syntax, as in Laravel's SQLite grammar.
+        if ($lock === null || $this->database->isSQLite()) {
+            return '';
+        }
+
+        if (is_string($lock)) {
+            return trim($lock) === '' ? '' : ' ' . trim($lock);
+        }
+
+        return $lock ? ' FOR UPDATE' : ($this->database->isPostgreSQL() ? ' FOR SHARE' : ' LOCK IN SHARE MODE');
     }
 
     /**
@@ -557,6 +608,8 @@ class QueryBuilder implements QueryBuilderContract
         $this->where = ['sql' => '', 'grouped' => false];
         $this->bindings = [];
         $this->parameters = [];
+
+        unset($this->query['lock'], $this->query['lock_model_primary']);
     }
 
     /**
@@ -687,6 +740,16 @@ REGEX;
     {
         $whereSql = $this->getWhereSql();
 
+        // Keep the instance key outside user OR conditions and resolve aliases at compile time.
+        if (isset($this->query['lock_model_primary'])) {
+            [$key, $placeholder] = $this->query['lock_model_primary'];
+
+            $column = ($forWrite ? $this->getTableName() : $this->getTableReference()) . '.' . $this->wrapper->wrapColumn($key);
+            $condition = "$column = :$placeholder";
+            $whereSql = $whereSql === '' ? " WHERE $condition "
+                : ' WHERE (' . preg_replace('/^WHERE\s+/i', '', trim($whereSql), 1) . ") AND $condition ";
+        }
+
         $through = $this->query['through_model'] ?? null;
         if (!$forWrite && $through instanceof Model && empty($this->query['with_trashed_parents'])) {
             $whereSql = $through->buildSoftDeleteWhereClause(
@@ -723,7 +786,7 @@ REGEX;
      */
     private function hasAnyCondition(): bool
     {
-        if ($this->hasWhere()) {
+        if ($this->hasWhere() || isset($this->query['lock_model_primary'])) {
             return true;
         }
 

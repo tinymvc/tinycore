@@ -675,7 +675,16 @@ trait InteractsWithRelation
      */
     public function useModel(Model $model): QueryBuilder
     {
+        if (isset($this->query['lock_model_primary'])) {
+            unset($this->bindings[$this->query['lock_model_primary'][1]], $this->query['lock_model_primary']);
+        }
+
         $this->query['model'] = $model;
+
+        if (isset($this->query['lock'])) {
+            $this->lock($this->query['lock']);
+        }
+
         return $this;
     }
 
@@ -741,9 +750,10 @@ trait InteractsWithRelation
     /**
      * Apply conditions based on the related model.
      *
+     * @param bool $forRead Scope a locked model read independently of user conditions.
      * @return void
      */
-    private function applyModelPrimaryCondition(): void
+    private function applyModelPrimaryCondition(bool $forRead = false): void
     {
         $model = $this->getModelBeingUsed();
         if (!$model) {
@@ -751,7 +761,13 @@ trait InteractsWithRelation
         }
 
         if ($model->hasPrimaryValue()) {
-            $this->where([$model->getPrimaryKey() => $model->primaryValue()]);
+            if ($forRead) {
+                $placeholder = $this->getWhereSqlColumn('spark_lock_primary');
+                $this->bindings[$placeholder] = $model->primaryValue();
+                $this->query['lock_model_primary'] = [$model->getPrimaryKey(), $placeholder];
+            } else {
+                $this->where([$model->getPrimaryKey() => $model->primaryValue()]);
+            }
         }
     }
 
@@ -1029,7 +1045,7 @@ trait InteractsWithRelation
         $joins = $query->query['joins'] ?? '';
         $where = $query->preparedWhereClauseSql();
 
-        $sql = "SELECT {$select} FROM {$table}{$joins}{$where}";
+        $sql = "SELECT {$select} FROM {$table}{$joins}{$where}" . $query->compileLock();
         return $this->importSubquery($sql, $query);
     }
 

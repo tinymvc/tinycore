@@ -711,7 +711,8 @@ trait BuildsReadQueries
             . (isset($this->query['having']) ? ' HAVING ' . trim($this->query['having']) : '')
             . ($this->query['unions'] ?? '')
             . (isset($this->query['order']) ? ' ORDER BY ' . trim($this->query['order']) : '')
-            . $this->buildLimitOffset();
+            . $this->buildLimitOffset()
+            . $this->compileLock();
     }
 
     /**

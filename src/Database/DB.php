@@ -36,6 +36,9 @@ use function sprintf;
  * @method QueryBuilder avg($field, $name = null)
  * @method QueryBuilder table(string $table, ?string $alias = null)
  * @method QueryBuilder prefix(string $prefix)
+ * @method QueryBuilder lock(bool|string|null $value = true)
+ * @method QueryBuilder lockForUpdate()
+ * @method QueryBuilder sharedLock()
  * @method QueryBuilder when(mixed $value, callable $callback)
  * @method QueryBuilder unless(mixed $value, callable $callback)
  * @method QueryBuilder column(string $column)
@@ -336,6 +339,43 @@ class DB implements DBContract
     }
 
     /**
+     * Execute a callback within a transaction.
+     *
+     * @param callable $callback The callback, receiving this connection as its argument.
+     * @return mixed The result of the callback.
+     *
+     * @throws \Throwable Rethrows any exception thrown within the transaction.
+     */
+    public function transaction(callable $callback): mixed
+    {
+        $connection = $this;
+        $nested = $connection->inTransaction();
+        $savepoint = 'spark_' . bin2hex(random_bytes(8));
+        $nested ? $connection->exec("SAVEPOINT $savepoint") : $connection->beginTransaction();
+
+        try {
+            $result = $callback($this);
+            $nested ? $connection->exec("RELEASE SAVEPOINT $savepoint") : $connection->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            // A callback or DDL may already have ended the transaction. Preserve its error.
+            try {
+                if ($connection->inTransaction()) {
+                    if ($nested) {
+                        $connection->exec("ROLLBACK TO SAVEPOINT $savepoint");
+                        $connection->exec("RELEASE SAVEPOINT $savepoint");
+                    } else {
+                        $connection->rollBack();
+                    }
+                }
+            } catch (\Throwable) {
+                // The original failure remains the actionable exception.
+            }
+            throw $e;
+        }
+    }
+
+    /**
      * Handles dynamic method calls, allowing direct PDO method calls on this class.
      *
      * @param string $name The name of the method to call.
@@ -353,6 +393,9 @@ class DB implements DBContract
             in_array($name, [
                 'table',
                 'prefix',
+                'lock',
+                'lockForUpdate',
+                'sharedLock',
                 'when',
                 'unless',
                 'select',

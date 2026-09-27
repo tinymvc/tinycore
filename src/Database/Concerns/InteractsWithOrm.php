@@ -104,13 +104,16 @@ trait InteractsWithOrm
      * This method clears all currently loaded relationships and re-attaches them.
      * It is useful when you want to refresh the relationship data after changes to the model.
      * 
-     * @return void
+     * @return $this
      */
-    public function reloadRelations(): void
+    public function reloadRelations()
     {
         $relations = array_keys($this->relations);
+
         $this->clearRelations();
         $this->load($relations);
+
+        return $this;
     }
 
     /**
@@ -436,14 +439,16 @@ trait InteractsWithOrm
      * It accepts a string or an array of relationship names and loads them.
      * 
      * @param array|string $relations
-     * @return void
+     * @return $this
      */
-    public function load(array|string $relations): void
+    public function load(array|string $relations)
     {
         $relations = is_array($relations) ? $relations : func_get_args();
         foreach ($relations as $relation) {
             $this->getRelation($relation);
         }
+
+        return $this;
     }
 
     /**
