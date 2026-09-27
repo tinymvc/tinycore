@@ -1539,4 +1539,48 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             }
         }
     }
+
+    /**
+     * Set the model's attributes.
+     *
+     * @param array $attributes The attributes to set on the model.
+     * @return void
+     */
+    public function setAttributes(array $attributes): void
+    {
+        $this->attributes = $attributes;
+    }
+
+    /**
+     * Get the model's attributes.
+     *
+     * @return array The model's attributes.
+     */
+    public function getAttributes(): array
+    {
+        return $this->attributes;
+    }
+
+    /**
+     * Check if the model has a specific attribute.
+     *
+     * @param string $name The name of the attribute to check.
+     * @return bool True if the attribute exists, false otherwise.
+     */
+    public function hasAttribute(string $name): bool
+    {
+        return array_key_exists($name, $this->attributes);
+    }
+
+    /**
+     * Get the value of a specific attribute.
+     *
+     * @param string $name The name of the attribute to get.
+     * @param mixed $default The default value to return if the attribute is not set.
+     * @return mixed The value of the attribute or the default value if not set.
+     */
+    public function getAttribute(string $name, $default = null): mixed
+    {
+        return $this->attributes[$name] ?? value($default);
+    }
 }
