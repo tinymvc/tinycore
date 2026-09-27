@@ -32,10 +32,10 @@ use Spark\Http\Auth as BaseAuth;
  * @method static void refresh()
  * @method static void register(string $model = null, array $config = [], string $guard)
  * @method static BaseAuth guard(string $guard)
- * @method static string getJwtToken(Model $user, array $payload = [])
- * @method static string createJwtToken(array $payload = [])
+ * @method static string makeToken(Model $user, array $payload = [])
+ * @method static string createToken(array $payload = [])
  * @method static \Spark\Support\Collection tokens()
- * @method static bool revokeToken(string $tokenHash)
+ * @method static bool revokeToken(?string $tokenHash = null)
  * @method static ?string token()
  * 
  * @package Spark\Facades
