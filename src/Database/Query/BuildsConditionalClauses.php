@@ -249,9 +249,9 @@ trait BuildsConditionalClauses
     /**
      * Add an OR where clause to the query.
      *
-     * @param string|array $column
+     * @param null|string|array|Arrayable|Closure $column
      *   The column name to query, or an array of column names.
-     * @param string|null $operator
+     * @param mixed $operator
      *   The operator to use. If null, the operator will be determined
      *   based on the value given.
      * @param mixed $value
@@ -272,9 +272,9 @@ trait BuildsConditionalClauses
     /**
      * Add an AND NOT where clause to the query.
      *
-     * @param string|array $column
+     * @param null|string|array|Arrayable|Closure $column
      *   The column name to query, or an array of column names.
-     * @param string|null $operator
+     * @param mixed $operator
      *   The operator to use. If null, the operator will be determined
      *   based on the value given.
      * @param mixed $value
@@ -295,9 +295,9 @@ trait BuildsConditionalClauses
     /**
      * Add an OR NOT where clause to the query.
      *
-     * @param string|array $column
+     * @param null|string|array|Arrayable|Closure $column
      *   The column name to query, or an array of column names.
-     * @param string|null $operator
+     * @param mixed $operator
      *   The operator to use. If null, the operator will be determined
      *   based on the value given.
      * @param mixed $value
