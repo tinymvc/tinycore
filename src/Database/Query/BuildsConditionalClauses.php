@@ -441,7 +441,7 @@ trait BuildsConditionalClauses
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false): QueryBuilder
+    public function whereInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false, string $mode = 'IN'): QueryBuilder
     {
         if ($subquery instanceof Closure) {
             $newQuery = new QueryBuilder($this->database);
@@ -463,9 +463,10 @@ trait BuildsConditionalClauses
 
         return $this->whereRaw(
             sprintf(
-                "%s %s (%s)",
+                "%s %s %s (%s)",
                 $this->wrapper->wrapColumn($column),
-                $not ? 'NOT IN' : 'IN',
+                $not ? 'NOT' : '',
+                $mode,
                 $subquerySql
             ),
             boolean: $boolean
@@ -517,6 +518,72 @@ trait BuildsConditionalClauses
     public function orWhereNotInSub(string $column, string|QueryBuilder|Closure $subquery): QueryBuilder
     {
         return $this->whereInSub($column, $subquery, 'OR', not: true);
+    }
+
+    /**
+     * Add a WHERE EXISTS condition to the query.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @param string $boolean
+     *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @param bool $not
+     *   Whether to use NOT EXISTS instead of EXISTS.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereExists(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false): QueryBuilder
+    {
+        return $this->whereInSub($column, $subquery, $boolean, $not, mode: 'EXISTS');
+    }
+
+    /**
+     * Add a WHERE NOT EXISTS condition to the query.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the NOT EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @param string $boolean
+     *   The type of where clause to add. May be 'AND' or 'OR'.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function whereNotExists(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND'): QueryBuilder
+    {
+        return $this->whereInSub($column, $subquery, $boolean, not: true, mode: 'EXISTS');
+    }
+
+    /**
+     * Add an OR WHERE EXISTS condition to the query.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orWhereExists(string $column, string|QueryBuilder|Closure $subquery): QueryBuilder
+    {
+        return $this->whereInSub($column, $subquery, 'OR', not: false, mode: 'EXISTS');
+    }
+
+    /**
+     * Add an OR WHERE NOT EXISTS condition to the query.
+     *
+     * @param string $column
+     *   The column name to query.
+     * @param string|QueryBuilder|Closure $subquery
+     *   The subquery to use for the NOT EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
+     * @return self
+     *   Returns the current instance for method chaining.
+     */
+    public function orWhereNotExists(string $column, string|QueryBuilder|Closure $subquery): QueryBuilder
+    {
+        return $this->whereInSub($column, $subquery, 'OR', not: true, mode: 'EXISTS');
     }
 
     /**

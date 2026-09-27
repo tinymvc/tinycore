@@ -78,6 +78,8 @@ use Spark\Database\QueryBuilder;
  * @method QueryBuilder withoutTrashed()
  * @method QueryBuilder whereInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false)
  * @method QueryBuilder whereNotInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND')
+ * @method static QueryBuilder whereExists(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false)
+ * @method static QueryBuilder whereNotExists(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND')
  * @method int forceDelete(null|string|array|\Spark\Contracts\Support\Arrayable|\Closure $where = null)
  * @method bool restore()
  * @method QueryBuilder distinct(?string $column = null)

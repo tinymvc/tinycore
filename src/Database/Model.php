@@ -104,6 +104,8 @@ use function sprintf;
  * @method static QueryBuilder withoutTrashed()
  * @method static QueryBuilder whereInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false)
  * @method static QueryBuilder whereNotInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND')
+ * @method static QueryBuilder whereExists(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false)
+ * @method static QueryBuilder whereNotExists(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND')
  * @method static int forceDelete(null|string|array|Arrayable|Closure $where = null)
  * @method static mixed first($fields = null)
  * @method static mixed firstOrFail($where = null, $fields = null)
