@@ -74,6 +74,7 @@ class Validator implements ValidatorContract
      * Sometimes skips absent fields; nullable skips non-presence rules for null.
      * Neither rule makes a supplied empty value satisfy required or filled.
      * Nested fields use dot notation; a * segment validates each array item.
+     * Rules may include parameter arrays, e.g. ['nullable', 'string', ['in' => ['a', 'b']]].
      *
      * @param array<string,mixed> $rules Array of validation rules where the key is the field name
      *                     and the value is an array of rules for that field.
@@ -100,11 +101,10 @@ class Validator implements ValidatorContract
         }
 
         foreach ($rules as $field => $fieldRules) {
-            $fieldRules = $this->normalizeFieldRules($fieldRules);
             $value = $inputData[$field] ?? null;
             $fieldExists = array_key_exists($field, $inputData);
             $valid = true;
-            $ruleNames = array_map(fn($rule) => strtolower(trim(explode(':', $rule, 2)[0])), $fieldRules);
+            $ruleNames = array_column($fieldRules, 'name');
             $nullable = in_array('nullable', $ruleNames, true);
 
             // Sometimes makes the entire rule set conditional on the field being supplied.
@@ -125,23 +125,8 @@ class Validator implements ValidatorContract
 
             // Loop through field rules
             foreach ($fieldRules as $rule) {
-                if (!is_string($rule)) {
-                    continue;
-                }
-
-                $rule = trim($rule);
-                if ($rule === '') {
-                    continue;
-                }
-
-                // Parse rule name and parameters
-                $ruleName = strtolower($rule);
-                $ruleParams = [];
-                if (str_contains($rule, ':')) {
-                    [$ruleName, $ruleParams] = array_map('trim', explode(':', $rule, 2));
-                    $ruleName = strtolower($ruleName);
-                    $ruleParams = array_map('trim', explode(',', $ruleParams));
-                }
+                $ruleName = $rule['name'];
+                $ruleParams = $rule['parameters'];
 
                 if (in_array($ruleName, ['sometimes', 'nullable'], true)) {
                     continue;
@@ -336,9 +321,9 @@ class Validator implements ValidatorContract
             foreach ($paths as $path => $keys) {
                 $resolvedRules = [];
                 foreach ($fieldRules as $rule) {
-                    [$name, $parameters] = array_pad(explode(':', $rule, 2), 2, null);
-                    if ($parameters !== null && $keys !== [] && in_array(strtolower(trim($name)), ['required_if', 'required_unless', 'same', 'equal', 'same_as'], true)) {
-                        $parameters = explode(',', $parameters);
+                    $name = $rule['name'];
+                    $parameters = $rule['parameters'];
+                    if (isset($parameters[0]) && $keys !== [] && in_array($name, ['required_if', 'required_unless', 'same', 'equal', 'same_as'], true)) {
                         $segments = $this->fieldSegments(trim($parameters[0]));
 
                         $index = 0;
@@ -350,13 +335,13 @@ class Validator implements ValidatorContract
                         unset($segment);
 
                         $parameters[0] = implode('.', $segments);
-                        $rule = "$name:" . implode(',', $parameters);
+                        $rule['parameters'] = $parameters;
                     }
 
                     $resolvedRules[] = $rule;
                 }
 
-                $expanded[$path] = array_merge($expanded[$path] ?? [], $resolvedRules);
+                $expanded[$path] = [...($expanded[$path] ?? []), ...$resolvedRules];
                 if ($keys !== []) {
                     $wildcardFields[$path] ??= array_keys($paths);
                 }
@@ -415,15 +400,16 @@ class Validator implements ValidatorContract
     }
 
     /**
-     * Normalize validation rules into an array.
+     * Parse string rules and associative parameter arrays into a common representation.
+     * Array parameters retain their original types and literal delimiters.
      *
      * @param mixed $fieldRules
-     * @return array
+     * @return array<int, array{name: string, parameters: array}>
      */
     private function normalizeFieldRules(mixed $fieldRules): array
     {
         if (is_string($fieldRules)) {
-            return array_values(array_filter(array_map('trim', explode('|', $fieldRules)), fn($rule) => $rule !== ''));
+            $fieldRules = explode('|', $fieldRules);
         }
 
         if (!is_array($fieldRules)) {
@@ -432,14 +418,31 @@ class Validator implements ValidatorContract
 
         $rules = [];
 
-        foreach ($fieldRules as $rule) {
+        foreach ($fieldRules as $name => $rule) {
+            if (is_string($name)) {
+                $name = strtolower(trim($name));
+                if ($name !== '') {
+                    $rules[] = ['name' => $name, 'parameters' => is_array($rule) ? array_values($rule) : [$rule]];
+                }
+                continue;
+            }
+
+            if (is_array($rule)) {
+                $rules = [...$rules, ...$this->normalizeFieldRules($rule)];
+                continue;
+            }
+
             if (!is_scalar($rule)) {
                 continue;
             }
 
             $rule = trim((string) $rule);
             if ($rule !== '') {
-                $rules[] = $rule;
+                [$name, $parameters] = array_pad(explode(':', $rule, 2), 2, null);
+                $rules[] = [
+                    'name' => strtolower(trim($name)),
+                    'parameters' => $parameters === null ? [] : array_map('trim', explode(',', $parameters)),
+                ];
             }
         }
 
@@ -479,8 +482,7 @@ class Validator implements ValidatorContract
     {
         $otherValue = $inputData[$params[0]] ?? null;
         $expectedValues = array_slice($params, 1);
-        $otherRules = $this->normalizeFieldRules($rules[$params[0]] ?? []);
-        $otherRuleNames = array_map(fn($rule) => strtolower(trim(explode(':', $rule, 2)[0])), $otherRules);
+        $otherRuleNames = array_column($rules[$params[0]] ?? [], 'name');
 
         if (is_bool($otherValue) || array_intersect(['boolean', 'bool'], $otherRuleNames)) {
             $expectedValues = array_map(fn($value) => match ($value) {
@@ -528,18 +530,7 @@ class Validator implements ValidatorContract
     {
         $numericRules = ['number', 'numeric', 'int', 'integer', 'float', 'decimal'];
 
-        foreach ($rules as $rule) {
-            if (!is_string($rule) || trim($rule) === '') {
-                continue;
-            }
-
-            $ruleName = strtolower(explode(':', $rule, 2)[0]);
-            if (in_array($ruleName, $numericRules, true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_intersect(array_column($rules, 'name'), $numericRules) !== [];
     }
 
     /**
