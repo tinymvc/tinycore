@@ -400,14 +400,10 @@ class Response implements ResponseContract
      */
     public function send(): void
     {
+        Application::$app?->prepareResponse($this);
+
         if (isset(Application::$app) && Application::$app->isTesting()) {
             throw new \Spark\Testing\ResponseException($this);
-        }
-
-        // If a redirect URL is set, perform the redirect.
-        if (isset($this->redirectUrl)) {
-            header("Location: {$this->redirectUrl}", true, $this->statusCode);
-            exit; // Terminate script execution after redirect
         }
 
         $this->prepare();
@@ -416,6 +412,12 @@ class Response implements ResponseContract
         http_response_code($this->statusCode);
         foreach ($this->headers as $key => $value) {
             header("$key: $value");
+        }
+
+        // Redirects must include prepared headers too (for example CORS headers).
+        if (isset($this->redirectUrl)) {
+            header("Location: {$this->redirectUrl}", true, $this->statusCode);
+            exit;
         }
 
         echo $this->content; // send output to client.

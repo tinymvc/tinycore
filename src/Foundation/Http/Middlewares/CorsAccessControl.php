@@ -3,6 +3,7 @@
 namespace Spark\Foundation\Http\Middlewares;
 
 use Spark\Contracts\Http\MiddlewareInterface;
+use Spark\Foundation\Application;
 use Spark\Http\Response;
 use Spark\Http\Request;
 use function in_array;
@@ -54,65 +55,69 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     public function handle(Request $request, \Closure $next): mixed
     {
-        // Retrieve the origin from the request headers
-        $origin = $request->header('origin', null);
-
-        // If an origin is present, proceed with CORS header setup
-        if ($origin !== null) {
-            if (!$this->shouldHandlePath($request)) {
-                return $next($request); // Skip CORS handling for this path
-            }
-
-            $allowedOrigin = $this->determineAllowedOrigin($origin);
-
-            // If origin is not allowed, do nothing and continue.
-            if ($allowedOrigin === null) {
-                return $next($request);
-            }
-
-            $config = $this->normalizeConfig();
-
-            $methods = $config['methods'];
-            $headers = $config['headers'];
-            $allowCredentials = $config['credentials'];
-
-            // Handle CORS preflight requests before the route callback is executed.
-            if ($this->isPreflightRequest($request)) {
-                $requestedMethod = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
-                $requestedHeaders = $this->requestedHeaders($request);
-
-                if (!$this->allowsMethod($requestedMethod, $methods) || !$this->allowsHeaders($requestedHeaders, $headers)) {
-                    return response('', 403);
-                }
-
-                $preflightResponse = response('', 204);
-                return $this->withCorsHeaders(
-                    $preflightResponse,
-                    $allowedOrigin,
-                    $this->allowedMethods($requestedMethod, $methods),
-                    $this->allowedHeaders($requestedHeaders, $headers),
-                    $allowCredentials,
-                    $config['age'],
-                    true
-                );
-            }
-
-            $response = $next($request);
-
-            if ($response === null) {
-                return null;
-            }
-
-            if (!$response instanceof Response) {
-                $response = is_int($response)
-                    ? new Response('', $response)
-                    : response($response);
-            }
-
-            return $this->withCorsHeaders($response, $allowedOrigin, $methods, $headers, $allowCredentials, $config['age']);
+        if (!$this->shouldHandlePath($request)) {
+            return $next($request);
         }
 
-        return $next($request); // Proceed to the next middleware or request handler
+        $origin = $request->header('Origin');
+        $allowedOrigin = $origin === null ? null : $this->determineAllowedOrigin($origin);
+        $config = $this->normalizeConfig();
+
+        // Detect by header presence, then validate their values. Malformed preflight
+        // attempts must not fall through to an explicit OPTIONS route callback.
+        if ($this->isPreflightRequest($request)) {
+            $requestedMethod = strtoupper(trim($request->header('Access-Control-Request-Method', ''), " \t"));
+            $requestedHeaders = $this->requestedHeaders($request);
+            $vary = ['Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'];
+
+            if (
+                $allowedOrigin === null
+                || !$this->allowsMethod($requestedMethod, $config['methods'])
+                || !$this->allowsHeaders($requestedHeaders, $config['headers'])
+            ) {
+                return $this->withVary(response('', 403), $vary);
+            }
+
+            return $this->withVary($this->withCorsHeaders(
+                response('', 204),
+                $allowedOrigin,
+                $this->allowedMethods($requestedMethod, $config['methods']),
+                $this->allowedHeaders($requestedHeaders, $config['headers']),
+                $config['credentials'],
+                $config['age'],
+                true
+            ), $vary);
+        }
+
+        // Validation and other exceptions may be rendered outside this middleware.
+        // Early send()/abort() calls also need headers before anything is emitted.
+        $decorate = function (Response $response) use ($allowedOrigin, $config): Response {
+            $this->withVary($response, ['Origin']);
+
+            return $allowedOrigin === null ? $response : $this->withCorsHeaders(
+                $response,
+                $allowedOrigin,
+                $config['methods'],
+                $config['headers'],
+                $config['credentials'],
+                $config['age']
+            );
+        };
+        Application::$app?->prepareResponseUsing($decorate);
+
+        $response = $next($request);
+
+        if ($response === null) {
+            return null;
+        }
+
+        if (!$response instanceof Response) {
+            $response = is_int($response)
+                ? new Response('', $response)
+                : response($response);
+        }
+
+        return $decorate($response);
     }
 
     /**
@@ -174,10 +179,6 @@ abstract class CorsAccessControl implements MiddlewareInterface
             $response->setHeader('Access-Control-Allow-Credentials', 'true');
         }
 
-        if ($allowedOrigin !== '*') {
-            $response->setHeader('Vary', 'Origin');
-        }
-
         if ($isPreflight) {
             $response->setHeader('Access-Control-Max-Age', (string) max(0, $maxAge));
         }
@@ -194,11 +195,45 @@ abstract class CorsAccessControl implements MiddlewareInterface
     }
 
     /**
+     * Merge cache variation without losing existing response header values.
+     */
+    private function withVary(Response $response, array $headers): Response
+    {
+        $keys = [];
+        $values = [];
+        foreach ($response->getHeaders() as $key => $value) {
+            if (strcasecmp($key, 'Vary') === 0) {
+                $keys[] = $key;
+                $values = [...$values, ...$this->normalizeList($value)];
+            }
+        }
+
+        $vary = [];
+        foreach ([...$values, ...$headers] as $value) {
+            $vary[strtolower($value)] = $value;
+        }
+        $value = isset($vary['*']) ? '*' : implode(', ', array_values($vary));
+        foreach ($keys ?: ['Vary'] as $key) {
+            $response->setHeader($key, $value);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Validate an HTTP method or field name before reflecting it in headers.
+     */
+    private function isHttpToken(string $value): bool
+    {
+        return preg_match('/\A[!#$%&\'*+.^_`|~0-9a-zA-Z-]+\z/', $value) === 1;
+    }
+
+    /**
      * Determine if the request is a CORS preflight request.
      */
     private function isPreflightRequest(Request $request): bool
     {
-        return $request->isMethod('OPTIONS')
+        return strtoupper($request->getMethod()) === 'OPTIONS'
             && $request->header('Origin') !== null
             && $request->header('Access-Control-Request-Method') !== null;
     }
@@ -208,7 +243,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     private function allowsMethod(string $requestedMethod, array $methods): bool
     {
-        return $requestedMethod !== ''
+        return $this->isHttpToken($requestedMethod)
             && (in_array('*', $methods, true) || in_array($requestedMethod, $methods, true));
     }
 
@@ -221,7 +256,11 @@ abstract class CorsAccessControl implements MiddlewareInterface
     {
         $headers = $request->header('Access-Control-Request-Headers', '');
 
-        return $this->normalizeHeaderList($this->normalizeList($headers));
+        // HTTP list syntax permits empty list members, but not invalid tokens.
+        return array_values(array_filter(
+            array_map(fn($header) => trim($header, " \t"), explode(',', $headers)),
+            fn($header) => $header !== ''
+        ));
     }
 
     /**
@@ -229,14 +268,13 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     private function allowsHeaders(array $requestedHeaders, array $headers): bool
     {
-        if ($requestedHeaders === [] || in_array('*', $headers, true)) {
-            return true;
-        }
-
         $allowed = array_map('strtolower', $headers);
 
         foreach ($requestedHeaders as $header) {
-            if (!in_array(strtolower($header), $allowed, true)) {
+            if (
+                !$this->isHttpToken($header)
+                || (!in_array('*', $headers, true) && !in_array(strtolower($header), $allowed, true))
+            ) {
                 return false;
             }
         }
@@ -265,51 +303,25 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     private function determineAllowedOrigin(string $origin): ?string
     {
-        $config = $this->normalizeConfig();
-        $allowedOrigin = $config['origin'];
-        $credentials = $config['credentials'];
-
-        if ($allowedOrigin === '*') {
-            return $credentials ? $origin : '*';
-        }
-
-        if (is_array($allowedOrigin)) {
-            if (in_array('*', $allowedOrigin, true) || in_array('*', array_map('strtolower', $allowedOrigin), true)) {
-                return $credentials ? $origin : '*';
-            }
-
-            foreach ($allowedOrigin as $allowed) {
-                if (!is_string($allowed)) {
-                    continue;
-                }
-
-                $candidate = trim($allowed);
-                if ($candidate === '') {
-                    continue;
-                }
-
-                if (strcasecmp($candidate, $origin) === 0 || (str_contains($candidate, '*') && $this->matchOriginPattern($candidate, $origin))) {
-                    return $origin;
-                }
-            }
-
+        // A serialized origin is a single value; do not reflect empty values,
+        // whitespace, control characters, or comma-separated origin lists.
+        $origin = trim($origin, " \t");
+        if ($origin === '' || preg_match('/[\x00-\x20\x7f,]/', $origin)) {
             return null;
         }
 
-        if (is_string($allowedOrigin)) {
-            if (str_contains($allowedOrigin, ',')) {
-                foreach ($this->normalizeList(explode(',', $allowedOrigin)) as $candidate) {
-                    if (str_contains((string) $candidate, '*') && $this->matchOriginPattern((string) $candidate, $origin)) {
-                        return $origin;
-                    }
+        $config = $this->normalizeConfig();
+        $origins = $this->normalizeList($config['origin']);
 
-                    if (strcasecmp((string) $candidate, $origin) === 0) {
-                        return $origin;
-                    }
-                }
-            } elseif (strcasecmp($allowedOrigin, '*') === 0) {
-                return $credentials ? $origin : '*';
-            } elseif (strcasecmp($allowedOrigin, $origin) === 0) {
+        if (in_array('*', $origins, true)) {
+            return $config['credentials'] ? $origin : '*';
+        }
+
+        foreach ($origins as $candidate) {
+            if (
+                strcasecmp($candidate, $origin) === 0
+                || (str_contains($candidate, '*') && $this->matchOriginPattern($candidate, $origin))
+            ) {
                 return $origin;
             }
         }
@@ -327,7 +339,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
         }
 
         $pattern = str_replace('\*', '.*', preg_quote(trim((string) $pattern), '/'));
-        return (bool) preg_match("/^$pattern\$/i", $origin);
+        return (bool) preg_match("/\\A$pattern\\z/i", $origin);
     }
 
     /**
@@ -335,17 +347,20 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     private function normalizeList(mixed $value): array
     {
-        if (is_array($value)) {
-            return array_values(array_unique(array_filter(array_map('trim', array_map('strval', $value)))));
+        if (is_string($value)) {
+            $value = explode(',', $value);
         }
 
-        if (!is_string($value)) {
+        if (!is_array($value)) {
             return [];
         }
 
-        return array_values(
-            array_unique(array_filter(array_map('trim', explode(',', $value))))
-        );
+        $value = array_filter($value, fn($item) => is_string($item) || is_int($item));
+
+        return array_values(array_unique(array_filter(
+            array_map(fn($item) => trim((string) $item), $value),
+            fn($item) => $item !== ''
+        )));
     }
 
     /**

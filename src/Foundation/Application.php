@@ -62,6 +62,12 @@ class Application extends \Spark\Container implements ApplicationContract
     /** @var array An array of callable functions to execute after sending the response. */
     private array $deferredCallbacks = [];
 
+    /** @var array<\Closure> Response preparation callbacks for the current request. */
+    private array $responseCallbacks = [];
+
+    /** @var \WeakMap<Response, int>|null Number of callbacks applied per response. */
+    private ?\WeakMap $preparedResponses = null;
+
     /** @var bool Whether the application is currently running termination callbacks. */
     private bool $terminating = false;
 
@@ -557,6 +563,37 @@ class Application extends \Spark\Container implements ApplicationContract
      * Testing captures early responses and lets unexpected exceptions reach the runner.
      */
     public function handle(Request $request): Response
+    {
+        $this->responseCallbacks = [];
+        $this->preparedResponses = new \WeakMap();
+
+        return $this->prepareResponse($this->dispatchRequest($request));
+    }
+
+    /**
+     * Register response preparation that also runs for early sends and errors.
+     * Callbacks are cleared at the start of each request.
+     */
+    public function prepareResponseUsing(\Closure $callback): void
+    {
+        $this->responseCallbacks[] = $callback;
+    }
+
+    /** Apply each request's response preparation callbacks once per response. */
+    public function prepareResponse(Response $response): Response
+    {
+        $this->preparedResponses ??= new \WeakMap();
+
+        for ($index = $this->preparedResponses[$response] ?? 0; $index < count($this->responseCallbacks); $index++) {
+            $this->preparedResponses[$response] = $index + 1;
+            ($this->responseCallbacks[$index])($response);
+        }
+
+        return $response;
+    }
+
+    /** Dispatch the request and render its handled exceptions. */
+    private function dispatchRequest(Request $request): Response
     {
         self::$app = $this;
 

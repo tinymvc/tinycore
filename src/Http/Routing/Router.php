@@ -691,15 +691,15 @@ class Router implements RouterContract
     {
         $requestMethod = strtoupper($request->getMethod());
 
-        // Laravel treats HEAD requests as GET route matches.
-        if ($requestMethod === 'HEAD') {
-            $requestMethod = 'GET';
-        }
-
         // CORS preflight should match the route for the requested method so
         // route-level CORS middleware can return the preflight response.
         if ($this->isCorsPreflight($request) && !$this->routeAllowsMethod($routeMethod, 'OPTIONS')) {
             $requestMethod = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
+        }
+
+        // HEAD uses GET routes, including when requested by a CORS preflight.
+        if ($requestMethod === 'HEAD') {
+            $requestMethod = 'GET';
         }
 
         // Check if the request method is allowed for this route.
