@@ -3,6 +3,7 @@
 namespace Spark\Database\Relation;
 
 use Closure;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use function is_int;
@@ -91,10 +92,10 @@ class HasMany extends Relation
     /**
      * Create a new instance of the related model.
      * 
-     * @param array $attributes The attributes for the new model.
+     * @param Arrayable|array $attributes The attributes for the new model.
      * @return Model The newly created model instance.
      */
-    public function create(array $attributes = []): Model
+    public function create(Arrayable|array $attributes = []): Model
     {
         $parent = $this->getParentModel();
 
@@ -153,11 +154,11 @@ class HasMany extends Relation
     /**
      * Create a new instance of the related model or update if it exists.
      * 
-     * @param array $attributes The attributes for the model.
+     * @param Arrayable|array $attributes The attributes for the model.
      * @param array $values Additional values to set on the model.
      * @return Model The created or updated model instance.
      */
-    public function createOrUpdate(array $attributes = [], array $values = []): Model
+    public function createOrUpdate(Arrayable|array $attributes = [], array $values = []): Model
     {
         $parent = $this->getParentModel();
 
@@ -182,10 +183,10 @@ class HasMany extends Relation
     /**
      * Get or create a new instance of the related model.
      * 
-     * @param array $attributes The attributes to search for.
+     * @param Arrayable|array $attributes The attributes to search for.
      * @return Model The found or newly created model instance.
      */
-    public function firstOrCreate(array $attributes = [], array $values = []): Model
+    public function firstOrCreate(Arrayable|array $attributes = [], array $values = []): Model
     {
         $parent = $this->getParentModel();
 
