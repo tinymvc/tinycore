@@ -1832,6 +1832,7 @@ if (!function_exists('abort')) {
             json(['message' => $message ?? _e('Internal Server Error'), 'code' => $code], $code)
                 ->send();
 
+            Application::$app->terminate();
             exit; // Exit the script
         }
 

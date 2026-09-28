@@ -584,7 +584,7 @@ class Application extends \Spark\Container implements ApplicationContract
     {
         $this->preparedResponses ??= new \WeakMap();
 
-        for ($index = $this->preparedResponses[$response] ?? 0; $index < count($this->responseCallbacks); $index++) {
+        for ($index = $this->preparedResponses[$response] ?? 0; $index < \count($this->responseCallbacks); $index++) {
             $this->preparedResponses[$response] = $index + 1;
             ($this->responseCallbacks[$index])($response);
         }

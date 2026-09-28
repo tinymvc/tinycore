@@ -103,7 +103,8 @@ abstract class CorsAccessControl implements MiddlewareInterface
                 $config['age']
             );
         };
-        Application::$app?->prepareResponseUsing($decorate);
+
+        isset(Application::$app) && Application::$app->prepareResponseUsing($decorate);
 
         $response = $next($request);
 
@@ -130,13 +131,14 @@ abstract class CorsAccessControl implements MiddlewareInterface
         $origin = $this->config['origin'] ?? '*';
         $credentials = $this->config['credentials'] ?? false;
         $maxAge = (int) ($this->config['age'] ?? 0);
+
         $methods = $this->normalizeList($this->config['methods'] ?? ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
         $headers = $this->normalizeList($this->config['headers'] ?? ['Content-Type', 'X-Requested-With', 'Authorization', 'X-CSRF-TOKEN', 'X-XSRF-TOKEN']);
 
         return [
             'origin' => $origin,
-            'credentials' => is_bool($credentials) ? $credentials : filter_var((string) $credentials, FILTER_VALIDATE_BOOLEAN),
             'age' => $maxAge,
+            'credentials' => is_bool($credentials) ? $credentials : filter_var((string) $credentials, FILTER_VALIDATE_BOOLEAN),
             'methods' => array_values(array_filter(array_map('strtoupper', $methods))),
             'headers' => $this->normalizeHeaderList($headers),
         ];
@@ -212,6 +214,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
         foreach ([...$values, ...$headers] as $value) {
             $vary[strtolower($value)] = $value;
         }
+
         $value = isset($vary['*']) ? '*' : implode(', ', array_values($vary));
         foreach ($keys ?: ['Vary'] as $key) {
             $response->setHeader($key, $value);

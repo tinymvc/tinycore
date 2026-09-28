@@ -400,13 +400,18 @@ class Response implements ResponseContract
      */
     public function send(): void
     {
-        Application::$app?->prepareResponse($this);
+        // If the application instance is set, prepare the response and handle testing mode.
+        if (isset(Application::$app)) {
+            Application::$app->prepareResponse($this);
 
-        if (isset(Application::$app) && Application::$app->isTesting()) {
-            throw new \Spark\Testing\ResponseException($this);
+            // If the application is in testing mode, throw a 
+            // ResponseException instead of sending the response.
+            if (Application::$app->isTesting()) {
+                throw new \Spark\Testing\ResponseException($this);
+            }
         }
 
-        $this->prepare();
+        $this->prepare(); // Prepare the response content and headers.
 
         // Set http response code and headers.
         http_response_code($this->statusCode);

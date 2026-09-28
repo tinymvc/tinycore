@@ -15,6 +15,8 @@ use function in_array;
 use function is_array;
 use function is_scalar;
 use function is_string;
+use function ord;
+use function strlen;
 
 /**
  * Class Request
@@ -32,72 +34,41 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 {
     use Macroable, Conditionable;
 
-    /**
-     * HTTP request method (e.g., GET, POST).
-     * @var string
-     */
+    /** @var string HTTP request method (e.g., GET, POST).*/
     public string $method;
 
-    /**
-     * Requested URI path.
-     * @var string
-     */
+    /** @var string The requested URI path.*/
     public string $path;
 
-    /**
-     * Root URL of the application (protocol and host).
-     * @var string
-     */
+    /** @var string Root URL of the application (protocol and host).*/
     public string $rootUrl;
 
-    /**
-     * Full URL of the current request.
-     * @var string
-     */
+    /** @var string Full URL of the current request.*/
     public string $url;
 
-    /**
-     * Additional route parameters.
-     * @var array
-     */
+    /** @var array Additional route parameters.*/
     public array $routeParams;
 
-    /**
-     * Query parameters from the URL.
-     * @var Collection
-     */
+    /** @var Collection Query parameters from the URL.*/
     public Collection $query;
 
-    /**
-     * Parameters from POST data.
-     * @var Collection
-     */
+    /** @var Collection Parameters from POST data.*/
     public Collection $post;
 
-    /**
-     * Uploaded files data.
-     * @var Collection
-     */
+    /** @var Collection Uploaded files data.*/
     public Collection $files;
 
-    /**
-     * Request headers.
-     * @var Collection
-     */
+    /** @var Collection Request headers.*/
     public Collection $headers;
 
-    /**
-     * Server parameters, including headers.
-     * @var Collection
-     */
+    /** @var Collection Server parameters, including headers.*/
     public Collection $server;
 
-    /**
-     * Sanitizer instance for validated input data.
-     * 
-     * @var Input
-     */
-    private Input $validated;
+    /** @var InputSanitizer instance for validated input data.*/
+    private Input $cleanData;
+
+    /** @var array List of trusted proxy IPs or CIDR ranges for accurate client IP detection.*/
+    protected array $trustedProxies;
 
     /**
      * request constructor.
@@ -118,7 +89,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->files = collect($_FILES);
         $this->query = collect($_GET);
         $this->post = collect([...$_POST, ...$this->parsePhpInput()]);
+
         $this->routeParams = []; // Initialize empty route parameters.
+        $this->trustedProxies = config('trusted_proxies', []); // Load trusted proxies from configuration.
     }
 
     /**
@@ -698,14 +671,78 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Checks if the 'Accept' header contains a specific content type.
-     * 
-     * @param string $contentType The content type to check.
-     * @return bool True if content type is accepted, otherwise false.
+     * Parse the Accept header into [mime type => quality], highest quality first.
+     *
+     * @return array<string, float>
+     */
+    public function acceptedTypes(): array
+    {
+        $types = [];
+
+        foreach (explode(',', strtolower((string) $this->header('accept', ''))) as $part) {
+            $segments = explode(';', $part);
+            $type = trim(array_shift($segments));
+
+            if ($type === '') {
+                continue;
+            }
+
+            $quality = 1.0;
+            foreach ($segments as $param) {
+                [$key, $value] = array_pad(explode('=', $param, 2), 2, '');
+                if (trim($key) === 'q') {
+                    $quality = (float) trim($value);
+                }
+            }
+
+            $types[$type] = $quality;
+        }
+
+        arsort($types); // stable in PHP 8+, so equal-quality types keep header order
+
+        return $types;
+    }
+
+    /**
+     * Checks if the client explicitly lists this content type (wildcards do not count).
      */
     public function accept(string $contentType): bool
     {
-        return stripos($this->header('accept', ''), $contentType) !== false;
+        $quality = $this->acceptedTypes()[strtolower(trim($contentType))] ?? 0;
+
+        return $quality > 0;
+    }
+
+    /**
+     * Checks if the client accepts this content type, honoring wildcards
+     * (*&#47;* and type/*) and explicit q=0 rejections.
+     */
+    public function accepts(string $contentType): bool
+    {
+        $contentType = strtolower(trim($contentType));
+        $types = $this->acceptedTypes();
+
+        if ($types === []) {
+            return true; // No Accept header means anything is acceptable.
+        }
+
+        // Most specific match wins: exact, then type/*, then */*.
+        if (isset($types[$contentType])) {
+            return $types[$contentType] > 0;
+        }
+
+        $group = strstr($contentType, '/', true);
+        if ($group !== false && isset($types["$group/*"])) {
+            return $types["$group/*"] > 0;
+        }
+
+        foreach (['*/*', '*'] as $any) {
+            if (isset($types[$any])) {
+                return $types[$any] > 0;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -715,39 +752,102 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function ip(): false|string
     {
-        $headersToCheck = [
-            'client-ip',
-            'x-forwarded-for',
-            'x-forwarded',
-            'forwarded-for',
-            'forwarded',
-            'cf-connecting-ip',
-        ];
+        $remote = $this->server('remote-addr');
+        $remote = is_string($remote) ? $this->cleanIp($remote) : false;
 
-        $ip = '';
+        if ($remote === false) {
+            return false;
+        }
 
-        // Check headers for IP
-        foreach ($headersToCheck as $header) {
-            $value = $this->header($header);
-            if (!empty($value)) {
-                $ip = $value;
-                break;
+        // Direct connection from an untrusted peer: headers cannot be believed.
+        if (!$this->isTrustedProxy($remote)) {
+            return $remote;
+        }
+
+        // Cloudflare sets this itself. Add Cloudflare's ranges to $trustedProxies
+        // and only rely on this if you are actually behind Cloudflare.
+        $cf = $this->cleanIp((string) $this->header('cf-connecting-ip', ''));
+        if ($cf !== false) {
+            return $cf;
+        }
+
+        $chain = [];
+        foreach (explode(',', (string) $this->header('x-forwarded-for', '')) as $part) {
+            $candidate = $this->cleanIp($part);
+            if ($candidate !== false) {
+                $chain[] = $candidate;
+            }
+        }
+        $chain[] = $remote;
+
+        // Walk right to left; the first address that is not one of our proxies is the client.
+        for ($i = count($chain) - 1; $i >= 0; $i--) {
+            if (!$this->isTrustedProxy($chain[$i])) {
+                return $chain[$i];
             }
         }
 
-        // If no IP from headers, fallback to server remote address
-        if (empty($ip)) {
-            $ip = $this->server('remote-addr');
+        return $chain[0]; // every hop is trusted, so use the leftmost
+    }
+
+    /** Strip whitespace, quotes, ports and IPv6 brackets, then validate. */
+    private function cleanIp(string $value): false|string
+    {
+        $value = trim($value, " \t\"'");
+
+        if (preg_match('/^\[([^\]]+)\](?::\d+)?$/', $value, $m)) {
+            $value = $m[1];                          // [::1]:443 -> ::1
+        } elseif (substr_count($value, ':') === 1) {
+            $value = explode(':', $value)[0];        // 1.2.3.4:80 -> 1.2.3.4
         }
 
-        // Extract first IP from comma-separated list
-        if (!empty($ip)) {
-            $ip = explode(',', $ip)[0];
-            $ip = trim($ip);
+        return filter_var($value, FILTER_VALIDATE_IP) ?: false;
+    }
+
+    /** Check if the given IP is a trusted proxy. */
+    private function isTrustedProxy(string $ip): bool
+    {
+        foreach ($this->trustedProxies as $proxy) {
+            if ($proxy === '*' || $this->ipInRange($ip, $proxy)) {
+                return true;
+            }
         }
 
-        // Validate and return IP, or false if invalid
-        return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : false;
+        return false;
+    }
+
+    /** IPv4/IPv6 exact match or CIDR check. */
+    private function ipInRange(string $ip, string $range): bool
+    {
+        [$subnet, $bits] = array_pad(explode('/', $range, 2), 2, null);
+
+        $ipBin = @inet_pton($ip);
+        $subnetBin = @inet_pton($subnet);
+
+        if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
+            return false;
+        }
+
+        $max = strlen($ipBin) * 8;
+        $bits = $bits === null ? $max : (int) $bits;
+
+        if ($bits < 0 || $bits > $max) {
+            return false;
+        }
+
+        $bytes = intdiv($bits, 8);
+        if (substr($ipBin, 0, $bytes) !== substr($subnetBin, 0, $bytes)) {
+            return false;
+        }
+
+        $remainder = $bits % 8;
+        if ($remainder === 0) {
+            return true;
+        }
+
+        $mask = (0xFF << (8 - $remainder)) & 0xFF;
+
+        return (ord($ipBin[$bytes]) & $mask) === (ord($subnetBin[$bytes]) & $mask);
     }
 
     /**
@@ -1041,14 +1141,68 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Checks if the request is an AJAX request, accepts JSON or if the path contains '/api/'.
-     * 
-     * @return bool True if the request is an AJAX request, accepts JSON or contains '/api/', false otherwise.
+     * Determines if the request expects a JSON response.
+     *
+     * This method checks if the request is an AJAX request, accepts JSON,
+     * or is an API path.
+     *
+     * @return bool True if the request expects a JSON response, false otherwise.
      */
     public function expectsJson(): bool
     {
-        return $this->accept('application/json') &&
-            ($this->isAjax() || strpos($this->getPath(), '/api/') === 0 || strpos($this->getPath(), '/webhook/') === 0);
+        return $this->wantsJson()
+            || ($this->isAjax() && $this->acceptsAnyContentType())
+            || $this->isApiPath();
+    }
+
+    /**
+     * Determines if the request wants a JSON response based on the 'Accept' header.
+     *
+     * This method checks if the first content type in the 'Accept' header
+     * contains '/json' or '+json'.
+     *
+     * @return bool True if the request wants a JSON response, false otherwise.
+     */
+    public function wantsJson(): bool
+    {
+        $first = strtolower(trim(explode(',', $this->header('accept', ''))[0]));
+        $first = trim(explode(';', $first)[0]);
+
+        return str_contains($first, '/json') || str_contains($first, '+json');
+    }
+
+    /**
+     * Determines if the request accepts any content type.
+     *
+     * This method checks if the 'Accept' header is empty or contains '/*'.
+     *
+     * @return bool True if the request accepts any content type, false otherwise.
+     */
+    public function acceptsAnyContentType(): bool
+    {
+        $accept = trim(explode(';', explode(',', $this->header('accept', ''))[0])[0]);
+
+        return $accept === '' || $accept === '*/*' || $accept === '*';
+    }
+
+    /**
+     * Determines if the request path is an API or webhook path.
+     *
+     * This method checks if the request path starts with '/api' or '/webhook'.
+     *
+     * @return bool True if the request path is an API or webhook path, false otherwise.
+     */
+    protected function isApiPath(): bool
+    {
+        $path = '/' . ltrim($this->getPath(), '/');
+
+        foreach (['/api', '/webhook'] as $prefix) {
+            if ($path === $prefix || str_starts_with($path, "$prefix/")) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1433,7 +1587,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             exit; // Exit the script to prevent further execution
         }
 
-        return $this->validated = $validator->validated(); // Return the validated attributes
+        return $this->cleanData = $validator->validated(); // Return the validated attributes
     }
 
     /**
@@ -1532,15 +1686,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function validated(?string $key = null, $default = null): mixed
     {
-        if (!isset($this->validated)) {
+        if (!isset($this->cleanData)) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
         }
 
         if ($key !== null) {
-            return $this->validated->get($key, $default);
+            return $this->cleanData->get($key, $default);
         }
 
-        return $this->validated;
+        return $this->cleanData;
     }
 
     /**
