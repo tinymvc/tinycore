@@ -35,6 +35,12 @@ class Column implements ColumnContract
     {
     }
 
+    /** The unquoted column name. */
+    public function getName(): string
+    {
+        return $this->name;
+    }
+
     /**
      * Marks the column as nullable.
      *
@@ -43,6 +49,10 @@ class Column implements ColumnContract
      */
     public function nullable(bool $value = true): self
     {
+        $this->modifiers = array_values(array_filter(
+            $this->modifiers,
+            fn($modifier) => $modifier !== 'nullable' && $modifier !== 'required'
+        ));
         $this->modifiers[] = $value ? 'nullable' : 'required';
         return $this;
     }
@@ -69,8 +79,7 @@ class Column implements ColumnContract
      */
     public function required(bool $value = true): self
     {
-        $this->modifiers[] = $value ? 'required' : 'nullable';
-        return $this;
+        return $this->nullable(!$value);
     }
 
     /**
@@ -209,9 +218,9 @@ class Column implements ColumnContract
     }
 
     /**
-     * Adds a unique index to the column.
+     * Adds a full-text index to the column.
      *
-     * @param string|null $name The name of the unique index
+     * @param string|null $name The name of the full-text index
      * @return self
      */
     public function fullText(?string $name = null): self

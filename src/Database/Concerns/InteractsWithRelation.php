@@ -125,7 +125,7 @@ trait InteractsWithRelation
         $relationConfig = $model->getRelationshipConfig($relation);
 
         // Create alias, e.g. "posts" -> "posts_exists"
-        $alias ??= (string) str("$aliasBase-exists")->snake();
+        $alias ??= (string) str(str_replace('.', '_', $aliasBase) . '_exists')->snake();
 
         $this->addExistsSubquery($relationConfig, $alias, $callback);
     }
@@ -207,13 +207,26 @@ trait InteractsWithRelation
     }
 
     /**
+     * Exclude one or more model primary keys. An empty array excludes nothing.
+     *
+     * @param string|int|array $value The primary key value(s) to exclude.
+     * @return QueryBuilder The current query builder instance.
+     */
+    public function whereNotKey(string|int|array $value): QueryBuilder
+    {
+        $model = $this->getRelatedModel();
+
+        return $this->wherePrimaryKey($model->getPrimaryKey(), $value, not: true);
+    }
+
+    /**
      * Bind a primary-key condition, deferring its table qualifier until compilation.
      * Reads may use aliases/joins; writes target the physical table.
      */
-    private function wherePrimaryKey(string $key, string|int|array $value): QueryBuilder
+    private function wherePrimaryKey(string $key, string|int|array $value, bool $not = false): QueryBuilder
     {
         if (is_array($value) && $value === []) {
-            return $this->whereRaw('0 = 1');
+            return $this->whereRaw($not ? '1 = 1' : '0 = 1');
         }
 
         $placeholder = $this->getWhereSqlColumn('spark_primary_key');
@@ -225,9 +238,9 @@ trait InteractsWithRelation
         if (is_array($value)) {
             $value = array_values($value);
             $parameters = implode(', ', array_map(fn($index) => ":{$placeholder}_$index", array_keys($value)));
-            $sql = "$marker IN ($parameters)";
+            $sql = $marker . ($not ? ' NOT IN' : ' IN') . " ($parameters)";
         } else {
-            $sql = "$marker = :$placeholder";
+            $sql = $marker . ($not ? ' !=' : ' =') . " :$placeholder";
         }
 
         return $this->whereRaw($sql, [$placeholder => $value]);
@@ -940,6 +953,11 @@ trait InteractsWithRelation
      */
     private function buildAggregateExpression(string $function, string $column, string $relatedTable): string
     {
+        // EXISTS must select rows, not COUNT(*), which returns a row even for no matches.
+        if ($function === 'exists') {
+            return '1';
+        }
+
         $function = strtoupper($function);
 
         // Handle COUNT(*) special case
@@ -1078,7 +1096,7 @@ trait InteractsWithRelation
      */
     private function addExistsSubquery(array $relationConfig, string $alias, ?Closure $callback = null): void
     {
-        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, 'count', '*');
+        $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, 'exists', '*');
 
         if ($subquery['parameters'] && $this->parameters) {
             throw new \Spark\Database\Exceptions\QueryBuilderException(

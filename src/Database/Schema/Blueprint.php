@@ -284,7 +284,7 @@ class Blueprint implements BlueprintContract
      */
     public function foreignId(string $name): ForeignKeyConstraint
     {
-        $this->unsignedBigInteger($name);
+        $this->unsignedBigInteger($name)->required();
 
         return $this->foreign($name);
     }
@@ -293,12 +293,23 @@ class Blueprint implements BlueprintContract
      * Add a 'foreign' constraint to the blueprint.
      *
      * @param array|string $columns The column(s) to constrain.
-     * @param string|null $name The name of the table.
+     * @param string|null $name The name of the constraint.
      * @return ForeignKeyConstraint
      */
     public function foreign(array|string $columns, ?string $name = null): ForeignKeyConstraint
     {
-        $constraint = new ForeignKeyConstraint($columns, $name, end($this->columns));
+        $column = null;
+        $names = (array) $columns;
+        if (\count($names) === 1) {
+            foreach ($this->columns as $candidate) {
+                if ($candidate->getName() === reset($names)) {
+                    $column = $candidate;
+                    break;
+                }
+            }
+        }
+
+        $constraint = new ForeignKeyConstraint($columns, $name, $column);
 
         $this->foreignKeys[] = $constraint;
         return $constraint;

@@ -63,7 +63,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
      */
     private function authorizeCurrentRequest(Request $request, int $duration, int $attempts, string $suffix): bool
     {
-        $user = ((string) $request->ip() ?: '127.0.0.1') . ':' . ((string) $request->useragent() ?: 'unknown');
+        $user = (string) $request->ip() ?: '127.0.0.1';
         $path = trim($request->getPath(), '/');
 
         $storage = Cache::make('th:requests');

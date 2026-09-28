@@ -188,7 +188,7 @@ class Storage implements Contracts\StorageContract
         return $this->storage->temporaryUploadUrl(StoragePath::normalize($key), $expires, $contentType, $acl);
     }
 
-    /** Download an S3 object to a local path; the destination directory must exist. */
+    /** Download an S3 object to a local path, creating its parent directory if needed. */
     public function downloadFile(string $key, string $localPath): bool
     {
         if (!$this->storage instanceof S3Storage) {

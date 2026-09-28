@@ -27,9 +27,10 @@ abstract class AuthMiddleware implements MiddlewareInterface
         $guards = empty($guards) ? ['default'] : $guards;
 
         foreach ($guards as $guard) {
+            $negated = $this->isNot($guard);
             $guard = ltrim($guard, '!');
 
-            if (Auth::guard($guard)->check() !== $this->isNot($guard)) {
+            if (Auth::guard($guard)->check() !== $negated) {
                 return $next($request);
             }
         }

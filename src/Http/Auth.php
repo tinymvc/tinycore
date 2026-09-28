@@ -892,16 +892,12 @@ class Auth implements AuthContract, ArrayAccess
      */
     protected function checkBasicAuth(): ?int
     {
-        $authHeader = request()->header('authorization');
+        $basicAuth = request()->basicAuth();
 
-        if ($authHeader && preg_match('/Basic\s(\S+)/', $authHeader, $matches)) {
-            $encodedCredentials = $matches[1];
-            $decodedCredentials = base64_decode($encodedCredentials, true);
-            if (!is_string($decodedCredentials) || !str_contains($decodedCredentials, ':')) {
-                return null;
-            }
+        if ($basicAuth && isset($basicAuth['username'], $basicAuth['password'])) {
 
-            [$username, $password] = explode(':', $decodedCredentials, 2);
+            $username = $basicAuth['username'];
+            $password = $basicAuth['password'];
 
             $user = $this->model::select('id, password')
                 ->where('username', $username)

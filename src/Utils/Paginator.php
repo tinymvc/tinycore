@@ -149,9 +149,8 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      */
     public function keywordValue(): int
     {
-        return filter_input(
-            INPUT_GET,
-            $this->keyword(),
+        return filter_var(
+            request()->query($this->keyword(), 1),
             FILTER_VALIDATE_INT,
             ['options' => ['default' => 1, 'min_range' => 1]]
         ) ?: 1;
@@ -201,7 +200,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
      */
     public function items(): array
     {
-        return $this->data(true);
+        return $this->data();
     }
 
     /**
@@ -478,8 +477,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
     }
 
     /**
-     * Converts the paginator instance to an array, matching Laravel's
-     * standard paginator structure.
+     * Converts the paginator to Laravel-style metadata with Spark link entries.
      * 
      * @return array
      */
@@ -628,8 +626,7 @@ class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringab
     }
 
     /**
-     * Apply the given callback to each item and return a new collection of results,
-     * without mutating the paginator's own data (alias of Laravel's through()).
+     * Map each item into a new array without mutating the paginator's data.
      * 
      * @param callable $callback
      * @return array

@@ -217,6 +217,7 @@ class S3Storage
 
         $deleted = 0;
         $marker = '';
+        $seen = [];
 
         do {
             $page = $this->listFiles(1000, $prefix, $marker);
@@ -227,6 +228,12 @@ class S3Storage
             }
 
             $marker = $page['next_marker'] ?? '';
+            if ($page['is_truncated']) {
+                if ($marker === '' || isset($seen[$marker])) {
+                    throw new RuntimeException('S3 prefix deletion encountered a missing or repeated listing cursor.');
+                }
+                $seen[$marker] = true;
+            }
         } while ($page['is_truncated']);
 
         return $deleted;
@@ -250,27 +257,51 @@ class S3Storage
 
     /**
      * Stream an object directly to a local file, without buffering the whole
-     * body in memory. Use for large files where getFile() would risk OOM.
+     * body in memory. Publish a temporary file only after a successful transfer,
+     * preserving any existing destination on failure. The parent directory must exist.
      */
     public function downloadFile(string $key, string $destinationPath): bool
     {
         $this->objectUrl($key);
 
-        $handle = @fopen($destinationPath, 'wb');
+        $directory = dirname($destinationPath);
+        if (!is_dir($directory) || !is_writable($directory)) {
+            throw new RuntimeException("Destination directory is not writable: {$directory}");
+        }
+        $temporary = tempnam($directory, '.spark_s3_');
+        if ($temporary === false) {
+            throw new RuntimeException('Cannot create temporary download file.');
+        }
+        $handle = @fopen($temporary, 'wb');
         if ($handle === false) {
+            @unlink($temporary);
             throw new RuntimeException("Cannot open destination for writing: {$destinationPath}");
         }
 
         try {
             $response = $this->request('GET', $key)
-                ->withOptions([CURLOPT_FILE => $handle])
+                ->withOptions([CURLOPT_RETURNTRANSFER => false, CURLOPT_FILE => $handle])
                 ->execute();
 
             $this->checkResponse($response, 200, 'Download file');
 
+            if (!fflush($handle)) {
+                throw new RuntimeException('Cannot flush downloaded file.');
+            }
+            fclose($handle);
+            $handle = null;
+            if (!@rename($temporary, $destinationPath)) {
+                throw new RuntimeException("Cannot save downloaded file: {$destinationPath}");
+            }
+
             return true;
         } finally {
-            fclose($handle);
+            if (\is_resource($handle)) {
+                fclose($handle);
+            }
+            if (is_file($temporary)) {
+                @unlink($temporary);
+            }
         }
     }
 
@@ -491,7 +522,7 @@ class S3Storage
 
     /**
      * Short-lived presigned PUT URL for direct client uploads; sign the origin, never a CDN URL.
-     * The client must PUT the raw file body with no additional headers beyond what's signed here.
+     * The client must PUT the raw file body and match any signed Content-Type and x-amz-acl headers.
      * 
      * @param string $key Destination object key.
      * @param int $expires Seconds until the URL expires (1–604800).
@@ -509,6 +540,28 @@ class S3Storage
             throw new InvalidArgumentException('This client supports null, private, or public-read ACLs.');
         }
 
+        if ($contentType !== null && (trim($contentType) === '' || preg_match('/[\x00-\x1f\x7f]/', $contentType))) {
+            throw new InvalidArgumentException('Content-Type must be non-empty and contain no control characters.');
+        }
+
+        $url = $this->objectUrl($key);
+        $headers = ['host' => $this->host($url)];
+
+        if ($contentType !== null) {
+            $headers['content-type'] = preg_replace('/ +/', ' ', trim($contentType));
+        }
+
+        if ($acl !== null) {
+            $headers['x-amz-acl'] = $acl;
+        }
+
+        ksort($headers);
+        $signedHeaders = implode(';', array_keys($headers));
+        $canonicalHeaders = '';
+        foreach ($headers as $name => $value) {
+            $canonicalHeaders .= "$name:$value\n";
+        }
+
         $dateTime = gmdate('Ymd\THis\Z');
         $date = substr($dateTime, 0, 8);
         $scope = "{$date}/{$this->region}/s3/aws4_request";
@@ -517,22 +570,20 @@ class S3Storage
             'X-Amz-Credential' => "{$this->accessKey}/{$scope}",
             'X-Amz-Date' => $dateTime,
             'X-Amz-Expires' => (string) $expires,
-            'X-Amz-SignedHeaders' => 'host',
+            'X-Amz-SignedHeaders' => $signedHeaders,
         ];
 
         if ($this->sessionToken !== null) {
             $query['X-Amz-Security-Token'] = $this->sessionToken;
         }
         ksort($query);
-
-        $url = $this->objectUrl($key);
         $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $canonical = implode("\n", [
             'PUT',
             parse_url($url, PHP_URL_PATH),
             $queryString,
-            'host:' . $this->host($url) . "\n",
-            'host',
+            $canonicalHeaders,
+            $signedHeaders,
             'UNSIGNED-PAYLOAD',
         ]);
 

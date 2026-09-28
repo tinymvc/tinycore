@@ -759,8 +759,32 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         $authorizationHeader = $this->header('authorization');
 
-        if ($authorizationHeader && preg_match('/Bearer\s(\S+)/', $authorizationHeader, $matches)) {
+        if ($authorizationHeader && preg_match('/^Bearer[ \t]+(\S+)$/iD', trim($authorizationHeader), $matches)) {
             return $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Retrieves the Basic Auth credentials from the Authorization header.
+     * 
+     * @return ?array An associative array with 'username' and 'password', or null if not present.
+     */
+    public function basicAuth(): ?array
+    {
+        $authHeader = $this->header('authorization');
+
+        if ($authHeader && preg_match('/Basic\s(\S+)/', $authHeader, $matches)) {
+            $encodedCredentials = $matches[1];
+            $decodedCredentials = base64_decode($encodedCredentials, true);
+            if (!is_string($decodedCredentials) || !str_contains($decodedCredentials, ':')) {
+                return null;
+            }
+
+            [$username, $password] = explode(':', $decodedCredentials, 2);
+
+            return ['username' => $username, 'password' => $password];
         }
 
         return null;
@@ -1074,7 +1098,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function integer(string $key, int $default = 0): int
     {
-        return $this->input()->number($key) ?: $default;
+        return $this->input()->number($key) ?? $default;
     }
 
     /**
@@ -1087,7 +1111,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function float(string $key, float $default = 0.0): float
     {
-        return $this->input()->float($key) ?: $default;
+        return $this->input()->float($key) ?? $default;
     }
 
     /**
@@ -1100,7 +1124,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function boolean(string $key, bool $default = false): bool
     {
-        return $this->input()->boolean($key) ?: $default;
+        return $this->input()->get($key) === null ? $default : ($this->input()->boolean($key) ?? $default);
     }
 
     /**
@@ -1508,7 +1532,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function validated(?string $key = null, $default = null): mixed
     {
-        if (!isset($this->validated) || $this->validated->isEmpty()) {
+        if (!isset($this->validated)) {
             throw new \RuntimeException('No data has been validated yet. Please call validate() first.');
         }
 
