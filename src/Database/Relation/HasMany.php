@@ -97,6 +97,10 @@ class HasMany extends Relation
      */
     public function create(Arrayable|array $attributes = []): Model
     {
+        if ($attributes instanceof Arrayable) {
+            $attributes = $attributes->toArray();
+        }
+
         $parent = $this->getParentModel();
 
         if (!$parent) {
@@ -160,6 +164,10 @@ class HasMany extends Relation
      */
     public function createOrUpdate(Arrayable|array $attributes = [], array $values = []): Model
     {
+        if ($attributes instanceof Arrayable) {
+            $attributes = $attributes->toArray();
+        }
+
         $parent = $this->getParentModel();
 
         if (!$parent) {
@@ -188,6 +196,10 @@ class HasMany extends Relation
      */
     public function firstOrCreate(Arrayable|array $attributes = [], array $values = []): Model
     {
+        if ($attributes instanceof Arrayable) {
+            $attributes = $attributes->toArray();
+        }
+
         $parent = $this->getParentModel();
 
         if (!$parent) {
