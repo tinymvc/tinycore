@@ -260,18 +260,29 @@ class QueryBuilder implements QueryBuilderContract
     }
 
     /**
-     * Gets the table name with the column name used for the query.
+     * Qualify a bare column with the read alias or effective table, including its prefix.
+     * Qualified names and SQL expressions are preserved; this does not escape raw SQL.
      *
-     * @param string $column The column name.
-     * @return string The table name with the column name.
+     * @param string $column A column name or trusted SQL expression.
+     * @return string The qualified column or unchanged expression.
      */
     public function withAlias(string $column): string
     {
+        $column = trim($column);
+
+        // A quoted bare identifier still needs qualification in an ambiguous join.
+        $quotedIdentifier = preg_match('/^(?:`(?:[^`]|``)+`|"(?:[^"]|"")+"|\[(?:[^\]]|\]\])+\])$/D', $column);
+        if (!$quotedIdentifier && !preg_match('/^(?:[a-zA-Z_][a-zA-Z0-9_]*|\*)$/D', $column)) {
+            return $column;
+        }
+
         if ($this->hasAlias()) {
             return "{$this->getAlias()}.$column";
         }
 
-        return "{$this->table}.$column";
+        $table = $this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']);
+
+        return "$table.$column";
     }
 
     /**
