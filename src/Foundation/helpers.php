@@ -23,7 +23,7 @@ use Spark\Queue\Job;
 use Spark\Translator;
 use Spark\Cache\Cache;
 use Spark\Carbon;
-use Spark\Utils\FileManager;
+use Spark\Utils\File;
 use Spark\Utils\Image;
 use Spark\Cache\Lock;
 use Spark\Utils\Mail;
@@ -2207,33 +2207,18 @@ if (!function_exists('carbon')) {
     }
 }
 
-if (!function_exists('filemanager')) {
-    /**
-     * Retrieves the FileManager instance.
-     *
-     * This function returns the FileManager instance, which provides methods
-     * for managing files and directories.
-     *
-     * @return FileManager The FileManager instance.
-     */
-    function filemanager(): FileManager
-    {
-        return new FileManager;
-    }
-}
-
 if (!function_exists('fm')) {
     /**
-     * Retrieves the FileManager instance.
+     * Retrieves the File instance.
      *
-     * This function returns the FileManager instance, which provides methods
-     * for managing files and directories. It is an alias for the filemanager() function.
+     * This function returns the File instance, which provides methods
+     * for managing files and directories.
      *
-     * @return FileManager The FileManager instance.
+     * @return File The File instance.
      */
-    function fm(): FileManager
+    function fm(): File
     {
-        return new FileManager;
+        return new File;
     }
 }
 

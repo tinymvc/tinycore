@@ -11,7 +11,7 @@ use function is_string;
 use function sprintf;
 
 /**
- * FileManager class provides utility methods for file and directory operations.
+ * File class provides utility methods for file and directory operations.
  * 
  * This class includes methods to check file existence, read/write files, manage directories,
  * and perform various file operations such as copying, moving, deleting, and retrieving file information.
@@ -21,7 +21,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class FileManager
+class File
 {
     /**
      * Check if a file exists

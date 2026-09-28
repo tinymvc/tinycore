@@ -11,7 +11,7 @@ use Spark\Queue\Queue;
 use Spark\Http\Routing\Router;
 use Spark\Translator;
 use Spark\Cache\Cache;
-use Spark\Utils\FileManager;
+use Spark\Utils\File;
 use Spark\Http\Client\Http;
 use Spark\Utils\Image;
 use Spark\Utils\Mail;
@@ -172,7 +172,7 @@ class Tinker
         $this->context['http'] = Application::$app->make(Http::class);
         $this->context['queue'] = Application::$app->make(Queue::class);
         $this->context['cache'] = Application::$app->make(Cache::class);
-        $this->context['fm'] = Application::$app->make(FileManager::class);
+        $this->context['fm'] = Application::$app->make(File::class);
         $this->context['image'] = Application::$app->make(Image::class);
 
         // Import Mailer if available

@@ -195,7 +195,7 @@ class Storage implements Contracts\StorageContract
             throw new RuntimeException('Download to local path is supported only by S3 disks.');
         }
 
-        \Spark\Utils\FileManager::ensureDirectoryExists(dirname($localPath));
+        \Spark\Utils\File::ensureDirectoryExists(dirname($localPath));
         return $this->storage->downloadFile(StoragePath::normalize($key), $localPath);
     }
 

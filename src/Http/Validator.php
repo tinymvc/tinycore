@@ -1075,7 +1075,7 @@ class Validator implements ValidatorContract
             return false;
         }
 
-        $mimeType = \Spark\Utils\FileManager::mimeType($tmpPath);
+        $mimeType = \Spark\Utils\File::mimeType($tmpPath);
 
         if ($mimeType === false) {
             return false;

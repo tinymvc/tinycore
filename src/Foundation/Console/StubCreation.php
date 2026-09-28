@@ -6,7 +6,7 @@ use RuntimeException;
 use Spark\Console\Prompt;
 use Spark\Support\Pluralizer;
 use Spark\Support\Str;
-use Spark\Utils\FileManager;
+use Spark\Utils\File;
 use function is_array;
 use function is_string;
 
@@ -40,7 +40,7 @@ class StubCreation
         }
 
         // Load the stub file contents
-        $stub = FileManager::get((string) $stubConfig['stub']);
+        $stub = File::get((string) $stubConfig['stub']);
         if ($stub === false) {
             throw new RuntimeException("Unable to read stub file: {$stubConfig['stub']}");
         }
@@ -55,7 +55,7 @@ class StubCreation
         }
 
         // Check if the file already exists and prompt for override confirmation
-        if (FileManager::isFile($destination)) {
+        if (File::isFile($destination)) {
             $override = Prompt::confirm(
                 "The file: {$destination}\n is already exists. Do you want to override it?",
                 true
@@ -68,11 +68,11 @@ class StubCreation
         // Create directory if it doesn't exist
         $directory = dirname($destination);
         if ($directory !== '' && $directory !== '.') {
-            FileManager::ensureDirectoryWritable($directory);
+            File::ensureDirectoryWritable($directory);
         }
 
         // Write the stub content to the destination file
-        if (FileManager::put($destination, $stub)) {
+        if (File::put($destination, $stub)) {
             Prompt::message("File: {$destination}\n created successfully.");
         } else {
             Prompt::message("File: {$destination}\n could not be created.", 'warning');
@@ -158,7 +158,7 @@ class StubCreation
      */
     public static function appendLineToArray(string $destination, string $element, ?string $key = null): void
     {
-        $contents = FileManager::get($destination);
+        $contents = File::get($destination);
 
         // Find the array start
         if ($contents === false || !preg_match('/return\s*(\[.*\]);/sU', $contents, $matches)) {
@@ -186,7 +186,7 @@ class StubCreation
             throw new RuntimeException("Unable to update return array in {$destination}");
         }
 
-        if (FileManager::put($destination, $newContents) === false) {
+        if (File::put($destination, $newContents) === false) {
             throw new RuntimeException("Unable to write updated array in {$destination}");
         }
     }

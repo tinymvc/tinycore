@@ -3,6 +3,7 @@
 namespace Spark\View;
 
 use InvalidArgumentException;
+use Spark\Utils\File;
 use Spark\View\Contracts\BladeCompilerContract;
 use function count;
 use function in_array;
@@ -45,7 +46,7 @@ class BladeCompiler implements BladeCompilerContract
         $this->cachePath = dir_path($cachePath);
 
         // Ensure the cache directory exists and is writable
-        fm()->ensureDirectoryWritable($this->cachePath);
+        File::ensureDirectoryWritable($this->cachePath);
     }
 
     /**

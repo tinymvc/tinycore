@@ -8,7 +8,7 @@ use Spark\Console\Process;
 use Spark\Console\Prompt;
 use Spark\Queue\Queue;
 use Spark\Http\Routing\Router;
-use Spark\Utils\FileManager;
+use Spark\Utils\File;
 use Spark\Utils\RedisConnector;
 use function in_array;
 use function is_array;
@@ -311,9 +311,9 @@ class PrimaryCommandsHandler
                     $item = dir_path("$cacheDir/$item");
 
                     if (is_dir($item)) {
-                        FileManager::deleteDirectory($item); // Delete directory
+                        File::deleteDirectory($item); // Delete directory
                     } else {
-                        FileManager::delete($item); // Delete file
+                        File::delete($item); // Delete file
                     }
                 }
             } else {
@@ -442,13 +442,13 @@ class PrimaryCommandsHandler
         $publicUploadsDir = root_dir('public/uploads');
 
         // Check if the symbolic link already exists
-        if (FileManager::isLink($publicUploadsDir)) {
+        if (File::isLink($publicUploadsDir)) {
             Prompt::message("The symbolic link is already exists.", "warning");
             return;
         }
 
         // Attempt to create the symbolic link
-        if (!FileManager::link($storageUploadsDir, $publicUploadsDir)) {
+        if (!File::link($storageUploadsDir, $publicUploadsDir)) {
             Prompt::message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
         }
 

@@ -2,6 +2,7 @@
 
 namespace Spark\Storage;
 
+use Spark\Utils\File;
 use Spark\Utils\Image;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Utils\UploaderUtilContract;
@@ -164,7 +165,7 @@ class Uploader implements UploaderUtilContract
     public function setUploadDir(string $uploadDir): self
     {
         // Ensure the upload directory exists and is writable
-        if (!fm()->ensureDirectoryWritable($uploadDir)) {
+        if (!File::ensureDirectoryWritable($uploadDir)) {
             throw new UploaderUtilException(__('Upload directory is not writable.'));
         }
 
