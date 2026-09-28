@@ -398,12 +398,13 @@ class Auth implements AuthContract, ArrayAccess
      * This method creates a JWT token that includes the user's ID and an expiration time.
      * Additional payload data can be included by passing an associative array.
      *
+     * @param Model|null $user The user model for whom the JWT token is to be generated. If null, the currently logged in user will be used.
      * @param array $payload Optional associative array of additional payload data to include in the token.
      * @return string The generated JWT token as a string.
      */
-    public function createToken(array $payload = []): string
+    public function createToken(?Model $user = null, array $payload = []): string
     {
-        $user = $this->getUser();
+        $user ??= $this->getUser();
 
         if (!isset($user)) {
             throw new \RuntimeException('No authenticated user found to create JWT token.');
