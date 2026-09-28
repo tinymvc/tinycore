@@ -91,7 +91,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->post = collect([...$_POST, ...$this->parsePhpInput()]);
 
         $this->routeParams = []; // Initialize empty route parameters.
-        $this->trustedProxies = config('trusted_proxies', []); // Load trusted proxies from configuration.
+        $this->trustedProxies = config('app.trusted_proxies', []); // Load trusted proxies from configuration.
     }
 
     /**
