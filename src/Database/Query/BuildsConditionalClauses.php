@@ -6,6 +6,7 @@ use Closure;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Database\QueryBuilder;
+use Spark\Database\Relation\Relation;
 use function func_num_args;
 use function in_array;
 use function is_array;
@@ -372,12 +373,12 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param array|string|QueryBuilder|Closure $values
+     * @param array|string|Relation|QueryBuilder|Closure $values
      *   An array of values, or a trusted SQL string, builder, or closure for a subquery.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereIn(string $column, array|string|QueryBuilder|Closure $values): QueryBuilder
+    public function whereIn(string $column, array|string|Relation|QueryBuilder|Closure $values): QueryBuilder
     {
         return is_array($values)
             ? $this->whereInValues($column, $values)
@@ -389,12 +390,12 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param array|string|QueryBuilder|Closure $values
+     * @param array|string|Relation|QueryBuilder|Closure $values
      *   An array of values, or a trusted SQL string, builder, or closure for a subquery.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNotIn(string $column, array|string|QueryBuilder|Closure $values): QueryBuilder
+    public function whereNotIn(string $column, array|string|Relation|QueryBuilder|Closure $values): QueryBuilder
     {
         return is_array($values)
             ? $this->whereInValues($column, $values, not: true)
@@ -406,12 +407,12 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param array|string|QueryBuilder|Closure $values
+     * @param array|string|Relation|QueryBuilder|Closure $values
      *   An array of values, or a trusted SQL string, builder, or closure for a subquery.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereIn(string $column, array|string|QueryBuilder|Closure $values): QueryBuilder
+    public function orWhereIn(string $column, array|string|Relation|QueryBuilder|Closure $values): QueryBuilder
     {
         return is_array($values)
             ? $this->whereInValues($column, $values, 'OR')
@@ -423,12 +424,12 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param array|string|QueryBuilder|Closure $values
+     * @param array|string|Relation|QueryBuilder|Closure $values
      *   An array of values, or a trusted SQL string, builder, or closure for a subquery.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereNotIn(string $column, array|string|QueryBuilder|Closure $values): QueryBuilder
+    public function orWhereNotIn(string $column, array|string|Relation|QueryBuilder|Closure $values): QueryBuilder
     {
         return is_array($values)
             ? $this->whereInValues($column, $values, 'OR', true)
@@ -440,7 +441,7 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @param string $boolean
      *   The type of where clause to add. May be 'AND' or 'OR'.
@@ -449,8 +450,12 @@ trait BuildsConditionalClauses
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false, string $mode = 'IN'): QueryBuilder
+    public function whereInSub(string $column, string|Relation|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false, string $mode = 'IN'): QueryBuilder
     {
+        if ($subquery instanceof Relation) {
+            $subquery = $subquery->query();
+        }
+
         if ($subquery instanceof Closure) {
             $newQuery = new QueryBuilder($this->database);
             $newQuery->table($this->table);
@@ -486,14 +491,14 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the NOT IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @param string $boolean
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNotInSub(string $column, string|QueryBuilder|Closure $subquery, string $boolean = 'AND'): QueryBuilder
+    public function whereNotInSub(string $column, string|Relation|QueryBuilder|Closure $subquery, string $boolean = 'AND'): QueryBuilder
     {
         return $this->whereInSub($column, $subquery, $boolean, not: true);
     }
@@ -503,12 +508,12 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereInSub(string $column, string|QueryBuilder|Closure $subquery): QueryBuilder
+    public function orWhereInSub(string $column, string|Relation|QueryBuilder|Closure $subquery): QueryBuilder
     {
         return $this->whereInSub($column, $subquery, 'OR');
     }
@@ -518,12 +523,12 @@ trait BuildsConditionalClauses
      *
      * @param string $column
      *   The column name to query.
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the NOT IN clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereNotInSub(string $column, string|QueryBuilder|Closure $subquery): QueryBuilder
+    public function orWhereNotInSub(string $column, string|Relation|QueryBuilder|Closure $subquery): QueryBuilder
     {
         return $this->whereInSub($column, $subquery, 'OR', not: true);
     }
@@ -531,7 +536,7 @@ trait BuildsConditionalClauses
     /**
      * Add a WHERE EXISTS condition to the query.
      *
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @param string $boolean
      *   The type of where clause to add. May be 'AND' or 'OR'.
@@ -540,7 +545,7 @@ trait BuildsConditionalClauses
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereExists(string|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false): QueryBuilder
+    public function whereExists(string|Relation|QueryBuilder|Closure $subquery, string $boolean = 'AND', bool $not = false): QueryBuilder
     {
         return $this->whereInSub('', $subquery, $boolean, $not, mode: 'EXISTS');
     }
@@ -548,14 +553,14 @@ trait BuildsConditionalClauses
     /**
      * Add a WHERE NOT EXISTS condition to the query.
      *
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the NOT EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @param string $boolean
      *   The type of where clause to add. May be 'AND' or 'OR'.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNotExists(string|QueryBuilder|Closure $subquery, string $boolean = 'AND'): QueryBuilder
+    public function whereNotExists(string|Relation|QueryBuilder|Closure $subquery, string $boolean = 'AND'): QueryBuilder
     {
         return $this->whereExists($subquery, $boolean, not: true);
     }
@@ -563,12 +568,12 @@ trait BuildsConditionalClauses
     /**
      * Add an OR WHERE EXISTS condition to the query.
      *
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereExists(string|QueryBuilder|Closure $subquery): QueryBuilder
+    public function orWhereExists(string|Relation|QueryBuilder|Closure $subquery): QueryBuilder
     {
         return $this->whereExists($subquery, 'OR');
     }
@@ -576,12 +581,12 @@ trait BuildsConditionalClauses
     /**
      * Add an OR WHERE NOT EXISTS condition to the query.
      *
-     * @param string|QueryBuilder|Closure $subquery
+     * @param string|Relation|QueryBuilder|Closure $subquery
      *   The subquery to use for the NOT EXISTS clause. Can be a raw SQL string, a QueryBuilder instance, or a Closure that receives a QueryBuilder instance.
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhereNotExists(string|QueryBuilder|Closure $subquery): QueryBuilder
+    public function orWhereNotExists(string|Relation|QueryBuilder|Closure $subquery): QueryBuilder
     {
         return $this->whereExists($subquery, 'OR', not: true);
     }
