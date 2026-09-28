@@ -862,14 +862,15 @@ trait InteractsWithRelation
         }
         $relatedTable = $query->getAlias() ?: $relatedModel->getTable();
 
-        // Build the aggregate expression
-        $aggregateExpression = $this->buildAggregateExpression($function, $column, $relatedTable);
+        // Build the aggregate expression for the subquery
+        $query->selectRaw(
+            $this->buildAggregateExpression($function, $column, $relatedTable)
+        );
 
         switch ($relationConfig['type']) {
             case 'hasOne':
             case 'hasMany':
                 $query
-                    ->select($aggregateExpression)
                     ->whereRaw(
                         $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey']) . " = " .
                         $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
@@ -878,7 +879,6 @@ trait InteractsWithRelation
 
             case 'belongsTo':
                 $query
-                    ->select($aggregateExpression)
                     ->whereRaw(
                         $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['ownerKey']) . " = " .
                         $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey'])
@@ -887,7 +887,6 @@ trait InteractsWithRelation
 
             case 'belongsToMany':
                 $query
-                    ->select($aggregateExpression)
                     ->join(
                         $relationConfig['table'],
                         $relationConfig['table'] . ".{$relationConfig['relatedPivotKey']}",
@@ -914,7 +913,6 @@ trait InteractsWithRelation
                 $query->useThroughModel($throughModel);
 
                 $query
-                    ->select($aggregateExpression)
                     ->join(
                         $throughTable,
                         $throughTable . ".{$relationConfig['secondLocalKey']}",
