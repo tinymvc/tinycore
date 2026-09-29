@@ -14,13 +14,14 @@ class JWT
 {
     /**
      * @param string $jwt The JWT
-     * @param string|null $key The secret key
+     * @param string|null $key The HMAC secret or RSA public key in PEM format
      * @param bool $verify Don't skip verification process
+     * @param string|array $allowedAlgorithms Trusted algorithms; explicitly allow RS256/RS384/RS512 for RSA
      * @return object The JWT's payload as a PHP object
      * @throws \DomainException
      * @throws \UnexpectedValueException
      */
-    public static function decode(string $jwt, ?string $key = null, bool $verify = true)
+    public static function decode(string $jwt, ?string $key = null, bool $verify = true, string|array $allowedAlgorithms = ['HS256', 'HS384', 'HS512'])
     {
         $tks = \explode('.', $jwt);
         if (\count($tks) !== 3) {
@@ -39,11 +40,27 @@ class JWT
         }
         $sig = self::urlsafeB64Decode($cryptob64);
         if ($verify) {
-            if (empty($header->alg)) {
-                throw new \DomainException('Empty algorithm');
+            if (!\is_object($header) || !\is_string($header->alg ?? null) || $header->alg === '') {
+                throw new \DomainException('Invalid algorithm');
             }
 
-            if (!hash_equals($sig, self::sign("$headb64.$payloadb64", $key, $header->alg))) {
+            if (!\in_array($header->alg, (array) $allowedAlgorithms, true)) {
+                throw new \DomainException('Algorithm not allowed');
+            }
+
+            $digest = self::algorithmDigest($header->alg);
+            if ($key === null) {
+                throw new \DomainException('A verification key is required');
+            }
+
+            if (\str_starts_with($header->alg, 'RS')) {
+                $publicKey = self::rsaKey($key, false);
+                $valid = \openssl_verify("$headb64.$payloadb64", $sig, $publicKey, $digest) === 1;
+            } else {
+                $valid = \hash_equals(self::sign("$headb64.$payloadb64", $key, $header->alg), $sig);
+            }
+
+            if (!$valid) {
                 throw new \UnexpectedValueException('Signature verification failed');
             }
         }
@@ -72,7 +89,7 @@ class JWT
 
     /**
      * @param object|array $payload PHP object or array
-     * @param string $key The secret key
+     * @param string $key The HMAC secret or RSA private key in PEM format
      * @param string $algo The signing algorithm
      * @param array $additionalHeaders Additional keys/values to add to the header
      *
@@ -96,22 +113,65 @@ class JWT
 
     /**
      * @param string $msg The message to sign
-     * @param string $key The secret key
+     * @param string $key The HMAC secret or RSA private key in PEM format
      * @param string $method The signing algorithm
-     * @return string An encrypted message
+     * @return string The binary signature
      * @throws \DomainException
      */
     public static function sign(string $msg, string $key, string $method = 'HS256'): string
+    {
+        $digest = self::algorithmDigest($method);
+
+        if (\str_starts_with($method, 'RS')) {
+            $privateKey = self::rsaKey($key, true);
+            if (!\openssl_sign($msg, $signature, $privateKey, $digest)) {
+                throw new \DomainException('RSA signing failed');
+            }
+            return $signature;
+        }
+
+        // Public/private PEM keys must never be usable as HMAC secrets.
+        if ($key === '' || \str_contains($key, '-----BEGIN ')) {
+            throw new \DomainException('A non-empty HMAC secret is required, not a PEM key');
+        }
+
+        return \hash_hmac($digest, $msg, $key, true);
+    }
+
+    private static function algorithmDigest(string $method): string
     {
         $methods = [
             'HS256' => 'sha256',
             'HS384' => 'sha384',
             'HS512' => 'sha512',
+            'RS256' => 'sha256',
+            'RS384' => 'sha384',
+            'RS512' => 'sha512',
         ];
         if (empty($methods[$method])) {
             throw new \DomainException('Algorithm not supported');
         }
-        return \hash_hmac($methods[$method], $msg, $key, true);
+        return $methods[$method];
+    }
+
+    private static function rsaKey(string $key, bool $private): \OpenSSLAsymmetricKey
+    {
+        if (!\extension_loaded('openssl')) {
+            throw new \DomainException('The OpenSSL extension is required for RSA algorithms');
+        }
+
+        // Accept key contents only, avoiding OpenSSL's implicit file:// loading.
+        if (!\str_starts_with(\ltrim($key), '-----BEGIN ')) {
+            throw new \DomainException('An RSA key in PEM format is required');
+        }
+
+        $parsed = $private ? @\openssl_pkey_get_private($key) : @\openssl_pkey_get_public($key);
+        $details = $parsed === false ? false : \openssl_pkey_get_details($parsed);
+        if ($details === false || $details['type'] !== OPENSSL_KEYTYPE_RSA || $details['bits'] < 2048) {
+            throw new \DomainException('A valid RSA ' . ($private ? 'private' : 'public') . ' key of at least 2048 bits is required');
+        }
+
+        return $parsed;
     }
 
     /**
