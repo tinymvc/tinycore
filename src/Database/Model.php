@@ -27,10 +27,8 @@ use function sprintf;
  * This class provides a base for models, handling database operations and entity management.
  * It includes CRUD operations, data decoding, and dynamic method invocation.
  * 
- * @template TKey of array-key
- *
- * @template-covariant TValue
- *
+ * @mixin QueryBuilder
+ * 
  * @method static QueryBuilder with($relations)
  * @method static QueryBuilder withExists(array|string $relations, ?Closure $callback = null)
  * @method static QueryBuilder withFiltered(string $relation, string|array $filters)

@@ -22,32 +22,14 @@ use function sprintf;
  * 
  * Manages database connections and provides query execution and statement preparation.
  * 
+ * @mixin QueryBuilder
+ * 
  * @method bool beginTransaction()
  * @method bool commit()
  * @method bool rollBack()
  * @method bool inTransaction()
  * @method bool|string lastInsertId()
  * @method bool|string quote(string $string, int $type = PDO::PARAM_STR)
- * 
- * @method QueryBuilder select(array|string $fields = '*', ...$args)
- * @method QueryBuilder max($field, $name = null)
- * @method QueryBuilder min($field, $name = null)
- * @method QueryBuilder sum($field, $name = null)
- * @method QueryBuilder avg($field, $name = null)
- * @method QueryBuilder table(string $table, ?string $alias = null)
- * @method QueryBuilder prefix(string $prefix)
- * @method QueryBuilder lock(bool|string|null $value = true)
- * @method QueryBuilder lockForUpdate()
- * @method QueryBuilder sharedLock()
- * @method QueryBuilder when(mixed $value, callable $callback)
- * @method QueryBuilder unless(mixed $value, callable $callback)
- * @method QueryBuilder column(string $column)
- * @method QueryBuilder from(string $table, ?string $alias = null)
- * @method QueryBuilder where(null|string|array|Closure $column = null, mixed $operator = null, mixed $value = null, ?string $boolean = null, bool $not = false)
- * @method QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $boolean = 'AND')
- * @method QueryBuilder selectRaw(string $sql, array $bindings = [])
- * @method QueryBuilder whereIn(string $column, array $values)
- * @method array raw(string $sql, array $bindings = [])
  * 
  * @method static array raw(string $sql, array $bindings = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, mixed $operator = null, mixed $value = null, ?string $boolean = null, bool $not = false)
@@ -348,24 +330,26 @@ class DB implements DBContract
      */
     public function transaction(callable $callback): mixed
     {
-        $connection = $this;
-        $nested = $connection->inTransaction();
         $savepoint = 'spark_' . bin2hex(random_bytes(8));
-        $nested ? $connection->exec("SAVEPOINT $savepoint") : $connection->beginTransaction();
+
+        $pdo = $this->getPdo(); // Get the PDO instance for transaction management.
+
+        $nested = $pdo->inTransaction();
+        $nested ? $pdo->exec("SAVEPOINT $savepoint") : $pdo->beginTransaction();
 
         try {
             $result = $callback($this);
-            $nested ? $connection->exec("RELEASE SAVEPOINT $savepoint") : $connection->commit();
+            $nested ? $pdo->exec("RELEASE SAVEPOINT $savepoint") : $pdo->commit();
             return $result;
         } catch (\Throwable $e) {
             // A callback or DDL may already have ended the transaction. Preserve its error.
             try {
-                if ($connection->inTransaction()) {
+                if ($pdo->inTransaction()) {
                     if ($nested) {
-                        $connection->exec("ROLLBACK TO SAVEPOINT $savepoint");
-                        $connection->exec("RELEASE SAVEPOINT $savepoint");
+                        $pdo->exec("ROLLBACK TO SAVEPOINT $savepoint");
+                        $pdo->exec("RELEASE SAVEPOINT $savepoint");
                     } else {
-                        $connection->rollBack();
+                        $pdo->rollBack();
                     }
                 }
             } catch (\Throwable) {
@@ -389,53 +373,9 @@ class DB implements DBContract
             return $this->macroCall($name, $args);
         }
 
-        if (
-            in_array($name, [
-                'table',
-                'prefix',
-                'lock',
-                'lockForUpdate',
-                'sharedLock',
-                'when',
-                'unless',
-                'select',
-                'column',
-                'from',
-                'where',
-                'orWhere',
-                'notWhere',
-                'orNotWhere',
-                'whereRaw',
-                'orWhereRaw',
-                'selectRaw',
-                'whereIn',
-                'whereNotIn',
-                'orWhereIn',
-                'orWhereNotIn',
-                'whereNull',
-                'whereNotNull',
-                'orWhereNull',
-                'orWhereNotNull',
-                'whereBetween',
-                'whereNotBetween',
-                'orWhereBetween',
-                'orWhereNotBetween',
-                'between',
-                'notBetween',
-                'orBetween',
-                'orNotBetween',
-                'like',
-                'notLike',
-                'orLike',
-                'orNotLike',
-                'max',
-                'min',
-                'sum',
-                'avg',
-                'raw'
-            ], true)
-        ) {
-            $query = new QueryBuilder($this);
+        $query = new QueryBuilder($this);
+
+        if (method_exists($query, $name)) {
             return $query->$name(...$args);
         }
 

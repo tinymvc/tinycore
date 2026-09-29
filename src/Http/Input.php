@@ -93,9 +93,8 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param bool $stripTags Whether to strip HTML tags from the text.
      * @return string|null Sanitized text or null if invalid.
      */
-    public function text(?string $key = null, bool $stripTags = true): ?string
+    public function text(string $key, bool $stripTags = true): ?string
     {
-        $key ??= 'text';
         $value = $this->get($key);
 
         if ($value === null) {
@@ -140,12 +139,11 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Escapes HTML special characters for safe output.
      *
-     * @param ?string $key Key in the data array to sanitize.
+     * @param string $key Key in the data array to sanitize.
      * @return string|null Sanitized HTML or null if invalid.
      */
-    public function html(?string $key = null): ?string
+    public function escapeHtml(string $key): ?string
     {
-        $key ??= 'html';
         $value = $this->get($key);
 
         if ($value === null) {
@@ -158,12 +156,11 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Sanitizes an integer value.
      *
-     * @param ?string $key Key in the data array to sanitize.
+     * @param string $key Key in the data array to sanitize.
      * @return int|null Sanitized integer or null if invalid.
      */
-    public function number(?string $key = null): ?int
+    public function number(string $key): ?int
     {
-        $key ??= 'number';
         $value = $this->get($key);
 
         if ($value === null || $value === '') {
@@ -181,9 +178,8 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $key Key in the data array to sanitize.
      * @return float|null Sanitized float or null if invalid.
      */
-    public function float(?string $key = null): ?float
+    public function float(string $key): ?float
     {
-        $key ??= 'float';
         $value = $this->get($key);
 
         if ($value === null || $value === '') {
@@ -212,9 +208,8 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $key Key in the data array to sanitize.
      * @return string|null Sanitized URL or null if invalid.
      */
-    public function url(?string $key = null): ?string
+    public function url(string $key = null): ?string
     {
-        $key ??= 'url';
         $value = $this->get($key);
 
         if ($value === null || $value === '') {
@@ -228,12 +223,11 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Validates an IP address.
      *
-     * @param ?string $key Key in the data array to validate.
+     * @param string $key Key in the data array to validate.
      * @return string|null Valid IP address or null if invalid.
      */
-    public function ip(?string $key = null): ?string
+    public function ip(string $key = null): ?string
     {
-        $key ??= 'ip';
         $value = $this->get($key);
 
         if ($value === null || $value === '') {
@@ -244,62 +238,80 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     }
 
     /**
-     * Sanitizes a string to contain only alphabetic characters.
+     * Sanitizes a string to contain only Unicode letters/marks (matches the 'alpha' rule).
      *
      * @param string $key Key in the data array to sanitize.
+     * @param bool $ascii Restrict to plain ASCII letters only, like validateAlphabetic()'s 'ascii' param.
      * @return string|null Sanitized alphabetic string or null if invalid.
      */
-    public function alpha(string $key): ?string
+    public function alpha(string $key, bool $ascii = false): ?string
     {
-        $value = $this->get($key);
-        if ($value === null || $value === '')
-            return null;
-
-        $sanitized = preg_replace('/[^a-zA-Z]/', '', (string) $value);
-        return $sanitized !== '' ? $sanitized : null;
+        return $this->sanitizeAlphabetic($this->get($key), 'alpha', $ascii);
     }
 
     /**
-     * Sanitizes a string to contain only alphanumeric characters.
+     * Sanitizes a string to contain only Unicode letters/marks/numbers (matches 'alpha_num').
      *
      * @param string $key Key in the data array to sanitize.
+     * @param bool $ascii Restrict to plain ASCII letters/digits only.
      * @return string|null Sanitized alphanumeric string or null if invalid.
      */
-    public function alphaNum(string $key): ?string
+    public function alphaNum(string $key, bool $ascii = false): ?string
     {
-        $value = $this->get($key);
-        if ($value === null || $value === '')
-            return null;
-
-        $sanitized = preg_replace('/[^a-zA-Z0-9]/', '', (string) $value);
-        return $sanitized !== '' ? $sanitized : null;
+        return $this->sanitizeAlphabetic($this->get($key), 'alpha_num', $ascii);
     }
 
     /**
-     * Sanitizes a string to contain only alphanumeric characters, dashes, and underscores.
+     * Sanitizes a string to contain only Unicode letters/marks/numbers, dashes,
+     * and underscores (matches 'alpha_dash').
      *
      * @param string $key Key in the data array to sanitize.
+     * @param bool $ascii Restrict to plain ASCII letters/digits/dash/underscore only.
      * @return string|null Sanitized string or null if invalid.
      */
-    public function alphaDash(string $key): ?string
+    public function alphaDash(string $key, bool $ascii = false): ?string
     {
-        $value = $this->get($key);
-        if ($value === null || $value === '')
-            return null;
+        return $this->sanitizeAlphabetic($this->get($key), 'alpha_dash', $ascii);
+    }
 
-        $sanitized = preg_replace('/[^a-zA-Z0-9_-]/', '', (string) $value);
+    /**
+     * Strip characters that would fail validateAlphabetic() for the given rule,
+     * so the result always satisfies that same rule.
+     */
+    private function sanitizeAlphabetic(mixed $value, string $rule, bool $ascii = false): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = (string) $value;
+
+        // Match validateAlphabetic()'s ascii param: if requested, drop non-ASCII
+        // bytes first so only plain ASCII letters/digits can survive the pattern.
+        if ($ascii) {
+            $value = preg_replace('/[^\x00-\x7F]/', '', $value);
+        }
+
+        $characters = match ($rule) {
+            'alpha' => '\pL\pM',
+            'alpha_num' => '\pL\pM\pN',
+            'alpha_dash' => '\pL\pM\pN_-',
+            default => throw new \InvalidArgumentException("Unsupported alphabetic rule: {$rule}"),
+        };
+
+        $sanitized = preg_replace("/[^$characters]/u", '', $value);
+
         return $sanitized !== '' ? $sanitized : null;
     }
 
     /**
      * Sanitizes a string to contain only digits.
      *
-     * @param ?string $key Key in the data array to sanitize.
+     * @param string $key Key in the data array to sanitize.
      * @return string|null Sanitized digit string or null if invalid.
      */
-    public function digits(?string $key = null): ?string
+    public function digits(string $key = null): ?string
     {
-        $key ??= 'digits';
         $value = $this->get($key);
         if ($value === null || $value === '')
             return null;
@@ -311,7 +323,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Sanitizes a phone number by removing non-digit characters.
      *
-     * @param ?string $key Key in the data array to sanitize.
+     * @param string $key Key in the data array to sanitize.
      * @param bool $keepPlus Whether to keep the plus sign for international numbers.
      * @return string|null Sanitized phone number or null if invalid.
      */
@@ -334,7 +346,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $format Output date format (default: 'Y-m-d').
      * @return string|null Sanitized date or null if invalid.
      */
-    public function date(?string $key = null, string $format = 'Y-m-d'): ?string
+    public function date(string $key = null, string $format = 'Y-m-d'): ?string
     {
         $key ??= 'date';
         $value = $this->get($key);
@@ -348,13 +360,12 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Sanitizes a JSON string and optionally decodes it.
      *
-     * @param ?string $key Key in the data array to sanitize.
+     * @param string $key Key in the data array to sanitize.
      * @param bool $decode Whether to decode the JSON to array.
      * @return string|array|null Sanitized JSON or decoded array, null if invalid.
      */
-    public function json(?string $key = null, bool $decode = false): string|array|null
+    public function json(string $key, bool $decode = false): string|array|null
     {
-        $key ??= 'json';
         $value = $this->get($key);
         if ($value === null || $value === '')
             return null;
@@ -369,14 +380,13 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Sanitizes an array by filtering out empty values and optionally applying a callback.
      *
-     * @param ?string $key Key in the data array to sanitize.
+     * @param string $key Key in the data array to sanitize.
      * @param callable|null $callback Optional callback to apply to each array element.
      * @param bool $removeEmpty Whether to remove empty values.
      * @return array|null Sanitized array or null if invalid.
      */
-    public function array(?string $key = null, ?callable $callback = null, bool $removeEmpty = true): ?array
+    public function array(string $key, ?callable $callback = null, bool $removeEmpty = true): ?array
     {
-        $key ??= 'array';
         $value = $this->get($key);
         if (!is_array($value)) {
             $value = arr_from_set($value);
@@ -741,7 +751,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             $result[$field] = match ($type) {
                 'email' => $this->email($field),
                 'text' => $this->text($field),
-                'html' => $this->html($field),
+                'html', 'escapeHtml' => $this->escapeHtml($field),
                 'number' => $this->number($field),
                 'float' => $this->float($field),
                 'boolean' => $this->boolean($field),
@@ -919,7 +929,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
 
         return match (true) {
             $first === null => '',
-            is_array($first), is_object($first) => json_encode($first) ?: '',
+            is_array($first), \is_object($first) => json_encode($first) ?: '',
             default => (string) $first,
         };
     }
