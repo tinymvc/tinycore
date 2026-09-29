@@ -393,7 +393,7 @@ class Auth implements AuthContract, ArrayAccess
     }
 
     /**
-     * Generates a JWT token for the currently logged in user with an optional payload.
+     * Generates a JWT token for an explicit user, or the current user when omitted.
      *
      * This method creates a JWT token that includes the user's ID and an expiration time.
      * Additional payload data can be included by passing an associative array.

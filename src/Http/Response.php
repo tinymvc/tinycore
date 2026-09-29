@@ -2,10 +2,10 @@
 
 namespace Spark\Http;
 
-use Closure;
 use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
+use Spark\Http\Resources\JsonResource;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
@@ -201,7 +201,7 @@ class Response implements ResponseContract
         $this->setStatusCode($statusCode);
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
         $this->setContent(
-            json_encode($this->castDataForApiResponse($data), $flags, $depth)
+            json_encode(JsonResource::normalize($data), $flags, $depth)
         );
         return $this;
     }
@@ -480,54 +480,19 @@ class Response implements ResponseContract
      */
     private function prepare(): void
     {
+        if ($this->content instanceof JsonResource) {
+            $this->content = $this->content->responseData();
+        }
+
         // Convert content to string if it's an array, Arrayable, or Stringable.
         if (is_array($this->content) || $this->content instanceof Arrayable) {
             $this->setHeader('Content-Type', 'application/json; charset=utf-8');
             $this->setContent(
-                json_encode($this->castDataForApiResponse($this->content), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                json_encode(JsonResource::normalize($this->content), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             );
         } elseif (!is_string($this->content)) {
             $this->setContent((string) $this->content); // Ensure content is a string
         }
     }
 
-    /**
-     * Recursively converts any Arrayable objects and nested arrays into pure arrays.
-     *
-     * @param  mixed  $data  An Arrayable, an array of mixed values, or any other value.
-     * @return mixed         A pure array if input was Arrayable/array; otherwise the original value.
-     */
-    private function castDataForApiResponse(mixed $data): mixed
-    {
-        // If it's a Stringable or specific object, cast to string
-        if ($data instanceof \Spark\Url) {
-            return $data->getUrl();
-        }
-
-        // return UTC string for Carbon instances
-        if ($data instanceof \Spark\Carbon) {
-            return $data->toIsoUtcString();
-        }
-
-        if ($data instanceof \DateTimeInterface) {
-            return $data->format(\DateTimeInterface::ATOM);
-        }
-
-        if ($data instanceof Closure) {
-            return $this->castDataForApiResponse($data()); // Call the closure and return its result
-        }
-
-        // If it's an object that knows how to cast itself to array, do it and recurse
-        if ($data instanceof Arrayable) {
-            $data = $data->toArray();
-        }
-
-        // If it's an array, recurse into each element
-        if (is_array($data)) {
-            return array_map($this->castDataForApiResponse(...), $data);
-        }
-
-        // Otherwise return as-is (string/int/etc)
-        return $data;
-    }
 }

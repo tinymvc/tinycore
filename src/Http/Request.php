@@ -5,6 +5,7 @@ namespace Spark\Http;
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
+use Spark\Foundation\Application;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
@@ -64,11 +65,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /** @var Collection Server parameters, including headers.*/
     public Collection $server;
 
-    /** @var InputSanitizer instance for validated input data.*/
+    /** @var Input Validated input data. */
     private Input $cleanData;
 
     /** @var array List of trusted proxy IPs or CIDR ranges for accurate client IP detection.*/
-    protected array $trustedProxies;
+    protected array $trustedProxies = [];
+
+    /** @var string Header explicitly trusted to convey the client IP. */
+    protected string $trustedProxyHeader = 'x-forwarded-for';
 
     /**
      * request constructor.
@@ -90,8 +94,28 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->query = collect($_GET);
         $this->post = collect([...$_POST, ...$this->parsePhpInput()]);
 
+        // Configure trusted proxies if the application instance is available.
+        if (isset(Application::$app)) {
+            $this->configureAppTrustedProxies();
+        }
+
         $this->routeParams = []; // Initialize empty route parameters.
-        $this->trustedProxies = config('app.trusted_proxies', []); // Load trusted proxies from configuration.
+    }
+
+    /** Configures the trusted proxies for the request. */
+    private function configureAppTrustedProxies(): void
+    {
+        $this->trustedProxies = array_values(array_filter(
+            (array) Application::$app->getConfig('app.trusted_proxies', []),
+            'is_string'
+        ));
+
+        if (
+            is_string($header = Application::$app->getConfig('app.trusted_proxy_header', 'x-forwarded-for'))
+            && strtolower(trim($header)) === 'cf-connecting-ip'
+        ) {
+            $this->trustedProxyHeader = 'cf-connecting-ip';
+        }
     }
 
     /**
@@ -679,11 +703,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         $types = [];
 
-        foreach (explode(',', strtolower((string) $this->header('accept', ''))) as $part) {
-            $segments = explode(';', $part);
+        foreach (preg_split('/,(?=(?:[^"]*"[^"]*")*[^"]*$)/', strtolower((string) $this->header('accept', ''))) as $part) {
+            $segments = preg_split('/;(?=(?:[^"]*"[^"]*")*[^"]*$)/', $part);
             $type = trim(array_shift($segments));
 
-            if ($type === '') {
+            if (!preg_match('/\A(?:\*|\*\/\*|[!#$%&\'^_`|~.0-9a-z+-]+\/(?:\*|[!#$%&\'^_`|~.0-9a-z+-]+))\z/', $type)) {
                 continue;
             }
 
@@ -691,11 +715,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             foreach ($segments as $param) {
                 [$key, $value] = array_pad(explode('=', $param, 2), 2, '');
                 if (trim($key) === 'q') {
-                    $quality = (float) trim($value);
+                    $value = trim($value);
+                    $quality = preg_match('/\A(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)\z/', $value)
+                        ? (float) $value : 0.0;
+                    break;
                 }
             }
 
-            $types[$type] = $quality;
+            $types[$type] = max($types[$type] ?? 0.0, $quality);
         }
 
         arsort($types); // stable in PHP 8+, so equal-quality types keep header order
@@ -723,7 +750,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $types = $this->acceptedTypes();
 
         if ($types === []) {
-            return true; // No Accept header means anything is acceptable.
+            return trim((string) $this->header('accept', '')) === '';
         }
 
         // Most specific match wins: exact, then type/*, then */*.
@@ -764,41 +791,54 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             return $remote;
         }
 
-        // Cloudflare sets this itself. Add Cloudflare's ranges to $trustedProxies
-        // and only rely on this if you are actually behind Cloudflare.
-        $cf = $this->cleanIp((string) $this->header('cf-connecting-ip', ''));
-        if ($cf !== false) {
-            return $cf;
+        // Generic trusted proxies may pass through a client-supplied Cloudflare
+        // header. Trust it only when the deployment explicitly selects it.
+        if ($this->trustedProxyHeader === 'cf-connecting-ip') {
+            return $this->cleanIp((string) $this->header('cf-connecting-ip', '')) ?: $remote;
         }
 
-        $chain = [];
-        foreach (explode(',', (string) $this->header('x-forwarded-for', '')) as $part) {
-            $candidate = $this->cleanIp($part);
-            if ($candidate !== false) {
-                $chain[] = $candidate;
-            }
+        $forwarded = trim((string) $this->header('x-forwarded-for', ''));
+        if ($forwarded === '') {
+            return $remote;
         }
-        $chain[] = $remote;
 
-        // Walk right to left; the first address that is not one of our proxies is the client.
+        // Stop at the first untrusted hop; everything to its left is untrusted
+        // input and must not affect the result, even when it is malformed.
+        $chain = explode(',', $forwarded);
         for ($i = count($chain) - 1; $i >= 0; $i--) {
-            if (!$this->isTrustedProxy($chain[$i])) {
-                return $chain[$i];
+            $candidate = $this->cleanIp($chain[$i]);
+            if ($candidate === false) {
+                return $remote; // Do not skip a malformed hop across a trust boundary.
+            }
+            if (!$this->isTrustedProxy($candidate)) {
+                return $candidate;
             }
         }
 
-        return $chain[0]; // every hop is trusted, so use the leftmost
+        return $candidate; // Every hop is trusted, so use the cleaned leftmost address.
     }
 
     /** Strip whitespace, quotes, ports and IPv6 brackets, then validate. */
     private function cleanIp(string $value): false|string
     {
-        $value = trim($value, " \t\"'");
+        $value = trim($value, " \t");
+        if (
+            strlen($value) >= 2 && (($value[0] === '"' && str_ends_with($value, '"'))
+                || ($value[0] === "'" && str_ends_with($value, "'")))
+        ) {
+            $value = substr($value, 1, -1);
+        }
 
-        if (preg_match('/^\[([^\]]+)\](?::\d+)?$/', $value, $m)) {
+        if (preg_match('/\A\[([^\]]+)\](?::([0-9]{1,5}))?\z/', $value, $m)) {
+            if (isset($m[2]) && (int) $m[2] > 65535) {
+                return false;
+            }
             $value = $m[1];                          // [::1]:443 -> ::1
         } elseif (substr_count($value, ':') === 1) {
-            $value = explode(':', $value)[0];        // 1.2.3.4:80 -> 1.2.3.4
+            [$value, $port] = explode(':', $value, 2);
+            if (!preg_match('/\A[0-9]{1,5}\z/', $port) || (int) $port > 65535) {
+                return false;
+            }
         }
 
         return filter_var($value, FILTER_VALIDATE_IP) ?: false;
@@ -808,6 +848,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private function isTrustedProxy(string $ip): bool
     {
         foreach ($this->trustedProxies as $proxy) {
+            $proxy = trim($proxy);
             if ($proxy === '*' || $this->ipInRange($ip, $proxy)) {
                 return true;
             }
@@ -820,6 +861,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private function ipInRange(string $ip, string $range): bool
     {
         [$subnet, $bits] = array_pad(explode('/', $range, 2), 2, null);
+
+        if ($bits !== null && !preg_match('/\A[0-9]{1,3}\z/', $bits)) {
+            return false; // Invalid masks must never become /0 through an integer cast.
+        }
 
         $ipBin = @inet_pton($ip);
         $subnetBin = @inet_pton($subnet);
@@ -1151,38 +1196,42 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function expectsJson(): bool
     {
         return $this->wantsJson()
-            || ($this->isAjax() && $this->acceptsAnyContentType())
+            || ($this->isAjax() && $this->acceptsAnyContentType() && $this->accepts('application/json'))
             || $this->isApiPath();
     }
 
     /**
      * Determines if the request wants a JSON response based on the 'Accept' header.
      *
-     * This method checks if the first content type in the 'Accept' header
-     * contains '/json' or '+json'.
+     * The highest-ranked positive-quality type must end in '/json' or '+json'.
      *
      * @return bool True if the request wants a JSON response, false otherwise.
      */
     public function wantsJson(): bool
     {
-        $first = strtolower(trim(explode(',', $this->header('accept', ''))[0]));
-        $first = trim(explode(';', $first)[0]);
+        $types = array_filter($this->acceptedTypes(), fn($quality) => $quality > 0);
+        $first = array_key_first($types) ?? '';
 
-        return str_contains($first, '/json') || str_contains($first, '+json');
+        return (bool) preg_match('~(?:/json|\+json)\z~', $first);
     }
 
     /**
      * Determines if the request accepts any content type.
      *
-     * This method checks if the 'Accept' header is empty or contains '/*'.
+     * Accept must be empty, or its preferred positive-quality type a global wildcard.
      *
      * @return bool True if the request accepts any content type, false otherwise.
      */
     public function acceptsAnyContentType(): bool
     {
-        $accept = trim(explode(';', explode(',', $this->header('accept', ''))[0])[0]);
+        if (trim((string) $this->header('accept', '')) === '') {
+            return true;
+        }
 
-        return $accept === '' || $accept === '*/*' || $accept === '*';
+        $types = array_filter($this->acceptedTypes(), fn($quality) => $quality > 0);
+        $first = array_key_first($types);
+
+        return $first === '*/*' || $first === '*';
     }
 
     /**
