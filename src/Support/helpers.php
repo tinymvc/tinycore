@@ -476,6 +476,23 @@ if (!function_exists('tap')) {
     }
 }
 
+if (!function_exists('pipe')) {
+    /**
+     * Pass the value to the callback and return its result.
+     *
+     * @template TValue
+     * @template TResult
+     *
+     * @param  TValue  $value
+     * @param  callable(TValue): TResult  $callback
+     * @return TResult
+     */
+    function pipe(mixed $value, callable $callback): mixed
+    {
+        return $callback($value);
+    }
+}
+
 if (!function_exists('preg_replace_array')) {
     /**
      * Replace a given pattern with each value in the array in sequentially.

@@ -208,7 +208,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $key Key in the data array to sanitize.
      * @return string|null Sanitized URL or null if invalid.
      */
-    public function url(string $key = null): ?string
+    public function url(string $key): ?string
     {
         $value = $this->get($key);
 
@@ -226,7 +226,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $key Key in the data array to validate.
      * @return string|null Valid IP address or null if invalid.
      */
-    public function ip(string $key = null): ?string
+    public function ip(string $key): ?string
     {
         $value = $this->get($key);
 
@@ -310,7 +310,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $key Key in the data array to sanitize.
      * @return string|null Sanitized digit string or null if invalid.
      */
-    public function digits(string $key = null): ?string
+    public function digits(string $key): ?string
     {
         $value = $this->get($key);
         if ($value === null || $value === '')
@@ -346,7 +346,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param string $format Output date format (default: 'Y-m-d').
      * @return string|null Sanitized date or null if invalid.
      */
-    public function date(string $key = null, string $format = 'Y-m-d'): ?string
+    public function date(?string $key = null, string $format = 'Y-m-d'): ?string
     {
         $key ??= 'date';
         $value = $this->get($key);
