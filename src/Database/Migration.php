@@ -2,27 +2,32 @@
 
 namespace Spark\Database;
 
+use PDO;
+use PDOStatement;
 use Spark\Console\Prompt;
 use Spark\Database\Contracts\MigrationContract;
-use Spark\Database\Exceptions\InvalidMigrationFile;
 use Throwable;
 use function array_slice;
 use function count;
 use function in_array;
-use function is_array;
 use function is_object;
-use function sprintf;
 
 /**
  * Class Migration
  *
- * A class for managing database migrations. It provides methods for
- * listing, applying, and rolling back migrations.
+ * A class for managing database migrations and seeders. Applied migration/seed
+ * records are persisted in a database table (created automatically on first
+ * use) instead of a JSON ledger file.
  *
  * @package Spark\Database
  */
 class Migration implements MigrationContract
 {
+    /**
+     * The PDO connection used to track and run migrations.
+     */
+    private PDO $pdo;
+
     /**
      * Creates a new instance of the migration class.
      *
@@ -30,77 +35,25 @@ class Migration implements MigrationContract
      *   The path to the folder containing the migration PHP files.
      *   Defaults to "database/migrations" in the root directory.
      *
-     * @param string|null $migrationFile
-     *   The path to the JSON file containing the list of applied migrations.
-     *   Defaults to "database/migrations.json" in the root directory.
+     * @param string $table
+     *   The table used to persist applied migration/seed records.
+     *   Defaults to "migrations".
      */
-    public function __construct(private ?string $migrationsFolder = null, private ?string $migrationFile = null)
+    public function __construct(private ?string $migrationsFolder = null, private string $table = 'migrations')
     {
         $this->migrationsFolder ??= root_dir('database/migrations'); // Default to the root directory
 
-        // The JSON file that stores migration records.
-        $this->migrationFile ??= root_dir('database/migrations.json');
+        $this->pdo = app(DB::class)->getPdo();
 
-        // Check if the migration file exists and is writable
-        if (!file_exists($this->migrationFile) && !touch($this->migrationFile)) {
-            throw new InvalidMigrationFile(sprintf('The migration file (%s) does not exist.', $this->migrationFile));
-        } elseif (!is_writable($this->migrationFile) && !chmod($this->migrationFile, 0666)) {
-            throw new InvalidMigrationFile(sprintf('The migration file (%s) is not writable.', $this->migrationFile));
-        }
-    }
-
-    /**
-     * Returns the list of applied migrations from the JSON record file.
-     *
-     * @return array
-     *   The list of applied migrations as an array of migration filenames.
-     */
-    private function getAppliedMigrations(): array
-    {
-        $json = file_get_contents($this->migrationFile);
-        if (trim($json) === '') {
-            return [];
-        }
-
-        $data = json_decode($json, true);
-        if (
-            json_last_error() !== JSON_ERROR_NONE || !is_array($data) ||
-            !isset($data['migrations']) || !is_array($data['migrations']) || !array_is_list($data['migrations']) ||
-            count(array_filter($data['migrations'], 'is_string')) !== count($data['migrations'])
-        ) {
-            throw new InvalidMigrationFile('Invalid migration ledger: ' . $this->migrationFile);
-        }
-
-        return $data['migrations'];
-    }
-
-    /**
-     * Saves the list of applied migrations to the JSON record file.
-     *
-     * This method updates the migration record file with the given array
-     * of migration filenames, ensuring that all applied migrations are
-     * stored in a structured JSON format.
-     *
-     * @param array $migrations
-     *   An array of migration filenames that have been applied.
-     *
-     * @return void
-     */
-    private function saveAppliedMigrations(array $migrations): void
-    {
-        $data = ['migrations' => $migrations];
-
-        if (file_put_contents($this->migrationFile, json_encode($data, JSON_THROW_ON_ERROR), LOCK_EX) === false) {
-            throw new InvalidMigrationFile('Unable to save migration ledger: ' . $this->migrationFile);
-        }
+        $this->ensureTableExists();
     }
 
     /**
      * Applies new migrations.
      *
-     * Scans the folder for migration files (all PHP files except the JSON record)
-     * and executes the up() method on those that haven’t been applied yet.
-     * 
+     * Scans the folder for migration files (all PHP files) and executes the
+     * up() method on those that haven't been applied yet.
+     *
      * @param array $args
      *  An array containing the arguments for the migration.
      * @return void
@@ -111,19 +64,18 @@ class Migration implements MigrationContract
 
         $allowSeeds = (isset($args['seed']) && $args['seed']) || (isset($args['s']) && $args['s']); // Allow seeds if specified in args
 
-        // Get all PHP files in the folder (excluding migrations.json)
-        $files = glob($this->migrationsFolder . DIRECTORY_SEPARATOR . '*.php');
+        // Get all PHP files in the folder.
+        $files = glob($this->migrationsFolder . DIRECTORY_SEPARATOR . '*.php') ?: [];
 
         // Sort files for consistency in the order they are applied.
         sort($files);
 
-        try {
-            $run = 0;
-            foreach ($files as $file) {
-                if (basename($file) === 'migrations.json') {
-                    continue;
-                }
+        $batch = $this->nextBatchNumber();
+        $run = 0;
+        $migrationName = null;
 
+        try {
+            foreach ($files as $file) {
                 $migrationName = basename($file);
 
                 if (
@@ -147,30 +99,31 @@ class Migration implements MigrationContract
 
                     Prompt::message("Applied migration: {$migrationName}", 'success');
 
-                    $appliedMigrations[] = $migrationName;
+                    $this->recordMigration(
+                        $migrationName,
+                        str_starts_with($migrationName, 'seed_') ? 'seed' : 'migration',
+                        $batch
+                    );
+
                     $run++;
                 }
             }
-
-            if ($run === 0) {
-                Prompt::message("No new migrations to apply.", 'info');
-            }
-
-            // Save the list of applied migrations
-            $this->saveAppliedMigrations($appliedMigrations);
         } catch (Throwable $e) {
-            $this->saveAppliedMigrations($appliedMigrations); // Save the list of applied migrations
+            Prompt::message("Migration failed: {$migrationName} — {$e->getMessage()}", 'error');
             throw $e;
+        }
+
+        if ($run === 0) {
+            Prompt::message("No new migrations to apply.", 'info');
         }
     }
 
     /**
      * Rolls back the last applied migrations.
      *
-     * This method rolls back the last $steps applied migrations.
-     * It retrieves the list of applied migrations, reverses the order,
-     * and applies the down() method on the specified number of migrations.
-     * 
+     * Retrieves the list of applied migrations, most recently applied first,
+     * and calls down() on the specified number of them.
+     *
      * @param array $args
      *   An array containing the number of steps to rollback.
      *   If 'step' is not provided, it defaults to 1.
@@ -178,28 +131,26 @@ class Migration implements MigrationContract
      */
     public function down(array $args = []): void
     {
-        $steps = $args['step'] ?? ($args['_args'][0] ?? 1);
-
         $appliedMigrations = $this->getAppliedMigrations();
-
-        if (isset($args['all']) && $args['all']) {
-            $steps = count($appliedMigrations); // Rollback all applied migrations
-        }
 
         if (empty($appliedMigrations)) {
             Prompt::message("No migrations to rollback.", 'warning');
             return;
         }
 
-        // Reverse the applied migrations, so they are applied in the correct order
-        $remainingMigrations = array_reverse($appliedMigrations);
+        $steps = (int) ($args['step'] ?? ($args['_args'][0] ?? 1));
 
-        // Determine the migrations to rollback: the last $steps applied migrations.
-        $migrationsToRollback = array_slice($remainingMigrations, 0, $steps);
+        if (isset($args['all']) && $args['all']) {
+            $steps = count($appliedMigrations); // Rollback all applied migrations
+        }
+
+        // Most recently applied migrations are rolled back first.
+        $migrationsToRollback = array_slice(array_reverse($appliedMigrations), 0, $steps);
+
+        $run = 0;
 
         try {
-            $run = 0;
-            foreach ($migrationsToRollback as $index => $migrationName) {
+            foreach ($migrationsToRollback as $migrationName) {
                 $file = $this->migrationsFolder . DIRECTORY_SEPARATOR . $migrationName;
 
                 if (!file_exists($file)) {
@@ -214,23 +165,18 @@ class Migration implements MigrationContract
 
                     Prompt::message("Rolled back migration: {$migrationName}", 'success');
 
-                    // Remove the rolled back migration from the list
-                    $remainingMigrations = array_values(array_filter($remainingMigrations, fn($name) => $name !== $migrationName));
+                    $this->removeMigration($migrationName);
+
                     $run++;
                 }
             }
-
-            if ($run === 0) {
-                Prompt::message("No migrations were rolled back.", 'info');
-            }
-
-            // Save the list of applied migrations
-            $remainingMigrations = array_reverse($remainingMigrations);
-            $this->saveAppliedMigrations($remainingMigrations);
         } catch (Throwable $e) {
-            $remainingMigrations = array_reverse($remainingMigrations);
-            $this->saveAppliedMigrations($remainingMigrations); // Save the list of applied migrations
+            Prompt::message("Rollback failed: {$e->getMessage()}", 'error');
             throw $e;
+        }
+
+        if ($run === 0) {
+            Prompt::message("No migrations were rolled back.", 'info');
         }
     }
 
@@ -238,7 +184,7 @@ class Migration implements MigrationContract
      * Rolls back all applied migrations and then applies all migrations again.
      *
      * This is useful for quickly setting up a database in a development environment.
-     * 
+     *
      * @param array $args
      *  An array containing the number of steps to rollback.
      * @return void
@@ -253,5 +199,99 @@ class Migration implements MigrationContract
         Prompt::newline();
 
         $this->up($args);
+    }
+
+    /**
+     * Ensures the migrations ledger table exists, creating it if necessary.
+     *
+     * @return void
+     */
+    private function ensureTableExists(): void
+    {
+        $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+
+        $sql = match ($driver) {
+            'sqlite' => "CREATE TABLE IF NOT EXISTS {$this->table} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                migration TEXT NOT NULL UNIQUE,
+                type TEXT NOT NULL DEFAULT 'migration',
+                batch INTEGER NOT NULL,
+                applied_at INTEGER NOT NULL
+            )",
+            'pgsql' => "CREATE TABLE IF NOT EXISTS {$this->table} (
+                id SERIAL PRIMARY KEY,
+                migration VARCHAR(255) NOT NULL UNIQUE,
+                type VARCHAR(10) NOT NULL DEFAULT 'migration',
+                batch INTEGER NOT NULL,
+                applied_at INTEGER NOT NULL
+            )",
+            default => "CREATE TABLE IF NOT EXISTS {$this->table} (
+                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                migration VARCHAR(255) NOT NULL,
+                type VARCHAR(10) NOT NULL DEFAULT 'migration',
+                batch INT UNSIGNED NOT NULL,
+                applied_at INT UNSIGNED NOT NULL,
+                UNIQUE KEY {$this->table}_migration_unique (migration)
+            )",
+        };
+
+        $this->pdo->exec($sql);
+    }
+
+    /**
+     * Returns the list of applied migration/seed filenames, oldest first.
+     *
+     * @return array<int, string>
+     */
+    private function getAppliedMigrations(): array
+    {
+        $stmt = $this->run("SELECT migration FROM {$this->table} ORDER BY id ASC");
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    }
+
+    /**
+     * Records an applied migration/seed in the ledger table.
+     */
+    private function recordMigration(string $migration, string $type, int $batch): void
+    {
+        $this->run(
+            "INSERT INTO {$this->table} (migration, type, batch, applied_at) VALUES (?, ?, ?, ?)",
+            [$migration, $type, $batch, time()]
+        );
+    }
+
+    /**
+     * Removes a migration/seed record from the ledger table.
+     */
+    private function removeMigration(string $migration): void
+    {
+        $this->run("DELETE FROM {$this->table} WHERE migration = ?", [$migration]);
+    }
+
+    /**
+     * Returns the next batch number to tag newly applied migrations with.
+     */
+    private function nextBatchNumber(): int
+    {
+        $max = $this->run("SELECT MAX(batch) FROM {$this->table}")->fetchColumn();
+
+        return $max !== false && $max !== null ? ((int) $max + 1) : 1;
+    }
+
+    /**
+     * Prepare, bind (ints as PARAM_INT) and execute.
+     */
+    private function run(string $sql, array $params = []): PDOStatement
+    {
+        $stmt = $this->pdo->prepare($sql);
+
+        foreach (array_values($params) as $i => $value) {
+            $stmt->bindValue($i + 1, $value, \is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+
+        $stmt->execute();
+
+        return $stmt;
     }
 }

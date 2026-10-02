@@ -206,24 +206,6 @@ class Router implements RouterContract
     }
 
     /**
-     * Add a route that renders a Fireline template.
-     *
-     * This method is a convenience method for adding routes that render
-     * Fireline templates, allowing for easy integration with the Fireline
-     * templating system.
-     *
-     * @param string $path The path for the route.
-     * @param string $template The Fireline template to render.
-     * @param array $context Optional context data to pass to the Fireline template.
-     *
-     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
-     */
-    public function fireline(string $path, string $template, array $context = []): Route
-    {
-        return new Route($path, callback: fn() => fireline($template, $context));
-    }
-
-    /**
      * Redirect to a specified path.
      *
      * This method adds a route that redirects to a specified URL with an optional HTTP status code.

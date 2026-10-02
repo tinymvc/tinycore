@@ -449,38 +449,6 @@ if (!function_exists('blade')) {
     }
 }
 
-if (!function_exists('fireline')) {
-    /**
-     * Renders a template with the given context.
-     *
-     * This function will render a template with the given context using the
-     * Template engine. If the request accepts JSON, it will return a JSON
-     * response with the rendered HTML and title. Otherwise, it will return a
-     * regular HTTP response with the rendered HTML.
-     *
-     * @param string $template The path to the template file to render.
-     * @param array $context An associative array of variables to pass to the template.
-     * @return Response The response object after writing the rendered content.
-     */
-    function fireline(string $template, array $context = []): Response
-    {
-        // Check if the request accepts JSON
-        if (request()->isFirelineRequest()) {
-            // Get the template engine
-            $engine = get(Blade::class);
-
-            // Return a JSON response with the rendered HTML and title
-            return json([
-                'html' => $engine->render($template, $context),
-                'title' => $engine->yieldSection('title'),
-            ])->noCache();
-        }
-
-        // Otherwise, return a regular HTTP response with the rendered HTML
-        return view($template, $context);
-    }
-}
-
 if (!function_exists('url')) {
     /**
      * Generate a URL from a given path relative to the application's root URL.

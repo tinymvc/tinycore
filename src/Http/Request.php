@@ -1173,19 +1173,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Determines if the request is made by a Fireline agent.
-     *
-     * This method checks if the request is an AJAX request, accepts JSON,
-     * and contains the 'x-fireline-agent' header.
-     *
-     * @return bool True if the request is from a Fireline agent, false otherwise.
-     */
-    public function isFirelineRequest(): bool
-    {
-        return $this->isAjax() && $this->accept('application/json') && $this->header('x-fireline-agent');
-    }
-
-    /**
      * Determines if the request expects a JSON response.
      *
      * This method checks if the request is an AJAX request, accepts JSON,
@@ -1650,17 +1637,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function prepareValidationError(string $message, array $errors, array $attributes = []): Response
     {
         // If the request wants a JSON response
-        if ($this->isFirelineRequest()) {
-            $flattenedErrors = $this->flattenValidationErrors($errors);
-            $errorHtml = '<ul>' // Build the error HTML
-                . collect($flattenedErrors)
-                    ->map(fn($error) => "<li>{$error}</li>")
-                    ->join('') // Join the errors into a string
-                . '</ul>';
-
-            // Return the errors as a JSON response
-            return json(['status' => 'error', 'message' => $errorHtml]);
-        } elseif ($this->expectsJson()) {
+        if ($this->expectsJson()) {
             // Validate error message
             $flattenedErrors = $this->flattenValidationErrors($errors);
             $message .= (count($flattenedErrors) > 1 ? ' (and ' . (count($flattenedErrors) - 1) . ' more errors)' : '');

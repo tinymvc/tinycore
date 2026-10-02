@@ -1179,8 +1179,8 @@ class Tinker
         // Paths
         echo "\n" . $this->color("Paths:", 'white') . "\n";
         echo "  Storage: " . $this->color($this->removeRootDir(config('app.storage_dir', '/storage')), 'yellow') . "\n";
-        echo "  Cache: " . $this->color($this->removeRootDir(config('app.cache_dir', '/cache')), 'yellow') . "\n";
-        echo "  Uploads: " . $this->color($this->removeRootDir(config('app.upload_dir', '/uploads')), 'yellow') . "\n";
+        echo "  Temp: " . $this->color($this->removeRootDir(config('app.temp_dir', '/storage/temp')), 'yellow') . "\n";
+        echo "  Uploads: " . $this->color($this->removeRootDir(config('app.upload_dir', '/storage/app/public')), 'yellow') . "\n";
         echo "  Views: " . $this->color($this->removeRootDir(config('app.views_dir', '/views')), 'yellow') . "\n";
 
         // System info

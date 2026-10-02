@@ -295,10 +295,11 @@ class PrimaryCommandsHandler
     public function clearCache()
     {
         $this->clearViewCaches(); // Also clear view caches
+        $this->clearConfigCache(); // Also clear config caches
 
         $cacheDirs = [
-            storage_dir('cache'),
-            root_dir('bootstrap/cache'),
+            temp_dir(),
+            storage_dir('framework/testing'),
         ];
 
         foreach ($cacheDirs as $cacheDir) {
@@ -336,50 +337,43 @@ class PrimaryCommandsHandler
     private function clearRedisCacheAndLocks(): void
     {
         $cacheConfig = (array) config('cache', []);
-        $cacheDriver = strtolower((string) ($cacheConfig['driver'] ?? 'sqlite'));
+        $cacheDriver = strtolower((string) ($cacheConfig['driver'] ?? 'database'));
 
-        $lockConfig = (array) config('lock', []);
-        $lockDriver = strtolower((string) ($lockConfig['driver'] ?? $cacheDriver));
-
-        if ($cacheDriver !== 'redis' && $lockDriver !== 'redis') {
+        if ($cacheDriver !== 'redis') {
             return;
         }
 
         // Flush cached values via the public Cache API.
-        if ($cacheDriver === 'redis') {
-            Cache::make()->flush();
-        }
+        Cache::make()->flush();
 
         // Locks live under their own namespace, so flush them separately.
-        if ($lockDriver === 'redis') {
-            $connections = (array) ($cacheConfig['connections'] ?? []);
-            $driverConfig = is_array($connections['redis'] ?? null) ? $connections['redis'] : [];
+        $connections = (array) ($cacheConfig['connections'] ?? []);
+        $driverConfig = is_array($connections['redis'] ?? null) ? $connections['redis'] : [];
 
-            $connection = RedisConnector::resolveConnectionConfig(
-                RedisConnector::mergeConfig(['driver' => 'redis', 'name' => 'default'], $driverConfig)
-            );
+        $connection = RedisConnector::resolveConnectionConfig(
+            RedisConnector::mergeConfig(['driver' => 'redis', 'name' => 'default'], $driverConfig)
+        );
 
-            $redis = RedisConnector::make($connection, 'default');
+        $redis = RedisConnector::make($connection, 'default');
 
-            $prefix = trim((string) ($connection['prefix'] ?? 'spark'), ':');
-            if ($prefix === '') {
-                $prefix = 'spark';
+        $prefix = trim((string) ($connection['prefix'] ?? 'spark'), ':');
+        if ($prefix === '') {
+            $prefix = 'spark';
+        }
+
+        $pattern = "$prefix:lock:*";
+        $cursor = 0;
+
+        do {
+            $keys = $redis->scan($cursor, $pattern);
+            if ($keys === false) {
+                break;
             }
 
-            $pattern = "$prefix:lock:*";
-            $cursor = 0;
-
-            do {
-                $keys = $redis->scan($cursor, $pattern);
-                if ($keys === false) {
-                    break;
-                }
-
-                if (!empty($keys)) {
-                    $redis->del($keys);
-                }
-            } while ($cursor > 0);
-        }
+            if (!empty($keys)) {
+                $redis->del($keys);
+            }
+        } while ($cursor > 0);
     }
 
     /**
