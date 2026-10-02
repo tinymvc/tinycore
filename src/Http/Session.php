@@ -4,8 +4,8 @@ namespace Spark\Http;
 
 use Spark\Contracts\Http\SessionContract;
 use Spark\Foundation\Application;
-use Spark\Support\Traits\Conditionable;
-use Spark\Support\Traits\Macroable;
+use Spark\Http\Session\SessionHandler;
+use Spark\Support\Traits\{Conditionable, Macroable};
 use function array_key_exists;
 use function is_array;
 use function is_string;
@@ -23,47 +23,31 @@ class Session implements SessionContract
 {
     use Macroable, Conditionable;
 
-    /**
-     * Constructor for the session class.
-     *
-     * Initializes the session if it hasn't been started yet.
-     *
-     * @return void
-     */
     public function __construct()
     {
-        self::start();
+        SessionHandler::start(); // Start the session when the Session class is instantiated
     }
 
-    /**
-     * Starts the session if it hasn't been started yet.
-     *
-     * @return void
-     */
-    public static function start(): void
-    {
-        if (self::isTesting()) {
-            $_SESSION ??= [];
-            return;
-        }
-
-        if (!is_web() || session_status() === PHP_SESSION_ACTIVE || headers_sent()) {
-            return;
-        }
-
-        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
-            session_start();
-        }
-    }
 
     /**
      * Checks if the session has been started.
      *
+     * @param bool $forceStart If true, the session will be started if it's not already active.
      * @return bool True if the session is active, false otherwise.
      */
-    public static function isStarted(): bool
+    public static function isStarted(bool $forceStart = false): bool
     {
-        return self::isTesting() || session_status() === PHP_SESSION_ACTIVE;
+        if (self::isTesting()) {
+            return true;
+        }
+
+        if (session_status() === PHP_SESSION_ACTIVE && $forceStart) {
+            SessionHandler::start();
+        } else {
+            return false;
+        }
+
+        return session_status() === PHP_SESSION_ACTIVE;
     }
 
     /**
@@ -75,7 +59,7 @@ class Session implements SessionContract
      */
     public static function get(string $key, $default = null): mixed
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return $default;
         }
 
@@ -91,7 +75,7 @@ class Session implements SessionContract
      */
     public static function set(string $key, $value): void
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -106,7 +90,7 @@ class Session implements SessionContract
      */
     public static function has(string $key): bool
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return false;
         }
 
@@ -121,7 +105,7 @@ class Session implements SessionContract
      */
     public static function delete(string $key): void
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -137,7 +121,7 @@ class Session implements SessionContract
      */
     public static function put(string|array $key, $value = null): void
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -163,7 +147,7 @@ class Session implements SessionContract
      */
     public static function forget(string|array $keys): void
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -181,7 +165,7 @@ class Session implements SessionContract
      */
     public static function flush(): void
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -197,7 +181,7 @@ class Session implements SessionContract
      */
     public static function pull(string $key, $default = null): mixed
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return $default;
         }
 
@@ -296,7 +280,7 @@ class Session implements SessionContract
      */
     public static function flash(string $key, $value): void
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -312,7 +296,7 @@ class Session implements SessionContract
      */
     public static function getFlash(string $key, $default = null): mixed
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return $default;
         }
 
@@ -338,7 +322,7 @@ class Session implements SessionContract
      */
     public static function hasFlash(string $key): bool
     {
-        if (!self::isStarted() || !isset($_SESSION['_flash'])) {
+        if (!self::isStarted(forceStart: true) || !isset($_SESSION['_flash'])) {
             return false;
         }
 
@@ -352,7 +336,7 @@ class Session implements SessionContract
      */
     public static function clearFlash(): void
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -366,7 +350,7 @@ class Session implements SessionContract
      */
     public static function all(): array
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return [];
         }
 
