@@ -4,8 +4,9 @@ namespace Spark\Cache;
 
 use Spark\Cache\Contracts\CacheContract;
 use Spark\Cache\Contracts\CacheStorageContract;
+use Spark\Cache\Storage\FileStorage;
 use Spark\Cache\Storage\RedisStorage;
-use Spark\Cache\Storage\SqliteStorage;
+use Spark\Cache\Storage\DatabaseStorage;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
@@ -36,11 +37,13 @@ class Cache implements CacheContract, \ArrayAccess
     public function __construct(string $name = 'default')
     {
         $connection = $this->resolveDriverConfig($name);
-        $driver = strtolower((string) ($connection['driver'] ?? 'sqlite'));
+        $driver = strtolower((string) ($connection['driver'] ?? 'database'));
 
-        $this->storage = $driver === 'redis'
-            ? new RedisStorage($name, $connection)
-            : new SqliteStorage($name, $connection, 'cache');
+        $this->storage = match ($driver) {
+            'redis' => new RedisStorage($name, $connection),
+            'file' => new FileStorage($name, $connection),
+            default => new DatabaseStorage($name, $connection, 'cache'),
+        };
     }
 
     /**
@@ -133,17 +136,6 @@ class Cache implements CacheContract, \ArrayAccess
     }
 
     /**
-     * Return cache metadata for a key.
-     *
-     * @param string $key The cache key.
-     * @return mixed The metadata associated with the cache key.
-     */
-    public function metadata(string $key): mixed
-    {
-        return $this->storage->metadata($key);
-    }
-
-    /**
      * Retrieve every active item in this named cache.
      *
      * @param bool $eraseExpired Whether to erase expired entries when retrieving.
@@ -204,16 +196,6 @@ class Cache implements CacheContract, \ArrayAccess
     public function flushIf(bool $condition): self
     {
         $condition && $this->flush();
-
-        return $this;
-    }
-
-    /**
-     * Clear all entries and reclaim storage when the driver supports it.
-     */
-    public function clear(): self
-    {
-        $this->storage->clear();
 
         return $this;
     }
@@ -382,7 +364,7 @@ class Cache implements CacheContract, \ArrayAccess
     private function resolveDriverConfig(string $name): array
     {
         $cacheConfig = (array) config('cache', []);
-        $driver = strtolower((string) ($cacheConfig['driver'] ?? 'sqlite'));
+        $driver = strtolower((string) ($cacheConfig['driver'] ?? 'database'));
         $connections = (array) ($cacheConfig['connections'] ?? []);
         $driverConfig = is_array($connections[$driver] ?? null) ? $connections[$driver] : [];
 

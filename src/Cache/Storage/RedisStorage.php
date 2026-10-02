@@ -25,7 +25,6 @@ class RedisStorage implements CacheStorageContract
     private string $lockNamespace = 'lock';
 
     private const REDIS_OWNER_KEY = 'owner';
-    private const REDIS_LOCKED_AT_KEY = 'locked_at';
     private const REDIS_EXPIRE_AT_KEY = 'expire_at';
 
     public function __construct(
@@ -320,7 +319,6 @@ class RedisStorage implements CacheStorageContract
             $timeout = max(1, $timeout);
             $payload = [
                 self::REDIS_OWNER_KEY => $owner,
-                self::REDIS_LOCKED_AT_KEY => time(),
                 self::REDIS_EXPIRE_AT_KEY => time() + $timeout,
             ];
 
@@ -454,7 +452,6 @@ LUA;
 
         return [
             'owner' => $payload[self::REDIS_OWNER_KEY] ?? null,
-            'locked_at' => $payload[self::REDIS_LOCKED_AT_KEY] ?? null,
             'expire_at' => $payload[self::REDIS_EXPIRE_AT_KEY] ?? null,
         ];
     }

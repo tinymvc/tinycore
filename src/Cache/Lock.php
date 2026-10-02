@@ -5,8 +5,9 @@ namespace Spark\Cache;
 use Spark\Cache\Contracts\LockContract;
 use Spark\Cache\Contracts\CacheStorageContract;
 use Spark\Cache\Exceptions\LockException;
+use Spark\Cache\Storage\FileStorage;
 use Spark\Cache\Storage\RedisStorage;
-use Spark\Cache\Storage\SqliteStorage;
+use Spark\Cache\Storage\DatabaseStorage;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
@@ -42,11 +43,13 @@ class Lock implements LockContract, \ArrayAccess
     public function __construct(string $name = 'default')
     {
         $connection = $this->resolveDriverConfig($name);
-        $driver = strtolower((string) ($connection['driver'] ?? 'sqlite'));
+        $driver = strtolower((string) ($connection['driver'] ?? 'database'));
 
-        $this->storage = $driver === 'redis'
-            ? new RedisStorage($name, $connection)
-            : new SqliteStorage($name, $connection, 'lock');
+        $this->storage = match ($driver) {
+            'redis' => new RedisStorage($name, $connection),
+            'file' => new FileStorage($name, $connection),
+            default => new DatabaseStorage($name, $connection, 'lock'),
+        };
 
         $this->owner = sprintf('%s-%s-%s', gethostname(), getmypid(), uniqid('', true));
     }
@@ -260,7 +263,7 @@ class Lock implements LockContract, \ArrayAccess
     private function resolveDriverConfig(string $name): array
     {
         $cacheConfig = (array) config('cache', []);
-        $driver = strtolower((string) ($cacheConfig['driver'] ?? 'sqlite'));
+        $driver = strtolower((string) ($cacheConfig['driver'] ?? 'database'));
         $connections = (array) ($cacheConfig['connections'] ?? []);
         $driverConfig = is_array($connections[$driver] ?? null) ? $connections[$driver] : [];
 

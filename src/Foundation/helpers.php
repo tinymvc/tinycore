@@ -822,7 +822,7 @@ if (!function_exists('storage_dir')) {
     }
 }
 
-if (!function_exists('lang_dir')) {
+if (!function_exists('locale_dir')) {
     /**
      * Get the language directory path with an optional appended path.
      *
@@ -833,7 +833,7 @@ if (!function_exists('lang_dir')) {
      * @param string $path The sub-path to append to the language directory path. Default is '/'.
      * @return string The full path to the language directory, including the appended sub-path.
      */
-    function lang_dir(string $path = '/'): string
+    function locale_dir(string $path = '/'): string
     {
         return dir_path(config('app.lang_dir') . '/' . ltrim($path, '/'));
     }

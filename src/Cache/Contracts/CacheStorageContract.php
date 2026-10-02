@@ -17,8 +17,6 @@ interface CacheStorageContract
 
     public function retrieve(string|array $keys, bool $eraseExpired = false): mixed;
 
-    public function metadata(string $key): ?array;
-
     public function retrieveAll(bool $eraseExpired = false): array;
 
     public function erase(array $keys): void;
@@ -28,8 +26,6 @@ interface CacheStorageContract
     public function getExpired(): array;
 
     public function flush(): void;
-
-    public function clear(): void;
 
     public function storeMany(array $items, ?string $expire = null): void;
 
