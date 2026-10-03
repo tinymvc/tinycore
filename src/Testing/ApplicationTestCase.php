@@ -40,6 +40,12 @@ abstract class ApplicationTestCase extends TestCase
     /** Create a new application instance for this test. */
     abstract protected function createApplication(): Application;
 
+    /** Parent directory for isolated per-test storage, resolved before application boot. */
+    protected function testStorageDirectory(): string
+    {
+        return sys_get_temp_dir();
+    }
+
     /** Set up the test environment before each test. */
     protected function setUp(): void
     {
@@ -54,9 +60,19 @@ abstract class ApplicationTestCase extends TestCase
         $this->environment = getenv();
         $this->previousApp = Application::$app;
         $this->previousTracer = Tracer::$instance;
-        $this->temporaryDirectory = $this->storagePath = sys_get_temp_dir() . '/tinycore-test-' . bin2hex(random_bytes(10));
+        $root = rtrim($this->testStorageDirectory(), '/\\');
 
-        mkdir($this->storagePath, 0700, true);
+        if ($root === '') {
+            throw new \LogicException('The test storage directory must not be empty.');
+        }
+
+        $directory = $root . '/tinycore-test-' . bin2hex(random_bytes(10));
+
+        if (!mkdir($directory, 0700, true)) {
+            throw new \RuntimeException('Unable to create test storage: ' . $directory);
+        }
+
+        $this->temporaryDirectory = $this->storagePath = $directory;
 
         \Spark\View\Blade::flushState();
 
@@ -65,14 +81,10 @@ abstract class ApplicationTestCase extends TestCase
         $_GET = $_POST = $_FILES = $_COOKIE = $_SESSION = $_REQUEST = [];
         $_SERVER = $this->server('GET', '/');
 
-        try {
-            $this->app = $this->createApplication();
-            if (!$this->app->isTesting()) {
-                throw new \LogicException('Feature tests require a CLI testing application.');
-            }
-        } catch (\Throwable $e) {
-            $this->cleanUp();
-            throw $e;
+        $this->app = $this->createApplication();
+
+        if (!$this->app->isTesting()) {
+            throw new \LogicException('Feature tests require a CLI testing application.');
         }
     }
 
@@ -300,38 +312,50 @@ abstract class ApplicationTestCase extends TestCase
 
     private function cleanUp(): void
     {
-        if (!isset($this->globals, $this->timezone, $this->storagePath, $this->environment)) {
+        if (!isset($this->temporaryDirectory)) {
             return;
         }
 
-        if (isset($this->app)) {
-            $this->app->flush();
-            unset($this->app);
-        }
+        try {
+            if (isset($this->app)) {
+                try {
+                    $this->app->flush();
+                } finally {
+                    unset($this->app);
+                }
+            }
+        } finally {
+            try {
+                \Spark\View\Blade::flushState();
 
-        \Spark\View\Blade::flushState();
+                Application::$app = $this->previousApp;
+                Tracer::$instance = $this->previousTracer;
 
-        Application::$app = $this->previousApp;
-        Tracer::$instance = $this->previousTracer;
+                foreach ($this->globals as $key => $value) {
+                    if ($value === null) {
+                        unset($GLOBALS[$key]);
+                    } else {
+                        $GLOBALS[$key] = $value;
+                    }
+                }
 
-        foreach ($this->globals as $key => $value) {
-            if ($value === null) {
-                unset($GLOBALS[$key]);
-            } else {
-                $GLOBALS[$key] = $value;
+                foreach (array_diff_key(getenv(), $this->environment) as $key => $value) {
+                    putenv($key);
+                }
+
+                foreach ($this->environment as $key => $value) {
+                    putenv("$key=$value");
+                }
+
+                date_default_timezone_set($this->timezone);
+            } finally {
+                $this->removeTemporaryDirectory();
             }
         }
+    }
 
-        foreach (array_diff_key(getenv(), $this->environment) as $key => $value) {
-            putenv($key);
-        }
-
-        foreach ($this->environment as $key => $value) {
-            putenv("$key=$value");
-        }
-
-        date_default_timezone_set($this->timezone);
-
+    private function removeTemporaryDirectory(): void
+    {
         // Only remove the directory allocated by this test, never a replacement symlink.
         $directory = $this->temporaryDirectory;
         clearstatcache(true, $directory);

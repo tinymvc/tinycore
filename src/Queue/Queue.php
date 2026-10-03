@@ -3,18 +3,17 @@
 namespace Spark\Queue;
 
 use PDO;
-use Spark\Console\Prompt;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueContract;
 use Spark\Queue\Storage\{RedisStorage, DatabaseStorage, FileStorage};
 use Spark\Support\Traits\Macroable;
 use function implode;
 use function is_array;
-use function memory_get_usage;
 use function microtime;
 use function rand;
 use function sleep;
 use function sprintf;
+use function strlen;
 
 /**
  * Public queue manager and worker lifecycle coordinator.
@@ -135,10 +134,9 @@ class Queue implements QueueContract
         $ranJobs = 0;
         $failedJobs = 0;
         $startedAt = microtime(true);
-        $startedMemory = memory_get_usage(true);
 
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
-        $this->message("Queue worker started for queue(s): $queueNames");
+        $this->message("Processing jobs from [$queueNames].");
 
         sleep(rand(0, $sleep));
         $this->recoverStaleJobs();
@@ -152,7 +150,11 @@ class Queue implements QueueContract
             $job = $this->storage->getNextJob($queue);
 
             if (!$job) {
-                $once === false && sleep($sleep);
+                if ($once) {
+                    break;
+                }
+
+                sleep($sleep);
                 continue;
             }
 
@@ -160,15 +162,16 @@ class Queue implements QueueContract
             $attempts = (int) $job->getMetadata('attempts', 0);
             $maxTries = $job->getTries($tries);
 
-            $this->message(
-                sprintf(
-                    'Processing job #%d (%s) - Attempt %d/%d',
-                    $jobId,
-                    $job->getDisplayName(),
-                    $attempts + 1,
-                    $maxTries,
-                ),
+            $jobStartedAt = microtime(true);
+            $label = sprintf(
+                '%s [queue=%s, id=%d, attempt=%d/%d]',
+                $job->getDisplayName(),
+                $job->getMetadata('queue', 'default'),
+                $jobId,
+                $attempts + 1,
+                $maxTries,
             );
+            $this->message($label, 'RUNNING');
 
             try {
                 $this->storage->updateJobStatus($jobId, 'processing', $attempts + 1);
@@ -179,29 +182,29 @@ class Queue implements QueueContract
                     $nextRun = now()->modify('+' . $job->getRepeat());
                     $this->storage->rescheduleJob($jobId, $nextRun);
 
-                    $this->message(sprintf('Job #%d completed and rescheduled for %s', $jobId, $nextRun));
+                    $this->message("$label - next run: $nextRun", 'DONE', microtime(true) - $jobStartedAt);
                 } else {
                     $this->removeJobById($jobId);
-                    $this->message("Job #$jobId completed successfully");
+                    $this->message($label, 'DONE', microtime(true) - $jobStartedAt);
                 }
 
                 $ranJobs++;
             } catch (\Throwable $e) {
                 $newAttempts = $attempts + 1;
 
-                $this->message(sprintf('Job #%d failed: %s', $jobId, $e->getMessage()));
+                $this->message("$label - " . $e->getMessage(), 'FAIL', microtime(true) - $jobStartedAt);
 
                 if ($newAttempts >= $maxTries) {
                     $this->storage->markJobAsFailed($jobId, $e, $newAttempts);
                     $this->callFailedHandler($job, $e->getPrevious() ?? $e);
 
-                    $this->message(sprintf('Job #%d failed permanently after %d attempts', $jobId, $newAttempts));
+                    $this->message(sprintf('Job #%d exhausted %d attempts.', $jobId, $newAttempts), 'ERROR');
                 } else {
                     $retryDelay = $job->getBackoff($delay, $newAttempts);
                     $retryTime = now()->addSeconds($retryDelay);
                     $this->storage->retryJob($jobId, $retryTime, $newAttempts);
 
-                    $this->message(sprintf('Job #%d will be retried at %s', $jobId, $retryTime));
+                    $this->message(sprintf('Job #%d scheduled for %s', $jobId, $retryTime), 'RETRY');
                 }
 
                 $failedJobs++;
@@ -212,7 +215,7 @@ class Queue implements QueueContract
             }
         } while (true);
 
-        $this->message(sprintf('Queue worker finished. Ran %d job(s), %d failed', $ranJobs, $failedJobs));
+        $this->message(sprintf('Worker stopped: %d completed, %d failed attempts.', $ranJobs, $failedJobs));
     }
 
     /**
@@ -258,9 +261,9 @@ class Queue implements QueueContract
         $recovered = $this->storage->recoverStaleJobs($timeout);
 
         if ($recovered > 0) {
-            Prompt::message(
-                sprintf('Recovered <bold>%d</bold> stale job(s)', $recovered),
-                'warning'
+            $this->message(
+                sprintf('Recovered %d stale job(s).', $recovered),
+                'WARN'
             );
         }
 
@@ -277,20 +280,47 @@ class Queue implements QueueContract
                     'Failed handler for job #%s threw an exception: %s',
                     $job->getId() ?? 'unknown',
                     $failedException->getMessage()
-                )
+                ),
+                'ERROR',
             );
         }
     }
 
-    private function message(string $message): void
+    /** Emit complete lines: no cursor movement or terminal markup in captured logs. */
+    private function message(string $message, string $status = 'INFO', ?float $duration = null): void
     {
-        echo '[' . date('Y-m-d H:i:s') . '] ' . $message . PHP_EOL;
+        $terminal = \defined('STDOUT') && function_exists('stream_isatty') && stream_isatty(STDOUT);
+        $colors = $terminal && getenv('TERM') !== 'dumb'
+            && (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '');
+
+        // Strip terminal escape sequences, then flatten control characters in job/error text.
+        $message = preg_replace('/\x1B(?:\][^\x07\x1B]*(?:\x07|\x1B\\\\)|\[[0-?]*[ -\/]*[@-~]|[@-_])/', '', $message) ?? $message;
+        $message = trim(preg_replace('/[\x00-\x20\x7F]+/', ' ', $message) ?? $message);
+        $line = '[' . date('Y-m-d H:i:s') . '] ' . $message;
+        $elapsed = $duration === null ? '' : ($duration >= 1
+            ? sprintf('%.2fs ', $duration)
+            : sprintf('%.2fms ', max(0, $duration) * 1000));
+
+        $width = max(40, min(200, (int) (getenv('COLUMNS') ?: 80)));
+        $separator = $terminal
+            ? ' ' . str_repeat('.', max(2, $width - strlen($line) - strlen($elapsed) - strlen($status) - 2)) . ' '
+            : ' ';
+
+        $color = match ($status) {
+            'DONE' => '32',
+            'FAIL', 'ERROR' => '31',
+            'RUNNING', 'RETRY', 'WARN' => '33',
+            default => '36',
+        };
+        $badge = $colors ? "\033[{$color}m$status\033[0m" : $status;
+
+        echo "$line$separator$elapsed$badge" . PHP_EOL;
     }
 
     private function resolveDriverConfig(): array
     {
         $queueConfig = (array) config('queue', []);
-        $driver = strtolower((string) ($queueConfig['driver'] ?? 'sqlite'));
+        $driver = strtolower((string) ($queueConfig['driver'] ?? 'database'));
         $connections = (array) ($queueConfig['connections'] ?? []);
         $connection = is_array($connections[$driver] ?? null) ? $connections[$driver] : [];
 
