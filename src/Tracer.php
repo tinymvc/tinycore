@@ -27,6 +27,7 @@ class Tracer implements TracerContract
     /** @var Tracer $instance */
     public static ?self $instance = null;
 
+    /** @var bool Weather the tracer is currently rendering an error. */
     private bool $rendering = false;
 
     /** @var int */
@@ -222,6 +223,7 @@ class Tracer implements TracerContract
                     $frameFile = $frame['file'] ?? '[internal function]';
                     $frameLine = $frame['line'] ?? 'n/a';
                     $frameFunction = $frame['function'] ?? 'unknown';
+
                     Prompt::message("#$index $frameFile(<danger>$frameLine</danger>): <warning>$frameFunction()</warning>");
                 }
             }
@@ -235,6 +237,7 @@ class Tracer implements TracerContract
 
         $debug = $this->debugEnabled();
         $json = $this->expectsJson();
+
         $this->prepareResponse($json);
 
         if ($json) {
@@ -309,7 +312,7 @@ class Tracer implements TracerContract
     private function debugEnabled(): bool
     {
         try {
-            return is_debug_mode();
+            return Application::$app->isDebugMode();
         } catch (Throwable) {
             return false;
         }
@@ -346,19 +349,24 @@ class Tracer implements TracerContract
     /** Render a basic response when Blade is unavailable or fails. */
     private function renderFallback(string $message): void
     {
-        $message = $this->debugEnabled() ? $message : 'Internal Server Error';
-
         if (is_cli()) {
-            echo "Error: {$message}" . PHP_EOL;
+            Prompt::error($message);
+            Prompt::newline();
             exit(1);
         }
 
-        $json = $this->expectsJson();
-        $this->prepareResponse($json);
+        $message = $this->debugEnabled() ? $message : 'Internal Server Error';
 
-        echo $json
-            ? json_encode(['message' => $message], JSON_INVALID_UTF8_SUBSTITUTE)
-            : '<h1>Internal Server Error</h1><p>' . htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>';
+        $this->prepareResponse($json = $this->expectsJson());
+
+        if ($json) {
+            echo json_encode(['message' => $message], JSON_INVALID_UTF8_SUBSTITUTE);
+        } else {
+            echo '<div style="font:16px/1.5 system-ui,sans-serif;max-width:480px;margin:18vh auto;padding:0 24px;text-align:center;color:#111827">'
+                . '<div style="font-size:80px;font-weight:700;letter-spacing:-.04em;color:#e5e7eb">500</div>'
+                . '<h1 style="margin:0 0 8px;font-size:20px;font-weight:600">Internal Server Error</h1>'
+                . '<p style="margin:0;font-size:14px;color:#6b7280">' . htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p></div>';
+        }
 
         exit(1);
     }
