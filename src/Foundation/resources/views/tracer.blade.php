@@ -1,6 +1,6 @@
 @extends('master')
 
-@section('title', "$type: $message")
+@section('title', htmlspecialchars("$type: $message", ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'))
 
 @section('content')
     <div class="error-container">
@@ -14,17 +14,17 @@
             </div>
             <div class="error-content">
                 <h1 class="error-title">
-                    <span class="error-type">{!! $type !!}</span>
+                    <span class="error-type">{{ $type }}</span>
                 </h1>
-                <p class="error-message">{!! $message !!}</p>
+                <p class="error-message">{{ $message }}</p>
                 <div class="error-location">
                     <div class="location-item">
                         <span class="location-label">File:</span>
-                        <span class="location-value">{!! '@' . remove_root_dir($file, root_dir()) !!}</span>
+                        <span class="location-value">{{ '@' . remove_root_dir($file, root_dir()) }}</span>
                     </div>
                     <div class="location-item">
                         <span class="location-label">Line:</span>
-                        <span class="location-value location-line">{!! $line !!}</span>
+                        <span class="location-value location-line">{{ $line }}</span>
                     </div>
                 </div>
             </div>
@@ -62,22 +62,22 @@
                                     : '';
                             @endphp
                             <div class="trace-frame">
-                                <div class="frame-number">#{!! $index + 1 !!}</div>
+                                <div class="frame-number">#{{ $index + 1 }}</div>
                                 <div class="frame-details">
                                     <div class="frame-location">
-                                        <span class="frame-file">{!! '@' . remove_root_dir($file, root_dir()) !!}</span>
+                                        <span class="frame-file">{{ '@' . remove_root_dir($file, root_dir()) }}</span>
                                         @if ($line)
-                                            <span class="frame-line">:{!! $line !!}</span>
+                                            <span class="frame-line">:{{ $line }}</span>
                                         @endif
                                     </div>
                                     <div class="frame-function">
                                         @if ($class)
-                                            <span class="frame-class">{!! $class !!}</span>
-                                            <span class="frame-type">{!! $type !!}</span>
+                                            <span class="frame-class">{{ $class }}</span>
+                                            <span class="frame-type">{{ $type }}</span>
                                         @endif
-                                        <span class="frame-method">{!! $function !!}</span>
+                                        <span class="frame-method">{{ $function }}</span>
                                         @if ($args)
-                                            <span class="frame-args">({!! $args !!})</span>
+                                            <span class="frame-args">({{ $args }})</span>
                                         @else
                                             <span class="frame-args">()</span>
                                         @endif

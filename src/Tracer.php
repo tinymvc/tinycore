@@ -4,8 +4,10 @@ namespace Spark;
 
 use Spark\Console\Prompt;
 use Spark\Contracts\TracerContract;
-use Spark\Facades\Blade;
+use Spark\Foundation\Application;
+use Spark\Http\Request;
 use Spark\Support\Traits\Macroable;
+use Spark\Facades\Blade;
 use Throwable;
 use function in_array;
 use function sprintf;
@@ -24,6 +26,8 @@ class Tracer implements TracerContract
 
     /** @var Tracer $instance */
     public static ?self $instance = null;
+
+    private bool $rendering = false;
 
     /** @var int */
     private const LOG_FILE_MAX_SIZE = 10_485_760;
@@ -113,9 +117,13 @@ class Tracer implements TracerContract
             return false;
         }
 
+        if ($this->rendering) {
+            throw new \ErrorException($errstr, 0, $errno, $errfile, $errline);
+        }
+
         $type = self::ERROR_TYPES[$errno] ?? 'Error';
 
-        if (!is_debug_mode() && !in_array($errno, self::FATAL_ERROR_TYPES, true)) {
+        if (!$this->debugEnabled() && !in_array($errno, self::FATAL_ERROR_TYPES, true)) {
             $this->log("$type: $errstr in $errfile on line $errline");
             return true;
         }
@@ -175,6 +183,26 @@ class Tracer implements TracerContract
      */
     public function renderError(string $type, string $message, string $file, int $line, array $trace = []): void
     {
+        if ($this->rendering) {
+            $this->renderFallback($message);
+
+            return;
+        }
+
+        $this->rendering = true;
+
+        try {
+            $this->renderErrorResponse($type, $message, $file, $line, $trace);
+        } catch (Throwable) {
+            // Error pages must not depend on a working container or template compiler.
+            $this->renderFallback($message);
+        } finally {
+            $this->rendering = false;
+        }
+    }
+
+    private function renderErrorResponse(string $type, string $message, string $file, int $line, array $trace): void
+    {
         // Log the error message unless it's from Tinker context
         if (!($isFromTinker = $this->isFromTinkerContext($file))) {
             $this->log("$type: $message in $file on line $line" . $this->traceString($trace));
@@ -205,47 +233,41 @@ class Tracer implements TracerContract
             exit(1);
         }
 
-        if (!is_debug_mode()) {
-            abort(500, 'Internal Server Error');
-        }
+        $debug = $this->debugEnabled();
+        $json = $this->expectsJson();
+        $this->prepareResponse($json);
 
-        // Clear any previous output
-        ob_get_length() && ob_end_clean();
+        if ($json) {
+            $data = ['message' => $debug ? "$type: $message" : 'Internal Server Error'];
 
-        // Set HTTP response code to 500 for server error.
-        if (!headers_sent() && http_response_code() !== 500) {
-            http_response_code(500);
-        }
-
-        if (\Spark\Foundation\Application::$app->get(\Spark\Http\Request::class)->expectsJson()) {
-            header('Content-Type: application/json');
-            echo json_encode([
-                'message' => "$type: $message",
-                'file' => '@' . remove_root_dir($file, root_dir()),
-                'line' => $line,
-                'trace' => array_map(
-                    fn($frame) => sprintf(
-                        '%s(%d): %s()',
-                        '@' . remove_root_dir($frame['file'] ?? '[internal function]', root_dir()),
-                        $frame['line'] ?? 'n/a',
-                        $frame['function'] ?? 'unknown'
+            if ($debug) {
+                $data += [
+                    'file' => '@' . remove_root_dir($file, root_dir()),
+                    'line' => $line,
+                    'trace' => array_map(
+                        static fn(array $frame): string => sprintf(
+                            '%s(%s): %s()',
+                            '@' . remove_root_dir($frame['file'] ?? '[internal function]', root_dir()),
+                            $frame['line'] ?? 'n/a',
+                            $frame['function'] ?? 'unknown',
+                        ),
+                        $trace,
                     ),
-                    $trace
-                ),
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-            exit;
+                ];
+            }
+
+            echo json_encode($data, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
+        } else {
+            Blade::setPath(__DIR__ . '/Foundation/resources/views');
+
+            if ($debug) {
+                echo Blade::render('tracer', compact('type', 'message', 'file', 'line', 'trace'));
+            } else {
+                echo Blade::render('errors/500', ['message' => 'Internal Server Error']);
+            }
         }
 
-        // Detailed error output with stack trace if debug mode is enabled.
-        Blade::setPath(__DIR__ . '/Foundation/resources/views');
-
-        echo Blade::render(
-            'tracer',
-            compact('type', 'message', 'file', 'line', 'trace')
-        );
-
-        // End the script to prevent further execution
-        exit;
+        exit(1);
     }
 
     /**
@@ -268,10 +290,12 @@ class Tracer implements TracerContract
      */
     public function log(string $message): void
     {
-        $logFile = dir_path($this->logFile ??= storage_dir('logs/spark.log'));
         $entry = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message);
+        $logFile = $this->logFile;
 
         try {
+            $logFile = dir_path($this->logFile ??= storage_dir('logs/spark.log'));
+
             if ($this->appendLogEntry($logFile, $entry)) {
                 return;
             }
@@ -280,18 +304,63 @@ class Tracer implements TracerContract
         }
 
         @error_log("[Spark] Unable to write log file '$logFile'. $entry");
+    }
 
-        if (str_contains($logFile, storage_dir()) && !is_writable(storage_dir())) {
-            if (is_web()) {
-                ob_get_length() && ob_end_clean(); // Clear any previous output to avoid mixed content
-                ob_start();
-                include __DIR__ . '/Foundation/resources/storage-not-writable.php';
-                echo ob_get_clean();
-            } else {
-                Prompt::message("Storage directory is not writable. ", 'danger');
-            }
-            exit;
+    private function debugEnabled(): bool
+    {
+        try {
+            return is_debug_mode();
+        } catch (Throwable) {
+            return false;
         }
+    }
+
+    private function expectsJson(): bool
+    {
+        try {
+            $app = Application::$app;
+            $request = $app->resolved(Request::class) ? $app->get(Request::class) : new Request();
+
+            return $request->expectsJson();
+        } catch (Throwable) {
+            return str_contains(strtolower($_SERVER['HTTP_ACCEPT'] ?? ''), 'json');
+        }
+    }
+
+    private function prepareResponse(bool $json): void
+    {
+        // Discard nested partial views without closing non-removable server buffers.
+        while (ob_get_level() > 0) {
+            if (!@ob_end_clean()) {
+                @ob_clean();
+                break;
+            }
+        }
+
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: ' . ($json ? 'application/json' : 'text/html') . '; charset=UTF-8');
+        }
+    }
+
+    /** Render a basic response when Blade is unavailable or fails. */
+    private function renderFallback(string $message): void
+    {
+        $message = $this->debugEnabled() ? $message : 'Internal Server Error';
+
+        if (is_cli()) {
+            echo "Error: {$message}" . PHP_EOL;
+            exit(1);
+        }
+
+        $json = $this->expectsJson();
+        $this->prepareResponse($json);
+
+        echo $json
+            ? json_encode(['message' => $message], JSON_INVALID_UTF8_SUBSTITUTE)
+            : '<h1>Internal Server Error</h1><p>' . htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>';
+
+        exit(1);
     }
 
     /**

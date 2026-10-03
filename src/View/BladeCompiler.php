@@ -46,7 +46,9 @@ class BladeCompiler implements BladeCompilerContract
         $this->cachePath = dir_path($cachePath);
 
         // Ensure the cache directory exists and is writable
-        File::ensureDirectoryWritable($this->cachePath);
+        if (!@File::ensureDirectoryWritable($this->cachePath) || !is_writable($this->cachePath)) {
+            throw new \RuntimeException("View cache directory is not writable: {$this->cachePath}");
+        }
     }
 
     /**
