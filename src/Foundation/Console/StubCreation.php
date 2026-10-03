@@ -57,7 +57,7 @@ class StubCreation
         // Check if the file already exists and prompt for override confirmation
         if (File::isFile($destination)) {
             $override = Prompt::confirm(
-                "The file: {$destination}\n is already exists. Do you want to override it?",
+                "The file [{$destination}] already exists. Overwrite it?",
                 true
             );
             if (!$override) {
@@ -73,9 +73,9 @@ class StubCreation
 
         // Write the stub content to the destination file
         if (File::put($destination, $stub)) {
-            Prompt::message("File: {$destination}\n created successfully.");
+            Prompt::success("File [{$destination}] created successfully.");
         } else {
-            Prompt::message("File: {$destination}\n could not be created.", 'warning');
+            Prompt::error("File [{$destination}] could not be created.");
         }
     }
 

@@ -9,9 +9,8 @@ use Spark\Console\Prompt;
 use Spark\Queue\Queue;
 use Spark\Http\Routing\Router;
 use Spark\Utils\File;
-use function in_array;
+use function count;
 use function is_string;
-use function sprintf;
 use function strlen;
 
 /**
@@ -22,6 +21,10 @@ use function strlen;
  */
 class PrimaryCommandsHandler
 {
+    /** The default host to serve the development server on. */
+    private const DEFAULT_SERVE_HOST = 'localhost';
+    private const DEFAULT_SERVE_PORT = 8080;
+
     /**
      * Starts a PHP built-in development server.
      *
@@ -36,19 +39,15 @@ class PrimaryCommandsHandler
      */
     public function startDevelopmentServer(array $args)
     {
-        $port = $args['_args'][0] ?? 8080;
+        try {
+            [$host, $port] = $this->resolveAddress($args['_args'] ?? []);
+        } catch (\InvalidArgumentException $e) {
+            Prompt::error($e->getMessage());
+            return 1;
+        }
 
-        Prompt::message(
-            sprintf(
-                "<info>Info</info> Server running on: <bold>http://localhost:%s</bold>",
-                $port
-            )
-        );
-
-        Prompt::message(
-            sprintf('Press <bold>%s+C</bold> to stop the server.', windows_os() ? 'Ctrl' : 'Cmd'),
-            "warning"
-        );
+        Prompt::info("Server running on [http://$host:$port].");
+        Prompt::comment('  Press Ctrl+C to stop the server.');
         Prompt::newline();
 
         // Use the current PHP binary to avoid shell wrapper quirks on Windows.
@@ -57,6 +56,58 @@ class PrimaryCommandsHandler
             ->forever()
             ->tty()
             ->execute();
+    }
+
+    /**
+     * Resolve [host, port] from CLI arguments.
+     *
+     *   (none)               => localhost:8080
+     *   8000                 => localhost:8000
+     *   example.test         => example.test:8080
+     *   example.test 8000    => example.test:8000
+     *   0.0.0.0:8000         => 0.0.0.0:8000
+     *   [::1]:8000           => [::1]:8000
+     *
+     * @return array{0: string, 1: int}
+     * @throws \InvalidArgumentException
+     */
+    private function resolveAddress(array $args): array
+    {
+        $first = trim((string) ($args[0] ?? ''));
+        $second = trim((string) ($args[1] ?? ''));
+
+        $host = self::DEFAULT_SERVE_HOST;
+        $port = null;
+
+        if ($first !== '') {
+            if (ctype_digit($first)) {
+                // "8000" => port only
+                $port = $first;
+            } elseif (preg_match('/^(\[[0-9a-f:.]+\]|[^:\s]+):(\d+)$/i', $first, $m)) {
+                // "host:port" or "[::1]:port"
+                [, $host, $port] = $m;
+            } else {
+                $host = $first;
+            }
+        }
+
+        // An explicit second argument is used only if no port was found yet
+        $port ??= ($second !== '' ? $second : self::DEFAULT_SERVE_PORT);
+
+        $port = filter_var($port, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1, 'max_range' => 65535],
+        ]);
+
+        if ($port === false) {
+            throw new \InvalidArgumentException('Port must be a number between 1 and 65535.');
+        }
+
+        // Bare IPv6 (e.g. "::1") needs brackets in a URL
+        if (str_contains($host, ':') && $host[0] !== '[') {
+            $host = "[$host]";
+        }
+
+        return [$host, $port];
     }
 
     /**
@@ -72,18 +123,24 @@ class PrimaryCommandsHandler
      */
     public function routeList(Router $router)
     {
-        $maxLength = max(array_map('strlen', array_column($router->getRoutes(), 'path'))) + 4;
-        Prompt::message("Available routes:", "info");
+        $rows = [];
 
         foreach ($router->getRoutes() as $name => $route) {
-            $spacing = str_repeat(' ', $maxLength - strlen($route['path']));
-            $methods = implode(', ', (array) $route['method']);
-            $name = is_string($name) ? " (<bold>{$name}</bold>)" : '';
-            Prompt::message(
-                "  URI: <success>{$route['path']}</success>{$spacing} [<info>{$methods}</info>]{$name}",
-                'raw'
-            );
+            $rows[] = [
+                implode('|', (array) $route['method']),
+                $route['path'],
+                is_string($name) ? $name : '',
+            ];
         }
+
+        if ($rows === []) {
+            Prompt::info('No routes are registered.');
+
+            return;
+        }
+
+        Prompt::table(['Method', 'URI', 'Name'], $rows);
+        Prompt::comment('  Showing ' . count($rows) . ' routes.');
     }
 
     /**
@@ -107,9 +164,10 @@ class PrimaryCommandsHandler
             $commands->showCommandHelp($commandName);
         } else {
             // Otherwise, list all the registered commands.
-            Prompt::message("Available commands:", "info");
+            Prompt::section('Available commands');
             $commands->listCommands();
-            Prompt::message("\nUse 'help <command>' to view details for a specific command.", "info");
+            Prompt::newline();
+            Prompt::comment("  Use 'help <command>' to view details for a specific command.");
         }
     }
 
@@ -152,22 +210,26 @@ class PrimaryCommandsHandler
             status: $args['status'] ?? null
         );
 
+        $rows = [];
+
         foreach ($jobs as $job) {
-            Prompt::message(
-                sprintf(
-                    "Job <bold>#%s (%s)</bold> Scheduled <info>%s</info>%s%s",
-                    $job->getDisplayName(),
-                    $job->getQueueName(),
-                    $job->getScheduledTime()->toDateTimeString(),
-                    $job->isRepeated() ? ' <danger>(Repeats)</danger> ' : '',
-                    $job->isFailed() ? ' <danger>(Failed)</danger>' : ($job->getScheduledTime()->isPast() ? ' <warning>(Ready to run)</warning>' : '')
-                ),
-            );
+            $rows[] = [
+                $job->getId(),
+                $job->getDisplayName(),
+                $job->getQueueName(),
+                $job->getScheduledTime()->toDateTimeString(),
+                $job->isFailed() ? 'Failed' : ($job->getScheduledTime()->isPast() ? 'Ready' : 'Scheduled'),
+                $job->isRepeated() ? 'Yes' : 'No',
+            ];
         }
 
-        if (empty($jobs)) {
-            Prompt::message("No scheduled jobs found.", "info");
+        if ($rows === []) {
+            Prompt::info('No scheduled jobs found.');
+
+            return;
         }
+
+        Prompt::table(['ID', 'Job', 'Queue', 'Scheduled at', 'Status', 'Repeats'], $rows);
     }
 
     /**
@@ -185,21 +247,26 @@ class PrimaryCommandsHandler
             to: $args['to'] ?? 500,
         );
 
+        $rows = [];
+
         foreach ($failedJobs as $job) {
-            Prompt::message(
-                sprintf(
-                    "Failed Job <bold>#%s (%s)</bold> Failed At <danger>%s</danger> Reason: <danger>%s</danger>",
-                    $job->getDisplayName(),
-                    $job->getQueueName(),
-                    carbon($job->getMetadata('failed_at', ''))->toDateTimeString(),
-                    $job->getReasonFailed()
-                ),
-            );
+            $failedAt = $job->getMetadata('failed_at');
+            $rows[] = [
+                $job->getId(),
+                $job->getDisplayName(),
+                $job->getQueueName(),
+                $failedAt ? carbon($failedAt)->toDateTimeString() : '-',
+                $job->getReasonFailed(),
+            ];
         }
 
-        if (empty($failedJobs)) {
-            Prompt::message("No failed jobs found.", "info");
+        if ($rows === []) {
+            Prompt::info('No failed jobs found.');
+
+            return;
         }
+
+        Prompt::table(['ID', 'Job', 'Queue', 'Failed at', 'Reason'], $rows);
     }
 
     /**
@@ -341,7 +408,7 @@ class PrimaryCommandsHandler
 
         envs(['APP_KEY' => $appKey]); // Update the env variable in runtime
 
-        Prompt::message('<info>Info</info> Application key has been updated.');
+        Prompt::success('Application key set successfully.');
     }
 
     /**
@@ -362,15 +429,23 @@ class PrimaryCommandsHandler
 
         // Check if the symbolic link already exists
         if (File::isLink($publicUploadsDir)) {
-            Prompt::message("The symbolic link is already exists.", "warning");
+            Prompt::message("The [{$publicUploadsDir}] link already exists.", "warning");
+            return;
+        }
+
+        if (file_exists($publicUploadsDir)) {
+            Prompt::error("The [{$publicUploadsDir}] path already exists.");
+
             return;
         }
 
         // Attempt to create the symbolic link
         if (!File::link($storageUploadsDir, $publicUploadsDir)) {
-            Prompt::message("Failed to create symbolic link. Please check permissions and paths.", 'danger');
+            Prompt::error('Failed to create symbolic link. Please check permissions and paths.');
+
+            return;
         }
 
-        Prompt::message("<info>Success</info> Symbolic link created successfully: $storageUploadsDir → $publicUploadsDir");
+        Prompt::success("The [{$publicUploadsDir}] link has been connected to [{$storageUploadsDir}].");
     }
 }

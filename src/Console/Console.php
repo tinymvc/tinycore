@@ -54,7 +54,7 @@ class Console implements ConsoleContract
 
         if ($commandName === '') {
             // If no command name is provided, list all available commands
-            Prompt::message("Available commands:", "info");
+            Prompt::section('Available commands');
             $this->commands->listCommands();
             return;
         }

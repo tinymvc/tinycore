@@ -34,6 +34,7 @@ class Prompt implements PromptContract
     private const STYLES = [
         'comment' => "\033[90m",
         'success' => "\033[32m",
+        'error' => "\033[31m",
         'danger' => "\033[31m",
         'warning' => "\033[33m",
         'info' => "\033[36m",
@@ -57,8 +58,8 @@ class Prompt implements PromptContract
         // Append default value to the question if provided.
         $defaultText = $default ? " [{$default}]" : '';
 
-        // Display the question to the user with a blue color.
-        echo "\033[34m{$question}{$defaultText}:\033[0m ";
+        // Display the question using the terminal color preference.
+        echo self::replaceTags("<info>{$question}{$defaultText}:</info> ");
 
         // Read and trim the user's input from standard input.
         $input = fgets(STDIN);
@@ -83,12 +84,44 @@ class Prompt implements PromptContract
      */
     public static function message(string $message, string $type = 'normal'): void
     {
-        $message = self::replaceTags($message);
+        $label = match ($type) {
+            'info' => 'INFO',
+            'success' => 'DONE',
+            'warning' => 'WARN',
+            'danger', 'error' => 'ERROR',
+            default => null,
+        };
 
-        $color = self::STYLES[$type] ?? '';
-        $reset = $color ? "\033[0m" : '';
+        if ($label !== null) {
+            $message = self::singleLine($message);
+            echo self::replaceTags("  <{$type}>{$label}</{$type}>  {$message}") . PHP_EOL;
 
-        echo "$color$message$reset" . PHP_EOL;
+            return;
+        }
+
+        $color = self::supportsColors() ? (self::STYLES[$type] ?? '') : '';
+        $reset = $color !== '' ? "\033[0m" : '';
+
+        echo $color . self::replaceTags($message) . $reset . PHP_EOL;
+    }
+
+    /** Print a complete progress line, optionally including elapsed seconds. */
+    public static function status(string $message, string $status = 'DONE', ?float $duration = null): void
+    {
+        $message = self::singleLine($message);
+        $status = self::singleLine($status);
+        $elapsed = $duration === null ? '' : sprintf('%.2fms ', max(0, $duration) * 1000);
+        $width = max(40, min(200, (int) (getenv('COLUMNS') ?: 80)));
+        $separator = self::isTerminal()
+            ? ' ' . str_repeat('.', max(2, $width - strlen($message) - strlen($elapsed) - strlen($status) - 4)) . ' '
+            : ' ';
+        $style = match ($status) {
+            'DONE' => 'success',
+            'FAIL', 'ERROR' => 'danger',
+            default => 'warning',
+        };
+
+        self::line("  {$message}{$separator}{$elapsed}<{$style}>{$status}</{$style}>");
     }
 
     /**
@@ -292,6 +325,22 @@ class Prompt implements PromptContract
             $normalizedRows[] = array_pad($values, $headerCount, '');
         }
 
+        $normalize = static function (mixed $value): string {
+            $value = is_scalar($value) ? (string) $value : (json_encode($value) ?: '');
+
+            foreach (array_keys(self::STYLES) as $tag) {
+                $value = str_replace(["<{$tag}>", "</{$tag}>"], '', $value);
+            }
+
+            return self::singleLine($value);
+        };
+
+        $headers = array_map($normalize, $headers);
+        $normalizedRows = array_map(
+            static fn(array $row): array => array_map($normalize, $row),
+            $normalizedRows,
+        );
+
         $columnWidths = array_fill(0, $headerCount, 0);
         foreach ([$headers, ...$normalizedRows] as $row) {
             for ($i = 0; $i < $headerCount; $i++) {
@@ -445,13 +494,38 @@ class Prompt implements PromptContract
      */
     private static function replaceTags(string $message): string
     {
-        $result = $message;
+        $result = self::clean($message);
+        $colors = self::supportsColors();
+
         foreach (self::STYLES as $tag => $code) {
-            $result = str_replace("<{$tag}>", $code, $result);
-            $resetCode = $tag === 'bold' ? "\033[22m" : "\033[0m";
-            $result = str_replace("</{$tag}>", $resetCode, $result);
+            $result = str_replace("<{$tag}>", $colors ? $code : '', $result);
+            $reset = $tag === 'bold' ? "\033[22m" : "\033[0m";
+            $result = str_replace("</{$tag}>", $colors ? $reset : '', $result);
         }
 
         return $result;
+    }
+
+    private static function isTerminal(): bool
+    {
+        return \defined('STDOUT') && function_exists('stream_isatty') && stream_isatty(STDOUT);
+    }
+
+    private static function supportsColors(): bool
+    {
+        return self::isTerminal() && getenv('TERM') !== 'dumb'
+            && (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '');
+    }
+
+    private static function singleLine(string $message): string
+    {
+        return trim(preg_replace('/[\x00-\x20\x7F]+/', ' ', self::clean(str_replace("\r", ' ', $message))) ?? $message);
+    }
+
+    private static function clean(string $message): string
+    {
+        $message = preg_replace('/\x1B(?:\][^\x07\x1B]*(?:\x07|\x1B\\\\)|\[[0-?]*[ -\/]*[@-~]|[@-_])/', '', $message) ?? $message;
+
+        return preg_replace('/[\x00-\x08\x0B-\x1F\x7F]/', '', $message) ?? $message;
     }
 }

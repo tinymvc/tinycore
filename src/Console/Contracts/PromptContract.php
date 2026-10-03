@@ -34,6 +34,10 @@ interface PromptContract
      */
     public static function message(string $message, string $type = "normal"): void;
 
+    /** Print a progress status with an optional duration in seconds. */
+    public static function status(string $message, string $status = 'DONE', ?float $duration = null): void;
+
+
     /**
      * Print a plain line.
      *

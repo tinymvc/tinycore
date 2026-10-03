@@ -88,15 +88,18 @@ class ConsoleServiceProvider extends ServiceProvider
 
         // Add the migrate command
         $commands->addCommand('migrate', [Migration::class, 'up'])
-            ->description('Run the database migrations');
+            ->description('Run the database migrations')
+            ->help('Use --force to skip confirmation when app.debug is disabled.');
 
         // Add the migrate:rollback command
         $commands->addCommand('migrate:rollback', [Migration::class, 'down'])
-            ->description('Rollback the last database migration');
+            ->description('Rollback the last database migration')
+            ->help('Use --force to skip confirmation when app.debug is disabled.');
 
         // Add the migrate:fresh command
         $commands->addCommand('migrate:fresh', [Migration::class, 'refresh'])
-            ->description('Rollback all database migrations and re-run them');
+            ->description('Rollback all database migrations and re-run them')
+            ->help('Use --force to skip confirmation when app.debug is disabled.');
 
         // Add the key:generate command
         $commands->addCommand('key:generate', [PrimaryCommandsHandler::class, 'generateAppKey'])

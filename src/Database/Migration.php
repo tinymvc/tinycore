@@ -56,8 +56,6 @@ class Migration implements MigrationContract
 
         $quote = $driver === 'mysql' ? '`' : '"';
         $this->table = $quote . $this->table . $quote;
-
-        $this->ensureTableExists();
     }
 
     /**
@@ -72,6 +70,12 @@ class Migration implements MigrationContract
      */
     public function up(array $args = []): void
     {
+        if (!$this->confirmToProceed($args, 'run migrations')) {
+            return;
+        }
+
+        $this->ensureTableExists();
+
         $appliedMigrations = $this->getAppliedMigrations();
 
         $allowSeeds = (isset($args['seed']) && $args['seed']) || (isset($args['s']) && $args['s']); // Allow seeds if specified in args
@@ -103,6 +107,13 @@ class Migration implements MigrationContract
                     continue;
                 }
 
+                if ($run === 0) {
+                    Prompt::info('Running migrations.');
+                }
+
+                $startedAt = microtime(true);
+                Prompt::status($migrationName, 'RUNNING');
+
                 // Include the migration file; it should return an instance with up() and down() methods.
                 $migration = require $file;
 
@@ -119,17 +130,18 @@ class Migration implements MigrationContract
                     );
                 });
 
-                Prompt::message("Applied migration: {$migrationName}", 'success');
+                Prompt::status($migrationName, 'DONE', microtime(true) - $startedAt);
 
                 $run++;
             }
         } catch (Throwable $e) {
+            Prompt::status($migrationName, 'FAIL', microtime(true) - $startedAt);
             Prompt::message("Migration failed: {$migrationName} — {$e->getMessage()}", 'error');
             throw $e;
         }
 
         if ($run === 0) {
-            Prompt::message("No new migrations to apply.", 'info');
+            Prompt::message("Nothing to migrate.", 'info');
         }
     }
 
@@ -146,10 +158,16 @@ class Migration implements MigrationContract
      */
     public function down(array $args = []): void
     {
+        if (!$this->confirmToProceed($args, 'roll back migrations')) {
+            return;
+        }
+
+        $this->ensureTableExists();
+
         $appliedMigrations = $this->getAppliedMigrations();
 
         if (empty($appliedMigrations)) {
-            Prompt::message("No migrations to rollback.", 'warning');
+            Prompt::message("Nothing to roll back.", 'warning');
             return;
         }
 
@@ -167,9 +185,13 @@ class Migration implements MigrationContract
         $migrationsToRollback = array_slice(array_reverse($appliedMigrations), 0, $steps);
 
         $run = 0;
+        Prompt::info('Rolling back migrations.');
 
         try {
             foreach ($migrationsToRollback as $migrationName) {
+                $startedAt = microtime(true);
+                Prompt::status($migrationName, 'RUNNING');
+
                 $file = $this->migrationsFolder . DIRECTORY_SEPARATOR . $migrationName;
 
                 if (!file_exists($file)) {
@@ -187,11 +209,12 @@ class Migration implements MigrationContract
                     $this->removeMigration($migrationName);
                 });
 
-                Prompt::message("Rolled back migration: {$migrationName}", 'success');
+                Prompt::status($migrationName, 'DONE', microtime(true) - $startedAt);
 
                 $run++;
             }
         } catch (Throwable $e) {
+            Prompt::status($migrationName, 'FAIL', microtime(true) - $startedAt);
             Prompt::message("Rollback failed: {$e->getMessage()}", 'error');
             throw $e;
         }
@@ -212,6 +235,11 @@ class Migration implements MigrationContract
      */
     public function refresh(array $args = []): void
     {
+        if (!$this->confirmToProceed($args, 'roll back all migrations and run them again')) {
+            return;
+        }
+
+        $args['force'] = true; // The entire operation has already been confirmed.
         $args['all'] = true; // Default to rolling back all applied migrations
 
         // Rollback all applied migrations
@@ -220,6 +248,24 @@ class Migration implements MigrationContract
         Prompt::newline();
 
         $this->up($args);
+    }
+
+    /** Require explicit approval before changing a database with debug disabled. */
+    private function confirmToProceed(array $args, string $action): bool
+    {
+        if (config('app.debug', false) || filter_var($args['force'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return true;
+        }
+
+        Prompt::alert("Application debug mode is disabled. You are about to {$action}; this may change or delete data.");
+
+        if (Prompt::confirm('Are you sure you want to continue?', false)) {
+            return true;
+        }
+
+        Prompt::warning('Migration command cancelled.');
+
+        return false;
     }
 
     private function runMigration(callable $callback): void

@@ -244,8 +244,8 @@ class Commands implements CommandsContract
 
         $command = $this->getCommand($commandName);
 
-        Prompt::message("Command: {$commandName}", "success");
-        Prompt::message("Description: " . $command['description'], "info");
+        Prompt::section($commandName);
+        Prompt::line($command['description']);
 
         if (isset($command['help'])) {
             Prompt::message("<bold>Help:</bold> " . $command['help'], "raw");
