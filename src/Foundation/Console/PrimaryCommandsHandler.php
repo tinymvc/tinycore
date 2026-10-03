@@ -302,10 +302,17 @@ class PrimaryCommandsHandler
 
         $envFileContent = file_get_contents($envFile);
 
-        if (preg_match('/^APP_KEY\s*=\s*(.*)$/m', $envFileContent, $match)) {
-            $existing = trim(trim($match[1]), "\"'");
+        if ($envFileContent === false) {
+            throw new \RuntimeException('Unable to read the environment file.');
+        }
 
-            if ($existing !== '') {
+        // [ \t] instead of \s so the match can never cross a line break
+        $pattern = '/^APP_KEY[ \t]*=[ \t]*([^\r\n]*)/m';
+
+        if (preg_match($pattern, $envFileContent, $match)) {
+            $existing = trim($match[1], " \t\"'");
+
+            if ($existing !== '' && strlen($existing) === 32) {
                 Prompt::message('An application key already exists; it was not changed.', 'info');
 
                 return;
@@ -314,8 +321,9 @@ class PrimaryCommandsHandler
 
         $appKey = bin2hex(random_bytes(16));
         $line = "APP_KEY=$appKey";
-        $envFileContent = preg_match('/^APP_KEY\s*=/m', $envFileContent)
-            ? preg_replace('/^APP_KEY\s*=.*$/m', $line, $envFileContent)
+
+        $envFileContent = preg_match($pattern, $envFileContent)
+            ? preg_replace($pattern, $line, $envFileContent, 1)
             : rtrim($envFileContent) . PHP_EOL . $line . PHP_EOL;
 
         if (file_put_contents($envFile, $envFileContent, LOCK_EX) === false) {
@@ -333,7 +341,7 @@ class PrimaryCommandsHandler
 
         envs(['APP_KEY' => $appKey]); // Update the env variable in runtime
 
-        Prompt::message("<info>Info</info> Application key has been updated.");
+        Prompt::message('<info>Info</info> Application key has been updated.');
     }
 
     /**
