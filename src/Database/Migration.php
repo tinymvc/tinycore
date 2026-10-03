@@ -224,7 +224,7 @@ class Migration implements MigrationContract
 
     private function runMigration(callable $callback): void
     {
-        if (DB::isSQLite()) {
+        if (DB::isMySQL()) {
             $callback();
         } else {
             DB::transaction($callback);

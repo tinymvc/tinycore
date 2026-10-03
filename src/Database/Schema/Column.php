@@ -4,6 +4,7 @@ namespace Spark\Database\Schema;
 
 use Spark\Database\Schema\Contracts\ColumnContract;
 use Spark\Support\Traits\Macroable;
+use function in_array;
 use function is_array;
 
 /**
@@ -19,9 +20,9 @@ class Column implements ColumnContract
     use Macroable;
 
     /**
-     * @var array List of modifiers for the column
+     * @var array Columns reject null unless explicitly marked nullable.
      */
-    protected $modifiers = [];
+    protected $modifiers = ['required'];
 
     /**
      * Column constructor.
@@ -53,7 +54,8 @@ class Column implements ColumnContract
             $this->modifiers,
             fn($modifier) => $modifier !== 'nullable' && $modifier !== 'required'
         ));
-        $this->modifiers[] = $value ? 'nullable' : 'required';
+        array_unshift($this->modifiers, $value ? 'nullable' : 'required');
+
         return $this;
     }
 
@@ -259,22 +261,29 @@ class Column implements ColumnContract
 
         $sql = [
             $grammar->getWrapper()->wrapColumn($this->name),
-            $type
+            $type,
         ];
+        $typeModifiers = [];
+        $columnModifiers = [];
 
         foreach ($this->modifiers as $modifier) {
             if (is_array($modifier)) {
                 $key = key($modifier);
                 $mapped = $grammar->mapModifier($key, $modifier[$key]);
             } else {
+                $key = $modifier;
                 $mapped = $grammar->mapModifier($modifier);
             }
 
             if ($mapped !== '') {
-                $sql[] = $mapped;
+                if (in_array($key, ['unsigned', 'charset', 'collation'], true)) {
+                    $typeModifiers[] = $mapped;
+                } else {
+                    $columnModifiers[] = $mapped;
+                }
             }
         }
 
-        return implode(' ', $sql);
+        return implode(' ', [...$sql, ...$typeModifiers, ...$columnModifiers]);
     }
 }

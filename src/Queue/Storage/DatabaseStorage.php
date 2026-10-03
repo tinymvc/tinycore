@@ -8,7 +8,7 @@ use PDOException;
 use PDOStatement;
 use RuntimeException;
 use Spark\Carbon;
-use Spark\Facades\DB;
+use Spark\Database\DB;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueStorageContract;
 use Spark\Queue\Exceptions\FailedToLoadJobsException;
@@ -54,7 +54,7 @@ use function usleep;
  *  - pushOnce() is serialized per job fingerprint (GET_LOCK on MySQL, pg_advisory_xact_lock on
  *    PostgreSQL, the write lock of a transaction on SQLite), so concurrent dispatchOnce() calls
  *    cannot create duplicates.
- *  - Multi-statement changes use DB::transaction(), which uses savepoints when the application has
+ *  - Multi-statement changes use $this->db->transaction(), which uses savepoints when the application has
  *    a transaction open. Jobs pushed inside an application transaction therefore become visible
  *    to workers only after it commits.
  *  - Deadlocks, serialization failures and SQLite busy errors are retried automatically.
@@ -76,6 +76,8 @@ class DatabaseStorage implements QueueStorageContract
 
     private PDO $pdo;
 
+    private DB $db;
+
     private string $driver;
 
     /** @var array<string, string> Placeholder => quoted identifier. */
@@ -85,9 +87,11 @@ class DatabaseStorage implements QueueStorageContract
     {
         $connection = $config['connection'] ?? null;
 
-        $this->pdo = is_string($connection) && $connection !== ''
-            ? DB::connection($connection)->getPdo()
-            : DB::getPdo();
+        $this->db = is_string($connection) && $connection !== ''
+            ? DB::connection($connection)
+            : app(DB::class);
+
+        $this->pdo = $this->db->getPdo();
 
         $this->driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
@@ -163,7 +167,7 @@ class DatabaseStorage implements QueueStorageContract
 
     public function clearAllJobs(): void
     {
-        DB::transaction(function () {
+        $this->db->transaction(function () {
             $this->run('DELETE FROM {failed}');
             $this->run('DELETE FROM {jobs}');
         });
@@ -176,7 +180,7 @@ class DatabaseStorage implements QueueStorageContract
 
     public function clearFailedJobs(): void
     {
-        DB::transaction(function () {
+        $this->db->transaction(function () {
             $this->run("DELETE FROM {jobs} WHERE {status} = 'failed'");
             $this->run('DELETE FROM {failed}');
         });
@@ -276,7 +280,7 @@ class DatabaseStorage implements QueueStorageContract
 
         try {
             $this->retrying(function () use ($jobId, $attempts, $text) {
-                DB::transaction(function () use ($jobId, $attempts, $text) {
+                $this->db->transaction(function () use ($jobId, $attempts, $text) {
                     $updated = $this->run(
                         "UPDATE {jobs} SET {status} = 'failed', {attempts} = ?, {reserved_at} = NULL WHERE {id} = ?",
                         [$attempts, $jobId]
@@ -379,7 +383,7 @@ class DatabaseStorage implements QueueStorageContract
     {
         try {
             $this->retrying(function () {
-                DB::transaction(function () {
+                $this->db->transaction(function () {
                     $this->run(
                         "UPDATE {jobs} SET {status} = 'pending', {attempts} = 0, {reserved_at} = NULL "
                         . 'WHERE {id} IN (SELECT {job_id} FROM {failed})'
@@ -460,7 +464,7 @@ class DatabaseStorage implements QueueStorageContract
             }
         }
 
-        return DB::transaction(function () use ($fingerprint, $callback) {
+        return $this->db->transaction(function () use ($fingerprint, $callback) {
             if ($this->driver === 'pgsql') {
                 $this->run('SELECT pg_advisory_xact_lock(hashtext(?))', [$fingerprint]);
             } else {
