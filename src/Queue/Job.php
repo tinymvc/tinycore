@@ -283,7 +283,7 @@ class Job implements JobContract
                 $callback = $this->callback; // It is a function name or a static method.
             }
 
-            Application::$app->call($callback);
+            Application::$app->call($callback, is_object($callbackOrClass) ? [] : $this->parameters);
         } catch (\Throwable $e) {
             throw new FailedToResolveJobError(
                 'Failed to execute the job: ' . $e->getMessage(),

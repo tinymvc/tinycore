@@ -24,8 +24,8 @@
         "ext-curl": "Required for the HTTP client and S3 disks.",
         "ext-fileinfo": "Required for upload and file MIME detection.",
         "ext-gd": "Required for image manipulation.",
-        "ext-pdo_sqlite": "Required for the default sqlite cache, lock, and queue drivers.",
-        "ext-redis": "Required for redis cache, lock, and queue drivers.",
+        "ext-pdo_sqlite": "Required when the database connection uses SQLite.",
+        "ext-redis": "Required for Redis cache, lock, session, and queue drivers.",
         "phpmailer/phpmailer": "Required for the Mail utility and Mail facade (^6.9).",
         "ext-simplexml": "Required for listing and copying files on S3-compatible disks."
     },

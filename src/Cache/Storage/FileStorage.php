@@ -311,7 +311,7 @@ class FileStorage implements CacheStorageContract
 
                 $newValue = (int) $value + $amount;
 
-                // Keep the existing expiration, refresh created_at (same as the SQLite driver).
+                // Preserve the existing expiration while changing the value.
                 $this->writeAtomic($dir, $path, $this->encodeEntry($key, $newValue, $entry['expire_at']));
 
                 return $newValue;
@@ -704,8 +704,9 @@ class FileStorage implements CacheStorageContract
                 $written += $bytes;
             }
 
-            fflush($handle);
-            $this->fsync && function_exists('fsync') && @fsync($handle);
+            if (!fflush($handle) || ($this->fsync && function_exists('fsync') && !fsync($handle))) {
+                throw new \RuntimeException('Unable to flush storage file.');
+            }
         } catch (\Throwable $e) {
             fclose($handle);
             @unlink($tmp);

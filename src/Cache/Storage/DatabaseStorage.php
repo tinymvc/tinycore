@@ -45,8 +45,8 @@ use function usleep;
  * migrations first.
  *
  * Table mapping:
- *   caches(key PK, group, data, expiration)  -> `group` holds the cache name, `key` is "<name>:<key>"
- *   locks(key PK, owner, expiration)         -> `key` is "<name>:<key>"
+ *   caches(key PK, group, data, expiration)  -> `group` holds the namespace hash, `key` is "<namespace hash>:<key>:"
+ *   locks(key PK, owner, expiration)         -> `key` is "<namespace hash>:<key>:"
  *
  * Design rules (what keeps it stable under concurrency):
  *  - No operation relies on an application-level check-then-write. Writes are single atomic
@@ -96,7 +96,7 @@ class DatabaseStorage implements CacheStorageContract
         private readonly array $config = [],
         private readonly string $type = 'cache',
     ) {
-        $this->prefix = $name . ':';
+        $this->prefix = hash('sha256', $name) . ':';
     }
 
     /* ---------------------------------------------------------------------
@@ -133,7 +133,7 @@ class DatabaseStorage implements CacheStorageContract
 
         $this->run($h, $this->upsertSql($h), [
             $this->physicalKey($key),
-            $this->name,
+            hash('sha256', $this->name),
             $this->encode($data),
             $this->expireAt($expire),
         ]);
@@ -206,7 +206,7 @@ class DatabaseStorage implements CacheStorageContract
         $stmt = $this->run(
             $h,
             "SELECT {$h['key']} AS k, {$h['data']} AS d FROM {$h['table']} WHERE {$h['group']} = ? AND ({$h['exp']} = 0 OR {$h['exp']} > ?)",
-            [$this->name, time()]
+            [hash('sha256', $this->name), time()]
         );
 
         $results = [];
@@ -216,7 +216,7 @@ class DatabaseStorage implements CacheStorageContract
             }
 
             [$ok, $value] = $this->decode($row['d']);
-            $ok && $results[substr($row['k'], strlen($this->prefix))] = $value;
+            $ok && $results[substr($row['k'], strlen($this->prefix), -1)] = $value;
         }
 
         return $results;
@@ -244,7 +244,7 @@ class DatabaseStorage implements CacheStorageContract
         return $this->run(
             $h,
             "DELETE FROM {$h['table']} WHERE {$h['group']} = ? AND {$h['exp']} > 0 AND {$h['exp']} <= ?",
-            [$this->name, time()]
+            [hash('sha256', $this->name), time()]
         )->rowCount();
     }
 
@@ -254,7 +254,7 @@ class DatabaseStorage implements CacheStorageContract
         $stmt = $this->run(
             $h,
             "SELECT {$h['key']} AS k, {$h['data']} AS d FROM {$h['table']} WHERE {$h['group']} = ? AND {$h['exp']} > 0 AND {$h['exp']} <= ?",
-            [$this->name, time()]
+            [hash('sha256', $this->name), time()]
         );
 
         $expired = [];
@@ -264,7 +264,7 @@ class DatabaseStorage implements CacheStorageContract
             }
 
             [$ok, $value] = $this->decode($row['d']);
-            $ok && $expired[substr($row['k'], strlen($this->prefix))] = $value;
+            $ok && $expired[substr($row['k'], strlen($this->prefix), -1)] = $value;
         }
 
         return $expired;
@@ -273,7 +273,7 @@ class DatabaseStorage implements CacheStorageContract
     public function flush(): void
     {
         $h = $this->cacheHandle();
-        $this->run($h, "DELETE FROM {$h['table']} WHERE {$h['group']} = ?", [$this->name]);
+        $this->run($h, "DELETE FROM {$h['table']} WHERE {$h['group']} = ?", [hash('sha256', $this->name)]);
     }
 
     public function storeMany(array $items, null|string $expire = null): void
@@ -289,7 +289,7 @@ class DatabaseStorage implements CacheStorageContract
         try {
             $h['db']->transaction(function () use ($h, $sql, $items, $expireAt) {
                 foreach ($items as $key => $value) {
-                    $this->run($h, $sql, [$this->physicalKey((string) $key), $this->name, $this->encode($value), $expireAt]);
+                    $this->run($h, $sql, [$this->physicalKey((string) $key), hash('sha256', $this->name), $this->encode($value), $expireAt]);
                 }
             });
         } catch (PDOException | CacheException $e) {
@@ -340,7 +340,7 @@ class DatabaseStorage implements CacheStorageContract
         $inserted = $this->insertIfAbsent(
             $h,
             "{$h['key']}, {$h['group']}, {$h['data']}, {$h['exp']}",
-            [$physical, $this->name, $data, $expireAt]
+            [$physical, hash('sha256', $this->name), $data, $expireAt]
         );
 
         if ($inserted) {
@@ -352,7 +352,7 @@ class DatabaseStorage implements CacheStorageContract
         return $this->run(
             $h,
             "UPDATE {$h['table']} SET {$h['group']} = ?, {$h['data']} = ?, {$h['exp']} = ? WHERE {$h['key']} = ? AND {$h['exp']} > 0 AND {$h['exp']} <= ?",
-            [$this->name, $data, $expireAt, $physical, time()]
+            [hash('sha256', $this->name), $data, $expireAt, $physical, time()]
         )->rowCount() === 1;
     }
 
@@ -364,7 +364,7 @@ class DatabaseStorage implements CacheStorageContract
             $row = $this->run(
                 $h,
                 "SELECT COUNT(*) AS total, SUM(CASE WHEN {$h['exp']} > 0 AND {$h['exp']} <= ? THEN 1 ELSE 0 END) AS expired, COALESCE(SUM(LENGTH({$h['data']})), 0) AS size FROM {$h['table']} WHERE {$h['group']} = ?",
-                [time(), $this->name]
+                [time(), hash('sha256', $this->name)]
             )->fetch(PDO::FETCH_ASSOC);
         } catch (CacheException) {
             return [];
@@ -426,7 +426,7 @@ class DatabaseStorage implements CacheStorageContract
 
                     $this->run($h, $sql, [
                         $this->physicalKey((string) $key),
-                        $this->name,
+                        hash('sha256', $this->name),
                         $this->encode($config['value'] ?? null),
                         $this->expireAt($config['expire'] ?? null),
                     ]);
@@ -515,11 +515,12 @@ class DatabaseStorage implements CacheStorageContract
         unset($this->held[$owner][$key]);
 
         $h = $this->lockHandle();
+        $ownerColumn = $h['driver'] === 'mysql' ? "CAST({$h['owner']} AS BINARY)" : $h['owner'];
 
         try {
             return $this->run(
                 $h,
-                "DELETE FROM {$h['table']} WHERE {$h['key']} = ? AND {$h['owner']} = ?",
+                "DELETE FROM {$h['table']} WHERE {$h['key']} = ? AND $ownerColumn = ?",
                 [$this->physicalKey($key), $owner]
             )->rowCount() > 0;
         } catch (CacheException) {
@@ -529,20 +530,15 @@ class DatabaseStorage implements CacheStorageContract
 
     public function unlockAll(string $owner): int
     {
-        if (empty($this->held[$owner])) {
-            unset($this->held[$owner]);
-            return 0;
+        $released = 0;
+
+        foreach (array_keys($this->held[$owner] ?? []) as $key) {
+            $released += (int) $this->unlock((string) $key, $owner);
         }
 
         unset($this->held[$owner]);
 
-        $h = $this->lockHandle();
-
-        try {
-            return $this->run($h, "DELETE FROM {$h['table']} WHERE {$h['owner']} = ?", [$owner])->rowCount();
-        } catch (CacheException) {
-            return 0;
-        }
+        return $released;
     }
 
     public function isLocked(string $key): bool
@@ -587,11 +583,12 @@ class DatabaseStorage implements CacheStorageContract
     public function extendLock(string $key, string $owner, int $additionalSeconds): bool
     {
         $h = $this->lockHandle();
+        $ownerColumn = $h['driver'] === 'mysql' ? "CAST({$h['owner']} AS BINARY)" : $h['owner'];
 
         try {
             return $this->run(
                 $h,
-                "UPDATE {$h['table']} SET {$h['exp']} = {$h['exp']} + ? WHERE {$h['key']} = ? AND {$h['owner']} = ? AND {$h['exp']} > ?",
+                "UPDATE {$h['table']} SET {$h['exp']} = {$h['exp']} + ? WHERE {$h['key']} = ? AND $ownerColumn = ? AND {$h['exp']} > ?",
                 [max(1, $additionalSeconds), $this->physicalKey($key), $owner, time()]
             )->rowCount() > 0;
         } catch (CacheException) {
@@ -876,15 +873,15 @@ class DatabaseStorage implements CacheStorageContract
 
     /**
      * Rows are namespaced by cache name: the table has a single-column primary key, so the name is
-     * part of the stored key ("<name>:<key>") and also stored in the `group` column.
+     * part of the stored key ("<namespace hash>:<key>:") and also stored in the `group` column.
      */
     private function physicalKey(string $key): string
     {
-        $physical = $this->prefix . $key;
+        $physical = $this->prefix . $key . ':';
 
         if (strlen($physical) > self::MAX_KEY_LENGTH) {
             throw new CacheException(
-                "Cache key is too long ({$this->prefix}{$key}): the stored key (cache name + key) may be at most "
+                "Cache key is too long ({$this->prefix}{$key}): the stored key (namespace hash + key + separators) may be at most "
                 . self::MAX_KEY_LENGTH . ' bytes.'
             );
         }

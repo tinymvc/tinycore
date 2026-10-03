@@ -9,9 +9,7 @@ use Spark\Console\Prompt;
 use Spark\Queue\Queue;
 use Spark\Http\Routing\Router;
 use Spark\Utils\File;
-use Spark\Utils\RedisConnector;
 use function in_array;
-use function is_array;
 use function is_string;
 use function sprintf;
 use function strlen;
@@ -283,127 +281,46 @@ class PrimaryCommandsHandler
         Prompt::message("Configuration cache cleared.", "success");
     }
 
-    /**
-     * Clears all cache files in the application.
-     *
-     * This method removes all cache files from the storage/cache directory,
-     * except for the .gitignore file. It provides feedback on the success
-     * or failure of the operation.
-     *
-     * @return void
-     */
-    public function clearCache()
+    /** Clear the default cache and compiled views/configuration without releasing active locks. */
+    public function clearCache(): void
     {
-        $this->clearViewCaches(); // Also clear view caches
-        $this->clearConfigCache(); // Also clear config caches
-
-        $cacheDirs = [
-            temp_dir(),
-            storage_dir('framework/testing'),
-        ];
-
-        foreach ($cacheDirs as $cacheDir) {
-            if (is_dir($cacheDir)) {
-                foreach (scandir($cacheDir) as $item) {
-                    if (in_array($item, ['.', '..', '.gitignore'])) {
-                        continue;
-                    }
-
-                    $item = dir_path("$cacheDir/$item");
-
-                    if (is_dir($item)) {
-                        File::deleteDirectory($item); // Delete directory
-                    } else {
-                        File::delete($item); // Delete file
-                    }
-                }
-            } else {
-                Prompt::message("Cache directory does not exist.", "warning");
-            }
-        }
-
-        $this->clearRedisCacheAndLocks();
-
-        Prompt::message("All cache contents cleared.", "success");
-    }
-
-
-    /**
-     * Flush Redis-backed cache entries and locks, if either is configured
-     * to use the redis driver.
-     *
-     * @return void
-     */
-    private function clearRedisCacheAndLocks(): void
-    {
-        $cacheConfig = (array) config('cache', []);
-        $cacheDriver = strtolower((string) ($cacheConfig['driver'] ?? 'database'));
-
-        if ($cacheDriver !== 'redis') {
-            return;
-        }
-
-        // Flush cached values via the public Cache API.
         Cache::make()->flush();
+        $this->clearViewCaches();
+        $this->clearConfigCache();
 
-        // Locks live under their own namespace, so flush them separately.
-        $connections = (array) ($cacheConfig['connections'] ?? []);
-        $driverConfig = is_array($connections['redis'] ?? null) ? $connections['redis'] : [];
-
-        $connection = RedisConnector::resolveConnectionConfig(
-            RedisConnector::mergeConfig(['driver' => 'redis', 'name' => 'default'], $driverConfig)
-        );
-
-        $redis = RedisConnector::make($connection, 'default');
-
-        $prefix = trim((string) ($connection['prefix'] ?? 'spark'), ':');
-        if ($prefix === '') {
-            $prefix = 'spark';
-        }
-
-        $pattern = "$prefix:lock:*";
-        $cursor = 0;
-
-        do {
-            $keys = $redis->scan($cursor, $pattern);
-            if ($keys === false) {
-                break;
-            }
-
-            if (!empty($keys)) {
-                $redis->del($keys);
-            }
-        } while ($cursor > 0);
+        Prompt::message('Default cache, compiled views and configuration cleared.', 'success');
     }
 
-    /**
-     * Generates a new application key and updates the environment file.
-     *
-     * This method generates a random application key and replaces the placeholder
-     * in the environment file with the new key. It ensures the environment file is 
-     * writable before making any changes. If the file is not writable, a warning message
-     * is displayed. Once the key is updated, a success message is shown in the console.
-     * 
-     * @return void
-     */
+    /** Generate an application key only when the environment has no existing key. */
     public function generateAppKey()
     {
         $envFile = root_dir('.env');
 
-        if (!is_writable($envFile) && !chmod($envFile, 0666)) {
-            Prompt::message("<danger>Error</danger> Environment file is not writable.", "warning");
-            return;
+        if (!is_file($envFile) || !is_readable($envFile) || !is_writable($envFile)) {
+            throw new \RuntimeException('The environment file must exist and be readable and writable.');
         }
 
         $envFileContent = file_get_contents($envFile);
-        $envFileContent = str_replace(
-            'APP_KEY=',
-            'APP_KEY=' . $appKey = bin2hex(random_bytes(16)),
-            $envFileContent
-        );
 
-        file_put_contents($envFile, $envFileContent);
-        touch($envFile); // Update the file's modification tsime
+        if (preg_match('/^APP_KEY\s*=\s*(.*)$/m', $envFileContent, $match)) {
+            $existing = trim(trim($match[1]), "\"'");
+
+            if ($existing !== '') {
+                Prompt::message('An application key already exists; it was not changed.', 'info');
+
+                return;
+            }
+        }
+
+        $appKey = bin2hex(random_bytes(16));
+        $line = "APP_KEY=$appKey";
+        $envFileContent = preg_match('/^APP_KEY\s*=/m', $envFileContent)
+            ? preg_replace('/^APP_KEY\s*=.*$/m', $line, $envFileContent)
+            : rtrim($envFileContent) . PHP_EOL . $line . PHP_EOL;
+
+        if (file_put_contents($envFile, $envFileContent, LOCK_EX) === false) {
+            throw new \RuntimeException('Unable to save the application key.');
+        }
 
         $caches = [
             root_dir('bootstrap/cache/env.php'),
@@ -432,7 +349,7 @@ class PrimaryCommandsHandler
      */
     public function createSymbolicLinkForUploads()
     {
-        $storageUploadsDir = storage_dir('uploads');
+        $storageUploadsDir = storage_dir('app/public');
         $publicUploadsDir = root_dir('public/uploads');
 
         // Check if the symbolic link already exists

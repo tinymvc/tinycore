@@ -6,6 +6,8 @@ use ArrayAccess;
 use Spark\Contracts\Http\AuthContract;
 use Spark\Contracts\Http\AuthDriverContract;
 use Spark\Database\Model;
+use Spark\Facades\DB;
+use Spark\Facades\Hash;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\JWT;
@@ -57,13 +59,18 @@ class Auth implements AuthContract, ArrayAccess
      * and optional configuration settings.
      *
      * @param string $model The fully qualified class name of the user model.
-     * @param array $config Optional configuration array for customizing session key,
+     * @param ?array $config Optional configuration array for customizing session key,
      *                      cache settings, and route redirections.
      */
-    public function __construct(null|string $model = null, array $config = [])
+    public function __construct(null|string $model = null, null|array $config = null)
     {
+        if ($config === null) {
+            $guard = config('auth.guard', 'default');
+            $config = config("auth.guards.$guard", []);
+        }
+
         // Set the user model, defaulting to \App\Models\User if none is provided
-        $this->model = $model ?: \App\Models\User::class;
+        $this->model = $model ?: $config['model'] ?? config('auth.model', \App\Models\User::class);
 
         $this->config = [
             'session_key' => 'user_id',
@@ -100,6 +107,10 @@ class Auth implements AuthContract, ArrayAccess
      */
     public static function register(string $model, array $config, string $guard): void
     {
+        if ($guard === 'default') {
+            throw new \InvalidArgumentException("The 'default' guard is reserved and cannot be used for registration.");
+        }
+
         Application::$app->singleton(
             abstract: "auth.$guard",
             concrete: fn() => new static($model, $config)
@@ -118,9 +129,28 @@ class Auth implements AuthContract, ArrayAccess
     public static function guard(string $guard): Auth
     {
         if ($guard === 'default') {
-            return Application::$app->make(static::class);
+            return Application::$app->get(static::class);
         }
-        return Application::$app->make("auth.$guard");
+
+        if (Application::$app->has("auth.$guard")) {
+            return Application::$app->get("auth.$guard");
+        }
+
+        $guards = config('auth.guards', []);
+
+        if (isset($guards[$guard])) {
+            $config = $guards[$guard] ?? [];
+
+            static::register(
+                model: $config['model'] ?? config('auth.model', \App\Models\User::class),
+                config: $config,
+                guard: $guard
+            );
+
+            return Application::$app->get("auth.$guard");
+        }
+
+        throw new \InvalidArgumentException("Auth guard '$guard' is not registered.");
     }
 
     /**
@@ -337,6 +367,7 @@ class Auth implements AuthContract, ArrayAccess
             return; // If session channel is not enabled, skip setting session
         }
 
+        Session::regenerate();
         session([$this->config['session_key'] => $user->id]);
 
         if ($remember && $this->config['cookie_enabled']) {
@@ -345,14 +376,22 @@ class Auth implements AuthContract, ArrayAccess
 
             // add user hashed token in cookie with expiration
             if ($this->config['use_remember_token']) {
-                // generate a random token and store it in the database
-                $rememberToken = hasher()->random(16);
-                $token = encrypt($rememberToken);
+                $rememberToken = $this->user->getAttribute('remember_token');
 
-                $this->user->update(['remember_token' => $rememberToken]);
+                if (empty($rememberToken)) {
+                    $this->user->update([
+                        'remember_token' => $rememberToken = Hash::random(32),
+                    ]);
+                }
+
+                $token = encrypt($rememberToken);
             } else {
                 // create an encrypted token with user id and expiration
-                $token = encrypt(['id' => $user->id, 'expire' => $tokenExpire]);
+                $token = encrypt([
+                    'id' => $user->id,
+                    'expire' => $tokenExpire,
+                    'fingerprint' => $this->makeJwtFingerprint($user),
+                ]);
             }
 
             // set cookie with token and expiration
@@ -426,7 +465,7 @@ class Auth implements AuthContract, ArrayAccess
         // Encode before storing so an invalid payload cannot leave an unusable token row.
         $token = $this->makeToken($user, $payload);
 
-        query($this->config['jwt_token_table'])->insert([
+        DB::table($this->config['jwt_token_table'])->insert([
             'user_id' => $user->id,
             'token_hash' => $payload['jti'],
             'expire_at' => carbon($payload['exp']),
@@ -457,7 +496,7 @@ class Auth implements AuthContract, ArrayAccess
             throw new \RuntimeException('JWT token table is not configured.');
         }
 
-        return query($this->config['jwt_token_table'])
+        return DB::table($this->config['jwt_token_table'])
             ->where('user_id', $user->id)
             ->fetchAssoc()
             ->get(['token_hash', 'expire_at', 'created_at']);
@@ -491,7 +530,7 @@ class Auth implements AuthContract, ArrayAccess
             throw new \RuntimeException('JWT token table is not configured.');
         }
 
-        return query($this->config['jwt_token_table'])
+        return DB::table($this->config['jwt_token_table'])
             ->where(['user_id' => $user->id, 'token_hash' => $tokenHash])
             ->delete() > 0;
     }
@@ -530,7 +569,7 @@ class Auth implements AuthContract, ArrayAccess
 
         // Do not call getUser()/revokeToken() here: a missing user may be logging out.
         if ($id > 0 && $this->authenticatedJwt !== null && !empty($this->config['jwt_token_table'])) {
-            query($this->config['jwt_token_table'])
+            DB::table($this->config['jwt_token_table'])
                 ->where(['user_id' => $id, 'token_hash' => $this->authenticatedJwt->jti])
                 ->delete();
         }
@@ -546,12 +585,6 @@ class Auth implements AuthContract, ArrayAccess
 
         // destroy cookie auth if enabled
         if ($this->config['cookie_enabled']) {
-            // Clear the remember token from the database
-            if ($id > 0 && $user instanceof Model && isset($user['remember_token']) && $this->config['use_remember_token']) {
-                $user->update(['remember_token' => null]);
-            }
-
-            // Delete the authentication cookie by setting its expiration in the past
             cookie($this->config['cookie_name'], '', -3600);
         }
 
@@ -742,6 +775,10 @@ class Auth implements AuthContract, ArrayAccess
                 $token = decrypt($cookieToken);
 
                 if ($this->config['use_remember_token']) {
+                    if (!is_string($token) || $token === '') {
+                        return;
+                    }
+
                     $userId = $this->model::column('id')->where('remember_token', $token)->first();
                     if ($userId) {
                         session([$this->config['session_key'] => $userId]);
@@ -751,7 +788,12 @@ class Auth implements AuthContract, ArrayAccess
                 }
 
                 // Verify that the decrypted value is an array with an 'id' and 'expire' key
-                if (is_array($token) && isset($token['expire'], $token['id']) && carbon($token['expire'])->isFuture()) {
+                if (
+                    is_array($token) && isset($token['expire'], $token['id'], $token['fingerprint'])
+                    && carbon($token['expire'])->isFuture()
+                    && ($user = $this->model::find($token['id']) ?: null) !== null
+                    && hash_equals($token['fingerprint'], $this->makeJwtFingerprint($user))
+                ) {
                     session([$this->config['session_key'] => $token['id']]);
                 }
             } catch (Throwable $e) {
@@ -775,7 +817,7 @@ class Auth implements AuthContract, ArrayAccess
             $id = intval($payload->sub);
 
             if (!empty($this->config['jwt_token_table'])) {
-                $tokenExpire = query($this->config['jwt_token_table'])
+                $tokenExpire = DB::table($this->config['jwt_token_table'])
                     ->where(['user_id' => $id, 'token_hash' => $payload->jti])
                     ->value('expire_at') ?: null;
 
@@ -784,7 +826,7 @@ class Auth implements AuthContract, ArrayAccess
                 }
 
                 if (carbon($tokenExpire)->isPast()) {
-                    query($this->config['jwt_token_table'])
+                    DB::table($this->config['jwt_token_table'])
                         ->where(['user_id' => $id, 'token_hash' => $payload->jti])
                         ->delete(); // Delete the expired token from the database
 

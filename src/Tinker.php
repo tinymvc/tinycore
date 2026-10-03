@@ -1149,7 +1149,7 @@ class Tinker
         echo "  Name: " . $this->color(config('app.name', 'TinyMVC App'), 'yellow') . "\n";
         echo "  Timezone: " . $this->color(config('app.timezone', 'UTC'), 'yellow') . "\n";
         echo "  Debug: " . $this->color(config('app.debug', false) ? 'enabled' : 'disabled', 'yellow') . "\n";
-        echo "  Language: " . $this->color(config('app.lang', 'en'), 'yellow') . "\n";
+        echo "  Language: " . $this->color(config('app.locale', 'en'), 'yellow') . "\n";
 
         // Database settings
         echo "\n" . $this->color("Database:", 'white') . "\n";

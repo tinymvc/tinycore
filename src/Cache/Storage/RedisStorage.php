@@ -61,7 +61,6 @@ class RedisStorage implements CacheStorageContract
         }
 
         if ($this->isExpiredPayload($payload)) {
-            $this->redis->del($redisKey);
             return false;
         }
 
@@ -73,11 +72,11 @@ class RedisStorage implements CacheStorageContract
         $packed = $this->packValue($key, $data, $expire);
         $redisKey = $this->cacheKey($key);
 
-        $this->redis->set($redisKey, $packed['payload']);
-
-        if ($packed['expire_at'] > 0) {
-            $this->redis->expire($redisKey, max(1, $packed['expire_at'] - time()));
-        }
+        $this->redis->eval(
+            "redis.call('SET', KEYS[1], ARGV[1]); if tonumber(ARGV[2]) > 0 then redis.call('EXPIREAT', KEYS[1], ARGV[2]) end; return 1",
+            [$redisKey, $packed['payload'], (string) $packed['expire_at']],
+            1,
+        );
     }
 
     public function retrieve(string|array $keys, bool $eraseExpired = false): mixed
@@ -117,20 +116,6 @@ class RedisStorage implements CacheStorageContract
         return $payload['value'];
     }
 
-    public function metadata(string $key): ?array
-    {
-        $row = $this->unpackValue($this->redis->get($this->cacheKey($key)));
-
-        if (!is_array($row)) {
-            return null;
-        }
-
-        return [
-            'created_at' => $row['created_at'],
-            'expire_at' => $row['expire_at'],
-        ];
-    }
-
     public function retrieveAll(bool $eraseExpired = false): array
     {
         if ($eraseExpired) {
@@ -138,7 +123,7 @@ class RedisStorage implements CacheStorageContract
         }
 
         $result = [];
-        $this->scanKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$result) {
+        $this->scanKeys($this->prefixPattern($this->cacheKeyPrefix), function (string $redisKey) use (&$result) {
             $payload = $this->unpackValue($this->redis->get($redisKey));
 
             if (!is_array($payload) || $this->isExpiredPayload($payload)) {
@@ -169,7 +154,7 @@ class RedisStorage implements CacheStorageContract
     public function getExpired(): array
     {
         $result = [];
-        $this->scanKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$result) {
+        $this->scanKeys($this->prefixPattern($this->cacheKeyPrefix), function (string $redisKey) use (&$result) {
             $payload = $this->unpackValue($this->redis->get($redisKey));
 
             if (!is_array($payload) || !$this->isExpiredPayload($payload)) {
@@ -186,7 +171,7 @@ class RedisStorage implements CacheStorageContract
     public function flush(): void
     {
         $keys = [];
-        $this->scanKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$keys) {
+        $this->scanKeys($this->prefixPattern($this->cacheKeyPrefix), function (string $redisKey) use (&$keys) {
             $keys[] = $redisKey;
         });
 
@@ -209,18 +194,34 @@ class RedisStorage implements CacheStorageContract
 
     public function increment(string $key, int $amount = 1): int|false
     {
-        $value = $this->retrieve($key);
-        if (!is_numeric($value)) {
-            return false;
+        $redisKey = $this->cacheKey($key);
+
+        for ($attempt = 0; $attempt < 100; $attempt++) {
+            $raw = $this->redis->get($redisKey);
+            $payload = $this->unpackValue($raw);
+
+            if ($payload === null || $this->isExpiredPayload($payload) || !is_numeric($payload['value'])) {
+                return false;
+            }
+
+            $value = (int) $payload['value'] + $amount;
+            $stored = unserialize($raw);
+            $stored['value'] = serialize($value);
+
+            $changed = $this->redis->eval(
+                "if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end; redis.call('SET', KEYS[1], ARGV[2]); if tonumber(ARGV[3]) > 0 then redis.call('EXPIREAT', KEYS[1], ARGV[3]) end; return 1",
+                [$redisKey, $raw, serialize($stored), (string) $payload['expire_at']],
+                1,
+            );
+
+            if ($changed === 1) {
+                return $value;
+            }
+
+            usleep(random_int(100, 1000));
         }
 
-        $value = (int) $value + $amount;
-        $metadata = $this->metadata($key);
-        $expireAt = (int) ($metadata['expire_at'] ?? 0);
-        $expire = $expireAt > 0 ? ('+' . max(1, $expireAt - time()) . ' seconds') : null;
-
-        $this->store($key, $value, $expire);
-        return $value;
+        return false;
     }
 
     public function add(string $key, mixed $value, null|string $expire = null): bool
@@ -241,7 +242,7 @@ class RedisStorage implements CacheStorageContract
         $totalEntries = 0;
         $expiredEntries = 0;
 
-        $this->scanKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$totalEntries, &$expiredEntries, $now) {
+        $this->scanKeys($this->prefixPattern($this->cacheKeyPrefix), function (string $redisKey) use (&$totalEntries, &$expiredEntries, $now) {
             $payload = $this->unpackValue($this->redis->get($redisKey));
 
             if (!is_array($payload)) {
@@ -270,13 +271,14 @@ class RedisStorage implements CacheStorageContract
 
     public function pull(string $key, mixed $default = null): mixed
     {
-        $value = $this->retrieve($key);
-        if ($value !== null) {
-            $this->erase([$key]);
-            return $value;
-        }
+        $raw = $this->redis->eval(
+            "local value = redis.call('GET', KEYS[1]); redis.call('DEL', KEYS[1]); return value",
+            [$this->cacheKey($key)],
+            1,
+        );
+        $payload = $this->unpackValue($raw);
 
-        return $default;
+        return $payload !== null && !$this->isExpiredPayload($payload) ? $payload['value'] : $default;
     }
 
     public function storeManyWithExpiry(array $items): void
@@ -296,7 +298,7 @@ class RedisStorage implements CacheStorageContract
             return null;
         }
 
-        $metadata = $this->metadata($key);
+        $metadata = $this->unpackValue($this->redis->get($this->cacheKey($key)));
         if ((int) ($metadata['expire_at'] ?? 0) === 0) {
             return null;
         }
@@ -357,7 +359,7 @@ LUA;
     public function unlockAll(string $owner): int
     {
         $deleted = 0;
-        $this->scanKeys($this->lockNamespace . ':*', function (string $redisKey) use (&$deleted, $owner) {
+        $this->scanKeys($this->prefixPattern($this->lockNamespace . ':'), function (string $redisKey) use (&$deleted, $owner) {
             $payload = $this->decodeLockPayload($redisKey);
 
             if (($payload[self::REDIS_OWNER_KEY] ?? null) === $owner) {
@@ -379,7 +381,6 @@ LUA;
 
         $expiresAt = (int) ($payload[self::REDIS_EXPIRE_AT_KEY] ?? 0);
         if ($expiresAt > 0 && $expiresAt <= time()) {
-            $this->redis->del($redisKey);
             return false;
         }
 
@@ -397,14 +398,24 @@ LUA;
     {
         $now = time();
         $deleted = 0;
+        $script = <<<'LUA'
+local current = redis.call('GET', KEYS[1])
+if not current then
+    return 0
+end
+local ok, data = pcall(cjson.decode, current)
+if not ok or type(data) ~= 'table' then
+    return 0
+end
+local expiresAt = tonumber(data.expire_at) or 0
+if expiresAt > 0 and expiresAt <= tonumber(ARGV[1]) then
+    return redis.call('DEL', KEYS[1])
+end
+return 0
+LUA;
 
-        $this->scanKeys($this->lockNamespace . ':*', function (string $redisKey) use (&$deleted, $now) {
-            $payload = $this->decodeLockPayload($redisKey);
-            $expiresAt = (int) ($payload[self::REDIS_EXPIRE_AT_KEY] ?? 0);
-
-            if ($expiresAt > 0 && $expiresAt <= $now) {
-                $deleted += (int) $this->redis->del($redisKey);
-            }
+        $this->scanKeys($this->prefixPattern($this->lockNamespace . ':'), function (string $redisKey) use (&$deleted, $now, $script) {
+            $deleted += (int) $this->redis->eval($script, [$redisKey, $now], 1);
         });
 
         return $deleted;
@@ -476,9 +487,15 @@ LUA;
         return sprintf('%s:%s', $this->lockNamespace, $key);
     }
 
-    private function cachePrefixPattern(): string
+    private function prefixPattern(string $prefix): string
     {
-        return $this->cacheKeyPrefix . '*';
+        return strtr($prefix, [
+            '\\' => '\\\\',
+            '*' => '\\*',
+            '?' => '\\?',
+            '[' => '\\[',
+            ']' => '\\]',
+        ]) . '*';
     }
 
     private function packValue(string $key, mixed $data, ?string $expire): array
@@ -487,7 +504,6 @@ LUA;
         $payload = [
             'key' => $key,
             'value' => serialize($data),
-            'created_at' => time(),
             'expire_at' => $expireAt,
         ];
 
@@ -504,13 +520,12 @@ LUA;
         }
 
         $payload = @unserialize($value);
-        if (!is_array($payload) || !array_key_exists('value', $payload) || !array_key_exists('created_at', $payload)) {
+        if (!is_array($payload) || !array_key_exists('value', $payload)) {
             return null;
         }
 
         return [
             'value' => @unserialize((string) $payload['value']),
-            'created_at' => (int) ($payload['created_at'] ?? 0),
             'expire_at' => (int) ($payload['expire_at'] ?? 0),
         ];
     }
@@ -522,26 +537,31 @@ LUA;
 
     private function cleanupExpired(): int
     {
-        $expiredKeys = [];
+        $deleted = 0;
 
-        $this->scanKeys($this->cachePrefixPattern(), function (string $redisKey) use (&$expiredKeys) {
-            $payload = $this->unpackValue($this->redis->get($redisKey));
+        $this->scanKeys($this->prefixPattern($this->cacheKeyPrefix), function (string $redisKey) use (&$deleted): void {
+            $raw = $this->redis->get($redisKey);
+            $payload = $this->unpackValue($raw);
 
-            if (!is_array($payload) || $this->isExpiredPayload($payload)) {
-                $expiredKeys[] = $redisKey;
+            if (is_string($raw) && ($payload === null || $this->isExpiredPayload($payload))) {
+                $deleted += (int) $this->redis->eval(
+                    "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) end; return 0",
+                    [$redisKey, $raw],
+                    1,
+                );
             }
         });
 
-        return $expiredKeys === [] ? 0 : (int) $this->redis->del($expiredKeys);
+        return $deleted;
     }
 
     private function scanKeys(string $pattern, callable $callback): void
     {
-        $cursor = 0;
+        $cursor = null;
         do {
             $keys = $this->redis->scan($cursor, $pattern);
             if ($keys === false) {
-                break;
+                continue;
             }
 
             foreach ((array) $keys as $key) {

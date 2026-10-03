@@ -803,7 +803,7 @@ if (!function_exists('locale_dir')) {
      */
     function locale_dir(string $path = '/'): string
     {
-        return dir_path(config('app.lang_dir') . '/' . ltrim($path, '/'));
+        return dir_path(config('app.locale_dir', root_dir('/resources/languages')) . '/' . ltrim($path, '/'));
     }
 }
 

@@ -6,8 +6,7 @@ use PDO;
 use Spark\Console\Prompt;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueContract;
-use Spark\Queue\Storage\RedisStorage;
-use Spark\Queue\Storage\SqliteStorage;
+use Spark\Queue\Storage\{RedisStorage, DatabaseStorage, FileStorage};
 use Spark\Support\Traits\Macroable;
 use function implode;
 use function is_array;
@@ -21,7 +20,7 @@ use function sprintf;
  * Public queue manager and worker lifecycle coordinator.
  *
  * Queue storage is delegated to driver-specific storage classes so the worker
- * logic stays consistent across SQLite and Redis.
+ * logic stays consistent across database, file and Redis.
  */
 class Queue implements QueueContract
 {
@@ -33,10 +32,13 @@ class Queue implements QueueContract
     public function __construct()
     {
         $connection = $this->resolveDriverConfig();
-        $driver = strtolower((string) ($connection['driver'] ?? 'sqlite'));
-        $this->storage = $driver === 'redis'
-            ? new RedisStorage($connection)
-            : new SqliteStorage($connection);
+        $driver = strtolower((string) ($connection['driver'] ?? 'database'));
+        $this->storage = match ($driver) {
+            'redis' => new RedisStorage($connection),
+            'file' => new FileStorage($connection),
+            'database' => new DatabaseStorage($connection),
+            default => throw new \InvalidArgumentException("Unsupported storage driver [{$driver}]. Use database, file or redis."),
+        };
     }
 
     public function getConnection(): PDO|\Redis

@@ -41,10 +41,8 @@ class Session implements SessionContract
             return true;
         }
 
-        if (session_status() === PHP_SESSION_ACTIVE && $forceStart) {
+        if (session_status() === PHP_SESSION_NONE && $forceStart) {
             SessionHandler::start();
-        } else {
-            return false;
         }
 
         return session_status() === PHP_SESSION_ACTIVE;
@@ -253,7 +251,13 @@ class Session implements SessionContract
         session_destroy();
 
         if (isset($_COOKIE[session_name()])) {
-            setcookie(session_name(), '', time() - 3600, '/');
+            $options = session_get_cookie_params();
+
+            unset($options['lifetime']);
+
+            $options['expires'] = time() - 3600;
+
+            setcookie(session_name(), '', $options);
         }
     }
 

@@ -6,6 +6,7 @@ use PDO;
 use PDOStatement;
 use Spark\Console\Prompt;
 use Spark\Database\Contracts\MigrationContract;
+use Spark\Facades\DB;
 use Throwable;
 use function array_slice;
 use function count;
@@ -17,7 +18,7 @@ use function is_object;
  *
  * A class for managing database migrations and seeders. Applied migration/seed
  * records are persisted in a database table (created automatically on first
- * use) instead of a JSON ledger file.
+ * use).
  *
  * @package Spark\Database
  */
@@ -43,7 +44,18 @@ class Migration implements MigrationContract
     {
         $this->migrationsFolder ??= root_dir('database/migrations'); // Default to the root directory
 
-        $this->pdo = app(DB::class)->getPdo();
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $this->table)) {
+            throw new \InvalidArgumentException('Invalid migration table name.');
+        }
+
+        $this->pdo = DB::getPdo();
+
+        if (!in_array($driver = DB::getDriver(), ['sqlite', 'mysql', 'pgsql'], true)) {
+            throw new \RuntimeException('Unsupported migration database driver.');
+        }
+
+        $quote = $driver === 'mysql' ? '`' : '"';
+        $this->table = $quote . $this->table . $quote;
 
         $this->ensureTableExists();
     }
@@ -94,19 +106,22 @@ class Migration implements MigrationContract
                 // Include the migration file; it should return an instance with up() and down() methods.
                 $migration = require $file;
 
-                if (is_object($migration) && method_exists($migration, 'up')) {
+                if (!is_object($migration) || !is_callable([$migration, 'up'])) {
+                    throw new \RuntimeException("Migration must expose a public up() method: {$migrationName}");
+                }
+
+                $this->runMigration(function () use ($migration, $migrationName, $batch): void {
                     $migration->up();
-
-                    Prompt::message("Applied migration: {$migrationName}", 'success');
-
                     $this->recordMigration(
                         $migrationName,
                         str_starts_with($migrationName, 'seed_') ? 'seed' : 'migration',
-                        $batch
+                        $batch,
                     );
+                });
 
-                    $run++;
-                }
+                Prompt::message("Applied migration: {$migrationName}", 'success');
+
+                $run++;
             }
         } catch (Throwable $e) {
             Prompt::message("Migration failed: {$migrationName} — {$e->getMessage()}", 'error');
@@ -144,6 +159,10 @@ class Migration implements MigrationContract
             $steps = count($appliedMigrations); // Rollback all applied migrations
         }
 
+        if ($steps < 1) {
+            throw new \InvalidArgumentException('Rollback steps must be a positive integer.');
+        }
+
         // Most recently applied migrations are rolled back first.
         $migrationsToRollback = array_slice(array_reverse($appliedMigrations), 0, $steps);
 
@@ -154,21 +173,23 @@ class Migration implements MigrationContract
                 $file = $this->migrationsFolder . DIRECTORY_SEPARATOR . $migrationName;
 
                 if (!file_exists($file)) {
-                    Prompt::message("Migration file not found: {$migrationName}", 'warning');
-                    continue;
+                    throw new \RuntimeException("Migration file not found: {$migrationName}");
                 }
 
                 $migration = require $file;
 
-                if (is_object($migration) && method_exists($migration, 'down')) {
-                    $migration->down();
-
-                    Prompt::message("Rolled back migration: {$migrationName}", 'success');
-
-                    $this->removeMigration($migrationName);
-
-                    $run++;
+                if (!is_object($migration) || !is_callable([$migration, 'down'])) {
+                    throw new \RuntimeException("Migration must expose a public down() method: {$migrationName}");
                 }
+
+                $this->runMigration(function () use ($migration, $migrationName): void {
+                    $migration->down();
+                    $this->removeMigration($migrationName);
+                });
+
+                Prompt::message("Rolled back migration: {$migrationName}", 'success');
+
+                $run++;
             }
         } catch (Throwable $e) {
             Prompt::message("Rollback failed: {$e->getMessage()}", 'error');
@@ -201,6 +222,15 @@ class Migration implements MigrationContract
         $this->up($args);
     }
 
+    private function runMigration(callable $callback): void
+    {
+        if (DB::isSQLite()) {
+            $callback();
+        } else {
+            DB::transaction($callback);
+        }
+    }
+
     /**
      * Ensures the migrations ledger table exists, creating it if necessary.
      *
@@ -231,7 +261,7 @@ class Migration implements MigrationContract
                 type VARCHAR(10) NOT NULL DEFAULT 'migration',
                 batch INT UNSIGNED NOT NULL,
                 applied_at INT UNSIGNED NOT NULL,
-                UNIQUE KEY {$this->table}_migration_unique (migration)
+                UNIQUE (migration)
             )",
         };
 

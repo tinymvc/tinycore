@@ -3,6 +3,7 @@
 namespace Spark\Http\Session\Handler;
 
 use SessionHandlerInterface;
+use SessionUpdateTimestampHandlerInterface;
 use Spark\Utils\RedisConnector;
 use function max;
 use function trim;
@@ -15,7 +16,7 @@ use function trim;
  *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class RedisHandler implements SessionHandlerInterface
+class RedisHandler implements SessionHandlerInterface, SessionUpdateTimestampHandlerInterface
 {
     private \Redis $redis;
 
@@ -25,7 +26,7 @@ class RedisHandler implements SessionHandlerInterface
 
     public function __construct(private array $config = [])
     {
-        $this->lifetime = (int) ($config['lifetime'] ?? 120) * 60;
+        $this->lifetime = max(1, (int) ($config['lifetime'] ?? 120)) * 60;
     }
 
     public function open(string $path, string $name): bool
@@ -71,6 +72,16 @@ class RedisHandler implements SessionHandlerInterface
     {
         // Redis expires keys on its own via the TTL set in write(); nothing to sweep.
         return 0;
+    }
+
+    public function validateId(string $id): bool
+    {
+        return (bool) $this->redis->exists($this->key($id));
+    }
+
+    public function updateTimestamp(string $id, string $data): bool
+    {
+        return $this->write($id, $data);
     }
 
     private function key(string $id): string

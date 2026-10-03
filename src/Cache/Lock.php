@@ -48,7 +48,8 @@ class Lock implements LockContract, \ArrayAccess
         $this->storage = match ($driver) {
             'redis' => new RedisStorage($name, $connection),
             'file' => new FileStorage($name, $connection),
-            default => new DatabaseStorage($name, $connection, 'lock'),
+            'database' => new DatabaseStorage($name, $connection, 'lock'),
+            default => throw new \InvalidArgumentException("Unsupported storage driver [{$driver}]. Use database, file or redis."),
         };
 
         $this->owner = sprintf('%s-%s-%s', gethostname(), getmypid(), uniqid('', true));

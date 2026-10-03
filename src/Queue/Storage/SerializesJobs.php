@@ -14,7 +14,7 @@ trait SerializesJobs
         return [
             'callback' => $job->getCallback(),
             'parameters' => $job->getParameters(),
-            'scheduledTime' => (string) $job->getScheduledTime(),
+            'scheduledTime' => $job->getScheduledTime()->utc()->toDateTimeString(),
             'repeat' => $job->getRepeat(),
             'metadata' => $job->getMetadata(),
         ];
@@ -30,7 +30,7 @@ trait SerializesJobs
         return new Job(
             callback: $payload['callback'] ?? null,
             parameters: $payload['parameters'] ?? [],
-            scheduledTime: new Carbon($job['scheduled_time'] ?? now()),
+            scheduledTime: new Carbon($job['scheduled_time'] ?? now(), 'UTC'),
             repeat: $job['repeat'] ?? null,
             metadata: [
                 'id' => $job['id'] ?? null,

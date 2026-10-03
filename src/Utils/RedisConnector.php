@@ -38,7 +38,7 @@ final class RedisConnector
     {
         $config = self::resolveConnectionConfig($config);
 
-        $cacheKey = self::cacheKey($connectionName, $config);
+        $cacheKey = getmypid() . ':' . self::cacheKey($connectionName, $config);
 
         if (!isset(self::$instances[$cacheKey])) {
             self::$instances[$cacheKey] = self::connect($config, $connectionName);
@@ -320,7 +320,12 @@ final class RedisConnector
         $readTimeout = (float) $config['read_timeout'];
         $retryInterval = (int) $config['retry_interval'];
         $persistent = (bool) $config['persistent'];
-        $persistentId = (string) ($config['persistent_id'] ?? $connectionName);
+        $persistentId = sprintf(
+            '%s:%s:%s',
+            (string) ($config['persistent_id'] ?? $connectionName),
+            getmypid(),
+            hash('sha256', self::cacheKey($connectionName, $config)),
+        );
         $database = (int) $config['database'];
         $socket = $config['socket'];
         $username = $config['username'];
@@ -347,8 +352,8 @@ final class RedisConnector
             $redis->auth((string) $password);
         }
 
-        if ($database > 0) {
-            $redis->select($database);
+        if (!$redis->select($database)) {
+            throw new RuntimeException('Failed to select the configured Redis database.');
         }
 
         foreach ((array) $config['options'] as $option => $value) {

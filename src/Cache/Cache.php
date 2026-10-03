@@ -18,7 +18,7 @@ use function strtolower;
  * Public cache repository for the configured cache driver.
  *
  * This class keeps the application-facing cache API stable while delegating all
- * SQLite and Redis persistence details to storage classes.
+ * database, file and Redis persistence details to storage classes.
  *
  * @implements \ArrayAccess<string, mixed>
  */
@@ -32,7 +32,7 @@ class Cache implements CacheContract, \ArrayAccess
      * Create a cache repository by name.
      *
      * The name is used by storage drivers to isolate cache data, such as by
-     * SQLite file name or Redis key namespace.
+     * database key prefix, file directory or Redis key namespace.
      */
     public function __construct(string $name = 'default')
     {
@@ -42,7 +42,8 @@ class Cache implements CacheContract, \ArrayAccess
         $this->storage = match ($driver) {
             'redis' => new RedisStorage($name, $connection),
             'file' => new FileStorage($name, $connection),
-            default => new DatabaseStorage($name, $connection, 'cache'),
+            'database' => new DatabaseStorage($name, $connection, 'cache'),
+            default => throw new \InvalidArgumentException("Unsupported storage driver [{$driver}]. Use database, file or redis."),
         };
     }
 

@@ -5,7 +5,6 @@ namespace Spark\Queue\Storage;
 use Spark\Carbon;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueStorageContract;
-use Spark\Queue\Exceptions\FailedToSaveJobsException;
 use Spark\Utils\RedisConnector;
 use function array_key_first;
 use function array_keys;
@@ -19,7 +18,6 @@ use function get_class;
 use function in_array;
 use function is_array;
 use function is_bool;
-use function is_string;
 use function ltrim;
 use function max;
 use function md5;
@@ -51,7 +49,6 @@ class RedisStorage implements QueueStorageContract
 
         $prefix = trim($prefix, ':');
         $this->redisPrefix = sprintf('%s:queue:%s', $prefix, md5('redis'));
-        $this->pruneStaleFingerprintKeys();
     }
 
     public function getConnection(): \Redis
@@ -66,34 +63,7 @@ class RedisStorage implements QueueStorageContract
 
     public function pushOnce(JobContract $job, string $queue = 'default'): void
     {
-        $payload = $this->serializeJob($job);
-        $dupeKey = $this->redisFingerprintKey($queue, [
-            'callback' => $payload['callback'],
-            'parameters' => $payload['parameters'],
-        ], $payload['repeat'] ?? '');
-
-        $existing = $this->redis->get($dupeKey);
-        if (is_string($existing) && $existing !== '') {
-            $existingJob = $this->getRedisJob((int) $existing);
-            if ($existingJob !== null && $this->redisToValue($existingJob['status'] ?? '') !== null) {
-                return;
-            }
-
-            $this->redis->del($dupeKey);
-        }
-
-        $jobId = $this->nextRedisId();
-
-        if ($this->redis->setnx($dupeKey, (string) $jobId) !== true) {
-            return;
-        }
-
-        try {
-            $this->pushRedis($job, $queue, $jobId);
-        } catch (\Throwable $e) {
-            $this->redis->del($dupeKey);
-            throw new FailedToSaveJobsException('Failed to add job to the queue: ' . $e->getMessage(), previous: $e);
-        }
+        $this->pushRedis($job, $queue, once: true);
     }
 
     public function clearAllJobs(): void
@@ -105,8 +75,7 @@ class RedisStorage implements QueueStorageContract
             }
         }
 
-        $this->redis->del($this->redisJobsSetKey(), $this->redisFailedSetKey(), $this->redisQueuesSetKey(), $this->redisNextIdKey());
-        $this->pruneStaleFingerprintKeys();
+        $this->redis->del($this->redisJobsSetKey(), $this->redisFailedSetKey(), $this->redisQueuesSetKey());
     }
 
     public function clearRepeatedJobs(): void
@@ -128,23 +97,29 @@ class RedisStorage implements QueueStorageContract
 
         $queue = $this->redisNullIfMissing((string) ($row['queue'] ?? 'default'));
 
-        $this->redis->sRem($this->redisJobsSetKey(), $id);
-        if ($queue !== null) {
-            $this->redis->sRem($this->redisQueueJobsSetKey($queue), $id);
-            $this->redis->zRem($this->redisPendingSetKey($queue), (string) $id);
-            $this->redis->zRem($this->redisReservedSetKey($queue), (string) $id);
-        }
-
-        $this->redis->zRem($this->redisFailedSetKey(), (string) $id);
-        $this->redis->del($this->redisJobHashKey($id));
-
         $payload = json_decode((string) ($row['payload'] ?? '{}'), true);
-        if (is_array($payload)) {
-            $repeat = $this->redisNullIfMissing((string) ($row['repeat'] ?? null)) ?? '';
-            $this->redis->del($this->redisFingerprintKey($queue ?? 'default', $payload, $repeat));
-        }
+        $repeat = $this->redisNullIfMissing((string) ($row['repeat'] ?? null)) ?? '';
+        $dupe = $this->redisFingerprintKey($queue ?? 'default', is_array($payload) ? $payload : [], $repeat);
+        $script = <<<'LUA'
+redis.call('SREM', KEYS[1], ARGV[1])
+redis.call('SREM', KEYS[2], ARGV[1])
+redis.call('ZREM', KEYS[3], ARGV[1])
+redis.call('ZREM', KEYS[4], ARGV[1])
+redis.call('ZREM', KEYS[5], ARGV[1])
+redis.call('SREM', KEYS[7], ARGV[1])
+return redis.call('DEL', KEYS[6])
+LUA;
 
-        return true;
+        return $this->redis->eval($script, [
+            $this->redisJobsSetKey(),
+            $this->redisQueueJobsSetKey($queue ?? 'default'),
+            $this->redisPendingSetKey($queue ?? 'default'),
+            $this->redisReservedSetKey($queue ?? 'default'),
+            $this->redisFailedSetKey(),
+            $this->redisJobHashKey($id),
+            $dupe,
+            (string) $id,
+        ], 7) === 1;
     }
 
     public function removeQueue(string $name): bool
@@ -209,16 +184,20 @@ class RedisStorage implements QueueStorageContract
             return false;
         }
 
-        if ($this->redis->zRem($this->redisPendingSetKey($bestQueue), (string) $bestId) === 0) {
+        if (
+            !$this->transitionJob($bestId, [
+                'status' => 'reserved',
+                'reserved_at' => (string) $now,
+            ], expectedStatus: 'pending')
+        ) {
             return false;
         }
 
         $row = $this->getRedisJob($bestId);
+
         if (!$row) {
             return false;
         }
-
-        $this->updateJobStatus($bestId, 'reserved', $this->redisToIntValue($row['attempts'] ?? '0'));
 
         return $this->unserializeJob([
             'id' => $bestId,
@@ -237,99 +216,40 @@ class RedisStorage implements QueueStorageContract
 
     public function updateJobStatus(int $jobId, string $status, int $attempts): void
     {
-        $job = $this->getRedisJob($jobId);
-        if (!$job) {
-            return;
-        }
-
-        $queue = $this->redisNullIfMissing((string) ($job['queue'] ?? 'default')) ?? 'default';
-        $scheduled = $this->redisToTimestamp($job['scheduled_time'] ?? null);
-
-        $pendingSet = $this->redisPendingSetKey($queue);
-        $reservedSet = $this->redisReservedSetKey($queue);
-
-        $this->redis->zRem($pendingSet, (string) $jobId);
-        $this->redis->zRem($reservedSet, (string) $jobId);
-
-        $payload = [
+        $this->transitionJob($jobId, [
             'status' => $status,
             'attempts' => (string) max(0, $attempts),
-            'reserved_at' => self::REDIS_NULL,
-            'failed_at' => $job['failed_at'] ?? self::REDIS_NULL,
-            'exception' => $job['exception'] ?? self::REDIS_NULL,
-        ];
-
-        if (in_array($status, ['reserved', 'processing'], true)) {
-            $payload['reserved_at'] = (string) now()->timestamp;
-            $this->redis->zAdd($reservedSet, now()->timestamp, (string) $jobId);
-        } elseif ($status === 'pending') {
-            $this->redis->zAdd($pendingSet, $scheduled, (string) $jobId);
-        }
-
-        $this->redis->hMSet($this->redisJobHashKey($jobId), array_map($this->redisNormalizeValue(...), $payload));
+            'reserved_at' => in_array($status, ['reserved', 'processing'], true) ? (string) time() : self::REDIS_NULL,
+        ]);
     }
 
     public function rescheduleJob(int $jobId, Carbon $nextRun): void
     {
-        $job = $this->getRedisJob($jobId);
-        if (!$job) {
-            return;
-        }
-
-        $queue = $this->redisNullIfMissing((string) ($job['queue'] ?? 'default')) ?? 'default';
-        $this->redis->hMSet($this->redisJobHashKey($jobId), [
-            'scheduled_time' => (string) $nextRun,
-            'status' => 'pending',
-            'attempts' => '0',
-            'reserved_at' => self::REDIS_NULL,
-        ]);
-
-        $this->redis->zAdd($this->redisPendingSetKey($queue), $nextRun->timestamp, (string) $jobId);
-        $this->redis->zRem($this->redisReservedSetKey($queue), (string) $jobId);
+        $this->retryJob($jobId, $nextRun, 0);
     }
 
     public function markJobAsFailed(int $jobId, \Throwable $exception, int $attempts): void
     {
-        $row = $this->getRedisJob($jobId);
-        if (!$row) {
-            return;
-        }
-
-        $queue = $this->redisNullIfMissing((string) ($row['queue'] ?? 'default')) ?? 'default';
         $stack = $exception->getPrevious()?->getTraceAsString() ?? $exception->getTraceAsString();
-        $exceptionText = sprintf('%s: %s\nStack trace:\n%s', get_class($exception), $exception->getMessage(), $stack);
-        $failedAt = now();
+        $exceptionText = sprintf("%s: %s\nStack trace:\n%s", get_class($exception), $exception->getMessage(), $stack);
 
-        $this->redis->hMSet($this->redisJobHashKey($jobId), [
+        $this->transitionJob($jobId, [
             'status' => 'failed',
-            'attempts' => (string) $attempts,
+            'attempts' => (string) max(0, $attempts),
             'reserved_at' => self::REDIS_NULL,
-            'failed_at' => (string) $failedAt,
+            'failed_at' => (string) now(),
             'exception' => $exceptionText,
         ]);
-
-        $this->redis->zRem($this->redisReservedSetKey($queue), (string) $jobId);
-        $this->redis->zAdd($this->redisFailedSetKey(), $failedAt->timestamp, (string) $jobId);
     }
 
     public function retryJob(int $jobId, Carbon $retryTime, int $attempts): void
     {
-        $job = $this->getRedisJob($jobId);
-        if (!$job) {
-            return;
-        }
-
-        $queue = $this->redisNullIfMissing((string) ($job['queue'] ?? 'default')) ?? 'default';
-        $this->redis->hMSet($this->redisJobHashKey($jobId), [
-            'scheduled_time' => (string) $retryTime,
+        $this->transitionJob($jobId, [
+            'scheduled_time' => $retryTime->utc()->format('Y-m-d H:i:s'),
             'status' => 'pending',
-            'attempts' => (string) $attempts,
+            'attempts' => (string) max(0, $attempts),
             'reserved_at' => self::REDIS_NULL,
-        ]);
-
-        $this->redis->zAdd($this->redisPendingSetKey($queue), $retryTime->timestamp, (string) $jobId);
-        $this->redis->zRem($this->redisReservedSetKey($queue), (string) $jobId);
-        $this->redis->zRem($this->redisFailedSetKey(), (string) $jobId);
+        ], $retryTime->timestamp);
     }
 
     public function recoverStaleJobs(int $timeout = 3600): int
@@ -361,8 +281,10 @@ class RedisStorage implements QueueStorageContract
                     continue;
                 }
 
-                $this->updateJobStatus((int) $id, 'pending', $this->redisToIntValue($row['attempts'] ?? '0'));
-                $recovered++;
+                $recovered += (int) $this->transitionJob((int) $id, [
+                    'status' => 'pending',
+                    'reserved_at' => self::REDIS_NULL,
+                ], expectedStatus: $status, staleBefore: $staleBefore);
             }
         }
 
@@ -447,28 +369,24 @@ class RedisStorage implements QueueStorageContract
                 continue;
             }
 
-            $row = $this->normalizeRedisRow((int) $id, $job);
-            $this->redis->hMSet($this->redisJobHashKey((int) $id), [
+            $this->transitionJob((int) $id, [
                 'status' => 'pending',
                 'attempts' => '0',
                 'reserved_at' => self::REDIS_NULL,
                 'failed_at' => self::REDIS_NULL,
                 'exception' => self::REDIS_NULL,
-            ]);
-
-            $this->redis->zAdd($this->redisPendingSetKey($row['queue'] ?? 'default'), $this->redisToTimestamp($row['scheduled_time'] ?? null), (string) $id);
-            $this->redis->zRem($this->redisFailedSetKey(), (string) $id);
+            ], expectedStatus: 'failed');
         }
     }
 
-    private function pushRedis(JobContract $job, string $queue, ?int $jobId = null): void
+    private function pushRedis(JobContract $job, string $queue, ?int $jobId = null, bool $once = false): void
     {
         $payload = $this->serializeJob($job);
         $jobId = $jobId ?? $this->nextRedisId();
         $payloadData = json_encode([
             'callback' => $payload['callback'],
             'parameters' => $payload['parameters'],
-        ], JSON_UNESCAPED_UNICODE);
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
         $row = [
             'id' => (string) $jobId,
@@ -484,16 +402,100 @@ class RedisStorage implements QueueStorageContract
             'failed_at' => self::REDIS_NULL,
         ];
 
-        $this->redis->hMSet($this->redisJobHashKey($jobId), array_map($this->redisNormalizeValue(...), $row));
-        $this->redis->sAdd($this->redisJobsSetKey(), $jobId);
-        $this->redis->sAdd($this->redisQueueJobsSetKey($queue), $jobId);
-        $this->redis->sAdd($this->redisQueuesSetKey(), $queue);
-        $this->redis->zAdd($this->redisPendingSetKey($queue), $this->redisToTimestamp((string) $payload['scheduledTime']), (string) $jobId);
+        $pairs = [];
 
-        $this->redis->set($this->redisFingerprintKey($queue, [
-            'callback' => $payload['callback'],
-            'parameters' => $payload['parameters'],
-        ], $payload['repeat'] ?? ''), (string) $jobId);
+        foreach (array_map($this->redisNormalizeValue(...), $row) as $field => $value) {
+            $pairs[] = $field;
+            $pairs[] = $value;
+        }
+
+        $script = <<<'LUA'
+if ARGV[4] == '1' and redis.call('SCARD', KEYS[6]) > 0 then
+    return 0
+end
+redis.call('HSET', KEYS[5], unpack(ARGV, 5))
+redis.call('SADD', KEYS[1], ARGV[1])
+redis.call('SADD', KEYS[2], ARGV[1])
+redis.call('SADD', KEYS[3], ARGV[2])
+redis.call('ZADD', KEYS[4], ARGV[3], ARGV[1])
+redis.call('SADD', KEYS[6], ARGV[1])
+return 1
+LUA;
+
+        $this->redis->eval($script, [
+            $this->redisJobsSetKey(),
+            $this->redisQueueJobsSetKey($queue),
+            $this->redisQueuesSetKey(),
+            $this->redisPendingSetKey($queue),
+            $this->redisJobHashKey($jobId),
+            $this->redisFingerprintKey($queue, [
+                'callback' => $payload['callback'],
+                'parameters' => $payload['parameters'],
+            ], $payload['repeat'] ?? ''),
+            (string) $jobId,
+            $queue,
+            (string) $this->redisToTimestamp((string) $payload['scheduledTime']),
+            $once ? '1' : '0',
+            ...$pairs,
+        ], 6);
+    }
+
+    /** Atomically update a job and all indexes; never recreate a removed job. */
+    private function transitionJob(
+        int $id,
+        array $updates,
+        ?int $scheduled = null,
+        ?string $expectedStatus = null,
+        ?int $staleBefore = null,
+    ): bool {
+        $row = $this->getRedisJob($id);
+
+        if ($row === null) {
+            return false;
+        }
+
+        $queue = $row['queue'];
+        $pairs = [];
+
+        foreach ($updates as $field => $value) {
+            $pairs[] = $field;
+            $pairs[] = $value;
+        }
+
+        $script = <<<'LUA'
+if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
+if ARGV[4] ~= '' and redis.call('HGET', KEYS[1], 'status') ~= ARGV[4] then return 0 end
+if ARGV[4] == 'pending' then
+    local score = tonumber(redis.call('ZSCORE', KEYS[2], ARGV[1]))
+    if not score or score > tonumber(ARGV[3]) then return 0 end
+end
+if ARGV[5] ~= '' then
+    local reserved = tonumber(redis.call('HGET', KEYS[1], 'reserved_at'))
+    if not reserved or reserved >= tonumber(ARGV[5]) then return 0 end
+end
+redis.call('HSET', KEYS[1], unpack(ARGV, 6))
+redis.call('ZREM', KEYS[2], ARGV[1])
+redis.call('ZREM', KEYS[3], ARGV[1])
+redis.call('ZREM', KEYS[4], ARGV[1])
+local status = redis.call('HGET', KEYS[1], 'status')
+if status == 'pending' then redis.call('ZADD', KEYS[2], ARGV[2], ARGV[1]) end
+if status == 'reserved' or status == 'processing' then redis.call('ZADD', KEYS[3], ARGV[3], ARGV[1]) end
+if status == 'failed' then redis.call('ZADD', KEYS[4], ARGV[3], ARGV[1]) end
+return 1
+LUA;
+
+        return $this->redis->eval($script, [
+            $this->redisJobHashKey($id),
+            $this->redisPendingSetKey($queue),
+            $this->redisReservedSetKey($queue),
+            $this->redisFailedSetKey(),
+            (string) $id,
+            (string) ($scheduled ?? $this->redisToTimestamp($row['scheduled_time'])),
+            (string) time(),
+            $expectedStatus ?? '',
+            $staleBefore === null ? '' : (string) $staleBefore,
+            ...$pairs,
+        ], 4) === 1;
     }
 
     private function clearJobsByFilter(callable $filter): void
@@ -620,9 +622,7 @@ class RedisStorage implements QueueStorageContract
             return time();
         }
 
-        $timestamp = strtotime($value);
-
-        return $timestamp === false ? time() : $timestamp;
+        return (new Carbon($value, 'UTC'))->timestamp;
     }
 
     private function redisNullIfMissing(?string $value): ?string
@@ -656,30 +656,4 @@ class RedisStorage implements QueueStorageContract
         return array_values(array_unique($statuses));
     }
 
-    private function pruneStaleFingerprintKeys(): void
-    {
-        $cursor = 0;
-        $dupeKeys = [];
-
-        do {
-            $keys = $this->redis->scan($cursor, $this->redisPrefix . ':dupe:*');
-            if ($keys !== false) {
-                foreach ((array) $keys as $key) {
-                    $dupeKeys[] = (string) $key;
-                }
-            }
-        } while ($cursor > 0);
-
-        foreach ($dupeKeys as $dupeKey) {
-            $jobId = $this->redis->get($dupeKey);
-            if (!is_string($jobId) || $jobId === '') {
-                $this->redis->del($dupeKey);
-                continue;
-            }
-
-            if ($this->getRedisJob((int) $jobId) === null) {
-                $this->redis->del($dupeKey);
-            }
-        }
-    }
 }

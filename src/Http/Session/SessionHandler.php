@@ -39,20 +39,24 @@ class SessionHandler
      */
     private static function configure(): void
     {
-        $lifetime = (int) config('session.lifetime', 120); // minutes
+        $lifetime = max(1, (int) config('session.lifetime', 120)); // minutes
 
         ini_set('session.gc_maxlifetime', (string) ($lifetime * 60));
         ini_set('session.gc_probability', (string) config('session.gc_probability', 1));
         ini_set('session.gc_divisor', (string) config('session.gc_divisor', 100));
 
+        ini_set('session.use_strict_mode', '1');
+        ini_set('session.use_only_cookies', '1');
+
+        $cookie = (array) config('session.cookie_settings', []);
+
         session_set_cookie_params([
             'lifetime' => config('session.expire_on_close', false) ? 0 : $lifetime * 60,
-            'path' => '/',
-            'domain' => '',
-            'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
-            'httponly' => true,
-            'samesite' => 'Lax',
-            ...config('session.cookie_settings', []),
+            'path' => $cookie['path'] ?? '/',
+            'domain' => $cookie['domain'] ?? '',
+            'secure' => $cookie['secure'] ?? (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443),
+            'httponly' => $cookie['http_only'] ?? $cookie['httponly'] ?? true,
+            'samesite' => $cookie['same_site'] ?? $cookie['samesite'] ?? 'Lax',
         ]);
 
         $cookieName = config('session.cookie_name');
@@ -69,9 +73,9 @@ class SessionHandler
     /**
      * Builds the configured session storage handler instance.
      *
-     * @return SessionHandlerInterface|null Null falls back to PHP's native file handler.
+     * @return SessionHandlerInterface The configured storage handler.
      */
-    private static function resolveHandler(): ?SessionHandlerInterface
+    private static function resolveHandler(): SessionHandlerInterface
     {
         $handler = (string) config('session.handler', 'file');
         $config = (array) config("session.connections.$handler", []);
@@ -81,7 +85,7 @@ class SessionHandler
             'database' => new DatabaseHandler($config),
             'redis' => new RedisHandler($config),
             'file' => new FileHandler($config),
-            default => null,
+            default => throw new \InvalidArgumentException("Unsupported session handler [{$handler}]."),
         };
     }
 }

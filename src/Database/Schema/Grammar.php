@@ -242,7 +242,7 @@ class Grammar implements GrammarContract
                 },
             'after' => $this->isMySQL() ? "AFTER " . $this->wrapper->wrapColumn($value) : '',
             'charset' => $this->isMySQL() ? "CHARACTER SET $value" : '',
-            'collation' => $this->isMySQL() ? "COLLATE $value" : '',
+            'collation' => $this->isMySQL() ? "COLLATE $value" : ($this->isSQLite() ? 'COLLATE ' . $this->wrapper->wrapColumn($value) : ''),
             'comment' => $this->isMySQL() ? 'COMMENT ' . $this->quoteLiteral($value) : '',
             'on_update_current_timestamp' => $this->isMySQL() ? 'ON UPDATE CURRENT_TIMESTAMP' : '',
             'default_current_timestamp' => 'DEFAULT CURRENT_TIMESTAMP',
