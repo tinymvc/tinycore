@@ -25,9 +25,18 @@ class Session implements SessionContract
 
     public function __construct()
     {
-        SessionHandler::start(); // Start the session when the Session class is instantiated
+        self::start(); // Start the session when the Session class is instantiated
     }
 
+    /**
+     * Starts the session if it has not already been started.
+     *
+     * @return void
+     */
+    public static function start(): void
+    {
+        session_status() === PHP_SESSION_NONE && SessionHandler::start();
+    }
 
     /**
      * Checks if the session has been started.
@@ -201,7 +210,7 @@ class Session implements SessionContract
      */
     public static function invalidate(bool $deleteOldSession = true): bool
     {
-        if (!is_web() || !self::isStarted()) {
+        if (!is_web() || !self::isStarted(forceStart: true)) {
             return false;
         }
 
@@ -223,7 +232,7 @@ class Session implements SessionContract
             return true;
         }
 
-        if (!is_web() || !self::isStarted()) {
+        if (!is_web() || !self::isStarted(forceStart: true)) {
             return false;
         }
 
@@ -242,7 +251,7 @@ class Session implements SessionContract
             return;
         }
 
-        if (!is_web() || !self::isStarted()) {
+        if (!is_web() || !self::isStarted(forceStart: true)) {
             return;
         }
 
@@ -268,7 +277,7 @@ class Session implements SessionContract
      */
     public static function id(): string
     {
-        if (!self::isStarted()) {
+        if (!self::isStarted(forceStart: true)) {
             return '';
         }
 

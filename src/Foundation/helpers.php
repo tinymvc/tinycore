@@ -996,7 +996,7 @@ if (!function_exists('env')) {
             $value = getenv($key);
         }
 
-        return $value !== false ? DotEnv::parseValue($value) : (is_callable($default) ? $default() : $default);
+        return $value !== false ? DotEnv::parseValue($value) : ($default instanceof \Closure ? $default() : $default);
     }
 }
 
