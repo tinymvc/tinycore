@@ -5,6 +5,7 @@ namespace Spark\Http\Session;
 use SessionHandlerInterface;
 use Spark\Foundation\Application;
 use Spark\Http\Session\Handler\{DatabaseHandler, RedisHandler, FileHandler};
+use function is_string;
 
 class SessionHandler
 {
@@ -77,7 +78,7 @@ class SessionHandler
      */
     private static function resolveHandler(): SessionHandlerInterface
     {
-        $handler = (string) config('session.handler', 'file');
+        $handler = (string) (config('session.default') ?: config('session.handler') ?: config('session.driver', 'file'));
         $config = (array) config("session.connections.$handler", []);
         $config['lifetime'] ??= config('session.lifetime', 120);
 

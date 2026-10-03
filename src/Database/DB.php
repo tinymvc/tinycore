@@ -73,6 +73,28 @@ class DB implements DBContract
     public const DEFAULT_DRIVER = 'mysql';
 
     /**
+     * PDO driver names that may double as connection names.
+     *
+     * When a connection entry omits `driver`, a connection name from this list
+     * (for example `DB_CONNECTION=pgsql`) is used as the driver.
+     *
+     * @var string[]
+     */
+    private const KNOWN_DRIVERS = [
+        'mysql',
+        'pgsql',
+        'sqlite',
+        'sqlsrv',
+        'oci',
+        'odbc',
+        'firebird',
+        'ibm',
+        'informix',
+        'dblib',
+        'cubrid',
+    ];
+
+    /**
      * Initializes the database connection.
      *
      * @param array $config Database configuration.
@@ -90,17 +112,27 @@ class DB implements DBContract
     /**
      * Creates a new database connection instance.
      *
-     * @param string|array $config The database configuration or driver name.
+     * @param string|array $config A connection name from `database.connections` or a complete configuration array.
      * @return self A new instance of the DB class.
      */
     public static function connection(string|array $config = []): self
     {
         if (is_string($config)) {
             $name = $config;
+            $default = self::defaultConnectionName((array) config('database', []));
+
+            if ($name === $default) {
+                return app(DB::class); // Return the default connection instance if the name matches the default.
+            }
+
             $config = config("database.connections.$name");
             if (!is_array($config) || $config === []) {
                 throw new InvalidDatabaseConfigException("Undefined database connection: $name");
             }
+
+            // A driver-less entry (such as the skeleton's `default` entry) uses its own
+            // name when that is a PDO driver, otherwise the default connection's name.
+            $config['driver'] ??= self::guessDriver($name, $default);
         }
 
         return new self($config);
@@ -195,26 +227,33 @@ class DB implements DBContract
 
     /**
      * Resolves config/database.php connection shapes into a single PDO config.
+     *
+     * `default` names the connection. If no entry has that name and the name is a
+     * PDO driver (for example `DB_CONNECTION=mysql`), the `default` entry is used
+     * with that driver. The selected entry is merged over any top-level options.
      */
     private function resolveConnectionConfig(array $config): array
     {
-        $config['driver'] ??= self::DEFAULT_DRIVER; // Set default driver if not provided.
-
         if (is_array($config['connections'] ?? null)) {
-            $driver = strtolower((string) $config['driver']);
-            $connectionKey = $config['default_connection'] ??= (
-                is_array($config['connections'][$driver] ?? null) ? $driver : 'default'
-            );
-            $connection = is_array($config['connections'][$connectionKey] ?? null)
-                ? $config['connections'][$connectionKey]
-                : [];
+            $connections = $config['connections'];
+            $name = self::defaultConnectionName($config);
+
+            if (is_array($connections[$name] ?? null)) {
+                $connection = $connections[$name];
+            } elseif (in_array(strtolower($name), self::KNOWN_DRIVERS, true)) {
+                $connection = is_array($connections['default'] ?? null) ? $connections['default'] : [];
+            } else {
+                throw new InvalidDatabaseConfigException("Undefined database connection: $name");
+            }
 
             $base = $config;
-            unset($base['connections']);
+            unset($base['connections'], $base['default']);
 
             $config = [...$base, ...$connection];
+            $config['driver'] ??= self::guessDriver($name);
         }
 
+        $config['driver'] ??= self::DEFAULT_DRIVER; // Set default driver if not provided.
         $config['driver'] = strtolower((string) $config['driver']);
         if (isset($config['username']) && !isset($config['user'])) {
             $config['user'] = $config['username'];
@@ -233,6 +272,35 @@ class DB implements DBContract
         }
 
         return $config;
+    }
+
+    /**
+     * Returns the default connection name from a config/database.php array.
+     */
+    private static function defaultConnectionName(array $config): string
+    {
+        foreach (['default', 'default_connection', 'driver'] as $key) {
+            if (is_string($config[$key] ?? null) && $config[$key] !== '') {
+                return $config[$key];
+            }
+        }
+
+        return self::DEFAULT_DRIVER;
+    }
+
+    /**
+     * Returns the first candidate that is a known PDO driver name, or the default driver.
+     */
+    private static function guessDriver(string ...$candidates): string
+    {
+        foreach ($candidates as $candidate) {
+            $candidate = strtolower($candidate);
+            if (in_array($candidate, self::KNOWN_DRIVERS, true)) {
+                return $candidate;
+            }
+        }
+
+        return self::DEFAULT_DRIVER;
     }
 
     /**

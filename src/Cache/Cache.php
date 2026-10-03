@@ -11,6 +11,7 @@ use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
 use function func_get_args;
+use function in_array;
 use function is_array;
 use function strtolower;
 
@@ -360,18 +361,25 @@ class Cache implements CacheContract, \ArrayAccess
     }
 
     /**
-     * Resolve the configured cache driver and its connection settings.
+     * Resolve the configured default cache store and its settings.
      */
     private function resolveDriverConfig(string $name): array
     {
         $cacheConfig = (array) config('cache', []);
-        $driver = strtolower((string) ($cacheConfig['driver'] ?? 'database'));
-        $connections = (array) ($cacheConfig['connections'] ?? []);
-        $driverConfig = is_array($connections[$driver] ?? null) ? $connections[$driver] : [];
+        $store = (string) (($cacheConfig['default'] ?? null) ?: ($cacheConfig['store'] ?? null) ?: ($cacheConfig['driver'] ?? null) ?: 'database');
+        $storeConfig = $cacheConfig['connections'][$store] ?? null;
+
+        if (!is_array($storeConfig)) {
+            if (!in_array(strtolower($store), ['database', 'file', 'redis'], true)) {
+                throw new \InvalidArgumentException("Cache store [{$store}] is not defined in cache.connections.");
+            }
+
+            $storeConfig = []; // Built-in driver name without an entry: use driver defaults.
+        }
 
         return RedisConnector::mergeConfig([
-            'driver' => $driver,
+            'driver' => $store,
             'name' => $name,
-        ], $driverConfig);
+        ], $storeConfig);
     }
 }

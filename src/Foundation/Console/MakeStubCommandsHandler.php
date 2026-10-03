@@ -250,6 +250,25 @@ class MakeStubCommandsHandler
         );
     }
 
+    public function makeJsonResource(array $args)
+    {
+        $this->askName($args, 'What is the name of the JSON resource?');
+
+        $name = $this->resolveSuffix($args['_args'][0], 'Resource');
+
+        StubCreation::create(
+            $name,
+            [
+                'stub' => __DIR__ . '/stubs/resource.stub',
+                'destination' => 'app/Http/Resources/::subfolder:ucfirst/::name:ucfirst.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'App\Http\Resources::subfolder:namespace',
+                    '{{ class }}' => '::name:ucfirst',
+                ],
+            ]
+        );
+    }
+
     /**
      * Create a job stub.
      *

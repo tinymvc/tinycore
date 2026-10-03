@@ -145,6 +145,10 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('make:request', [MakeStubCommandsHandler::class, 'makeFormRequest'])
             ->description('Create a new form request class for validating incoming HTTP requests');
 
+        // Make a JSON Resource class file
+        $commands->addCommand('make:resource', [MakeStubCommandsHandler::class, 'makeJsonResource'])
+            ->description('Create a new JSON resource class for API responses');
+
         // Make a Job class file
         $commands->addCommand('make:job', [MakeStubCommandsHandler::class, 'makeJob'])
             ->description('Create a new job class');

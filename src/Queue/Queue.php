@@ -8,6 +8,7 @@ use Spark\Queue\Contracts\QueueContract;
 use Spark\Queue\Storage\{RedisStorage, DatabaseStorage, FileStorage};
 use Spark\Support\Traits\Macroable;
 use function implode;
+use function in_array;
 use function is_array;
 use function microtime;
 use function rand;
@@ -317,16 +318,25 @@ class Queue implements QueueContract
         echo "$line$separator$elapsed$badge" . PHP_EOL;
     }
 
+    /**
+     * Resolve the configured default queue connection and its settings.
+     */
     private function resolveDriverConfig(): array
     {
         $queueConfig = (array) config('queue', []);
-        $driver = strtolower((string) ($queueConfig['driver'] ?? 'database'));
-        $connections = (array) ($queueConfig['connections'] ?? []);
-        $connection = is_array($connections[$driver] ?? null) ? $connections[$driver] : [];
+        $name = (string) (($queueConfig['default'] ?? null) ?: ($queueConfig['driver'] ?? null) ?: 'database');
+        $connection = $queueConfig['connections'][$name] ?? null;
 
-        return [
-            ...$connection,
-            'driver' => $driver,
-        ];
+        if (!is_array($connection)) {
+            if (!in_array(strtolower($name), ['database', 'file', 'redis'], true)) {
+                throw new \InvalidArgumentException("Queue connection [{$name}] is not defined in queue.connections.");
+            }
+
+            $connection = []; // Built-in driver name without an entry: use driver defaults.
+        }
+
+        $connection['driver'] ??= $name;
+
+        return $connection;
     }
 }

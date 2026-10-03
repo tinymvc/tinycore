@@ -1151,20 +1151,36 @@ class Tinker
         echo "  Debug: " . $this->color(config('app.debug', false) ? 'enabled' : 'disabled', 'yellow') . "\n";
         echo "  Language: " . $this->color(config('app.locale', 'en'), 'yellow') . "\n";
 
-        // Database settings
+        // Database settings (resolved from the default connection; no PDO connection is opened)
         echo "\n" . $this->color("Database:", 'white') . "\n";
-        echo "  Driver: " . $this->color(config('database.driver', 'mysql'), 'yellow') . "\n";
 
-        if (config('database.driver') === 'sqlite') {
-            $dbFile = config('database.file', 'N/A');
-            $dbFile = $dbFile !== 'N/A' ? $this->removeRootDir($dbFile) : 'N/A';
-            echo "  File: " . $this->color($dbFile, 'yellow') . "\n";
-        } else {
-            echo "  Host: " . $this->color(config('database.host', 'localhost'), 'yellow') . "\n";
-            echo "  Port: " . $this->color((string) config('database.port', '3306'), 'yellow') . "\n";
-            echo "  Database: " . $this->color(config('database.name', 'N/A'), 'yellow') . "\n";
-            echo "  User: " . $this->color(config('database.user', 'N/A'), 'yellow') . "\n";
+        try {
+            $db = app(DB::class);
+            $driver = $db->getDriver();
+            $connection = (string) (config('database.default') ?: config('database.driver', $driver));
+
+            echo "  Connection: " . $this->color($connection, 'yellow') . "\n";
+            echo "  Driver: " . $this->color($driver, 'yellow') . "\n";
+
+            if ($driver === 'sqlite') {
+                $dbFile = (string) $db->getConfig('database', 'N/A');
+                $dbFile = $dbFile !== 'N/A' ? $this->removeRootDir($dbFile) : 'N/A';
+                echo "  File: " . $this->color($dbFile, 'yellow') . "\n";
+            } else {
+                echo "  Host: " . $this->color((string) $db->getConfig('host', 'localhost'), 'yellow') . "\n";
+                echo "  Port: " . $this->color((string) $db->getConfig('port', 'N/A'), 'yellow') . "\n";
+                echo "  Database: " . $this->color((string) $db->getConfig('name', 'N/A'), 'yellow') . "\n";
+                echo "  User: " . $this->color((string) $db->getConfig('user', 'N/A'), 'yellow') . "\n";
+            }
+        } catch (Throwable $e) {
+            echo "  " . $this->color($e->getMessage(), 'red') . "\n";
         }
+
+        // Cache and queue settings
+        echo "\n" . $this->color("Session, Cache & Queue:", 'white') . "\n";
+        echo "  Session handler: " . $this->color((string) (config('session.default') ?: config('session.handler') ?: config('session.driver', 'database')), 'yellow') . "\n";
+        echo "  Cache store: " . $this->color((string) (config('cache.default') ?: config('cache.store') ?: config('cache.driver', 'database')), 'yellow') . "\n";
+        echo "  Queue connection: " . $this->color((string) (config('queue.default') ?: config('queue.driver', 'database')), 'yellow') . "\n";
 
         // Mail settings
         echo "\n" . $this->color("Mail:", 'white') . "\n";
