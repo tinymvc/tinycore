@@ -1157,7 +1157,7 @@ class Tinker
         try {
             $db = app(DB::class);
             $driver = $db->getDriver();
-            $connection = (string) (config('database.default') ?: config('database.driver', $driver));
+            $connection = (string) (config('database.default') ?: config('database.default_connection') ?: config('database.driver', $driver));
 
             echo "  Connection: " . $this->color($connection, 'yellow') . "\n";
             echo "  Driver: " . $this->color($driver, 'yellow') . "\n";

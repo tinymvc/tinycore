@@ -5,6 +5,8 @@ namespace Spark\Http\Session;
 use SessionHandlerInterface;
 use Spark\Foundation\Application;
 use Spark\Http\Session\Handler\{DatabaseHandler, RedisHandler, FileHandler};
+use function in_array;
+use function is_array;
 use function is_string;
 
 class SessionHandler
@@ -79,14 +81,24 @@ class SessionHandler
     private static function resolveHandler(): SessionHandlerInterface
     {
         $handler = (string) (config('session.default') ?: config('session.handler') ?: config('session.driver', 'file'));
-        $config = (array) config("session.connections.$handler", []);
+        $config = config("session.connections.$handler");
+
+        if (!is_array($config)) {
+            if (!in_array(strtolower($handler), ['database', 'redis', 'file'], true)) {
+                throw new \InvalidArgumentException("Session connection [{$handler}] is not defined in session.connections.");
+            }
+
+            $config = [];
+        }
+
+        $driver = strtolower((string) ($config['driver'] ?? $handler));
         $config['lifetime'] ??= config('session.lifetime', 120);
 
-        return match ($handler) {
+        return match ($driver) {
             'database' => new DatabaseHandler($config),
             'redis' => new RedisHandler($config),
             'file' => new FileHandler($config),
-            default => throw new \InvalidArgumentException("Unsupported session handler [{$handler}]."),
+            default => throw new \InvalidArgumentException("Unsupported session handler [{$driver}]."),
         };
     }
 }

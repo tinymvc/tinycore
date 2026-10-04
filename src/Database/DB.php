@@ -117,6 +117,10 @@ class DB implements DBContract
      */
     public static function connection(string|array $config = []): self
     {
+        if (empty($config)) {
+            return app(DB::class); // Return the default connection instance if no config is provided.
+        }
+
         if (is_string($config)) {
             $name = $config;
             $default = self::defaultConnectionName((array) config('database', []));
@@ -250,11 +254,12 @@ class DB implements DBContract
             unset($base['connections'], $base['default']);
 
             $config = [...$base, ...$connection];
-            $config['driver'] ??= self::guessDriver($name);
+            $config['driver'] ??= self::guessDriver($name, (string) ($base['driver'] ?? ''), (string) ($connection['driver'] ?? ''));
         }
 
         $config['driver'] ??= self::DEFAULT_DRIVER; // Set default driver if not provided.
         $config['driver'] = strtolower((string) $config['driver']);
+
         if (isset($config['username']) && !isset($config['user'])) {
             $config['user'] = $config['username'];
         }

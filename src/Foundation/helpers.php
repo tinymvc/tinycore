@@ -339,10 +339,10 @@ if (!function_exists('database')) {
     /**
      * Get the current database instance.
      *
-     * @param string|null $connection The name of the database connection to use.
+     * @param null|string|array $connection The name of the database connection to use.
      * @return DB The database instance.
      */
-    function database(?string $connection = null): DB
+    function database(null|string|array $connection = null): DB
     {
         if ($connection !== null) {
             return DB::connection($connection);
@@ -356,10 +356,10 @@ if (!function_exists('db')) {
     /**
      * Get the current database instance.
      *
-     * @param string|null $connection The name of the database connection to use.
+     * @param null|string|array $connection The name of the database connection to use.
      * @return DB The database instance.
      */
-    function db(?string $connection = null): DB
+    function db(null|string|array $connection = null): DB
     {
         return database($connection);
     }

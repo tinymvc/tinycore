@@ -355,7 +355,7 @@ class Tracer implements TracerContract
             exit(1);
         }
 
-        $message = $this->debugEnabled() ? $message : 'Internal Server Error';
+        $message = $this->debugEnabled() ? $message : 'Something went wrong on the server. If this persists, please contact the administrator.';
 
         $this->prepareResponse($json = $this->expectsJson());
 
