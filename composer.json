@@ -34,5 +34,8 @@
             "name": "Shahin Moyshan",
             "email": "shahin.moyshan2@gmail.com"
         }
-    ]
+    ],
+    "scripts": {
+        "test": "@php tests/run.php"
+    }
 }

@@ -9,6 +9,7 @@ use Spark\Http\Resources\JsonResource;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
+use function in_array;
 use function is_array;
 use function is_string;
 use function strlen;
@@ -35,6 +36,24 @@ class Response implements ResponseContract
     private string $redirectUrl;
 
     /**
+     * This property indicates whether the default content type has been set for the response.
+     * It is used to determine if the "Content-Type" header should be automatically set
+     * based on the response content type (e.g., JSON, HTML).
+     *
+     * @var bool True if the default content type is set; false otherwise.
+     */
+    private bool $defaultContentType = false;
+
+    /**
+     * This property holds the HTTP response headers as an associative array. Each key represents a header name,
+     * and the corresponding value represents the header value. Headers can be set using the `setHeader` method
+     * or the `withHeaders` method. The headers are sent to the client when the `send` method is called.
+     *
+     * @var array An associative array of HTTP response headers.
+     */
+    private array $headers = [];
+
+    /**
      * Constructor
      * 
      * Initializes a new response instance with the provided content, status code, and headers.
@@ -45,8 +64,9 @@ class Response implements ResponseContract
      * @param int $statusCode The HTTP status code.
      * @param array $headers An associative array of headers to send with the response.
      */
-    public function __construct(private mixed $content = '', private int $statusCode = 200, private array $headers = [])
+    public function __construct(private mixed $content = '', private int $statusCode = 200, array $headers = [])
     {
+        $this->withHeaders($headers);
     }
 
     /**
@@ -57,6 +77,7 @@ class Response implements ResponseContract
      */
     public function setContent(array|string|Arrayable|Stringable $content): self
     {
+        $this->clearDefaultContentType();
         $this->content = $content;
         return $this;
     }
@@ -198,11 +219,10 @@ class Response implements ResponseContract
      */
     public function json(array|Arrayable $data, int $statusCode = 200, int $flags = 320, int $depth = 512): self
     {
+        $content = json_encode(JsonResource::normalize($data), $flags | JSON_THROW_ON_ERROR, $depth);
         $this->setStatusCode($statusCode);
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
-        $this->setContent(
-            json_encode(JsonResource::normalize($data), $flags, $depth)
-        );
+        $this->setContent($content);
         return $this;
     }
 
@@ -255,6 +275,10 @@ class Response implements ResponseContract
      */
     public function setHeader(string $key, string $value): self
     {
+        $this->removeHeader($key);
+        if (strcasecmp($key, 'Content-Type') === 0) {
+            $this->defaultContentType = false;
+        }
         $this->headers[$key] = $value;
         return $this;
     }
@@ -281,8 +305,7 @@ class Response implements ResponseContract
      */
     public function withData(array|string|Arrayable|Stringable $data): self
     {
-        $this->content = $data;
-        return $this;
+        return $this->setContent($data);
     }
 
     /**
@@ -384,6 +407,7 @@ class Response implements ResponseContract
         $this->content = '';
         $this->statusCode = 200;
         $this->headers = [];
+        $this->defaultContentType = false;
 
         // Clear session flash data
         session()->clearFlash();
@@ -480,19 +504,73 @@ class Response implements ResponseContract
      */
     private function prepare(): void
     {
+        // These statuses have no message content. Do not invent a media type.
+        if (
+            ($this->statusCode >= 100 && $this->statusCode < 200)
+            || in_array($this->statusCode, [204, 205, 304], true)
+        ) {
+            $this->content = '';
+            $this->clearDefaultContentType();
+            if ($this->statusCode < 200 || $this->statusCode === 204) {
+                $this->removeHeader('Content-Length');
+            } elseif ($this->statusCode === 205 && $this->hasHeader('Content-Length')) {
+                $this->setHeader('Content-Length', '0');
+            }
+            return;
+        }
+
         if ($this->content instanceof JsonResource) {
             $this->content = $this->content->responseData();
         }
 
-        // Convert content to string if it's an array, Arrayable, or Stringable.
         if (is_array($this->content) || $this->content instanceof Arrayable) {
-            $this->setHeader('Content-Type', 'application/json; charset=utf-8');
-            $this->setContent(
-                json_encode(JsonResource::normalize($this->content), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            );
-        } elseif (!is_string($this->content)) {
-            $this->setContent((string) $this->content); // Ensure content is a string
+            $this->setContent(json_encode(
+                JsonResource::normalize($this->content),
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+            ));
+            $this->setDefaultContentType('application/json; charset=utf-8');
+        } else {
+            if (!is_string($this->content)) {
+                $this->content = (string) $this->content;
+            }
+            // Strings are HTML by framework convention; text/binary types are explicit.
+            $this->setDefaultContentType('text/html; charset=utf-8');
         }
     }
 
+    public function setDefaultContentType(string $value): void
+    {
+        if (!$this->hasHeader('Content-Type')) {
+            $this->setHeader('Content-Type', $value);
+            $this->defaultContentType = true;
+        }
+    }
+
+    public function clearDefaultContentType(): void
+    {
+        if ($this->defaultContentType) {
+            $this->removeHeader('Content-Type');
+            $this->defaultContentType = false;
+        }
+    }
+
+    public function hasHeader(string $name): bool
+    {
+        foreach ($this->headers as $key => $value) {
+            if (strcasecmp($key, $name) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function removeHeader(string $name): void
+    {
+        foreach (array_keys($this->headers) as $key) {
+            if (strcasecmp($key, $name) === 0) {
+                unset($this->headers[$key]);
+            }
+        }
+    }
 }

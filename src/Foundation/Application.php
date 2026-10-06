@@ -71,6 +71,9 @@ class Application extends \Spark\Container implements ApplicationContract
     /** @var bool Whether the application is currently running termination callbacks. */
     private bool $terminating = false;
 
+    /** Whether the current request has already emitted its termination event. */
+    private bool $terminated = false;
+
     /** @var bool Whether the application is running in testing mode. */
     private bool $testing;
 
@@ -159,6 +162,26 @@ class Application extends \Spark\Container implements ApplicationContract
     public function isBooted(): bool
     {
         return $this->booted;
+    }
+
+    /**
+     * Checks if the application is currently running termination callbacks.
+     *
+     * @return bool True if the application is terminating, false otherwise.
+     */
+    public function isTerminating(): bool
+    {
+        return $this->terminating;
+    }
+
+    /**
+     * Checks if the application has already emitted its termination event.
+     *
+     * @return bool True if the application has terminated, false otherwise.
+     */
+    public function isTerminated(): bool
+    {
+        return $this->terminated;
     }
 
     /**
@@ -564,10 +587,21 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function handle(Request $request): Response
     {
+        // Bind the request instance to the container for dependency injection.
+        $this->instance(Request::class, $request);
+
         $this->responseCallbacks = [];
         $this->preparedResponses = new \WeakMap();
+        $this->terminated = false;
 
-        return $this->prepareResponse($this->dispatchRequest($request));
+        try {
+            return $this->prepareResponse($this->dispatchRequest($request));
+        } catch (Throwable $e) {
+            if ($this->testing) {
+                $this->deferredCallbacks = [];
+            }
+            throw $e;
+        }
     }
 
     /**
@@ -584,7 +618,7 @@ class Application extends \Spark\Container implements ApplicationContract
     {
         $this->preparedResponses ??= new \WeakMap();
 
-        for ($index = $this->preparedResponses[$response] ?? 0; $index < \count($this->responseCallbacks); $index++) {
+        while (($index = $this->preparedResponses[$response] ?? 0) < \count($this->responseCallbacks)) {
             $this->preparedResponses[$response] = $index + 1;
             ($this->responseCallbacks[$index])($response);
         }
@@ -651,11 +685,6 @@ class Application extends \Spark\Container implements ApplicationContract
             }
         } catch (\Spark\Testing\ResponseException $e) {
             return $e->response;
-        } catch (Throwable $e) {
-            if ($this->testing) {
-                $this->deferredCallbacks = [];
-            }
-            throw $e;
         }
     }
 
@@ -732,14 +761,17 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->terminating = true;
 
         try {
-            if (!$this->testing) {
-                $this->finishRequest();
-            }
+            if (!$this->terminated) {
+                $this->terminated = true;
+                if (!$this->testing) {
+                    $this->finishRequest();
+                }
 
-            try {
-                $this->isDebugMode() && event('app:terminated');
-            } catch (Throwable $e) {
-                $this->reportDeferredException($e);
+                try {
+                    $this->isDebugMode() && event('app:terminated');
+                } catch (Throwable $e) {
+                    $this->reportDeferredException($e);
+                }
             }
 
             $this->runDeferredCallbacks();

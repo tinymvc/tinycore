@@ -237,8 +237,6 @@ abstract class ApplicationTestCase extends TestCase
     /** Data is supplied as parsed input, including for JSON requests. */
     protected function request(string $method, string $uri, array $data = [], array $headers = [], bool $json = false): TestResponse
     {
-        $this->app->forgetInstance(Request::class);
-
         $saved = [$_SERVER, $_GET, $_POST, $_FILES, $_REQUEST];
 
         try {
@@ -270,8 +268,9 @@ abstract class ApplicationTestCase extends TestCase
             $this->app->terminate();
 
             if ($method === 'HEAD') {
-                $response->getContent(); // Prepare headers before suppressing the body.
-                $response->setContent('');
+                // Preserve the GET representation's headers while suppressing its body.
+                $headers = $response->getHeaders();
+                $response->setContent('')->withHeaders($headers);
             }
 
             return new TestResponse($response);

@@ -133,13 +133,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         // is set either in the X-HTTP-METHOD-OVERRIDE header or
         // in the '_method' POST parameter.
         if ($method === 'POST') {
-            if (isset($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'])) {
-                $overrideMethod = strtoupper($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE']);
-            } elseif (isset($_POST['_method'])) {
-                $overrideMethod = strtoupper($_POST['_method']);
-            } else {
-                $overrideMethod = null;
-            }
+            $override = $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'] ?? $_POST['_method'] ?? null;
+            $overrideMethod = is_string($override) ? strtoupper($override) : null;
 
             // If an override method is set and is one of the
             // PUT, PATCH, or DELETE methods, return that override
@@ -167,6 +162,14 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             }
             $headers[$this->parseHeaderKey($key)] = $value;
         }
+
+        // CGI/FastCGI supplies these two headers without the HTTP_ prefix.
+        foreach (['CONTENT_TYPE', 'CONTENT_LENGTH'] as $key) {
+            if (isset($_SERVER[$key])) {
+                $headers[$this->parseHeaderKey($key)] = $_SERVER[$key];
+            }
+        }
+
         return $headers;
     }
 
@@ -231,7 +234,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 
                 // If the JSON decoding was successful, return the decoded
                 // JSON data as an associative array.
-                if (json_last_error() === JSON_ERROR_NONE) {
+                if (json_last_error() === JSON_ERROR_NONE && is_array($params)) {
                     return $params;
                 }
             }
