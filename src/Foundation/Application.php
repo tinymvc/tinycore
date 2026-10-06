@@ -10,7 +10,7 @@ use Spark\Events;
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\NotFoundException;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
-use Spark\Foundation\Exceptions\TooManyRequests;
+use Spark\Foundation\Exceptions\ThrottleException;
 use Spark\Foundation\Exceptions\ValidationException;
 use Spark\Hash;
 use Spark\DotEnv;
@@ -665,7 +665,7 @@ class Application extends \Spark\Container implements ApplicationContract
                 abort(403, 'Forbidden');
             } catch (InvalidCsrfTokenException) {
                 abort(419, 'Page Expired');
-            } catch (TooManyRequests) {
+            } catch (ThrottleException) {
                 abort(429, 'Too many requests');
             } catch (ValidationException $e) {
                 return $request->prepareValidationError(

@@ -5,7 +5,7 @@ namespace Tests\Feature;
 require_once dirname(__DIR__) . '/Support/LifecycleTestCase.php';
 
 use Spark\Facades\Route;
-use Spark\Foundation\Exceptions\{InvalidCsrfTokenException, TooManyRequests, ValidationException};
+use Spark\Foundation\Exceptions\{InvalidCsrfTokenException, ThrottleException, ValidationException};
 use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Exceptions\NotFoundException;
 use Spark\Support\ItemNotFoundException;
@@ -22,7 +22,7 @@ final class ExceptionLifecycleTest extends LifecycleTestCase
             [ItemNotFoundException::class, 404, 'Item not found'],
             [AuthorizationException::class, 403, 'Forbidden'],
             [InvalidCsrfTokenException::class, 419, 'Page Expired'],
-            [TooManyRequests::class, 429, 'Too many requests'],
+            [ThrottleException::class, 429, 'Too many requests'],
         ];
         foreach ($cases as $index => [$class, $status, $message]) {
             Route::get('/error/' . $index, function () use ($class, $index, &$terminated) {

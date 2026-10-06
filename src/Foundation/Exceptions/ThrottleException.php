@@ -4,6 +4,6 @@ namespace Spark\Foundation\Exceptions;
 
 use Exception;
 
-class TooManyRequests extends Exception
+class ThrottleException extends Exception
 {
 }
