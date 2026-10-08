@@ -1038,11 +1038,13 @@ trait InteractsWithRelation
 
         [$baseRelation, $nestedRelation] = explode('.', $relation, 2);
 
-        $nestedCallback = function (QueryBuilder $query) use ($nestedRelation, $callback, $operator, $count): void {
-            $query->whereHas($nestedRelation, $callback, $operator, $count);
+        $doesntHave = $operator === '<' && $count === 1;
+
+        $nestedCallback = function (QueryBuilder $query) use ($nestedRelation, $callback, $operator, $count, $doesntHave): void {
+            $query->whereHas($nestedRelation, $callback, $doesntHave ? '>=' : $operator, $count);
         };
 
-        return [$baseRelation, $nestedCallback, '>=', 1];
+        return [$baseRelation, $nestedCallback, $doesntHave ? '<' : '>=', 1];
     }
 
     /**

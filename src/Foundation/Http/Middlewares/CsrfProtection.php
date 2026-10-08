@@ -53,7 +53,7 @@ abstract class CsrfProtection implements MiddlewareInterface
             $token ??= $this->getXsrfToken($request);
 
             // Validate the CSRF token against the cookie token
-            if (empty($token) || !hash_equals(session('csrf_token', ''), $token)) {
+            if (!is_string($token) || $token === '' || !hash_equals(session('csrf_token', ''), $token)) {
                 // Return a 403 Forbidden response if the token is invalid
                 throw new InvalidCsrfTokenException('Invalid CSRF token');
             }
@@ -111,7 +111,7 @@ abstract class CsrfProtection implements MiddlewareInterface
         }
 
         // Return the decrypted token if it exists
-        return $decryptedToken;
+        return is_string($decryptedToken) ? $decryptedToken : null;
     }
 
     /**

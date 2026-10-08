@@ -42,7 +42,12 @@ trait BuildsReadQueries
         $fields = preg_replace('/^\s*select\s+/i', '', $fields);
 
         // Build the initial SELECT SQL query
+        $distinct = preg_match('/^DISTINCT\s/i', $this->query['select'] ?? '');
         $this->query['select'] = $this->wrapAndEscapeColumns($fields);
+
+        if ($distinct && !preg_match('/^DISTINCT\s/i', $this->query['select'])) {
+            $this->query['select'] = 'DISTINCT ' . $this->query['select'];
+        }
 
         // Returns the current instance for method chaining.
         return $this;
@@ -91,7 +96,7 @@ trait BuildsReadQueries
      */
     public function column(string $column): QueryBuilder
     {
-        $this->query['select'] = $this->wrapAndEscapeColumns($column);
+        $this->select($column);
         return $this->fetchColumn();
     }
 

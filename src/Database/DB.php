@@ -123,20 +123,23 @@ class DB implements DBContract
 
         if (is_string($config)) {
             $name = $config;
-            $default = self::defaultConnectionName((array) config('database', []));
+            $default = self::defaultConnectionName($databaseConfig = (array) config('database', []));
 
             if ($name === $default) {
                 return app(DB::class); // Return the default connection instance if the name matches the default.
             }
 
             $config = config("database.connections.$name");
-            if (!is_array($config) || $config === []) {
+            if (!is_array($config)) {
                 throw new InvalidDatabaseConfigException("Undefined database connection: $name");
             }
 
-            // A driver-less entry (such as the skeleton's `default` entry) uses its own
-            // name when that is a PDO driver, otherwise the default connection's name.
-            $config['driver'] ??= self::guessDriver($name, $default);
+            // Aliases inherit the resolved driver, not the default connection's name.
+            if (!isset($config['driver'])) {
+                $config['driver'] = in_array(strtolower($name), self::KNOWN_DRIVERS, true)
+                    ? strtolower($name)
+                    : (new self($databaseConfig))->getDriver();
+            }
         }
 
         return new self($config);
@@ -254,7 +257,7 @@ class DB implements DBContract
             unset($base['connections'], $base['default']);
 
             $config = [...$base, ...$connection];
-            $config['driver'] ??= self::guessDriver($name, (string) ($base['driver'] ?? ''), (string) ($connection['driver'] ?? ''));
+            $config['driver'] = $connection['driver'] ?? self::guessDriver($name, (string) ($base['driver'] ?? ''));
         }
 
         $config['driver'] ??= self::DEFAULT_DRIVER; // Set default driver if not provided.
