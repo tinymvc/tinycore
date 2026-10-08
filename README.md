@@ -12,11 +12,12 @@ The Backbone/Core Classes and Functionalities for TinyMvc/Spark Framework.
 Run from the TinyCore repository after `composer install`:
 
 ```sh
+php tests/run.php
 composer test
 php tests/run.php --testsuite Unit
 php tests/run.php --filter AuthenticationTest
+php tests/run.php --filter RelationQueryTest
 php tests/database.php
-php tests/database.php --filter RelationQueryTest
 php tests/run.php --list-tests
 ```
 
@@ -60,55 +61,52 @@ The older database and migration tests also remain, including grammar compilatio
 
 `src/Support` is Laravel-derived and deliberately excluded from dedicated tests. Its collections and helpers may still be used as inputs to Spark APIs. `voku/portable-ascii` is a development dependency so the validator's optional ASCII integration can be tested after a normal `composer install`.
 
-## Requirements and optional services
-
-The default integration suite needs PDO SQLite, fileinfo, OpenSSL, and permission to create temporary files and local loopback sockets. HTTP/S3 fixtures start temporary PHP servers and stop them after each test. S3 transport requires curl and SimpleXML; no AWS credentials or external S3 account are used. Process contention checks require `pcntl`; unsupported optional checks are reported as skipped.
-
-Redis is opt-in and supports TCP or a Unix socket. The server must support logical databases 0 and 1. For DBngin on its default port:
+## Running the suite
 
 ```sh
-SPARK_TEST_REDIS_HOST=127.0.0.1 SPARK_TEST_REDIS_PORT=6379 composer test
-
-# Alternatively:
-SPARK_TEST_REDIS_SOCKET=/tmp/spark-test-redis.sock composer test
+php tests/run.php
 ```
 
-Set `SPARK_TEST_REDIS_PASSWORD` if authentication is required. Tests use unique Redis prefixes and remove their own keys during teardown, including after failures. They never use `FLUSHDB` or `FLUSHALL`. A skipped Redis test does not establish Redis compatibility.
-
-Optional MySQL/PostgreSQL transaction and row-lock checks create and drop uniquely named tables in an explicitly configured **test database**:
+`composer test` runs the same command. This runs the framework suite with SQLite, plus Redis integration checks and two external SQL transaction/lock checks. Connection defaults come from `tests/config.php`; start your local DBngin services first. The external SQL checks create and remove their own disposable databases. Filters, unit-only runs and test discovery remain available:
 
 ```sh
-SPARK_TEST_MYSQL_DSN='mysql:host=127.0.0.1;dbname=spark_test' \
-SPARK_TEST_MYSQL_USER=test SPARK_TEST_MYSQL_PASSWORD=test \
-php tests/run.php --filter test_mysql
-
-SPARK_TEST_PGSQL_DSN='pgsql:host=127.0.0.1;dbname=spark_test' \
-SPARK_TEST_PGSQL_USER=test SPARK_TEST_PGSQL_PASSWORD=test \
-php tests/run.php --filter test_postgresql
+php tests/run.php --filter AuthenticationTest
+php tests/run.php --testsuite Unit
+php tests/run.php --list-tests
 ```
 
-SQL compilation tests run without those servers, but compilation alone does not validate database-specific runtime behavior. Mail providers, live cloud storage, every optional extension, and every possible configuration are not covered. A passing regression suite is evidence of the tested behavior, not a guarantee of complete correctness.
+## Database matrix
 
-To exercise every configured service in one run, set the Redis variables and both database DSN/user/password groups together, then run `composer test`. DBngin defaults commonly use MySQL user `root` and PostgreSQL user `postgres` with empty passwords; create dedicated test databases first. The SQL tests remove their uniquely named tables but do not create or drop the configured database.
-
-## Full local service matrix
-
-With DBngin MySQL (3306), PostgreSQL (5432) and Redis (6379) running:
+Start DBngin MySQL (3306) and PostgreSQL (5432), then run:
 
 ```sh
-php tests/services.php
+php tests/database.php
+php tests/database.php --filter RelationQueryTest
+php tests/database.php --list-tests
 ```
 
-This opt-in command creates uniquely named `spark_test_*` databases, runs the complete suite with SQLite plus the service-driver checks, then runs all focused database scenarios against MySQL and PostgreSQL. It propagates failures and drops only the databases it created in a `finally` block. Each scenario also removes its fixture tables. Redis tests retain their unique per-test prefixes. Administrative database credentials must allow creation and deletion of the disposable databases.
+This runs the 283 focused database scenarios on SQLite, MySQL and PostgreSQL. It creates uniquely named `spark_test_*` databases automatically and removes them afterward, including after test failures. Redis is not needed for this command. Filters apply to all three engines; listing tests does not connect to services.
 
-Defaults are MySQL `root` and PostgreSQL `postgres` with empty passwords. Override `SPARK_TEST_MYSQL_ADMIN_DSN`, `SPARK_TEST_PGSQL_ADMIN_DSN`, and the corresponding `_USER`/`_PASSWORD` variables for other local setups. Redis uses the variables described above. No application database is selected by this runner.
+Failures produce a nonzero exit code. A failed test phase does not prevent the remaining phases from running. Cleanup errors also fail the command. Unavailable SQL servers or insufficient database permissions produce a setup error. The runner never selects an application's database; administrative credentials must allow creation and deletion of disposable databases. Both commands preserve terminal colors and keep redirected logs plain.
 
-To run the focused scenarios in an existing disposable database, provide its connection variables and select the driver explicitly:
+## Service settings and requirements
 
-```sh
-SPARK_TEST_DATABASE_DRIVER=mysql \
-SPARK_TEST_MYSQL_DSN='mysql:host=127.0.0.1;dbname=spark_test_manual' \
-SPARK_TEST_MYSQL_USER=root php tests/database.php
-```
+Both runners load `tests/config.php`. Edit that file to configure local services: MySQL `root` on port 3306, PostgreSQL `postgres` on port 5432 (both empty passwords), and Redis at `127.0.0.1:6379` are enabled by default. Existing environment variables override file values. Set the Redis host and socket, or an SQL admin DSN, to `null` to skip that optional integration in `run.php` when no environment override is present. The three-engine `database.php` command still requires both SQL services.
 
-The focused runner refuses external DSNs unless the database name starts with `spark_test_`. It creates and removes its fixed `scenario_*` fixture tables, so use a database reserved for these tests and do not run concurrent suites in that same database. PostgreSQL uses `SPARK_TEST_DATABASE_DRIVER=pgsql` and the `SPARK_TEST_PGSQL_*` variables.
+Available settings:
+
+| Variable | Purpose |
+| --- | --- |
+| `SPARK_TEST_MYSQL_ADMIN_DSN` | Administrative connection; default `mysql:host=127.0.0.1;port=3306` |
+| `SPARK_TEST_PGSQL_ADMIN_DSN` | Administrative connection; default `pgsql:host=127.0.0.1;port=5432;dbname=postgres` |
+| `SPARK_TEST_MYSQL_USER` / `SPARK_TEST_MYSQL_PASSWORD` | MySQL credentials |
+| `SPARK_TEST_PGSQL_USER` / `SPARK_TEST_PGSQL_PASSWORD` | PostgreSQL credentials |
+| `SPARK_TEST_REDIS_HOST` / `SPARK_TEST_REDIS_PORT` | Redis TCP connection |
+| `SPARK_TEST_REDIS_SOCKET` | Redis Unix socket instead of TCP |
+| `SPARK_TEST_REDIS_PASSWORD` | Optional Redis authentication |
+
+`database.php` supplies its disposable database DSNs itself. The external SQL checks in `run.php` also create disposable databases unless you explicitly supply `SPARK_TEST_MYSQL_DSN` / `SPARK_TEST_PGSQL_DSN` for an existing dedicated test database. Redis must support logical databases 0 and 1. Tests use unique prefixes and remove their own keys during teardown; they never use `FLUSHDB` or `FLUSHALL`.
+
+The suite needs PDO SQLite (plus PDO MySQL/PostgreSQL for the full run), fileinfo, OpenSSL, and permission to create temporary files and local loopback sockets. HTTP/S3 fixtures start temporary PHP servers and stop them after each test. S3 transport requires curl and SimpleXML; no AWS credentials or external S3 account are used. Redis needs the Redis extension. Process contention checks require `pcntl`; unsupported optional checks are reported as skipped.
+
+SQL compilation alone does not validate database-specific runtime behavior. Mail providers, live cloud storage, every optional extension, and every possible configuration are not covered. A passing regression suite is evidence of the tested behavior, not a guarantee of complete correctness.

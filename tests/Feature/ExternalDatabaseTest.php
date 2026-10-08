@@ -21,11 +21,36 @@ final class ExternalDatabaseTest extends FrameworkTestCase
     private function verifyDatabase(string $driver, string $prefix): void
     {
         $dsn = getenv($prefix . '_DSN');
+        $adminDsn = getenv($prefix . '_ADMIN_DSN');
 
-        if (!$dsn) {
-            $this->markTestSkipped("Set {$prefix}_DSN to run against a dedicated {$driver} test database.");
+        if (!$dsn && !$adminDsn) {
+            $this->markTestSkipped("Configure {$prefix}_ADMIN_DSN in tests/config.php to test {$driver}.");
         }
 
+        $admin = null;
+        $database = null;
+
+        if (!$dsn) {
+            $admin = new PDO($adminDsn, getenv($prefix . '_USER') ?: '', getenv($prefix . '_PASSWORD') ?: '', [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            ]);
+            $database = 'spark_test_' . bin2hex(random_bytes(8));
+            $admin->exec("CREATE DATABASE $database");
+            $dsn = preg_replace('/;dbname=[^;]*/', '', $adminDsn) . ';dbname=' . $database;
+        }
+
+        try {
+            $this->verifyConnection($driver, $prefix, $dsn);
+        } finally {
+            // verifyConnection() has returned, releasing its PDO connection before DROP DATABASE.
+            if ($database !== null) {
+                $admin->exec("DROP DATABASE $database");
+            }
+        }
+    }
+
+    private function verifyConnection(string $driver, string $prefix, string $dsn): void
+    {
         $db = new DB([
             'driver' => $driver,
             'dsn' => $dsn,
@@ -33,7 +58,7 @@ final class ExternalDatabaseTest extends FrameworkTestCase
             'password' => getenv($prefix . '_PASSWORD') ?: '',
         ]);
         $table = 'spark_test_' . bin2hex(random_bytes(8));
-        $query = fn () => (new QueryBuilder($db))->table($table);
+        $query = fn() => (new QueryBuilder($db))->table($table);
         $db->exec("CREATE TABLE {$table} (id INTEGER PRIMARY KEY, name VARCHAR(80) NOT NULL)");
 
         try {

@@ -6,14 +6,16 @@ final class ConsoleCommandsTest extends FrameworkTestCase
 {
     public function test_named_connection_resolution_and_resource_generator(): void
     {
-        config(['database' => [
-            'default' => 'primary',
-            'connections' => [
-                'primary' => ['driver' => 'sqlite', 'database' => ':memory:'],
-                'reports' => ['database' => ':memory:'],
-                'pgsql' => [],
-            ],
-        ]]);
+        config([
+            'database' => [
+                'default' => 'primary',
+                'connections' => [
+                    'primary' => ['driver' => 'sqlite', 'database' => ':memory:'],
+                    'reports' => ['database' => ':memory:'],
+                    'pgsql' => [],
+                ],
+            ]
+        ]);
         $primary = app(\Spark\Database\DB::class);
         $this->assertSame($primary, \Spark\Database\DB::connection('primary'));
         $primary->beginTransaction();
@@ -133,6 +135,9 @@ final class ConsoleCommandsTest extends FrameworkTestCase
 
     public function test_migration_progress_success_noop_and_failure(): void
     {
+        // These assertions exercise plain output; ApplicationTestCase restores the environment.
+        putenv('NO_COLOR=1');
+
         $directory = $this->storagePath . '/migrations';
         mkdir($directory);
         $file = $directory . '/migration_example.php';
