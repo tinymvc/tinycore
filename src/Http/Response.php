@@ -70,6 +70,19 @@ class Response implements ResponseContract
     }
 
     /**
+     * Creates a new response instance with the specified content, status code, and headers.
+     *
+     * @param mixed $content The response content.
+     * @param int $statusCode The HTTP status code.
+     * @param array $headers An associative array of headers to send with the response.
+     * @return self A new instance of the Response class.
+     */
+    public static function make(mixed $content = '', int $statusCode = 200, array $headers = []): self
+    {
+        return new self($content, $statusCode, $headers);
+    }
+
+    /**
      * Sets the response content to a specified string, replacing any existing content.
      *
      * @param array|string|Arrayable|Stringable $content The content to set in the response body.

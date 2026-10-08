@@ -210,6 +210,11 @@ class Session implements SessionContract
      */
     public static function invalidate(bool $deleteOldSession = true): bool
     {
+        if (self::isTesting()) {
+            self::flush();
+            return true;
+        }
+
         if (!is_web() || !self::isStarted(forceStart: true)) {
             return false;
         }

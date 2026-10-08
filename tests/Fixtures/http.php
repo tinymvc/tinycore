@@ -57,6 +57,7 @@ Route::get('/json', fn() => ['ok' => true]);
 Route::get('/events', fn() => 'events');
 Route::get('/vendor-json', fn() => new Response(['ok' => true], headers: ['Content-Type' => 'application/vnd.test+json']));
 Route::get('/status/{status}', fn(string $status) => new Response('must disappear', (int) $status));
+Route::redirect('/route-redirect', '/html', 301);
 Route::get('/redirect', fn() => (new Response())->redirect('/html', 303));
 Route::get('/early', function () {
     (new Response('early', 202))->send();

@@ -218,10 +218,7 @@ class Router implements RouterContract
      */
     public function redirect(string $from, string $to, int $status = 302): Route
     {
-        return new Route($from, 'GET', function () use ($to, $status): never {
-            header("Location: $to", true, $status);
-            exit;
-        });
+        return new Route($from, 'GET', fn(): Response => Response::make()->redirect($to, $status));
     }
 
     /**

@@ -547,20 +547,26 @@ class Blade implements BladeContract
         $started = microtime(true);
         $startedMemory = memory_get_usage(true);
 
-        extract($context); // Unpack context variables
+        $bufferLevel = ob_get_level();
+        extract($context, EXTR_SKIP); // Context must not replace renderer state or the include path.
 
-        ob_start();
-        include dir_path($compiledPath);
-        $content = ob_get_clean();
+        try {
+            ob_start();
+            include dir_path($compiledPath);
+            $content = ob_get_clean();
+        } finally {
+            while (ob_get_level() > $bufferLevel) {
+                ob_end_clean();
+            }
+
+            if ($previousSections !== null) {
+                $GLOBALS['sections'] = $previousSections;
+            } else {
+                unset($GLOBALS['sections']);
+            }
+        }
 
         $renderTime = round((microtime(true) - $started) * 1000, 6);
-
-        // Restore previous sections state
-        if ($previousSections !== null) {
-            $GLOBALS['sections'] = $previousSections;
-        } else {
-            unset($GLOBALS['sections']);
-        }
 
         is_debug_mode() && event('app:bladeTemplateRendered', [
             'path' => $compiledPath,

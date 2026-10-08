@@ -13,6 +13,7 @@ use function in_array;
 use function is_array;
 use function ord;
 use function strlen;
+use function is_string;
 
 /**
  * Class Hash
@@ -381,6 +382,12 @@ class Hash implements HashContract
             throw new DecryptionFailedException('Invalid encrypted data format.');
         }
 
+        foreach (['iv', 'cipherText', 'hmac'] as $component) {
+            if (!is_string($data[$component])) {
+                throw new DecryptionFailedException('Invalid encrypted data components.');
+            }
+        }
+
         $iv = base64_decode($data['iv'], true);
         $cipherText = base64_decode($data['cipherText'], true);
         $hmac = base64_decode($data['hmac'], true);
@@ -461,7 +468,12 @@ class Hash implements HashContract
      */
     public function encryptArray(array $data): string
     {
-        return $this->encrypt(json_encode($data));
+        $encoded = json_encode($data);
+        if ($encoded === false) {
+            throw new EncryptionFailedException('Failed to encode array data.');
+        }
+
+        return $this->encrypt($encoded);
     }
 
     /**

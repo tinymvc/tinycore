@@ -170,13 +170,13 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
 
     public function testRedirectEarlyExitAndHandledErrorArePreparedAndTerminatedExactlyOnce(): void
     {
-        $cases = [['/json', 200, '{"ok":true}'], ['/redirect', 303, ''], ['/early', 202, 'early'], ['/forbidden', 403, '{"message":"Forbidden","code":403}']];
+        $cases = [['/json', 200, '{"ok":true}'], ['/redirect', 303, ''], ['/route-redirect', 301, ''], ['/early', 202, 'early'], ['/forbidden', 403, '{"message":"Forbidden","code":403}']];
         foreach ($cases as [$path, $status, $body]) {
             $response = $this->exchange('GET', $path, headers: ['Accept' => 'application/json']);
             $this->assertSame($status, $response['status']);
             $this->assertSame($body, $response['body']);
             $this->assertSame(['1'], $response['headers']['x-prepared']);
-            if ($path === '/redirect') {
+            if (in_array($path, ['/redirect', '/route-redirect'], true)) {
                 $this->assertSame(['/html'], $response['headers']['location']);
             }
         }
@@ -185,6 +185,7 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
         $this->assertSame([
             ['path' => '/json', 'same' => true],
             ['path' => '/redirect', 'same' => true],
+            ['path' => '/route-redirect', 'same' => true],
             ['path' => '/early', 'same' => true],
             ['path' => '/forbidden', 'same' => true],
         ], $entries);

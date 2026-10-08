@@ -362,7 +362,7 @@ class Url implements Arrayable, Htmlable, \JsonSerializable, \ArrayAccess, \Stri
         $url = $this->getScheme() . '://' . $this->getHost();
 
         $port = $this->getPort();
-        if ($port && !in_array($port, [80, 443])) {
+        if ($port && !$this->isDefaultPort()) {
             $url .= ":$port";
         }
 

@@ -909,7 +909,7 @@ trait BuildsReadQueries
 
         $paginator = new Paginator(total: $this->count(), limit: $limit, keyword: $keyword);
 
-        $this->limit((int) ($limit * ($paginator->keywordValue() - 1)), $limit)
+        $this->limit($paginator->offset(), $paginator->limit())
             ->executeSelectQuery();
 
         // Set database records into paginator class.
