@@ -923,7 +923,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         $authHeader = $this->header('authorization');
 
-        if ($authHeader && preg_match('/Basic\s(\S+)/', $authHeader, $matches)) {
+        if ($authHeader && preg_match('/^Basic[ \t]+(\S+)$/iD', trim($authHeader), $matches)) {
             $encodedCredentials = $matches[1];
             $decodedCredentials = base64_decode($encodedCredentials, true);
             if (!is_string($decodedCredentials) || !str_contains($decodedCredentials, ':')) {

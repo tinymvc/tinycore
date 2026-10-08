@@ -197,6 +197,10 @@ trait BuildsWriteQueries
         $table = $this->getTableName();
         $whereSql = $this->preparedWhereClauseSql(forWrite: true);
 
+        if ($this->parameters !== [] && $this->bindings !== []) {
+            throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
+        }
+
         // Prepare the SQL update statement
         $setBindings = [];
         $sql = sprintf("UPDATE $table SET %s %s", $this->compileUpdateSet($data, $setBindings), $whereSql);
@@ -209,14 +213,14 @@ trait BuildsWriteQueries
         // Bind the values for update
         foreach ($setBindings as $placeholder => $val) {
             $statement->bindValue(
-                param: ":$placeholder",
+                param: is_int($placeholder) ? $placeholder + 1 : ":$placeholder",
                 value: $this->castValue($val),
                 type: $this->getParameterType($val)
             );
         }
 
         // Bind the WHERE clause parameters
-        $this->bindParameters($statement);
+        $this->bindParameters($statement, $this->parameters !== [] ? count($setBindings) : 0);
 
         // Execute the statement and reset the WHERE clause
         if ($statement->execute() === false) {
@@ -273,13 +277,21 @@ trait BuildsWriteQueries
         // Prepare the SQL delete statement
         $whereSql = $this->preparedWhereClauseSql(withTrashedByDefault: $force, forWrite: true);
 
+        if ($this->parameters !== [] && $this->bindings !== []) {
+            throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
+        }
+
         if (isset($model) && $model->usesSoftDeletes() && !$force) {
             // Mark the rows selected by the current active/only/with-trashed scope.
             $column = $this->wrapper->wrapColumn($model->getSoftDeleteColumn());
             $placeholder = $this->getWhereSqlColumn('spark_deleted_at');
-            $sql = "UPDATE $table SET $column = :$placeholder $whereSql";
-
-            $this->bind([$placeholder => now()]);
+            if ($this->parameters !== []) {
+                $sql = "UPDATE $table SET $column = ? $whereSql";
+                array_unshift($this->parameters, now());
+            } else {
+                $sql = "UPDATE $table SET $column = :$placeholder $whereSql";
+                $this->bind([$placeholder => now()]);
+            }
         }
 
         $sql ??= "DELETE FROM $table $whereSql";
@@ -569,9 +581,14 @@ trait BuildsWriteQueries
 
         $this->where($where);
 
-        $bindings = ['increment' => $value, ...$this->getBindings()];
+        $positional = $this->parameters !== [];
+        if ($positional && $this->bindings !== []) {
+            throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
+        }
+        $bindings = $positional ? [$value, ...$this->parameters] : ['increment' => $value, ...$this->getBindings()];
+        $placeholder = $positional ? '?' : ':increment';
         $sql = "UPDATE " . $this->getTableName()
-            . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} + :increment "
+            . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} + $placeholder "
             . $this->preparedWhereClauseSql(forWrite: true);
 
         $result = $this->executeAffectingStatement($sql, $bindings);
@@ -607,9 +624,14 @@ trait BuildsWriteQueries
 
         $this->where($where);
 
-        $bindings = ['decrement' => $value, ...$this->getBindings()];
+        $positional = $this->parameters !== [];
+        if ($positional && $this->bindings !== []) {
+            throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
+        }
+        $bindings = $positional ? [$value, ...$this->parameters] : ['decrement' => $value, ...$this->getBindings()];
+        $placeholder = $positional ? '?' : ':decrement';
         $sql = "UPDATE " . $this->getTableName()
-            . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} - :decrement "
+            . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} - $placeholder "
             . $this->preparedWhereClauseSql(forWrite: true);
 
         $result = $this->executeAffectingStatement($sql, $bindings);
@@ -637,6 +659,12 @@ trait BuildsWriteQueries
         $sets = [];
 
         foreach ($data as $column => $value) {
+            if ($this->parameters !== []) {
+                $sets[] = $this->wrapper->wrapColumn($column) . ' = ?';
+                $bindings[] = $value;
+                continue;
+            }
+
             $placeholder = $this->getWhereSqlColumn("set_$column");
             $sets[] = $this->wrapper->wrapColumn($column) . " = :$placeholder";
             $bindings[$placeholder] = $value;
@@ -668,11 +696,22 @@ trait BuildsWriteQueries
                     type: $this->getParameterType($value)
                 );
             } else {
-                $statement->bindValue(
-                    param: $this->normalizeNamedBinding($key),
-                    value: $this->castValue($value),
-                    type: $this->getParameterType($value)
-                );
+                $parameter = $this->normalizeNamedBinding($key);
+                if (is_array($value)) {
+                    foreach ($value as $index => $item) {
+                        $statement->bindValue(
+                            param: "{$parameter}_$index",
+                            value: $this->castValue($item),
+                            type: $this->getParameterType($item)
+                        );
+                    }
+                } else {
+                    $statement->bindValue(
+                        param: $parameter,
+                        value: $this->castValue($value),
+                        type: $this->getParameterType($value)
+                    );
+                }
             }
         }
 

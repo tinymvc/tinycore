@@ -29,19 +29,33 @@ Verified on **2026-10-08**, using PHP **8.4.25** on macOS:
 
 | Command | Result | Assertions | Skipped / failed |
 | --- | --- | --- | --- |
-| `php tests/run.php` | 555 passed | 2,825 | 0 / 0 |
-| `php tests/database.php` — SQLite | 310 passed | 412 | 0 / 0 |
-| `php tests/database.php` — MySQL | 310 passed | 412 | 0 / 0 |
-| `php tests/database.php` — PostgreSQL | 310 passed | 412 | 0 / 0 |
+| `php tests/run.php` | 1,014 passed | 4,386 | 0 / 0 |
+| `php tests/database.php` — SQLite | 413 passed | 896 | 0 / 0 |
+| `php tests/database.php` — MySQL | 413 passed | 896 | 0 / 0 |
+| `php tests/database.php` — PostgreSQL | 413 passed | 896 | 0 / 0 |
 
-The database matrix reuses the same 310 scenarios; these are not 930 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
+The database matrix reuses the same 413 scenarios; these are not 1,239 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
 
 | Test location | Classes | Independently reported tests |
 | --- | --- | --- |
-| `tests/Unit/` | 5 | 30 |
-| `tests/Feature/Database/` | 17 | 310 |
-| Other `tests/Feature/` classes | 43 | 215 |
-| **Total** | **65** | **555** |
+| `tests/Unit/` | 6 | 56 |
+| `tests/Feature/Database/` | 20 | 413 |
+| Other `tests/Feature/` classes | 50 | 545 |
+| **Total** | **76** | **1,014** |
+
+The follow-up expansion adds **459 independently reported tests** to the previous 555, with **1,561 additional assertions**. Every test has a descriptive name and fresh test state. The driver contract defines 37 behaviors once and runs each on file, database and Redis storage (111 backend-specific tests); those are included in the 1,014 total, not added again. No changes were made to the test runner to increase the count.
+
+| Added class / contract | Tests | Focus |
+| --- | --- | --- |
+| `ValidationFormatTest` | 100 | Email/URL/IP/MAC/UUID formats, Unicode/ASCII, digit and numeric boundaries, case/prefix/suffix rules, dates, accepted/declined and distinct values; success and failure state |
+| `InputConversionTest` | 58 | Sanitizers, typed conversion, JSON, null/empty values, immutable selection, copying, filtering and array access |
+| `HttpClientResponseTest` | 26 | Status boundaries, JSON scalar/list/object decoding, malformed bodies, decoded-cache invalidation, nested nulls and case-insensitive headers |
+| `FileStorageContractTest`, `DatabaseStorageContractTest`, `RedisStorageContractTest` | 37 each | Cache replacement/expiry/type preservation, counter errors, ownership, force unlock, queue isolation, reservations, deduplication, retries, failed/repeated cleanup and exception metadata |
+| `Database/ScopedMutationTest` | 48 | Update, hard delete, soft delete and restore under IN/NOT IN, null, grouped OR, ranges, raw bindings, subquery, date and column predicates; unaffected-row preservation |
+| `Database/QueryStateContractTest` | 24 | Count/exists/read reuse, scoped aggregates and relation-filtered writes |
+| `Database/ArithmeticWriteTest` | 31 | Increment/decrement scope preservation, positional/named write parameters, multiple SET values, mixed-binding rejection and unchanged neighboring rows |
+| `RequestBoundaryTest` | 34 | Bearer/Basic header parsing, method flags, IPv4/IPv6 proxy ranges, malformed forwarded addresses, ports and trust boundaries |
+| `BladeDirectiveTest` | 27 | Conditional attributes, nested expressions, conditionals, loops, comments, verbatim/PHP blocks and escaped/raw output; first/cached render consistency and output-buffer balance |
 
 This is **behavioral regression coverage**, not a measured line or branch percentage. No Xdebug/PCOV coverage instrumentation was enabled. `src/Support/` is excluded from dedicated testing and was not modified.
 
@@ -71,7 +85,7 @@ Database fixtures explicitly use case-sensitive cache/lock keys. Application mig
 
 ## Focused database scenarios
 
-`tests/Feature/Database/` contains 310 independently reported scenarios. Each scenario creates fresh fixtures and verifies returned records, persisted state, exceptions, or query counts. They run unchanged against SQLite, MySQL, and PostgreSQL:
+`tests/Feature/Database/` contains 413 independently reported scenarios. Each scenario creates fresh fixtures and verifies returned records, persisted state, exceptions, or query counts. They run unchanged against SQLite, MySQL, and PostgreSQL:
 
 | Test class | Focus |
 | --- | --- |
@@ -89,6 +103,8 @@ Database fixtures explicitly use case-sensitive cache/lock keys. Application mig
 | ConstraintBehaviorTest | Foreign-key rejection, nullable keys, restrict/cascade/set-null deletes, cascade updates and composite uniqueness |
 | PaginationBoundaryTest | Second/custom pages, invalid and out-of-range pages, zero/negative limits, empty results and grouped totals |
 | ValidationDatabaseTest | Unique values and exclusions, exists/not-exists, bound hostile strings and rejected-field query suppression |
+| ScopedMutationTest / ArithmeticWriteTest | Scoped writes and arithmetic, raw positional bindings, multiple SET values, IN/NOT IN expansion, soft deletion/restoration and unaffected rows |
+| QueryStateContractTest | Reusable read predicates, aggregate scopes and relation-filtered updates |
 | QueryRegressionTest | DISTINCT preservation, nested absence, paginated relationship projections, eager-loading query counts and query-free serialization |
 
 The older database and migration tests also remain, including grammar compilation and migration-ledger failure scenarios. Validation now has independently reported boundary cases for optional/nullable fields, numeric/string/array sizes, integer rejection, nested fields and ASCII rules.
@@ -119,7 +135,7 @@ php tests/database.php --filter RelationQueryTest
 php tests/database.php --list-tests
 ```
 
-This runs the 310 focused database scenarios on SQLite, MySQL and PostgreSQL. It creates uniquely named `spark_test_*` databases automatically and removes them afterward, including after test failures. Redis is not needed for this command. Filters apply to all three engines; listing tests does not connect to services.
+This runs the 413 focused database scenarios on SQLite, MySQL and PostgreSQL. It creates uniquely named `spark_test_*` databases automatically and removes them afterward, including after test failures. Redis is not needed for this command. Filters apply to all three engines; listing tests does not connect to services.
 
 Failures produce a nonzero exit code. A failed test phase does not prevent the remaining phases from running. Cleanup errors also fail the command. Unavailable SQL servers or insufficient database permissions produce a setup error. The runner never selects an application's database; administrative credentials must allow creation and deletion of disposable databases. Both commands preserve terminal colors and keep redirected logs plain.
 

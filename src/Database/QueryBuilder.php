@@ -564,7 +564,7 @@ class QueryBuilder implements QueryBuilderContract
      * @param PDOStatement $statement The prepared PDO statement to bind values.
      * @return void
      */
-    private function bindParameters(PDOStatement &$statement): void
+    private function bindParameters(PDOStatement &$statement, int $offset = 0): void
     {
         if (!empty($this->bindings) && !empty($this->parameters)) {
             throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
@@ -600,7 +600,7 @@ class QueryBuilder implements QueryBuilderContract
 
         foreach ($this->parameters as $key => $param) {
             $statement->bindValue(
-                param: $key + 1,
+                param: $key + 1 + $offset,
                 value: $this->castValue($param),
                 type: $this->getParameterType($param)
             );

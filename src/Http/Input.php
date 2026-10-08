@@ -888,6 +888,11 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         return clone $this;
     }
 
+    public function __clone(): void
+    {
+        $this->data = clone $this->data;
+    }
+
     /**
      * Converts the sanitizer data array to a JSON string.
      *
