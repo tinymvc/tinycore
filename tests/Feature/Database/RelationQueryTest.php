@@ -31,12 +31,12 @@ final class RelationQueryTest extends DatabaseScenarioTestCase
 
     public function test_where_has(): void
     {
-        $this->assertSame([2], array_map('intval', ScenarioUser::whereHas('posts', fn ($q) => $q->where('score', '>=', 20))->orderBy('id')->pluck('id')));
+        $this->assertSame([2], array_map('intval', ScenarioUser::whereHas('posts', fn($q) => $q->where('score', '>=', 20))->orderBy('id')->pluck('id')));
     }
 
     public function test_where_doesnt_have(): void
     {
-        $this->assertSame([1, 3], array_map('intval', ScenarioUser::whereDoesntHave('posts', fn ($q) => $q->where('score', '>=', 20))->orderBy('id')->pluck('id')));
+        $this->assertSame([1, 3], array_map('intval', ScenarioUser::whereDoesntHave('posts', fn($q) => $q->where('score', '>=', 20))->orderBy('id')->pluck('id')));
     }
 
     public function test_nested_has(): void
@@ -46,7 +46,7 @@ final class RelationQueryTest extends DatabaseScenarioTestCase
 
     public function test_nested_where_has(): void
     {
-        $this->assertSame([1], array_map('intval', ScenarioUser::whereHas('posts.comments', fn ($q) => $q->where('body', 'First'))->orderBy('id')->pluck('id')));
+        $this->assertSame([1], array_map('intval', ScenarioUser::whereHas('posts.comments', fn($q) => $q->where('body', 'First'))->orderBy('id')->pluck('id')));
     }
 
     public function test_nested_absence(): void
@@ -86,7 +86,7 @@ final class RelationQueryTest extends DatabaseScenarioTestCase
 
     public function test_or_where_has(): void
     {
-        $this->assertSame([1, 3], array_map('intval', ScenarioUser::whereKey(3)->orWhereHas('posts', fn ($q) => $q->where('score', 10))->orderBy('id')->pluck('id')));
+        $this->assertSame([1, 3], array_map('intval', ScenarioUser::whereKey(3)->orWhereHas('posts', fn($q) => $q->where('score', 10))->orderBy('id')->pluck('id')));
     }
 
     public function test_withCount_projection(): void
@@ -182,7 +182,7 @@ final class RelationQueryTest extends DatabaseScenarioTestCase
 
     public function test_relation_find_scope(): void
     {
-        $this->assertFalse(ScenarioUser::findOrFail(1)->posts()->find(3));
+        $this->assertNull(ScenarioUser::findOrFail(1)->posts()->find(3));
     }
 
     public function test_relation_key_scope(): void
@@ -213,14 +213,14 @@ final class RelationQueryTest extends DatabaseScenarioTestCase
 
     public function test_filtered_exists(): void
     {
-        $user = ScenarioUser::withExists('posts as popular', fn ($q) => $q->where('score', '>', 20))->findOrFail(1);
+        $user = ScenarioUser::withExists('posts as popular', fn($q) => $q->where('score', '>', 20))->findOrFail(1);
 
         $this->assertSame(0, (int) $user->popular);
     }
 
     public function test_filtered_count(): void
     {
-        $user = ScenarioUser::withCount('posts', fn ($q) => $q->where('status', 'published'))->findOrFail(1);
+        $user = ScenarioUser::withCount('posts', fn($q) => $q->where('status', 'published'))->findOrFail(1);
 
         $this->assertSame(1, (int) $user->posts_count);
     }

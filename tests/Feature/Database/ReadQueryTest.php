@@ -11,7 +11,7 @@ final class ReadQueryTest extends DatabaseScenarioTestCase
 
     public function test_find_missing(): void
     {
-        $this->assertFalse(ScenarioPost::find(99));
+        $this->assertNull(ScenarioPost::find(99));
     }
 
     public function test_find_or_fail_existing(): void
@@ -31,7 +31,7 @@ final class ReadQueryTest extends DatabaseScenarioTestCase
 
     public function test_first_missing(): void
     {
-        $this->assertFalse(ScenarioPost::whereKey(99)->first());
+        $this->assertNull(ScenarioPost::whereKey(99)->first());
     }
 
     public function test_count_filtered(): void

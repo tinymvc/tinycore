@@ -45,7 +45,7 @@ final class ThroughRelationTest extends DatabaseScenarioTestCase
 
     public function test_where_has(): void
     {
-        $this->assertSame('Grace', ScenarioUser::whereHas('comments', fn ($q) => $q->where('body', 'Third'))->first()->name);
+        $this->assertSame('Grace', ScenarioUser::whereHas('comments', fn($q) => $q->where('body', 'Third'))->first()->name);
     }
 
     public function test_soft_deleted_intermediate(): void
@@ -71,6 +71,6 @@ final class ThroughRelationTest extends DatabaseScenarioTestCase
 
     public function test_find_is_scoped(): void
     {
-        $this->assertFalse(ScenarioUser::findOrFail(1)->comments()->find(3));
+        $this->assertNull(ScenarioUser::findOrFail(1)->comments()->find(3));
     }
 }

@@ -614,7 +614,7 @@ class Auth implements AuthContract, ArrayAccess
             if ($id > 0) {
                 $cache->erase($id);
             } else {
-                $cache->clear();
+                $cache->flush();
             }
         }
     }

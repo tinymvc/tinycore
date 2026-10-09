@@ -199,7 +199,7 @@ final class QueryBuilderTest extends DatabaseTestCase
         $this->assertSame(1, (int) DatabaseFixtureQueryKey::findOrFail('a')->score);
         $this->assertSame(2, (int) DatabaseFixtureQueryKey::withTrashed()->findOrFail('d')->score);
         $this->assertSame(1, $owner->records()->whereNotKey(['a', '0'])->delete());
-        $this->assertFalse(DatabaseFixtureQueryKey::find('b'));
+        $this->assertNull(DatabaseFixtureQueryKey::find('b'));
         $this->assertSame('c', DatabaseFixtureQueryKey::findOrFail('c')->code);
         $this->assertSame(1, DatabaseFixtureQueryKey::onlyTrashed()->whereNotKey('d')->forceDelete());
         $this->assertSame(1, DatabaseFixtureQueryKey::onlyTrashed()->count());

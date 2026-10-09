@@ -9,7 +9,7 @@ final class SoftDeleteTest extends DatabaseScenarioTestCase
         $post = ScenarioPost::findOrFail(1);
 
         $this->assertTrue($post->remove());
-        $this->assertFalse(ScenarioPost::find(1));
+        $this->assertNull(ScenarioPost::find(1));
         $this->assertSame(5, ScenarioPost::withTrashed()->count());
     }
 
