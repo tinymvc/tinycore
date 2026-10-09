@@ -6,6 +6,9 @@ abstract class DriverTestCase extends \Spark\Testing\ApplicationTestCase
 {
     protected function testStorageDirectory(): string
     {
+        if (defined('SPARK_TEST_CACHE_STORAGE_DIR')) {
+            return SPARK_TEST_CACHE_STORAGE_DIR;
+        }
         return dirname(__DIR__) . '/.cache/';
     }
 

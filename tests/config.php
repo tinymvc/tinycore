@@ -1,5 +1,7 @@
 <?php
 
+const SPARK_TEST_CACHE_STORAGE_DIR = __DIR__ . '/.cache/';
+
 return [
     'SPARK_TEST_MYSQL_ADMIN_DSN' => 'mysql:host=127.0.0.1;port=3306',
     'SPARK_TEST_MYSQL_USER' => 'root',
