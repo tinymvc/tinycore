@@ -4,6 +4,11 @@ require_once dirname(__DIR__) . '/Fixtures/Worker.php';
 
 abstract class DriverTestCase extends \Spark\Testing\ApplicationTestCase
 {
+    protected function testStorageDirectory(): string
+    {
+        return getcwd() . '/tests/.cache/';
+    }
+
     protected function createApplication(): \Spark\Foundation\Application
     {
         return \Spark\Foundation\Application::create($this->storagePath, [

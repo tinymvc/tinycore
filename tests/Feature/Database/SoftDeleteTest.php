@@ -40,7 +40,7 @@ final class SoftDeleteTest extends DatabaseScenarioTestCase
         ScenarioPost::whereKey(1)->delete();
 
         $this->assertSame(1, ScenarioPost::onlyTrashed()->whereKey(1)->forceDelete());
-        $this->assertFalse(ScenarioPost::withTrashed()->find(1));
+        $this->assertNull(ScenarioPost::withTrashed()->find(1));
     }
 
     public function test_count_excludes_deleted(): void

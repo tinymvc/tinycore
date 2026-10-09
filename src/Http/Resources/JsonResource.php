@@ -14,7 +14,12 @@ use function array_key_exists;
 use function is_array;
 use function is_object;
 
-/** Transform an explicit set of attributes into a JSON response. */
+/**
+ * Transform an explicit set of attributes into a JSON response.
+ * 
+ * @template TResource of object
+ * @mixin TResource
+ */
 class JsonResource implements Arrayable, Jsonable, JsonSerializable
 {
     /** The outer key for the resource; null disables wrapping when no metadata exists. */
@@ -24,17 +29,29 @@ class JsonResource implements Arrayable, Jsonable, JsonSerializable
     protected array $additional = [];
 
     /** The resource being transformed. */
-    public function __construct(public mixed $resource)
-    {
+    public function __construct(
+        /** @var TResource */
+        public mixed $resource
+    ) {
     }
 
-    /** Create a new resource instance. */
+    /**
+     * Create a new resource instance.
+     * 
+     * @param TResource $resource
+     * @return static<TResource>
+     */
     public static function make(mixed $resource): static
     {
         return new static($resource);
     }
 
-    /** Create a new resource collection instance. */
+    /**
+     * Create a new resource collection instance.
+     * 
+     * @param iterable<TResource>|Paginator<TResource> $resource
+     * @return ResourceCollection
+     */
     public static function collection(iterable|Paginator $resource): ResourceCollection
     {
         return new ResourceCollection($resource, static::class);

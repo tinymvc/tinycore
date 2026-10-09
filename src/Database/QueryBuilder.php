@@ -19,55 +19,10 @@ use function sprintf;
 
 /**
  * Class Query
- *
- * @method Collection except($keys)
- * @method Collection filter(?callable $callback = null)
- * @method Collection map(callable $callback)
- * @method Collection each(callable $callback)
- * @method Collection mapToDictionary(callable $callback)
- * @method Collection mapWithKeys(callable $callback)
- * @method Collection merge($items)
- * @method Collection mergeRecursive($items)
- * @method Collection only($keys)
- * @method Collection forget($keys)
- * @method bool contains($key, $operator = null, $value = null)
- * @method bool doesntContain($key, $operator = null, $value = null)
- * @method bool hasAny($key)
- * @method string implode($value, $glue = null)
- * @method Collection diff($items)
- * @method Collection diffUsing($items, callable $callback)
- * @method Collection diffAssoc($items)
- * @method Collection diffKeys($items)
- * @method Collection duplicates($callback = null, $strict = false)
- * @method Collection keyBy($keyBy)
- * @method Collection intersect($items)
- * @method Collection intersectAssoc($items)
- * @method Collection combine($values)
- * @method Collection nth($step, $offset = 0)
- * @method Collection prepend($value, $key = null)
- * @method Collection push(...$values)
- * @method Collection unshift(...$values)
- * @method Collection concat($source)
- * @method mixed random($number = null, $preserveKeys = false)
- * @method mixed search($value, $strict = false)
- * @method Collection put($key, $value)
- * @method Collection reverse()
- * @method Collection shuffle()
- * @method Collection sliding($size = 2, $step = 1)
- * @method Collection skipUntil($value)
- * @method Collection skipWhile($value)
- * @method Collection slice($offset, $length = null)
- * @method Collection split($numberOfGroups)
- * @method Collection splitIn($numberOfGroups)
- * @method Collection chunk($size, $preserveKeys = true)
- * @method Collection chunkWhile(callable $callback)
- * @method Collection sort($callback = null)
- * @method Collection splice($offset, $length = null, $replacement = [])
- * @method Collection transform(callable $callback)
- * @method Collection dot()
- * @method Collection unique($key = null, $strict = false)
- * @method Collection pad($size, $value)
- * @method Collection add($item)
+ * 
+ * @template TModel of Model
+ * 
+ * @mixin Collection
  *
  * This class provides methods to build and execute SQL queries for CRUD operations and
  * joins in a structured and dynamic way.
@@ -445,11 +400,11 @@ class QueryBuilder implements QueryBuilderContract
      *
      * @param string $method The name of the method being called.
      * @param array $args The arguments passed to the method.
-     * @return mixed
+     * @return static<TModel>
      */
     public function __call(string $method, array $args)
     {
-        if (static::hasMacro($method)) {
+        if (static::hasMacro(name: $method)) {
             return $this->macroCall($method, $args);
         }
 

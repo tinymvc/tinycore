@@ -264,6 +264,7 @@ class MakeStubCommandsHandler
                 'replacements' => [
                     '{{ namespace }}' => 'App\Http\Resources::subfolder:namespace',
                     '{{ class }}' => '::name:ucfirst',
+                    '{{ model }}' => ucfirst($this->removeSuffix($name, 'Resource')),
                 ],
             ]
         );

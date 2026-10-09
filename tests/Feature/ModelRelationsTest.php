@@ -26,15 +26,16 @@ final class ModelRelationsTest extends DatabaseTestCase
         query('users')->insert(['name' => 'Ada']);
         $user = DatabaseFixtureUser::findOrFail(1);
         $factories = [
-            'array' => fn (array $data) => $data,
-            'input' => fn (array $data) => new \Spark\Http\Input($data),
-            'arrayable' => fn (array $data) => new class($data) implements \Spark\Contracts\Support\Arrayable {
-                public function __construct(private array $data) {}
+            'array' => fn(array $data) => $data,
+            'input' => fn(array $data) => new \Spark\Http\Input($data),
+            'arrayable' => fn(array $data) => new class ($data) implements \Spark\Contracts\Support\Arrayable {
+            public function __construct(private array $data)
+                {}
                 public function toArray(): array
                 {
                     return $this->data;
                 }
-            },
+                },
         ];
         foreach ($factories as $label => $make) {
             // The parent overrides a supplied foreign key without mutating the input.
@@ -102,7 +103,7 @@ final class ModelRelationsTest extends DatabaseTestCase
         $this->assertStringContainsString('FOREIGN KEY', $constraintOnly->compileCreate());
         query('users')->insert(['name' => 'Ada']);
         query('posts')->insert(['title' => 'Before migration', 'user_id' => 1]);
-        Schema::table('posts', fn (Blueprint $table) => $table->softDeletes());
+        Schema::table('posts', fn(Blueprint $table) => $table->softDeletes());
         $this->assertTrue(Schema::hasColumn('posts', 'deleted_at'));
         $this->assertNull(query('posts')->where('id', 1)->value('deleted_at'));
         $post = DatabaseFixturePost::create(['title' => 'Recover me', 'user_id' => 1, 'views' => 10]);
@@ -110,18 +111,18 @@ final class ModelRelationsTest extends DatabaseTestCase
         $this->assertTrue($post->usesSoftDeletes());
         $this->assertSame('deleted_at', $post->getSoftDeleteColumn());
         $this->assertSame(2, DatabaseFixturePost::count());
-        $exists = fn ($q) => $q->table('posts')->selectRaw('1')->whereColumn('posts.user_id', 'users.id');
+        $exists = fn($q) => $q->table('posts')->selectRaw('1')->whereColumn('posts.user_id', 'users.id');
         $this->assertSame(1, query('users')->whereExists($exists)->count());
         $this->assertSame(0, query('users')->whereNotExists($exists)->count());
         $this->assertSame(1, query('users')->where('id', -1)->orWhereExists($exists)->count());
         $this->assertSame(1, query('users')->whereInSub('id', query('posts')->select('user_id'))->count());
         $this->assertSame(0, (int) query('users')->where('name', 'Ada')->selectSub(query('posts')->selectRaw('COUNT(*)')->where('title', 'absent'), 'matched')->fetchAssoc()->first()['matched']);
         $this->assertSame(1, (int) DatabaseFixtureUser::withExists('posts')->findOrFail(1)->posts_exists);
-        $this->assertSame(0, (int) DatabaseFixtureUser::withExists(['posts as has_posts' => fn ($q) => $q->where('title', 'absent')])->findOrFail(1)->has_posts);
+        $this->assertSame(0, (int) DatabaseFixtureUser::withExists(['posts as has_posts' => fn($q) => $q->where('title', 'absent')])->findOrFail(1)->has_posts);
         $this->assertSame(1, DatabaseFixturePost::whereKey(1)->as('p')->join('users', 'users.id', '=', 'p.user_id')->select('p.*')->firstOrFail()->primaryValue());
         $this->assertSame(0, DatabaseFixturePost::whereKey([])->count());
         $this->assertSame(1, DatabaseFixtureUser::findOrFail(1)->posts()->whereKey(1)->firstOrFail()->primaryValue());
-        $locked = DB::transaction(fn () => DatabaseFixturePost::whereKey($id)->lockForUpdate()->firstOrFail());
+        $locked = DB::transaction(fn() => DatabaseFixturePost::whereKey($id)->lockForUpdate()->firstOrFail());
         $this->assertSame($id, $locked->primaryValue());
         $this->assertFalse(str_contains(DatabaseFixturePost::whereKey($id)->sharedLock()->toSql(), 'FOR UPDATE'));
 
@@ -158,14 +159,14 @@ final class ModelRelationsTest extends DatabaseTestCase
         // Related reads and relationship subqueries both use the model's prepared scope.
         $user = DatabaseFixtureUser::with('posts')->findOrFail(1);
         $this->assertCount(1, $user->posts);
-        $user = DatabaseFixtureUser::with(['posts' => fn ($q) => $q->withTrashed()])->findOrFail(1);
+        $user = DatabaseFixtureUser::with(['posts' => fn($q) => $q->withTrashed()])->findOrFail(1);
         $this->assertCount(2, $user->posts);
         $this->assertSame(1, (int) DatabaseFixtureUser::withCount('posts')->findOrFail(1)->posts_count);
         $user = DatabaseFixtureUser::has('posts')->withCount('posts')->findOrFail(1);
         $this->assertSame(1, (int) $user->posts_count);
-        $this->assertSame(2, (int) DatabaseFixtureUser::withCount('posts as all_posts', fn ($q) => $q->withTrashed())->findOrFail(1)->all_posts);
+        $this->assertSame(2, (int) DatabaseFixtureUser::withCount('posts as all_posts', fn($q) => $q->withTrashed())->findOrFail(1)->all_posts);
         $this->assertSame(1, DatabaseFixturePost::onlyTrashed()->forceDelete());
-        $this->assertFalse(DatabaseFixturePost::withTrashed()->find($id));
+        $this->assertNull(DatabaseFixturePost::withTrashed()->find($id));
         $this->assertSame(1, DatabaseFixturePost::count());
 
         // The active row is protected by an explicit trash scope.
@@ -187,7 +188,7 @@ final class ModelRelationsTest extends DatabaseTestCase
         $this->assertSame(1, DatabaseFixtureCustomArchive::count());
 
         // Rollback the added column, after stopping use of the model scope.
-        Schema::table('posts', fn (Blueprint $table) => $table->dropColumn('deleted_at'));
+        Schema::table('posts', fn(Blueprint $table) => $table->dropColumn('deleted_at'));
         $this->assertFalse(Schema::hasColumn('posts', 'deleted_at'));
         Schema::create('products', function (Blueprint $table) {
             $table->id();
@@ -203,7 +204,7 @@ final class ModelRelationsTest extends DatabaseTestCase
         $this->assertSame(2, query('products')->count());
         $this->assertSame('Starter', query('products')->where('sku', 'SPARK-01')->value('name'));
         $titles = query('products')->select(['name'])->orderAsc('id')
-            ->addMapper(fn (array $rows) => array_map(fn ($row) => $row->name, $rows))->all();
+            ->addMapper(fn(array $rows) => array_map(fn($row) => $row->name, $rows))->all();
         $this->assertSame(['Starter', 'Team'], $titles);
         // New upsert arguments: explicit columns preserve other stored values.
         query('products')->upsert(
@@ -230,7 +231,7 @@ final class ModelRelationsTest extends DatabaseTestCase
             $this->assertSame('Rollback probe', $error->getMessage());
         }
         $this->assertSame('Starter', query('products')->where('sku', 'SPARK-01')->value('name'));
-        $this->assertSame('committed', DB::transaction(fn () => 'committed'));
+        $this->assertSame('committed', DB::transaction(fn() => 'committed'));
         $this->checkRelationshipScopes();
     }
 }

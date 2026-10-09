@@ -174,9 +174,9 @@ trait InteractsWithRelation
      * Finds a model by its primary key ID.
      *
      * @param string|int $value The Unique Identifier of the model to retrieve.
-     * @return false|Model The found model instance or false if not found.
+     * @return ?Model The found model instance or false if not found.
      */
-    public function find(string|int $value): false|Model
+    public function find(string|int $value): ?Model
     {
         return $this->whereKey($value)->first();
     }

@@ -15,6 +15,8 @@ use function is_string;
 
 /**
  * Builds SELECT, JOIN, ordering, grouping, pagination limit, and union SQL fragments.
+ * 
+ * @template TModel of \Spark\Database\Model
  *
  * @internal Composed into \Spark\Database\QueryBuilder.
  */
@@ -759,7 +761,7 @@ trait BuildsReadQueries
      * Retrieves the first result from the query.
      *
      * @param null|string|array $fields Optional fields to select for the first result.
-     * @return mixed
+     * @return TModel|array|object|null The first result object or null if none found.
      */
     public function first(null|string|array $fields = null): mixed
     {
@@ -779,8 +781,8 @@ trait BuildsReadQueries
         // Reset current query builder.
         $this->resetQuery();
 
-        // The first result as an object or false if none found.
-        return $result[0] ?? false;
+        // The first result as an object or null if none found.
+        return $result[0] ?? null;
     }
 
     /**
@@ -788,7 +790,7 @@ trait BuildsReadQueries
      *
      * @param mixed $where Optional WHERE clause to filter results.
      * @param null|string|array $fields Optional fields to select for the first result.
-     * @return mixed The first result object or throws NotFoundException.
+     * @return TModel|array|object|null The first result object or throws NotFoundException.
      * @throws \Spark\Exceptions\NotFoundException If no results are found.
      */
     public function firstOrFail($where = null, $fields = null): mixed
@@ -808,7 +810,7 @@ trait BuildsReadQueries
     /**
      * Retrieves the last result by applying descending order and fetching the first.
      *
-     * @return mixed
+     * @return TModel|array|object|null
      */
     public function last(null|string|array $fields = null): mixed
     {
@@ -857,7 +859,7 @@ trait BuildsReadQueries
      * Retrieves all results from the executed query.
      *
      * @param null|string|array $fields Optional fields to select.
-     * @return array Array of query results.
+     * @return array<TModel|array|object> Array of query results.
      */
     public function all(array|string|null $fields = null): array
     {
@@ -883,7 +885,7 @@ trait BuildsReadQueries
      * Retrieves all results from the executed query and returns them in a collection.
      *
      * @param null|string|array $fields Optional fields to select.
-     * @return Collection Array of query results.
+     * @return Collection<TModel> Array of query results.
      */
     public function get(array|string|null $fields = null): Collection
     {
@@ -896,7 +898,7 @@ trait BuildsReadQueries
      * @param int $limit Number of items per page.
      * @param string $keyword URL query parameter name for pagination.
      * @param null|string|array $fields Optional fields to select.
-     * @return Paginator
+     * @return Paginator<TModel>
      */
     public function paginate(int $limit = 10, string $keyword = 'page', array|string|null $fields = null): Paginator
     {

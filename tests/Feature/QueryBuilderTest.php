@@ -4,8 +4,6 @@ require_once dirname(__DIR__) . '/Support/DatabaseTestCase.php';
 
 use Spark\Database\Schema\Schema;
 use Spark\Database\Schema\Blueprint;
-use Spark\Database\Model;
-use Spark\Facades\DB;
 
 final class QueryBuilderTest extends DatabaseTestCase
 {
@@ -25,12 +23,12 @@ final class QueryBuilderTest extends DatabaseTestCase
                     [DatabaseFixtureRelationCountry::class, 'posts'],
                     [DatabaseFixtureRelationUser::class, 'posts.comments'],
                 ] as [$model, $relation]) {
-                    $sql = $model::as('parent')->withExists("$relation as viewer_exists")->toSql();
+                    $sql = $model::query()->as('parent')->withExists("$relation as viewer_exists")->toSql();
                     $this->assertStringContainsString('EXISTS(SELECT 1 FROM ', $sql);
                     $this->assertFalse((bool) preg_match('/SELECT\s+[`"\[]1[`"\]]/', $sql));
                 }
-                $sql = DatabaseFixtureRelationUser::withExists('posts as viewer_liked', fn ($q) => $q->where('views', 10))
-                    ->withExists('posts as viewer_saved', fn ($q) => $q->where('views', 20))
+                $sql = DatabaseFixtureRelationUser::withExists('posts as viewer_liked', fn($q) => $q->where('views', 10))
+                    ->withExists('posts as viewer_saved', fn($q) => $q->where('views', 20))
                     ->withCount('posts')->withSum('posts', 'views')->toSql();
                 $this->assertSame(2, substr_count($sql, 'EXISTS(SELECT 1 FROM '));
                 $this->assertStringContainsString('SELECT COUNT(*) FROM ', $sql);
@@ -60,7 +58,7 @@ final class QueryBuilderTest extends DatabaseTestCase
         foreach ([['a', 1, 10, null], ['b', 1, 20, null], ['c', 2, 30, null], ['d', 1, 40, '2026-01-01']] as [$code, $owner, $score, $deleted]) {
             query('query_keys')->insert(['code' => $code, 'owner_id' => $owner, 'score' => $score, 'deleted_at' => $deleted]);
         }
-        $joined = fn () => DatabaseFixtureQueryKey::as('k')->join('query_owners', 'query_owners.id', '=', 'k.owner_id')->select('k.*');
+        $joined = fn() => DatabaseFixtureQueryKey:: as('k')->join('query_owners', 'query_owners.id', '=', 'k.owner_id')->select('k.*');
         foreach (['score', ' score ', 'k.score', ' k.score ', '"score"', '`score`', '[score]', '"k"."score"', '`k`.`score`', '[k].[score]', 'ABS(k.score)'] as $field) {
             $this->assertSame('c', $joined()->latest($field)->firstOrFail()->code);
             $this->assertSame('a', $joined()->oldest($field)->firstOrFail()->code);
@@ -77,7 +75,7 @@ final class QueryBuilderTest extends DatabaseTestCase
         $this->assertSame('a', DatabaseFixtureQueryOwner::findOrFail(1)->records()->oldest('query_keys.score')->firstOrFail()->code);
         $subquery = DatabaseFixtureQueryOwner::findOrFail(1)->records()->select('query_keys.code')->latest('query_keys.score');
         $this->assertSame(2, DatabaseFixtureQueryKey::whereIn('code', $subquery)->count());
-        $subquery = DatabaseFixtureQueryKey::as('inner_key')->whereKey('b')->select('inner_key.code')->latest('inner_key.score');
+        $subquery = DatabaseFixtureQueryKey:: as('inner_key')->whereKey('b')->select('inner_key.code')->latest('inner_key.score');
         $this->assertSame('b', DatabaseFixtureQueryKey::whereIn('code', $subquery)->firstOrFail()->code);
         $this->assertSame(20, (int) DatabaseFixtureQueryOwner::withMax('records', 'query_keys.score')->findOrFail(1)->records_max);
 
@@ -88,7 +86,7 @@ final class QueryBuilderTest extends DatabaseTestCase
         });
         query('audit_rows')->insert(['score' => 10]);
         query('audit_rows')->insert(['score' => 20]);
-        foreach ([fn () => query('rows')->prefix('audit_'), fn () => query('unused')->from('rows')->prefix('audit_'), fn () => query('unused')->from('audit_rows')] as $source) {
+        foreach ([fn() => query('rows')->prefix('audit_'), fn() => query('unused')->from('rows')->prefix('audit_'), fn() => query('unused')->from('audit_rows')] as $source) {
             $this->assertSame('audit_rows.score', $source()->withAlias('score'));
             $this->assertSame(2, (int) $source()->latest('score')->fetchAssoc()->first()['id']);
             $this->assertSame(1, (int) $source()->oldest('score')->fetchAssoc()->first()['id']);
@@ -150,15 +148,17 @@ final class QueryBuilderTest extends DatabaseTestCase
         $this->assertSame(1, DatabaseFixtureQueryOwner::whereNotKey(2)->whereNotKey([])->count());
         $owner = DatabaseFixtureQueryOwner::findOrFail(1);
         $this->assertSame(1, $owner->records()->whereNotKey(['a', '0'])->count());
-        $this->assertFalse($owner->records()->whereNotKey([])->find('c'));
+        $this->assertNull($owner->records()->whereNotKey([])->find('c'));
         $this->assertSame(3, $owner->records()->whereNotKey([])->count());
 
         // Every IN/NOT IN and OR form accepts the same four input types.
         $sources = [
-            fn () => [5 => 'a', 10 => 'b'],
-            fn () => "SELECT code FROM query_keys WHERE score = 1",
-            fn () => query('query_keys')->select('code')->where('score', 1),
-            fn () => function ($sub) { $sub->table('query_keys')->select('code')->where('score', 1); },
+            fn() => [5 => 'a', 10 => 'b'],
+            fn() => "SELECT code FROM query_keys WHERE score = 1",
+            fn() => query('query_keys')->select('code')->where('score', 1),
+            fn() => function ($sub) {
+                $sub->table('query_keys')->select('code')->where('score', 1);
+            },
         ];
         foreach ($sources as $source) {
             $this->assertSame(2, DatabaseFixtureQueryKey::whereIn('code', $source())->count());
@@ -179,9 +179,9 @@ final class QueryBuilderTest extends DatabaseTestCase
 
         // EXISTS has only a subquery argument; correlate explicitly, never implicitly.
         $existenceSources = [
-            fn () => "SELECT 1 FROM query_keys WHERE query_keys.owner_id = query_owners.id AND score = 1",
-            fn () => query('query_keys')->selectRaw('1')->whereColumn('query_keys.owner_id', 'query_owners.id')->where('score', 1),
-            fn () => function ($sub) {
+            fn() => "SELECT 1 FROM query_keys WHERE query_keys.owner_id = query_owners.id AND score = 1",
+            fn() => query('query_keys')->selectRaw('1')->whereColumn('query_keys.owner_id', 'query_owners.id')->where('score', 1),
+            fn() => function ($sub) {
                 $sub->table('query_keys')->selectRaw('1')->whereColumn('query_keys.owner_id', 'query_owners.id')->where('score', 1);
             },
         ];

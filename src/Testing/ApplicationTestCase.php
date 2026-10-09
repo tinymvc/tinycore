@@ -348,7 +348,11 @@ abstract class ApplicationTestCase extends TestCase
 
                 date_default_timezone_set($this->timezone);
             } finally {
-                $this->removeTemporaryDirectory();
+                try {
+                    $this->removeTemporaryDirectory();
+                } catch (\Throwable) {
+                    // Ignore errors when removing the temporary directory.
+                }
             }
         }
     }

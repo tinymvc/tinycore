@@ -55,12 +55,12 @@ final class CustomKeyTest extends DatabaseScenarioTestCase
 
     public function test_aliased_find(): void
     {
-        $this->assertSame('Alpha', ScenarioCustomKey::as('k')->findOrFail('a')->name);
+        $this->assertSame('Alpha', ScenarioCustomKey:: as('k')->findOrFail('a')->name);
     }
 
     public function test_aliased_exclusion(): void
     {
-        $this->assertSame(2, ScenarioCustomKey::as('k')->whereNotKey('a')->count());
+        $this->assertSame(2, ScenarioCustomKey:: as('k')->whereNotKey('a')->count());
     }
 
     public function test_save(): void
@@ -76,7 +76,7 @@ final class CustomKeyTest extends DatabaseScenarioTestCase
     public function test_delete(): void
     {
         $this->assertTrue(ScenarioCustomKey::findOrFail('a')->remove());
-        $this->assertFalse(ScenarioCustomKey::find('a'));
+        $this->assertNull(ScenarioCustomKey::find('a'));
         $this->assertSame(2, ScenarioCustomKey::count());
     }
 
@@ -88,13 +88,13 @@ final class CustomKeyTest extends DatabaseScenarioTestCase
 
     public function test_aliased_update(): void
     {
-        $this->assertSame(1, ScenarioCustomKey::as('k')->whereKey('a')->update(['name' => 'Changed']));
+        $this->assertSame(1, ScenarioCustomKey:: as('k')->whereKey('a')->update(['name' => 'Changed']));
         $this->assertSame('Changed', ScenarioCustomKey::findOrFail('a')->name);
     }
 
     public function test_aliased_delete(): void
     {
-        $this->assertSame(1, ScenarioCustomKey::as('k')->whereKey('a')->delete());
+        $this->assertSame(1, ScenarioCustomKey:: as('k')->whereKey('a')->delete());
         $this->assertSame(2, ScenarioCustomKey::count());
     }
 

@@ -133,6 +133,7 @@ use function sprintf;
  * @method static int count()
  * @method static \Spark\Utils\Paginator paginate(int $limit = 10, string $keyword = 'page', $fields = null)
  * @method static \Spark\Support\Collection filter(?callable $callback = null)
+ * @method static \Spark\Support\Collection each(callable $callback)
  * @method static \Spark\Support\Collection map(callable $callback)
  * @method static \Spark\Support\Collection mapToDictionary(callable $callback)
  * @method static \Spark\Support\Collection mapWithKeys(callable $callback)
@@ -1356,7 +1357,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      *
      * @param string $name The method name.
      * @param array $arguments The method arguments.
-     * @return mixed The result of the query method call.
+     * @return QueryBuilder<static> The result of the query method call.
      */
     public function __call(string $name, array $arguments): mixed
     {
@@ -1372,7 +1373,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      *
      * @param string $name The method name.
      * @param array $arguments The method arguments.
-     * @return mixed The result of the query method call.
+     * @return QueryBuilder<static> The result of the query method call.
      */
     public static function __callStatic(string $name, array $arguments): mixed
     {
