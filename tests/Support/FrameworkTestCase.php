@@ -6,7 +6,7 @@ abstract class FrameworkTestCase extends \Spark\Testing\ApplicationTestCase
 {
     protected function testStorageDirectory(): string
     {
-        return getcwd() . '/tests/.cache/';
+        return dirname(__DIR__) . '/.cache/';
     }
 
     protected function createApplication(): \Spark\Foundation\Application

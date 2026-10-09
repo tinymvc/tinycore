@@ -10,7 +10,7 @@ abstract class LifecycleTestCase extends ApplicationTestCase
 {
     protected function testStorageDirectory(): string
     {
-        return getcwd() . '/tests/.cache/';
+        return dirname(__DIR__) . '/.cache/';
     }
 
     protected function createApplication(): Application

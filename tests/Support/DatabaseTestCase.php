@@ -5,13 +5,12 @@ require_once dirname(__DIR__) . '/Fixtures/Models.php';
 
 use Spark\Database\Schema\Schema;
 use Spark\Database\Schema\Blueprint;
-use Spark\Facades\DB;
 
 abstract class DatabaseTestCase extends FrameworkTestCase
 {
     protected function checkRelationshipScopes(): void
     {
-        Schema::create('scope_countries', fn (Blueprint $table) => $table->id());
+        Schema::create('scope_countries', fn(Blueprint $table) => $table->id());
         Schema::create('scope_users', function (Blueprint $table) {
             $table->id();
             $table->integer('country_id');
@@ -74,50 +73,52 @@ abstract class DatabaseTestCase extends FrameworkTestCase
         $this->assertSame(1, $user->posts()->count());
         $this->assertSame(2, $user->posts()->withTrashed()->count());
         $this->assertSame(1, $user->posts()->onlyTrashed()->count());
-        $this->assertCount(2, DatabaseFixtureRelationUser::with(['posts' => fn ($q) => $q->withTrashed()])->findOrFail(1)->posts);
-        $this->assertSame(2, (int) DatabaseFixtureRelationUser::with(['posts' => fn ($q) => $q->onlyTrashed()])->findOrFail(1)->posts[0]->id);
+        $this->assertCount(2, DatabaseFixtureRelationUser::with(['posts' => fn($q) => $q->withTrashed()])->findOrFail(1)->posts);
+        $this->assertSame(2, (int) DatabaseFixtureRelationUser::with(['posts' => fn($q) => $q->onlyTrashed()])->findOrFail(1)->posts[0]->id);
         $this->assertCount(1, DatabaseFixtureRelationUser::withTrashed()->with('posts')->findOrFail(3)->posts);
-        $this->assertSame(3, DatabaseFixtureRelationUser::with(['posts' => fn ($q) => $q->withTrashed()])->count());
+        $this->assertSame(3, DatabaseFixtureRelationUser::with(['posts' => fn($q) => $q->withTrashed()])->count());
         $this->assertCount(0, DatabaseFixtureRelationUser::with('posts')->findOrFail(2)->posts);
         $this->assertNull(DatabaseFixtureRelationUser::with('firstPost')->findOrFail(2)->firstPost);
-        $this->assertSame(3, (int) DatabaseFixtureRelationUser::with(['firstPost' => fn ($q) => $q->onlyTrashed()])->findOrFail(2)->firstPost->id);
+        $this->assertSame(3, (int) DatabaseFixtureRelationUser::with(['firstPost' => fn($q) => $q->onlyTrashed()])->findOrFail(2)->firstPost->id);
 
         // Existence, comparisons, OR variants, bindings, and explicit scope resets.
         $this->assertSame(1, DatabaseFixtureRelationUser::has('posts')->count());
         $this->assertSame(2, DatabaseFixtureRelationUser::doesntHave('posts')->count());
         $this->assertSame(0, DatabaseFixtureRelationUser::has('posts', '>=', 2)->count());
-        $this->assertSame(2, DatabaseFixtureRelationUser::whereHas('posts', fn ($q) => $q->withTrashed())->count());
-        $this->assertSame(2, DatabaseFixtureRelationUser::whereHas('posts', fn ($q) => $q->onlyTrashed())->count());
-        $this->assertSame(1, DatabaseFixtureRelationUser::whereDoesntHave('posts', fn ($q) => $q->withTrashed())->count());
-        $this->assertSame(1, DatabaseFixtureRelationUser::whereHas('posts', fn ($q) => $q->withTrashed()->withoutTrashed())->count());
-        $this->assertSame(1, DatabaseFixtureRelationUser::whereHas('posts', fn ($q) => $q->onlyTrashed()->withTrashed(false))->count());
-        $this->assertSame(0, DatabaseFixtureRelationUser::whereHas('posts', fn ($q) => $q->where('views', '>', 20))->count());
-        $this->assertSame(2, DatabaseFixtureRelationUser::whereHas('posts', fn ($q) => $q->withTrashed()->where('views', '>', 20))->count());
+        $this->assertSame(2, DatabaseFixtureRelationUser::whereHas('posts', fn($q) => $q->withTrashed())->count());
+        $this->assertSame(2, DatabaseFixtureRelationUser::whereHas('posts', fn($q) => $q->onlyTrashed())->count());
+        $this->assertSame(1, DatabaseFixtureRelationUser::whereDoesntHave('posts', fn($q) => $q->withTrashed())->count());
+        $this->assertSame(1, DatabaseFixtureRelationUser::whereHas('posts', fn($q) => $q->withTrashed()->withoutTrashed())->count());
+        $this->assertSame(1, DatabaseFixtureRelationUser::whereHas('posts', fn($q) => $q->onlyTrashed()->withTrashed(false))->count());
+        $this->assertSame(0, DatabaseFixtureRelationUser::whereHas('posts', fn($q) => $q->where('views', '>', 20))->count());
+        $this->assertSame(2, DatabaseFixtureRelationUser::whereHas('posts', fn($q) => $q->withTrashed()->where('views', '>', 20))->count());
         $this->assertSame(0, DatabaseFixtureRelationUser::whereRelation('posts', 'views', '>', 20)->count());
         $this->assertSame(2, DatabaseFixtureRelationUser::where('id', 4)->orHas('posts')->count());
         $this->assertSame(3, DatabaseFixtureRelationUser::has('posts')->orDoesntHave('posts')->count());
 
         $totals = DatabaseFixtureRelationUser::withCount('posts')
-            ->withCount('posts as all_posts', fn ($q) => $q->withTrashed())
-            ->withCount('posts as archived_posts', fn ($q) => $q->onlyTrashed())
+            ->withCount('posts as all_posts', fn($q) => $q->withTrashed())
+            ->withCount('posts as archived_posts', fn($q) => $q->onlyTrashed())
             ->withSum('posts', 'views')->withAvg('posts', 'views')
             ->withMin('posts', 'views')->withMax('posts', 'views')->findOrFail(1);
-        $this->assertSame([1, 2, 1, 10, 10, 10, 10], array_map(fn ($key) => (int) $totals->$key,
-            ['posts_count', 'all_posts', 'archived_posts', 'posts_sum', 'posts_avg', 'posts_min', 'posts_max']));
+        $this->assertSame([1, 2, 1, 10, 10, 10, 10], array_map(
+            fn($key) => (int) $totals->$key,
+            ['posts_count', 'all_posts', 'archived_posts', 'posts_sum', 'posts_avg', 'posts_min', 'posts_max']
+        ));
         $this->assertSame(0, (int) DatabaseFixtureRelationUser::withCount('posts')->findOrFail(2)->posts_count);
-        $this->assertSame(40, (int) DatabaseFixtureRelationUser::withSum('posts', 'views', fn ($q) => $q->withTrashed())->findOrFail(1)->posts_sum);
-        $this->assertSame(30, (int) DatabaseFixtureRelationUser::withSum('posts', 'views', fn ($q) => $q->onlyTrashed())->findOrFail(1)->posts_sum);
+        $this->assertSame(40, (int) DatabaseFixtureRelationUser::withSum('posts', 'views', fn($q) => $q->withTrashed())->findOrFail(1)->posts_sum);
+        $this->assertSame(30, (int) DatabaseFixtureRelationUser::withSum('posts', 'views', fn($q) => $q->onlyTrashed())->findOrFail(1)->posts_sum);
 
         // Inverse and nested relations scope each related model independently.
         $this->assertNull(DatabaseFixtureRelationPost::with('user')->findOrFail(4)->user);
-        $this->assertSame(3, (int) DatabaseFixtureRelationPost::with(['user' => fn ($q) => $q->withTrashed()])->findOrFail(4)->user->id);
+        $this->assertSame(3, (int) DatabaseFixtureRelationPost::with(['user' => fn($q) => $q->withTrashed()])->findOrFail(4)->user->id);
         $this->assertSame(1, DatabaseFixtureRelationPost::has('user')->count());
         $this->assertSame(1, DatabaseFixtureRelationPost::doesntHave('user')->count());
-        $this->assertSame(2, DatabaseFixtureRelationPost::whereHas('user', fn ($q) => $q->withTrashed())->count());
+        $this->assertSame(2, DatabaseFixtureRelationPost::whereHas('user', fn($q) => $q->withTrashed())->count());
         $this->assertSame(0, (int) DatabaseFixtureRelationPost::withCount('user')->findOrFail(4)->user_count);
         $this->assertSame(1, DatabaseFixtureRelationUser::withTrashed()->has('posts.comments')->count());
-        $this->assertSame(2, DatabaseFixtureRelationUser::withTrashed()->whereHas('posts.comments', fn ($q) => $q->withTrashed())->count());
-        $nested = DatabaseFixtureRelationUser::with(['posts' => fn ($q) => $q->with('comments')])->findOrFail(1);
+        $this->assertSame(2, DatabaseFixtureRelationUser::withTrashed()->whereHas('posts.comments', fn($q) => $q->withTrashed())->count());
+        $nested = DatabaseFixtureRelationUser::with(['posts' => fn($q) => $q->with('comments')])->findOrFail(1);
         $this->assertCount(1, $nested->posts);
         $this->assertCount(1, $nested->posts[0]->comments);
         $this->assertSame(1, (int) DatabaseFixtureRelationUser::withCount('posts.comments as commented_posts')->findOrFail(1)->commented_posts);
@@ -126,26 +127,26 @@ abstract class DatabaseTestCase extends FrameworkTestCase
         $this->assertCount(1, DatabaseFixtureRelationUser::with('roles')->findOrFail(1)->roles);
         $this->assertSame(1, DatabaseFixtureRelationUser::findOrFail(1)->roles()->count());
         $this->assertSame(1, (int) DatabaseFixtureRelationUser::withCount('roles')->findOrFail(1)->roles_count);
-        $this->assertSame(2, (int) DatabaseFixtureRelationUser::withCount('roles', fn ($q) => $q->withTrashed())->findOrFail(1)->roles_count);
-        $this->assertSame(1, DatabaseFixtureRelationUser::whereHas('roles', fn ($q) => $q->onlyTrashed())->count());
+        $this->assertSame(2, (int) DatabaseFixtureRelationUser::withCount('roles', fn($q) => $q->withTrashed())->findOrFail(1)->roles_count);
+        $this->assertSame(1, DatabaseFixtureRelationUser::whereHas('roles', fn($q) => $q->onlyTrashed())->count());
         $this->assertCount(1, DatabaseFixtureRelationCountry::with('posts')->findOrFail(1)->posts);
         $this->assertSame(1, DatabaseFixtureRelationCountry::findOrFail(1)->posts()->count());
         $this->assertSame(1, (int) DatabaseFixtureRelationCountry::withCount('posts')->findOrFail(1)->posts_count);
         $this->assertSame(2, DatabaseFixtureRelationCountry::findOrFail(1)->posts()->withTrashedParents()->count());
-        $this->assertCount(2, DatabaseFixtureRelationCountry::with(['posts' => fn ($q) => $q->withTrashedParents()])->findOrFail(1)->posts);
-        $this->assertSame(2, (int) DatabaseFixtureRelationCountry::withCount('posts', fn ($q) => $q->withTrashedParents())->findOrFail(1)->posts_count);
-        $activeThrough = fn ($q) => $q->whereNull('scope_users.deleted_at');
+        $this->assertCount(2, DatabaseFixtureRelationCountry::with(['posts' => fn($q) => $q->withTrashedParents()])->findOrFail(1)->posts);
+        $this->assertSame(2, (int) DatabaseFixtureRelationCountry::withCount('posts', fn($q) => $q->withTrashedParents())->findOrFail(1)->posts_count);
+        $activeThrough = fn($q) => $q->whereNull('scope_users.deleted_at');
         $this->assertCount(1, DatabaseFixtureRelationCountry::with(['posts' => $activeThrough])->findOrFail(1)->posts);
         $this->assertSame(1, (int) DatabaseFixtureRelationCountry::withCount('posts', $activeThrough)->findOrFail(1)->posts_count);
         $this->assertSame(0, DatabaseFixtureRelationCountry::whereHas('posts', $activeThrough, '>=', 2)->count());
 
         $this->assertSame(1, (int) DatabaseFixtureRelationUser::withExists('posts.comments')->findOrFail(1)->posts_comments_exists);
-        $this->assertSame(0, (int) DatabaseFixtureRelationUser::withExists('posts.comments', fn ($q) => $q->where('id', -1))->findOrFail(1)->posts_comments_exists);
+        $this->assertSame(0, (int) DatabaseFixtureRelationUser::withExists('posts.comments', fn($q) => $q->where('id', -1))->findOrFail(1)->posts_comments_exists);
 
         // Relation pagination keeps EXISTS projections in its count subquery.
         $page = DatabaseFixtureRelationUser::findOrFail(1)->posts()
-            ->withExists('comments as viewer_liked', fn ($q) => $q->where('id', 1))
-            ->withExists('comments as viewer_saved', fn ($q) => $q->where('id', 999))
+            ->withExists('comments as viewer_liked', fn($q) => $q->where('id', 1))
+            ->withExists('comments as viewer_saved', fn($q) => $q->where('id', 999))
             ->with('user')->orderByRaw('scope_posts.views DESC')->paginate(10);
         $this->assertSame(1, $page->total());
         $this->assertCount(1, $page->items());
@@ -155,10 +156,10 @@ abstract class DatabaseTestCase extends FrameworkTestCase
         $this->assertSame(1, (int) $post->user->id);
 
         // Both tables may use deleted_at: the model scope is qualified; pivot filtering is opt-in.
-        Schema::table('scope_role_user', fn (Blueprint $table) => $table->softDeletes());
+        Schema::table('scope_role_user', fn(Blueprint $table) => $table->softDeletes());
         query('scope_role_user')->where('user_id', 2)->update(['deleted_at' => $deleted]);
         $this->assertSame(1, (int) DatabaseFixtureRelationUser::withCount('roles')->findOrFail(2)->roles_count);
-        $activeRoles = fn ($q) => $q->whereNull('scope_role_user.deleted_at');
+        $activeRoles = fn($q) => $q->whereNull('scope_role_user.deleted_at');
         $this->assertCount(1, DatabaseFixtureRelationUser::with(['roles' => $activeRoles])->findOrFail(1)->roles);
         $this->assertCount(0, DatabaseFixtureRelationUser::with(['roles' => $activeRoles])->findOrFail(2)->roles);
         $this->assertSame(1, DatabaseFixtureRelationUser::whereHas('roles', $activeRoles)->count());
