@@ -116,7 +116,7 @@ use function sprintf;
  * @method static mixed first($fields = null)
  * @method static mixed firstOrFail($where = null, $fields = null)
  * @method static mixed last($fields = null)
- * @method static false|Model find($value)
+ * @method static Model|null find($value)
  * @method static Model findOrFail($value)
  * @method static QueryBuilder whereKey(string|int|array $value)
  * @method static QueryBuilder whereNotKey(string|int|array $value)

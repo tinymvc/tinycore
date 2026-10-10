@@ -111,7 +111,7 @@ trait BuildsReadQueries
     public function value(string $column): mixed
     {
         $result = (clone $this)->first($column);
-        if ($result === false) {
+        if ($result === null) {
             return null;
         }
 
@@ -790,7 +790,7 @@ trait BuildsReadQueries
      *
      * @param mixed $where Optional WHERE clause to filter results.
      * @param null|string|array $fields Optional fields to select for the first result.
-     * @return TModel|array|object|null The first result object or throws NotFoundException.
+     * @return TModel|array|object The first result object or throws NotFoundException.
      * @throws \Spark\Exceptions\NotFoundException If no results are found.
      */
     public function firstOrFail($where = null, $fields = null): mixed
@@ -800,7 +800,7 @@ trait BuildsReadQueries
         // Get the first result, or throw an exception if not found.
         $result = $this->first($fields);
 
-        if ($result === false) {
+        if ($result === null) {
             throw new \Spark\Exceptions\NotFoundException('No results found for the query.');
         }
 

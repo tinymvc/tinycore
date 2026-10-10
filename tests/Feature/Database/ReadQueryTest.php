@@ -34,6 +34,39 @@ final class ReadQueryTest extends DatabaseScenarioTestCase
         $this->assertNull(ScenarioPost::whereKey(99)->first());
     }
 
+    public function test_missing_single_rows_in_each_fetch_mode(): void
+    {
+        $this->assertNull(query('scenario_posts')->where('id', 99)->first());
+        $this->assertNull(query('scenario_posts')->where('id', 99)->fetchAssoc()->first());
+        $this->assertNull(query('scenario_posts')->where('id', 99)->column('title')->first());
+        $this->assertNull(ScenarioPost::whereKey(99)->last());
+    }
+
+    public function test_missing_single_rows_throw_not_found(): void
+    {
+        $this->assertThrows(\Spark\Exceptions\NotFoundException::class, fn() => ScenarioPost::findOrFail(99));
+        $this->assertThrows(\Spark\Exceptions\NotFoundException::class, fn() => ScenarioPost::whereKey(99)->firstOrFail());
+        $this->assertThrows(\Spark\Exceptions\NotFoundException::class, fn() => query('scenario_posts')->where('id', 99)->firstOrFail());
+    }
+
+    public function test_value_missing_and_nullable_columns(): void
+    {
+        $this->assertNull(ScenarioPost::whereKey(99)->value('title'));
+        $this->assertNull(query('scenario_posts')->where('id', 99)->value('title'));
+        $this->assertNull(query('scenario_posts')->where('id', 99)->fetchAssoc()->value('title'));
+        $this->assertNull(ScenarioPost::whereKey(1)->value('published_at'));
+        $this->assertSame(0, (int) ScenarioPost::whereKey(1)->value('score'));
+    }
+
+    public function test_falsey_existing_values_are_not_missing(): void
+    {
+        query('scenario_posts')->where('id', 1)->update(['title' => '']);
+
+        $this->assertSame('', query('scenario_posts')->where('id', 1)->column('title')->firstOrFail());
+        $this->assertSame(0, (int) query('scenario_posts')->where('id', 1)->column('score')->firstOrFail());
+        $this->assertSame('', query('scenario_posts')->where('id', 1)->fetchAssoc()->value('title'));
+    }
+
     public function test_count_filtered(): void
     {
         $this->assertSame(3, ScenarioPost::where('status', 'published')->count());

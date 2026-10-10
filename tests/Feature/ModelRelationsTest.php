@@ -129,7 +129,7 @@ final class ModelRelationsTest extends DatabaseTestCase
         $this->assertTrue($post->remove());
         $this->assertTrue($post->wasDeleted());
         $this->assertFalse($post->trashed()); // Deletion does not refresh loaded attributes.
-        $this->assertFalse(DatabaseFixturePost::find($id));
+        $this->assertNull(DatabaseFixturePost::find($id));
         $this->assertSame(1, DatabaseFixturePost::count());
         $this->assertSame(2, DatabaseFixturePost::withTrashed()->count());
         $this->assertSame(1, DatabaseFixturePost::onlyTrashed()->count());
