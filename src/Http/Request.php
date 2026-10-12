@@ -617,7 +617,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         $file = $this->file($key);
 
-        if ($file && isset($file['tmp_name']) && is_uploaded_file($file['tmp_name'])) {
+        if ($file && isset($file['tmp_name']) && is_string($file['tmp_name']) && is_uploaded_file($file['tmp_name'])) {
             return move_uploaded_file($file['tmp_name'], $destination);
         }
 

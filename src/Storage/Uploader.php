@@ -182,64 +182,136 @@ class Uploader implements UploaderUtilContract
     public function upload(string|array|Arrayable $files): string|array
     {
         if (is_string($files)) {
-            $files = request()->file($files, []);
+            $files = request()->file($files);
+
+            if ($files === null) {
+                throw new UploaderUtilException(__('No files were provided.'));
+            }
         } elseif ($files instanceof Arrayable) {
             $files = $files->toArray();
         }
 
-        if (!is_array($files) || !isset($files['name'])) {
-            throw new UploaderUtilException(__('Invalid upload payload.'));
-        }
+        $files = $this->normalizeFilesArray($files);
 
-        if (empty($files['name'])) {
+        if (!isset($files['name']) || $files['name'] === '' || $files['name'] === []) {
             throw new UploaderUtilException(__('No files were provided.'));
         }
 
-        $this->multiple ??= is_array($files['name']) && array_is_list((array) $files['name']);
+        // Local variable: auto-detection must not leak into the next upload() call.
+        $multiple = $this->multiple ?? is_array($files['name']);
 
-        if (!$this->multiple && is_array($files['name'])) {
-            throw new UploaderUtilException(__('Invalid upload payload for single upload.'));
+        if ($multiple !== is_array($files['name'])) {
+            throw new UploaderUtilException(__('Invalid upload payload.'));
         }
 
-        if ($this->multiple) {
-            if (
-                !is_array($files['name']) || !isset($files['tmp_name']) || !is_array($files['tmp_name'])
-                || array_keys($files['name']) !== array_keys($files['tmp_name'])
-            ) {
+        if (!$multiple) {
+            if (!is_string($files['name']) || !is_string($files['tmp_name'])) {
+                throw new UploaderUtilException(__('Invalid upload payload.'));
+            }
+
+            $paths = (array) $this->processUpload($files);
+
+            return count($paths) === 1 ? reset($paths) : $paths;
+        }
+
+        if (
+            !is_array($files['tmp_name'] ?? null)
+            || array_keys($files['name']) !== array_keys($files['tmp_name'])
+        ) {
+            throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+        }
+
+        foreach (['error', 'size', 'type'] as $field) {
+            if (isset($files[$field]) && !is_array($files[$field])) {
                 throw new UploaderUtilException(__('Invalid multiple upload payload.'));
             }
-            foreach (['error', 'size', 'type'] as $field) {
-                if (isset($files[$field]) && !is_array($files[$field])) {
-                    throw new UploaderUtilException(__('Invalid multiple upload payload.'));
-                }
+        }
+
+        // Validate every shape before storing any files; runtime failures can still be partial.
+        foreach ($files['name'] as $key => $name) {
+            if (!is_string($name) || !is_string($files['tmp_name'][$key])) {
+                throw new UploaderUtilException(__('Invalid multiple upload payload.'));
             }
-            // Validate every shape before storing any files; runtime failures can still be partial.
+        }
+
+        $uploaded = [];
+
+        try {
             foreach ($files['name'] as $key => $name) {
-                if (!is_string($name) || !is_string($files['tmp_name'][$key])) {
-                    throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+                $error = (int) ($files['error'][$key] ?? UPLOAD_ERR_OK);
+
+                if ($error === UPLOAD_ERR_NO_FILE) {
+                    continue; // empty slot in a multi-file input
                 }
-            }
-            $uploadedFiles = [];
-            foreach ($files['name'] as $key => $name) {
-                $file = [
+
+                $result = $this->processUpload([
                     'name' => $name,
                     'type' => $files['type'][$key] ?? '',
                     'tmp_name' => $files['tmp_name'][$key],
-                    'error' => $files['error'][$key] ?? 0,
+                    'error' => $error,
                     'size' => $files['size'][$key] ?? 0,
-                ];
-                $uploadedFiles = [...$uploadedFiles, ...(array) $this->processUpload($file)];
+                ]);
+
+                foreach ((array) $result as $path) {
+                    $uploaded[] = $path;
+                }
             }
-            return $uploadedFiles;
-        } else {
-            $uploadedFiles = $this->processUpload($files);
-            if (is_array($uploadedFiles) && count($uploadedFiles) === 1) {
-                return array_shift($uploadedFiles); // Return single file path if only one file is returned
+        } catch (\Throwable $e) {
+            if (!empty($uploaded)) {
+                $this->delete($uploaded); // Rollback any successfully uploaded files
+            }
+            throw $e;
+        }
+
+        if ($uploaded === []) {
+            throw new UploaderUtilException(__('No files were provided.'));
+        }
+
+        return $uploaded;
+    }
+
+    /**
+     * Normalizes the files array to the $_FILES-style structure:
+     * either single (name => string, ...) or columnar (name => [...], tmp_name => [...], ...).
+     *
+     * Accepts a list of per-file arrays too (what Request::files() returns).
+     */
+    private function normalizeFilesArray(array $files): array
+    {
+        // List of per-file arrays -> columnar structure
+        if (array_is_list($files) && isset($files[0]) && is_array($files[0]) && isset($files[0]['name'])) {
+            $normalized = ['name' => [], 'type' => [], 'tmp_name' => [], 'error' => [], 'size' => []];
+
+            foreach ($files as $file) {
+                if (!is_array($file) || !isset($file['name'])) {
+                    continue;
+                }
+
+                $normalized['name'][] = $file['name'];
+                $normalized['type'][] = $file['type'] ?? '';
+                $normalized['tmp_name'][] = $file['tmp_name'] ?? '';
+                $normalized['error'][] = $file['error'] ?? UPLOAD_ERR_NO_FILE;
+                $normalized['size'][] = $file['size'] ?? 0;
             }
 
-            return $uploadedFiles; // Return as array if multiple files are returned
+            return $normalized;
         }
+
+        // Already columnar
+        if (is_array($files['name'] ?? null)) {
+            return $files;
+        }
+
+        // Single file
+        return [
+            'name' => $files['name'] ?? '',
+            'type' => $files['type'] ?? '',
+            'tmp_name' => $files['tmp_name'] ?? '',
+            'error' => $files['error'] ?? UPLOAD_ERR_NO_FILE,
+            'size' => $files['size'] ?? 0,
+        ];
     }
+
 
     /**
      * Deletes a file or multiple files.
@@ -497,10 +569,8 @@ class Uploader implements UploaderUtilContract
         }
 
         // Ensure the file name is unique
-        $uniqueSuffix = uniqid($baseName . '_', true);
+        $uniqueSuffix = uniqid($baseName, true);
 
-        return $extension === ''
-            ? $uniqueSuffix
-            : "{$uniqueSuffix}.{$extension}";
+        return $extension === '' ? $uniqueSuffix : "$uniqueSuffix.$extension";
     }
 }

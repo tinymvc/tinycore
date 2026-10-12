@@ -13,6 +13,8 @@ use Spark\Support\Traits\Macroable;
 use function func_get_args;
 use function is_array;
 use function is_int;
+use function is_object;
+use function is_scalar;
 use function is_string;
 use function in_array;
 
@@ -76,7 +78,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function email(?string $key = null): ?string
     {
         $key ??= 'email';
-        $value = $this->get($key);
+        $value = strtolower(trim($this->get($key) ?: ''));
 
         if ($value === null || $value === '') {
             return null;
@@ -101,7 +103,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        $sanitized = filter_var((string) $value, FILTER_UNSAFE_RAW);
+        $sanitized = filter_var(trim((string) ($value ?: '')), FILTER_UNSAFE_RAW);
 
         return $stripTags ? strip_tags((string) $sanitized) : (string) $sanitized;
     }
@@ -128,6 +130,14 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             $value = $value->toArray();
         }
 
+        if ($value instanceof \Stringable) {
+            return (string) $value;
+        }
+
+        if ($value instanceof \JsonSerializable) {
+            $value = $value->jsonSerialize();
+        }
+
         if (is_array($value)) {
             $encoded = json_encode($value);
             return $encoded !== false ? $encoded : null;
@@ -150,7 +160,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        return htmlspecialchars((string) $value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return htmlspecialchars(trim((string) ($value ?: '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**
@@ -167,7 +177,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        $sanitized = filter_var((string) $value, FILTER_SANITIZE_NUMBER_INT);
+        $sanitized = filter_var(trim((string) ($value ?: 0)), FILTER_SANITIZE_NUMBER_INT);
 
         return $sanitized === false || $sanitized === '' ? null : (int) $sanitized;
     }
@@ -186,7 +196,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        $sanitized = filter_var((string) $value, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION | FILTER_FLAG_ALLOW_THOUSAND | FILTER_FLAG_ALLOW_SCIENTIFIC);
+        $sanitized = filter_var(trim((string) ($value ?: 0.0)), FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION | FILTER_FLAG_ALLOW_THOUSAND | FILTER_FLAG_ALLOW_SCIENTIFIC);
 
         return $sanitized === false || $sanitized === '' ? null : (float) $sanitized;
     }
@@ -199,7 +209,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function boolean(string $key): ?bool
     {
-        return filter_var($this->get($key), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return filter_var(trim((string) ($this->get($key) ?: '')), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     }
 
     /**
@@ -210,7 +220,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function url(string $key): ?string
     {
-        $value = $this->get($key);
+        $value = trim($this->get($key) ?: '');
 
         if ($value === null || $value === '') {
             return null;
@@ -228,7 +238,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function ip(string $key): ?string
     {
-        $value = $this->get($key);
+        $value = trim($this->get($key) ?: '');
 
         if ($value === null || $value === '') {
             return null;
@@ -284,7 +294,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        $value = (string) $value;
+        $value = trim((string) $value);
 
         // Match validateAlphabetic()'s ascii param: if requested, drop non-ASCII
         // bytes first so only plain ASCII letters/digits can survive the pattern.
@@ -313,8 +323,9 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function digits(string $key): ?string
     {
         $value = $this->get($key);
-        if ($value === null || $value === '')
+        if ($value === null || $value === '') {
             return null;
+        }
 
         $sanitized = preg_replace('/[^0-9]/', '', (string) $value);
         return $sanitized !== '' ? $sanitized : null;
@@ -331,8 +342,9 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'phone';
         $value = $this->get($key);
-        if ($value === null || $value === '')
+        if ($value === null || $value === '') {
             return null;
+        }
 
         $pattern = $keepPlus ? '/[^0-9+]/' : '/[^0-9]/';
         $sanitized = preg_replace($pattern, '', (string) $value);
@@ -350,8 +362,9 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'date';
         $value = $this->get($key);
-        if ($value === null || $value === '')
+        if ($value === null || $value === '') {
             return null;
+        }
 
         $timestamp = strtotime((string) $value);
         return $timestamp !== false ? date($format, $timestamp) : null;
@@ -366,13 +379,15 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function json(string $key, bool $decode = false): string|array|null
     {
-        $value = $this->get($key);
-        if ($value === null || $value === '')
+        $value = trim($this->get($key) ?: '');
+        if ($value === null || $value === '') {
             return null;
+        }
 
         $decoded = json_decode((string) $value, true);
-        if (json_last_error() !== JSON_ERROR_NONE)
+        if (json_last_error() !== JSON_ERROR_NONE) {
             return null;
+        }
 
         return $decode ? $decoded : $value;
     }
@@ -389,7 +404,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $value = $this->get($key);
         if (!is_array($value)) {
-            $value = arr_from_set($value);
+            $value = self::convertArr($value);
             if (!is_array($value)) {
                 return null;
             }
@@ -407,25 +422,162 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     }
 
     /**
-     * Sanitizes a file upload array.
+     * Convert a comma-separated string into an array of trimmed values.
+     *
+     * @param null|string|array|Arrayable $value
+     * @param callable|null $callback
+     * @param string|null $delimiter
+     * @return array
+     */
+    public static function convertArr(null|string|array|Arrayable $value, ?callable $callback = null, ?string $delimiter = ','): array
+    {
+        if (empty($value)) {
+            return [];
+        }
+
+        // If the value is a JSON string, decode it
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $value = $decoded;
+            }
+        }
+
+        // If the value is an instance of Arrayable, convert it to an array
+        if ($value instanceof Arrayable) {
+            $value = $value->toArray();
+        }
+
+        // If the value is a string and a delimiter is provided, split it into an array
+        if (is_string($value) && $delimiter && str_contains($value, $delimiter)) {
+            $value = explode($delimiter, $value);
+            $value = array_map('trim', $value); // Trim each value in the array
+        }
+
+        if (!is_array($value)) {
+            $value = [$value]; // Set as a single-element array
+        }
+
+        if ($callback) {
+            return array_map($callback, $value); // Apply the callback to each value in the array
+        }
+
+        return $value; // Trim each value in the array
+    }
+
+    /**
+     * Sanitizes a single file upload.
      *
      * @param ?string $key Key in the data array to sanitize.
-     * @return array|null Sanitized file array or null if invalid.
+     * @return array|null Sanitized file array (or list of files for multi-uploads), null if invalid.
      */
     public function file(?string $key = null): ?array
     {
         $key ??= 'file';
         $value = $this->get($key);
-        if (!is_array($value) || !isset($value['tmp_name']))
-            return null;
 
-        // Basic file sanitization
+        if (!is_array($value) || !isset($value['tmp_name'])) {
+            return null;
+        }
+
+        if (is_array($value['tmp_name'])) {
+            return $this->files($key); // Handle multiple file uploads
+        }
+
+        return $this->buildFile(
+            $value['name'] ?? '',
+            $value['type'] ?? '',
+            $value['tmp_name'],
+            $value['error'] ?? UPLOAD_ERR_NO_FILE,
+            $value['size'] ?? 0,
+        );
+    }
+
+    /**
+     * Sanitizes multiple file uploads.
+     *
+     * @param ?string $key Key in the data array to sanitize.
+     * @return array Sanitized files array or empty array if invalid.
+     */
+    public function files(?string $key = null): array
+    {
+        $key ??= 'files';
+        $value = $this->get($key);
+
+        if (!is_array($value) || !isset($value['tmp_name'])) {
+            return [];
+        }
+
+        if (!is_array($value['tmp_name'])) {
+            $file = $this->file($key);
+
+            return $file === null ? [] : [$file];
+        }
+
+        if (!is_array($value['name'] ?? null)) {
+            return [];
+        }
+
+        $files = [];
+        foreach ($value['tmp_name'] as $index => $tmpName) {
+            $file = $this->buildFile(
+                $value['name'][$index] ?? '',
+                $value['type'][$index] ?? '',
+                $tmpName,
+                $value['error'][$index] ?? UPLOAD_ERR_NO_FILE,
+                $value['size'][$index] ?? 0,
+            );
+
+            if ($file !== null) { // skips malformed/nested entries
+                $files[] = $file;
+            }
+        }
+
+        return $files;
+    }
+
+    /**
+     * Checks if at least one valid uploaded file exists for the given key.
+     *
+     * Note: is_uploaded_file() is always false outside real SAPI uploads
+     * (CLI tests, Swoole, etc.).
+     *
+     * @param ?string $key Key in the data array to check.
+     */
+    public function hasFile(?string $key = null): bool
+    {
+        $key ??= 'file';
+
+        foreach ($this->files($key) as $file) {
+            if ($file['error'] === UPLOAD_ERR_OK && is_uploaded_file($file['tmp_name'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Builds one normalized file entry, or null when the shape is invalid
+     * (e.g. nested arrays from `files[a][]` style inputs).
+     */
+    private function buildFile(mixed $name, mixed $type, mixed $tmpName, mixed $error, mixed $size): ?array
+    {
+        if (!is_string($name) || !is_string($tmpName)) {
+            return null;
+        }
+
+        // Keep the name raw: strip path parts and control chars only.
+        // HTML-escape on output, never at input; generate your own stored name in the uploader.
+        $name = basename(str_replace('\\', '/', $name));
+        $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name) ?? '';
+
         return [
-            'name' => filter_var($value['name'] ?? '', FILTER_SANITIZE_FULL_SPECIAL_CHARS),
-            'type' => filter_var($value['type'] ?? '', FILTER_SANITIZE_FULL_SPECIAL_CHARS),
-            'tmp_name' => $value['tmp_name'],
-            'error' => (int) ($value['error'] ?? UPLOAD_ERR_NO_FILE),
-            'size' => (int) ($value['size'] ?? 0)
+            'name' => $name,
+            'type' => is_string($type) ? $type : '', // client-supplied: verify with finfo in the uploader
+            'tmp_name' => $tmpName,
+            'error' => is_scalar($error) ? (int) $error : UPLOAD_ERR_NO_FILE,
+            'size' => is_scalar($size) ? (int) $size : 0,
         ];
     }
 
@@ -441,8 +593,9 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'password';
         $value = $this->get($key);
-        if ($value === null)
+        if ($value === null) {
             return null;
+        }
 
         $sanitized = trim((string) $value);
 
@@ -466,9 +619,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      */
     public function safe(string $key, array $allowedTags = []): ?string
     {
-        $value = $this->get($key);
-        if ($value === null)
+        $value = trim($this->get($key) ?: '');
+        if ($value === null || $value === '') {
             return null;
+        }
 
         if (empty($allowedTags)) {
             return strip_tags((string) $value);
@@ -846,8 +1000,8 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     {
         $key ??= 'slug';
 
-        $value = $this->get($key);
-        if ($value === null) {
+        $value = trim($this->get($key) ?: '');
+        if ($value === null || $value === '') {
             return null;
         }
 
@@ -864,7 +1018,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function str(string $key, string $default = ''): Stringable
     {
         return new Stringable(
-            (string) $this->data->get($key, $default)
+            trim((string) $this->data->get($key, $default) ?: '')
         );
     }
 
@@ -935,7 +1089,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         return match (true) {
             $first === null => '',
             is_array($first), \is_object($first) => json_encode($first) ?: '',
-            default => (string) $first,
+            default => trim((string) $first),
         };
     }
 }

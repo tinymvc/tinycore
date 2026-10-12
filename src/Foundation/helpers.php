@@ -2191,52 +2191,6 @@ if (!function_exists('fm')) {
     }
 }
 
-if (!function_exists('arr_from_set')) {
-    /**
-     * Convert a comma-separated string into an array of trimmed values.
-     *
-     * @param null|string|array|Arrayable $value
-     * @param callable|null $callback
-     * @param string|null $delimiter
-     * @return array
-     */
-    function arr_from_set(null|string|array|Arrayable $value, ?callable $callback = null, ?string $delimiter = ','): array
-    {
-        if (empty($value)) {
-            return [];
-        }
-
-        // If the value is a JSON string, decode it
-        if (is_string($value)) {
-            $decoded = json_decode($value, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                $value = $decoded;
-            }
-        }
-
-        // If the value is an instance of Arrayable, convert it to an array
-        if ($value instanceof Arrayable) {
-            $value = $value->toArray();
-        }
-
-        // If the value is a string and a delimiter is provided, split it into an array
-        if (is_string($value) && $delimiter && str_contains($value, $delimiter)) {
-            $value = explode($delimiter, $value);
-            $value = array_map('trim', $value); // Trim each value in the array
-        }
-
-        if (!is_array($value)) {
-            $value = [$value]; // Set as a single-element array
-        }
-
-        if ($callback) {
-            return array_map($callback, $value); // Apply the callback to each value in the array
-        }
-
-        return $value; // Trim each value in the array
-    }
-}
-
 if (!function_exists('tracer')) {
     /**
      * Retrieves the Tracer instance.
