@@ -618,7 +618,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        $sanitized = trim((string) $value);
+        $sanitized = (string) $value;
 
         if ($hash) {
             $hasher = app(\Spark\Hash::class)->copy();
