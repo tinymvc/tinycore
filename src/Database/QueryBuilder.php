@@ -22,7 +22,7 @@ use function sprintf;
  * 
  * @template TModel of Model
  * 
- * @mixin Collection
+ * @method Collection<int, TModel> get()
  *
  * This class provides methods to build and execute SQL queries for CRUD operations and
  * joins in a structured and dynamic way.
