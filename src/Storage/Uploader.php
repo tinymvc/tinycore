@@ -182,7 +182,7 @@ class Uploader implements UploaderUtilContract
     public function upload(string|array|Arrayable $files): string|array
     {
         if (is_string($files)) {
-            $files = request()->file($files);
+            $files = app(\Spark\Http\Request::class)->file($files);
 
             if ($files === null) {
                 throw new UploaderUtilException(__('No files were provided.'));

@@ -575,7 +575,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function file(string $key, $default = null): mixed
     {
-        return $this->files->get($key, $default);
+        return Input::make($this->files)->file($key) ?: $default;
     }
 
     /**
@@ -586,42 +586,20 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function hasFile(string $key): bool
     {
-        $file = $this->files->get($key);
-        if (!isset($file['size'])) {
-            return false;
-        }
-
-        $size = $file['size'];
-
-        // Handle multiple files (array of sizes) or a single file (integer size)
-        if (is_array($size)) {
-            foreach ($size as $fileSize) {
-                if ($fileSize > 0) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        return $size > 0;
+        return Input::make($this->files)->hasFile($key);
     }
 
     /**
      * Moves an uploaded file to a new destination.
      *
      * @param string $key The file key.
-     * @param string $destination The destination path to move the file to.
-     * @return bool True on success, false on failure.
+     * @param null|string $disk The disk to use for the upload.
+     * @param array $options Additional options for the upload.
+     * @return string|array|false The path(s) of the moved file(s) or false on failure.
      */
-    public function moveFile(string $key, string $destination): bool
+    public function moveFile(string $key, null|string $disk = null, array $options = []): string|array|false
     {
-        $file = $this->file($key);
-
-        if ($file && isset($file['tmp_name']) && is_string($file['tmp_name']) && is_uploaded_file($file['tmp_name'])) {
-            return move_uploaded_file($file['tmp_name'], $destination);
-        }
-
-        return false; // File not found or invalid.
+        return Input::make($this->files)->moveFile($key, $disk, $options);
     }
 
     /**

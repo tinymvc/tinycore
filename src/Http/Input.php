@@ -582,6 +582,27 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     }
 
     /**
+     * Moves an uploaded file to a new destination.
+     *
+     * @param string $key The file key.
+     * @param null|string $disk The disk to use for the upload.
+     * @param array $options Additional options for the upload.
+     * @return string|array|false The path(s) of the moved file(s) or false on failure.
+     */
+    public function moveFile(string $key, null|string $disk = null, array $options = []): string|array|false
+    {
+        $file = $this->file($key);
+        try {
+            return \Spark\Storage\Storage::disk($disk)
+                ->uploader(...$options)
+                ->upload($file);
+        } catch (\Throwable) {
+        }
+
+        return false; // File not found or invalid.
+    }
+
+    /**
      * Sanitizes a password by trimming and optionally hashing.
      *
      * @param ?string $key Key in the data array to sanitize.
@@ -589,7 +610,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * @param array $options Password hashing options.
      * @return string|null Sanitized password or null if invalid.
      */
-    public function password(?string $key = null, bool $hash = false, array $options = []): ?string
+    public function password(?string $key = null, bool $hash = false, null|string|int $algorithm = null, array $options = []): ?string
     {
         $key ??= 'password';
         $value = $this->get($key);
@@ -600,11 +621,17 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         $sanitized = trim((string) $value);
 
         if ($hash) {
-            if (!empty($options)) {
-                hashing()->setPasswordOptions($options);
+            $hasher = app(\Spark\Hash::class)->copy();
+
+            if ($algorithm !== null) {
+                $hasher->setPasswordAlgorithm($algorithm);
             }
 
-            return hashing()->hashPassword($sanitized);
+            if ($options !== []) {
+                $hasher->setPasswordOptions($options);
+            }
+
+            return $hasher->hashPassword($sanitized);
         }
 
         return $sanitized;
@@ -723,10 +750,15 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     /**
      * Retrieves all sanitized data as an associative array.
      *
+     * @param array $filter Optional list of keys to filter by.
      * @return array All key-value pairs in the sanitizer data array.
      */
-    public function all(): array
+    public function all(array $filter = []): array
     {
+        if ($filter !== []) {
+            return $this->data->only($filter)->all();
+        }
+
         return $this->data->all();
     }
 
@@ -863,42 +895,50 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
                 $type = 'string';
             }
 
+            $haystack = [
+                'email',
+                'text',
+                'html',
+                'escapeHtml',
+                'number',
+                'float',
+                'boolean',
+                'url',
+                'ip',
+                'alpha',
+                'alpha_num',
+                'alpha_dash',
+                'digits',
+                'phone',
+                'slug',
+                'string',
+                'date',
+                'json',
+                'array',
+                'file',
+                'password',
+                'safe'
+            ];
+
+            // Filter the types to only include valid ones from the haystack.
+            $filter = fn(array $types) => array_values(array_filter(
+                array_map(fn($item) => explode(':', trim($item ?: ''))[0], $types),
+                fn($item) => in_array($item, $haystack, true)
+            ));
+
             // If the type is an array, use the first element as the type.
             if (is_array($type)) {
+                $type = $filter($type);
                 $type = $type[0] ?? null;
             }
 
             // Pick the first item when a Laravel-like pipe string is passed.
             if (is_string($type) && str_contains($type, '|')) {
-                $type = array_values(array_filter(array_map('trim', explode('|', $type))));
+                $type = $filter(explode('|', $type));
                 $type = $type[0] ?? 'string';
             }
 
-            if (
-                !is_string($type) || !in_array($type, [
-                    'email',
-                    'text',
-                    'html',
-                    'number',
-                    'float',
-                    'boolean',
-                    'url',
-                    'ip',
-                    'alpha',
-                    'alpha_num',
-                    'alpha_dash',
-                    'digits',
-                    'phone',
-                    'slug',
-                    'string',
-                    'date',
-                    'json',
-                    'array',
-                    'file',
-                    'password',
-                    'safe'
-                ], true)
-            ) {
+            if (!is_string($type) || !in_array($type, $haystack, true)) {
                 $type = 'string';
             }
 

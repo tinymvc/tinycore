@@ -612,4 +612,14 @@ class Hash implements HashContract
 
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
+
+    /**
+     * Create a copy of the current Hash instance.
+     *
+     * @return Hash A new instance of Hash with the same key.
+     */
+    public function copy(): Hash
+    {
+        return new self($this->key);
+    }
 }
