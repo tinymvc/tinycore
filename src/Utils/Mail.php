@@ -28,6 +28,11 @@ class Mail extends PHPMailer implements MailUtilContract
     private array $config = [];
 
     /**
+     * @var string The transport method for sending emails (default is 'smtp').
+     */
+    private string $transport = 'smtp';
+
+    /**
      * Construct a new instance of the Mail utility class.
      *
      * The constructor takes an array of configuration options as its argument.
@@ -45,10 +50,10 @@ class Mail extends PHPMailer implements MailUtilContract
         ];
 
         $this->config = $config; // Store the configuration for later use
+        $this->transport = $config['transport'] ?? 'smtp';
 
         $from = $config['from'] ?? $config['mailer'] ?? [];
         $reply = $config['reply'] ?? $config['reply_to'] ?? [];
-        $smtp = $config['smtp'] ?? [];
 
         // Set from configuration
         if (isset($from['address'])) {
@@ -59,9 +64,20 @@ class Mail extends PHPMailer implements MailUtilContract
             $this->addReplyTo($reply['address'], $reply['name'] ?? '');
         }
 
-        // Set SMTP configuration
-        if (isset($smtp) && ($smtp['enabled'] ?? true)) {
-            $this->configureSmtp($smtp);
+        // Configure SMTP if the transport method is 'smtp'
+        if ($this->transport === 'smtp') {
+            $this->configureSmtp($config['smtp'] ?? []);
+        }
+
+        // Configure Sendmail, Mail, or Log transport methods
+        elseif ($this->transport === 'sendmail') {
+            $this->isSendmail();
+        } elseif ($this->transport === 'mail') {
+            $this->isMail();
+        } elseif ($this->transport === 'log') {
+            // Log transport does not require additional configuration
+        } else {
+            throw new \InvalidArgumentException("Unsupported transport method: {$this->transport}");
         }
     }
 
@@ -371,6 +387,20 @@ class Mail extends PHPMailer implements MailUtilContract
     public function send(): bool
     {
         try {
+
+            if ($this->transport === 'log') {
+                Log::info('Email logged instead of sent.', [
+                    'from' => $this->FromName . ' <' . $this->From . '>',
+                    'to' => array_map(
+                        fn($recipient) => $recipient[0],
+                        $this->getToAddresses()
+                    ),
+                    'message_id' => $this->getLastMessageID(),
+                    'subject' => $this->Subject,
+                ]);
+                return true;
+            }
+
             return parent::send();
         } catch (\Throwable $e) {
             Log::error('Mail send failed: ' . $e->getMessage());
