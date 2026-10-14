@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark\Contracts\Utils;
+namespace Spark\Storage\Contracts;
 
 use Spark\Contracts\Support\Arrayable;
 
@@ -10,7 +10,7 @@ use Spark\Contracts\Support\Arrayable;
  * This interface defines the contract for the Uploader util class.
  * The Uploader class provides methods for handling file uploads.
  */
-interface UploaderUtilContract
+interface UploaderContract
 {
     /**
      * Uploads a file or multiple files.

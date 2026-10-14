@@ -180,11 +180,6 @@ class RedisStorage implements CacheStorageContract
         }
     }
 
-    public function clear(): void
-    {
-        $this->flush();
-    }
-
     public function storeMany(array $items, null|string $expire = null): void
     {
         foreach ($items as $key => $value) {

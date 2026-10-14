@@ -2,10 +2,10 @@
 
 namespace Spark\Storage;
 
-use Spark\Contracts\Utils\UploaderUtilDriverInterface;
+use Spark\Storage\Contracts\UploaderDriverInterface;
 
 /** Reuses the uploader's existing driver contract for S3-compatible storage. */
-class S3UploaderDriver implements UploaderUtilDriverInterface
+class S3UploaderDriver implements UploaderDriverInterface
 {
     public function __construct(private S3Storage $storage, private ?string $acl = null)
     {

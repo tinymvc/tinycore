@@ -3,7 +3,7 @@
 namespace Spark\Utils;
 
 use PHPMailer\PHPMailer\PHPMailer;
-use Spark\Contracts\Utils\MailUtilContract;
+use Spark\Contracts\Utils\MailContract;
 use Spark\Facades\Blade;
 use Spark\Facades\Log;
 use Spark\Support\Traits\Conditionable;
@@ -18,7 +18,7 @@ use Spark\Support\Traits\Macroable;
  * 
  * @package Spark\Utils
  */
-class Mail extends PHPMailer implements MailUtilContract
+class Mail extends PHPMailer implements MailContract
 {
     use Macroable, Conditionable;
 
@@ -56,12 +56,12 @@ class Mail extends PHPMailer implements MailUtilContract
         $reply = $config['reply'] ?? $config['reply_to'] ?? [];
 
         // Set from configuration
-        if (isset($from['address'])) {
-            $this->setFrom($from['address'], $from['name'] ?? '');
+        if (isset($from['address']) || isset($from['email'])) {
+            $this->setFrom($from['address'] ?? $from['email'], $from['name'] ?? '');
         }
 
-        if (isset($reply['address'])) {
-            $this->addReplyTo($reply['address'], $reply['name'] ?? '');
+        if (isset($reply['address']) || isset($reply['email'])) {
+            $this->addReplyTo($reply['address'] ?? $reply['email'], $reply['name'] ?? '');
         }
 
         // Configure SMTP if the transport method is 'smtp'
@@ -345,20 +345,6 @@ class Mail extends PHPMailer implements MailUtilContract
     }
 
     /**
-     * Set the sender of the email.
-     *
-     * Alias for `from()` to match the service contract.
-     *
-     * @param string $address The email address of the sender.
-     * @param string|null $name The name of the sender.
-     * @return self Returns the instance for method chaining.
-     */
-    public function mailer($address, $name = null): self
-    {
-        return $this->from($address, $name);
-    }
-
-    /**
      * Set the reply-to email address and name.
      *
      * This method takes an email address and an optional name, and sets the reply-to
@@ -387,26 +373,27 @@ class Mail extends PHPMailer implements MailUtilContract
     public function send(): bool
     {
         try {
-
+            // If the transport method is 'log', log the email instead of sending it
             if ($this->transport === 'log') {
+                if (!$this->preSend()) {
+                    return false;
+                }
+
                 Log::info('Email logged instead of sent.', [
-                    'from' => $this->FromName . ' <' . $this->From . '>',
-                    'to' => array_map(
-                        fn($recipient) => $recipient[0],
-                        $this->getToAddresses()
-                    ),
                     'message_id' => $this->getLastMessageID(),
-                    'subject' => $this->Subject,
+                    'to' => array_column($this->getToAddresses(), 0),
+                    'raw' => $this->getSentMIMEMessage(),
                 ]);
+
                 return true;
             }
 
-            return parent::send();
+            return parent::send(); // Call the parent send method for other transport methods
         } catch (\Throwable $e) {
             Log::error('Mail send failed: ' . $e->getMessage());
         }
 
-        return false;
+        return false; // Return false if sending the email failed
     }
 
     /**

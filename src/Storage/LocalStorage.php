@@ -4,14 +4,14 @@ namespace Spark\Storage;
 
 use InvalidArgumentException;
 use RuntimeException;
-use Spark\Contracts\Utils\UploaderUtilDriverInterface;
+use Spark\Storage\Contracts\UploaderDriverInterface;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function in_array;
 use function is_resource;
 
 /** Local disk storage. Symlinks below the configured root are not followed. */
-class LocalStorage implements UploaderUtilDriverInterface
+class LocalStorage implements UploaderDriverInterface
 {
     use Macroable, Conditionable;
 

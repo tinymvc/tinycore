@@ -23,7 +23,7 @@ class FormRequest extends Request
      */
     public function __construct()
     {
-        parent::__construct(); // Call the parent constructor to initialize the request.
+        $this->initializeFrom(app(Request::class));
 
         if (!$this->authorize()) {
             $this->failedAuthorization();

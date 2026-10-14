@@ -3,7 +3,7 @@
 namespace Spark\Utils;
 
 use GdImage;
-use Spark\Contracts\Utils\ImageUtilContract;
+use Spark\Contracts\Utils\ImageContract;
 use Spark\Exceptions\Utils\ImageUtilException;
 use Spark\Support\Traits\Macroable;
 use function intval;
@@ -18,7 +18,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Image implements ImageUtilContract
+class Image implements ImageContract
 {
     use Macroable;
 

@@ -3,7 +3,7 @@
 use Spark\Concurrency;
 use Spark\Console\Commands;
 use Spark\Contracts\Support\Arrayable;
-use Spark\Contracts\Utils\UploaderUtilDriverInterface;
+use Spark\Storage\Contracts\UploaderDriverInterface;
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
 use Spark\Events;
@@ -2114,7 +2114,7 @@ if (!function_exists('uploader')) {
      * @param null|array|float $resize Optional. The resize configuration array. Default is an empty array.
      * @param array|null $resizes Optional. The resizes configuration array. Default is an empty array.
      * @param int|null $compress Optional. The compression ratio for images. Default is null.
-     * @param UploaderUtilDriverInterface|null $driver Optional. The custom uploader driver instance. Default is null.
+     * @param UploaderDriverInterface|null $driver Optional. The custom uploader driver instance. Default is null.
      * @return Uploader The Uploader instance.
      */
     function uploader(
@@ -2125,7 +2125,7 @@ if (!function_exists('uploader')) {
         null|array|float $resize = null,
         null|array $resizes = null,
         null|int $compress = null,
-        null|UploaderUtilDriverInterface $driver = null
+        null|UploaderDriverInterface $driver = null
     ): Uploader {
         $uploader = new Uploader(
             uploadTo: $uploadTo,

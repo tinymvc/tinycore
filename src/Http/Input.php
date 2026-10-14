@@ -572,9 +572,14 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         $name = basename(str_replace('\\', '/', $name));
         $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name) ?? '';
 
+        $type = \Spark\Utils\File::mimeType($tmpName) ?: (is_string($type) ? $type : '');
+        if (empty($type)) {
+            throw new \RuntimeException("Failed to determine MIME type for uploaded file: {$name}");
+        }
+
         return [
             'name' => $name,
-            'type' => is_string($type) ? $type : '', // client-supplied: verify with finfo in the uploader
+            'type' => $type,
             'tmp_name' => $tmpName,
             'error' => is_scalar($error) ? (int) $error : UPLOAD_ERR_NO_FILE,
             'size' => is_scalar($size) ? (int) $size : 0,

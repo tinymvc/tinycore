@@ -102,6 +102,21 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $this->routeParams = []; // Initialize empty route parameters.
     }
 
+    /**
+     * Initializes the request object from another request instance.
+     *
+     * @param self $request The request instance to copy from.
+     * @return static The current request instance with copied properties.
+     */
+    public function initializeFrom(self $request): static
+    {
+        foreach (get_object_vars($request) as $key => $value) {
+            $this->{$key} = $value;
+        }
+
+        return $this;
+    }
+
     /** Configures the trusted proxies for the request. */
     private function configureAppTrustedProxies(): void
     {

@@ -8,7 +8,7 @@ namespace Spark\Contracts\Utils;
  * Defines the contract for the ViteUtil class, which provides methods to
  * interact with Vite development server.
  */
-interface ViteUtilContract
+interface ViteContract
 {
     /**
      * Checks if the Vite development server is running for the given entry.

@@ -8,7 +8,7 @@ namespace Spark\Contracts\Utils;
  * This contract defines the methods required for sending emails,
  * including setting the subject, body, recipients, and other email properties.
  */
-interface MailUtilContract
+interface MailContract
 {
     /**
      * Set the email subject.
@@ -75,7 +75,7 @@ interface MailUtilContract
      * @param string|null $name The name of the sender.
      * @return self Returns the instance for method chaining.
      */
-    public function mailer($address, $name = null): self;
+    public function from($address, $name = null): self;
 
     /**
      * Set the reply-to email address and name.

@@ -66,7 +66,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
         $user = (string) $request->ip() ?: '127.0.0.1';
         $path = trim($request->getPath(), '/');
 
-        $storage = Cache::make('th:requests');
+        $storage = Cache::make('throttle:requests');
         $identifier = md5($request->getMethod() . "|$path|$user|$suffix");
         $key = "{$duration}m:$attempts:$identifier";
 

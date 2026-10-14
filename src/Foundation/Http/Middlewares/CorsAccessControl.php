@@ -32,6 +32,9 @@ use function trim;
  */
 abstract class CorsAccessControl implements MiddlewareInterface
 {
+    /** Configuration key for CORS settings. */
+    protected const CONFIG_KEY = 'cors';
+
     /**
      * Constructor for the CORS middleware.
      *
@@ -39,7 +42,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     public function __construct(protected null|array $config = null)
     {
-        $this->config ??= config('cors', []);
+        $this->config ??= config(self::CONFIG_KEY, []);
     }
 
     /**

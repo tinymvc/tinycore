@@ -269,11 +269,7 @@ class FileStorage implements CacheStorageContract
                 }
             });
         }
-    }
 
-    public function clear(): void
-    {
-        $this->flush();
         $this->removeStaleTempFiles($this->cacheRoot);
     }
 

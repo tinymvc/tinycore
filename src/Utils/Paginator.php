@@ -5,7 +5,7 @@ namespace Spark\Utils;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
 use Spark\Contracts\Support\Jsonable;
-use Spark\Contracts\Utils\PaginatorUtilContract;
+use Spark\Contracts\Utils\PaginatorContract;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
@@ -21,7 +21,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Paginator implements PaginatorUtilContract, Arrayable, Htmlable, \Stringable, Jsonable, \JsonSerializable, \ArrayAccess, \IteratorAggregate
+class Paginator implements PaginatorContract, Arrayable, Htmlable, \Stringable, Jsonable, \JsonSerializable, \ArrayAccess, \IteratorAggregate
 {
     use Macroable, Conditionable;
 

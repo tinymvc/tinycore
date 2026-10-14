@@ -3,7 +3,7 @@
 namespace Spark\Storage\Contracts;
 
 use DateTimeInterface;
-use Spark\Contracts\Utils\UploaderUtilDriverInterface;
+use Spark\Storage\Contracts\UploaderDriverInterface;
 use Spark\Storage\Uploader;
 
 /**
@@ -47,7 +47,7 @@ interface StorageContract
 
     public function move(string $from, string $to): bool;
 
-    public function getDriver(): UploaderUtilDriverInterface;
+    public function getDriver(): UploaderDriverInterface;
 
     public function uploader(
         string $uploadTo = '',

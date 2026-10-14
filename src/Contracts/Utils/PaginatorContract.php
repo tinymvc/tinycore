@@ -8,7 +8,7 @@ namespace Spark\Contracts\Utils;
  * This interface defines the contract for the PaginatorUtil class.
  * It outlines the methods that must be implemented by the class.
  */
-interface PaginatorUtilContract
+interface PaginatorContract
 {
     /**
      * Retrieves the data collection.

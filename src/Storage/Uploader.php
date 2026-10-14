@@ -2,11 +2,11 @@
 
 namespace Spark\Storage;
 
+use Spark\Storage\Contracts\UploaderContract;
 use Spark\Utils\File;
 use Spark\Utils\Image;
 use Spark\Contracts\Support\Arrayable;
-use Spark\Contracts\Utils\UploaderUtilContract;
-use Spark\Contracts\Utils\UploaderUtilDriverInterface;
+use Spark\Storage\Contracts\UploaderDriverInterface;
 use Spark\Exceptions\Utils\UploaderUtilException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
@@ -25,7 +25,7 @@ use function strlen;
  * @package Spark\Storage
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Uploader implements UploaderUtilContract
+class Uploader implements UploaderContract
 {
     use Macroable, Conditionable;
 
@@ -53,8 +53,8 @@ class Uploader implements UploaderUtilContract
     /** @var ?string Base directory stripped from driver destinations and returned paths. */
     private ?string $relativeTo = null;
 
-    /** @var ?UploaderUtilDriverInterface File upload driver. */
-    private ?UploaderUtilDriverInterface $driver;
+    /** @var ?UploaderDriverInterface File upload driver. */
+    private ?UploaderDriverInterface $driver;
 
     /**
      * Sets up the uploader configuration.
@@ -78,7 +78,7 @@ class Uploader implements UploaderUtilContract
         null|float|array $resize = null,
         null|array $resizes = null,
         null|int $compress = null,
-        null|UploaderUtilDriverInterface $driver = null,
+        null|UploaderDriverInterface $driver = null,
         null|string $relativeTo = null
     ) {
         $extensions = $extensions === null ? [] : $extensions;
@@ -126,7 +126,7 @@ class Uploader implements UploaderUtilContract
      * @param null|array $resizes Bulk resize options for images.
      * @param null|int $compress Compression level for images.
      * @param ?string $relativeTo Base directory stripped from driver destinations and returned paths.
-     * @param null|UploaderUtilDriverInterface $driver File upload driver.
+     * @param null|UploaderDriverInterface $driver File upload driver.
      * @return self Returns a new instance of the Uploader class.
      */
     public static function make(
@@ -138,7 +138,7 @@ class Uploader implements UploaderUtilContract
         null|float|array $resize = null,
         null|array $resizes = null,
         null|int $compress = null,
-        null|UploaderUtilDriverInterface $driver = null,
+        null|UploaderDriverInterface $driver = null,
         null|string $relativeTo = null
     ): self {
         return new self(
@@ -557,7 +557,7 @@ class Uploader implements UploaderUtilContract
         }
 
         // Replace non-alphanumeric characters with a hyphen
-        $baseName = preg_replace('/[^a-zA-Z0-9]+/u', '-', $baseName);
+        $baseName = trim(preg_replace('/[^a-zA-Z0-9]+/u', '-', $baseName), '-');
 
         // Limit the length of the base name (60 characters) while keeping multibyte safety
         $baseName = function_exists('mb_substr')

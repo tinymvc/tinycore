@@ -31,9 +31,9 @@ interface AuthDriverContract
     /**
      * Get the currently logged-in user.
      *
-     * @return Model|false
+     * @return ?Model
      */
-    public function getUser(): Model|false;
+    public function getUser(): ?Model;
 
     /**
      * Check and return the ID of the currently logged-in user.

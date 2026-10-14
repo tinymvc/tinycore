@@ -5,7 +5,7 @@ namespace Spark\Contracts\Utils;
 /**
  * Interface for image utilities.
  */
-interface ImageUtilContract
+interface ImageContract
 {
     /**
      * Compresses the image.

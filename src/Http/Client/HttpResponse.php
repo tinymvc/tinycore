@@ -20,11 +20,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
 
     private ?string $jsonBody = null;
 
-    /**
-     * Sets the response data.
-     *
-     * @param array $response The response data.
-     */
+    /** Create a new HttpResponse instance. */
     public function __construct(
         public mixed $body = '', // The response body
         public int $status = 0, // The HTTP status code

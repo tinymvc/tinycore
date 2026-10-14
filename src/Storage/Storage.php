@@ -4,7 +4,7 @@ namespace Spark\Storage;
 
 use InvalidArgumentException;
 use RuntimeException;
-use Spark\Contracts\Utils\UploaderUtilDriverInterface;
+use Spark\Storage\Contracts\UploaderDriverInterface;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function is_array;
@@ -299,7 +299,7 @@ class Storage implements Contracts\StorageContract
     }
 
     /** Uploader driver for integrations that already manage relative destinations. */
-    public function getDriver(): UploaderUtilDriverInterface
+    public function getDriver(): UploaderDriverInterface
     {
         return $this->driver;
     }

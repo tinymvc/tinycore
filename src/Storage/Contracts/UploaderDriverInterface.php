@@ -1,14 +1,12 @@
 <?php
 
-namespace Spark\Contracts\Utils;
+namespace Spark\Storage\Contracts;
 
 /**
  * UploaderUtilDriverInterface defines the contract for file upload and deletion operations.
  * Implementations of this interface should handle the specifics of file storage, such as local or cloud storage.
- *
- * @package Spark\Contracts\Utils
  */
-interface UploaderUtilDriverInterface
+interface UploaderDriverInterface
 {
     /**
      * Upload a file to the specified destination.

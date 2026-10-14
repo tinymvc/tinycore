@@ -3,7 +3,7 @@
 namespace Spark\Utils;
 
 use Throwable;
-use Spark\Contracts\Utils\ViteUtilContract;
+use Spark\Contracts\Utils\ViteContract;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function array_map;
@@ -36,7 +36,7 @@ use function trim;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Vite implements ViteUtilContract
+class Vite implements ViteContract
 {
     use Macroable;
 
