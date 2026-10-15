@@ -34,6 +34,7 @@ use Spark\Cache\Cache as BaseCache;
  * @method static array stats()
  * @method static null|int ttl(string $key)
  * @method static BaseCache optimize()
+ * @method static BaseCache make(string $name = 'default')
  * 
  * @package Spark\Facades
  * 
