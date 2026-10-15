@@ -22,7 +22,7 @@ use Spark\Http\Auth as BaseAuth;
  * @method static int getId()
  * @method static int id()
  * @method static bool check()
- * @method static bool attempt(array $credentials)
+ * @method static bool attempt(Arrayable|array $credentials, bool $remember = false)
  * @method static bool isGuest()
  * @method static bool isLogged()
  * @method static void configure(array $config)
