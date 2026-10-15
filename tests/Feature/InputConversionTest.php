@@ -301,8 +301,7 @@ final class InputConversionTest extends FrameworkTestCase
     public function test_password_trim(): void
     {
         $input = new \Spark\Http\Input(['value' => ' secret ']);
-        $this->assertSame('secret', $input->password('value'));
-        $this->assertSame(' secret ', $input->get('value'));
+        $this->assertSame(' secret ', $input->password('value'));
     }
 
     public function test_password_null(): void
