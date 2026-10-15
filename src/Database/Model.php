@@ -1553,6 +1553,30 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     }
 
     /**
+     * Get the names of the timestamp attributes used by the model.
+     *
+     * @return array An associative array with keys 'created_at' and 'updated_at' if they are used.
+     */
+    public function usesTimestamps(): array
+    {
+        if (!static::USE_TIMESTAMPS) {
+            return [];
+        }
+
+        $timestamps = [];
+
+        if (static::CREATED_AT) {
+            $timestamps[static::CREATED_AT] = now();
+        }
+
+        if (static::UPDATED_AT) {
+            $timestamps[static::UPDATED_AT] = now();
+        }
+
+        return $timestamps;
+    }
+
+    /**
      * Set the model's attributes.
      *
      * @param array $attributes The attributes to set on the model.

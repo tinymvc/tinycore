@@ -49,6 +49,11 @@ trait BuildsWriteQueries
         // Normalize data to always be an array of records
         $data = !array_is_list($data) && !(isset($data[0]) && is_array($data[0])) ? [$data] : $data;
 
+        // Add timestamps to each record if the model uses them
+        if (($model = $this->getModelBeingUsed()) !== null && ($timestamps = $model->usesTimestamps()) !== []) {
+            $data = array_map(fn($row) => [...$timestamps, ...$row], $data);
+        }
+
         $fields = $this->getInsertFields($data);
 
         // Generate the SQL statement
