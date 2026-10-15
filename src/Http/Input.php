@@ -1023,6 +1023,28 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     }
 
     /**
+     * Merges the sanitizer data array with another array.
+     *
+     * @param array $data Array to merge with the sanitizer data.
+     * @return self Returns a new instance with merged data.
+     */
+    public function merge(array $data): self
+    {
+        return new self($this->data->merge($data));
+    }
+
+    /**
+     * Recursively merges the sanitizer data array with another array.
+     *
+     * @param array $data Array to recursively merge with the sanitizer data.
+     * @return self Returns a new instance with recursively merged data.
+     */
+    public function mergeRecursive(array $data): self
+    {
+        return new self($this->data->mergeRecursive($data));
+    }
+
+    /**
      * Converts the sanitizer data array to a Spark\Support\Collection.
      *
      * @return Collection The collection containing sanitized data.
