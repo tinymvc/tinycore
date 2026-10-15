@@ -280,15 +280,16 @@ class Auth implements AuthContract, ArrayAccess
      * Attempts to authenticate a user with the given credentials.
      *
      * @param array $credentials An array containing the user's credentials (e.g., email and password).
+     * @param bool $remember Optional parameter to determine if the user should be remembered.
      * @return bool True if authentication is successful, false otherwise.
      */
-    public function attempt(array $credentials): bool
+    public function attempt(array $credentials, bool $remember = false): bool
     {
         $identifier = \Spark\Support\Arr::except($credentials, ['password']);
 
         $user = $this->model::where($identifier)->first();
         if ($user && passcode($credentials['password'], $user->password)) {
-            $this->login($user);
+            $this->login($user, $remember);
             return true;
         }
 
