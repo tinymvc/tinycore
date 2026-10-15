@@ -5,6 +5,7 @@ namespace Spark\Http;
 use ArrayAccess;
 use Spark\Contracts\Http\AuthContract;
 use Spark\Contracts\Http\AuthDriverContract;
+use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Model;
 use Spark\Facades\DB;
 use Spark\Facades\Hash;
@@ -283,8 +284,12 @@ class Auth implements AuthContract, ArrayAccess
      * @param bool $remember Optional parameter to determine if the user should be remembered.
      * @return bool True if authentication is successful, false otherwise.
      */
-    public function attempt(array $credentials, bool $remember = false): bool
+    public function attempt(Arrayable|array $credentials, bool $remember = false): bool
     {
+        if ($credentials instanceof Arrayable) {
+            $credentials = $credentials->toArray();
+        }
+
         $identifier = \Spark\Support\Arr::except($credentials, ['password']);
 
         $user = $this->model::where($identifier)->first();

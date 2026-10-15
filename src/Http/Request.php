@@ -1126,16 +1126,6 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Return the array of file uploads.
-     * 
-     * @return Collection Array of file uploads.
-     */
-    public function getFileUploads(): Collection
-    {
-        return $this->files;
-    }
-
-    /**
      * Retrieves all request headers.
      * 
      * @return Collection A collection of all request headers.
