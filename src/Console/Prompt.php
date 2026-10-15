@@ -115,6 +115,7 @@ class Prompt implements PromptContract
         $separator = self::isTerminal()
             ? ' ' . str_repeat('.', max(2, $width - strlen($message) - strlen($elapsed) - strlen($status) - 4)) . ' '
             : ' ';
+
         $style = match ($status) {
             'DONE' => 'success',
             'FAIL', 'ERROR' => 'danger',

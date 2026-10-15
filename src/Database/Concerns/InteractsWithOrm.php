@@ -1065,6 +1065,7 @@ trait InteractsWithOrm
 
         $tables = [Str::lower($currentTable), Str::lower($relatedTable)];
         sort($tables);
+
         return implode('_', $tables);
     }
 

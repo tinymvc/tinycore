@@ -51,7 +51,7 @@ trait BuildsWriteQueries
 
         // Add timestamps to each record if the model uses them
         if (
-            !(isset($config['conflict'], $config['update'])) &&
+            !isset($config['conflict'], $config['update']) &&
             ($model = $this->getModelBeingUsed()) !== null && ($timestamps = $model->usesTimestamps()) !== []
         ) {
             $data = array_map(fn($row) => [...$timestamps, ...$row], $data);

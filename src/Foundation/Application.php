@@ -115,6 +115,15 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(Middleware::class);
         $this->singleton(Events::class);
 
+        $this->alias('translator', Translator::class);
+        $this->alias('db', DB::class);
+        $this->alias('hash', Hash::class);
+        $this->alias('blade', Blade::class);
+        $this->alias('queue', Queue::class);
+        $this->alias('router', Router::class);
+        $this->alias('middleware', Middleware::class);
+        $this->alias('events', Events::class);
+
         // Bind core services to the container for Http Client
         if (is_web() || $this->testing) {
             $this->singleton(Session::class);
@@ -124,7 +133,26 @@ class Application extends \Spark\Container implements ApplicationContract
             $this->singleton(Gate::class);
             $this->singleton(Auth::class);
             $this->singleton(Vite::class);
+
+            $this->alias('session', Session::class);
+            $this->alias('inputErrors', InputErrors::class);
+            $this->alias('request', Request::class);
+            $this->alias('response', Response::class);
+            $this->alias('gate', Gate::class);
+            $this->alias('auth', Auth::class);
+            $this->alias('vite', Vite::class);
         }
+
+        $this->bind('input', $this->get(Request::class)->input(...));
+
+        $this->alias('storage', \Spark\Storage\Storage::class);
+        $this->alias('uploader', \Spark\Storage\Uploader::class);
+        $this->alias('cache', \Spark\Cache\Cache::class);
+        $this->alias('lock', \Spark\Cache\Lock::class);
+        $this->alias('query', \Spark\Database\QueryBuilder::class);
+        $this->alias('validator', \Spark\Http\Validator::class);
+        $this->alias('mail', \Spark\Utils\Mail::class);
+        $this->alias('jwt', \Spark\Utils\JWT::class);
     }
 
     /**

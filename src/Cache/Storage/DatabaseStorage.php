@@ -678,7 +678,7 @@ class DatabaseStorage implements CacheStorageContract
         $sql = "INSERT INTO {$h['table']} ($columns) VALUES ($placeholders)";
 
         if ($h['driver'] !== 'mysql') {
-            return $this->run($h, $sql . ' ON CONFLICT DO NOTHING', $params)->rowCount() === 1;
+            return $this->run($h, "$sql ON CONFLICT DO NOTHING", $params)->rowCount() === 1;
         }
 
         try {
@@ -877,7 +877,7 @@ class DatabaseStorage implements CacheStorageContract
      */
     private function physicalKey(string $key): string
     {
-        $physical = $this->prefix . $key . ':';
+        $physical = $this->prefix . "$key:";
 
         if (strlen($physical) > self::MAX_KEY_LENGTH) {
             throw new CacheException(

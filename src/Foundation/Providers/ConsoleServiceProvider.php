@@ -34,6 +34,10 @@ class ConsoleServiceProvider extends ServiceProvider
 
         // Register the migration singleton
         $this->app->singleton(Migration::class);
+
+        $this->app->alias('console', Console::class);
+        $this->app->alias('commands', Commands::class);
+        $this->app->alias('migration', Migration::class);
     }
 
     /**
