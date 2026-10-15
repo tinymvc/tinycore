@@ -7,7 +7,7 @@ use Spark\Utils\File;
 use Spark\Utils\Image;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Storage\Contracts\UploaderDriverInterface;
-use Spark\Exceptions\Utils\UploaderUtilException;
+use Spark\Exceptions\Utils\UploaderException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
@@ -160,13 +160,13 @@ class Uploader implements UploaderContract
      *
      * @param string $uploadDir Upload directory path.
      * @return $this
-     * @throws UploaderUtilException If the upload directory cannot be created or is not writable.
+     * @throws UploaderException If the upload directory cannot be created or is not writable.
      */
     public function setUploadDir(string $uploadDir): self
     {
         // Ensure the upload directory exists and is writable
         if (!File::ensureDirectoryWritable($uploadDir)) {
-            throw new UploaderUtilException(__('Upload directory is not writable.'));
+            throw new UploaderException(__('Upload directory is not writable.'));
         }
 
         $this->uploadDir = dir_path($uploadDir);
@@ -185,7 +185,7 @@ class Uploader implements UploaderContract
             $files = app(\Spark\Http\Request::class)->file($files);
 
             if ($files === null) {
-                throw new UploaderUtilException(__('No files were provided.'));
+                throw new UploaderException(__('No files were provided.'));
             }
         } elseif ($files instanceof Arrayable) {
             $files = $files->toArray();
@@ -194,19 +194,19 @@ class Uploader implements UploaderContract
         $files = $this->normalizeFilesArray($files);
 
         if (!isset($files['name']) || $files['name'] === '' || $files['name'] === []) {
-            throw new UploaderUtilException(__('No files were provided.'));
+            throw new UploaderException(__('No files were provided.'));
         }
 
         // Local variable: auto-detection must not leak into the next upload() call.
         $multiple = $this->multiple ?? is_array($files['name']);
 
         if ($multiple !== is_array($files['name'])) {
-            throw new UploaderUtilException(__('Invalid upload payload.'));
+            throw new UploaderException(__('Invalid upload payload.'));
         }
 
         if (!$multiple) {
             if (!is_string($files['name']) || !is_string($files['tmp_name'])) {
-                throw new UploaderUtilException(__('Invalid upload payload.'));
+                throw new UploaderException(__('Invalid upload payload.'));
             }
 
             $paths = (array) $this->processUpload($files);
@@ -218,19 +218,19 @@ class Uploader implements UploaderContract
             !is_array($files['tmp_name'] ?? null)
             || array_keys($files['name']) !== array_keys($files['tmp_name'])
         ) {
-            throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+            throw new UploaderException(__('Invalid multiple upload payload.'));
         }
 
         foreach (['error', 'size', 'type'] as $field) {
             if (isset($files[$field]) && !is_array($files[$field])) {
-                throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+                throw new UploaderException(__('Invalid multiple upload payload.'));
             }
         }
 
         // Validate every shape before storing any files; runtime failures can still be partial.
         foreach ($files['name'] as $key => $name) {
             if (!is_string($name) || !is_string($files['tmp_name'][$key])) {
-                throw new UploaderUtilException(__('Invalid multiple upload payload.'));
+                throw new UploaderException(__('Invalid multiple upload payload.'));
             }
         }
 
@@ -264,7 +264,7 @@ class Uploader implements UploaderContract
         }
 
         if ($uploaded === []) {
-            throw new UploaderUtilException(__('No files were provided.'));
+            throw new UploaderException(__('No files were provided.'));
         }
 
         return $uploaded;
@@ -377,37 +377,37 @@ class Uploader implements UploaderContract
      *
      * @param array $file Array containing file details such as name, type, tmp_name, error, and size.
      * @return array|string Returns the file path of the uploaded file or an array of paths if resizing options are applied.
-     * @throws UploaderUtilException If file validation fails or moving the file fails.
+     * @throws UploaderException If file validation fails or moving the file fails.
      */
     protected function processUpload(array $file): array|string
     {
         if (!isset($file['tmp_name'], $file['name']) || !is_string($file['name'])) {
-            throw new UploaderUtilException(__('Invalid file data.'));
+            throw new UploaderException(__('Invalid file data.'));
         }
 
         $tmpName = $file['tmp_name'];
         if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
-            throw new UploaderUtilException(__('Upload error: %s', $file['error'] ?? UPLOAD_ERR_OK));
+            throw new UploaderException(__('Upload error: %s', $file['error'] ?? UPLOAD_ERR_OK));
         }
 
         if (!is_string($tmpName) || !is_uploaded_file($tmpName)) {
-            throw new UploaderUtilException(__('The source is not a valid HTTP upload. Use Storage::putFile() for local files.'));
+            throw new UploaderException(__('The source is not a valid HTTP upload. Use Storage::putFile() for local files.'));
         }
 
         $actualSize = filesize($tmpName);
         if ($actualSize === false) {
-            throw new UploaderUtilException(__('Cannot read uploaded file size.'));
+            throw new UploaderException(__('Cannot read uploaded file size.'));
         }
 
         // Validate the actual size, not a caller-supplied size field.
         if (isset($this->maxSize) && ($actualSize > ($this->maxSize * 1024))) {
-            throw new UploaderUtilException(__('File size exceeds the maximum limit.'));
+            throw new UploaderException(__('File size exceeds the maximum limit.'));
         }
 
         // Validate file extension
         $extension = strtolower(ltrim(pathinfo($file['name'], PATHINFO_EXTENSION), '.'));
         if (!empty($this->extensions) && !in_array(strtolower($extension), $this->extensions, true)) {
-            throw new UploaderUtilException(__('Invalid file extension. Only %s are accepted.', implode(', ', $this->extensions)));
+            throw new UploaderException(__('Invalid file extension. Only %s are accepted.', implode(', ', $this->extensions)));
         }
 
         // Check if additional image options are set
@@ -421,7 +421,7 @@ class Uploader implements UploaderContract
         if ($additionalImageOptions) {
             // For image processing we need a local file first.
             if (!move_uploaded_file($tmpName, $destination)) {
-                throw new UploaderUtilException(__('Failed to move uploaded file.'));
+                throw new UploaderException(__('Failed to move uploaded file.'));
             }
 
             $destination = $this->processImageOptions($destination);
@@ -432,11 +432,11 @@ class Uploader implements UploaderContract
                 try {
                     foreach ($destination as $filePath) {
                         if (!is_file($filePath)) {
-                            throw new UploaderUtilException(__('Optimized image file not found: %s', $filePath));
+                            throw new UploaderException(__('Optimized image file not found: %s', $filePath));
                         }
 
                         if (!$this->handleUpload($filePath, $filePath)) {
-                            throw new UploaderUtilException(__('Failed to upload file using driver.'));
+                            throw new UploaderException(__('Failed to upload file using driver.'));
                         }
 
                         $uploadedFiles[] = $filePath;
@@ -444,7 +444,7 @@ class Uploader implements UploaderContract
 
                     foreach ($destination as $filePath) {
                         if (!@unlink($filePath)) {
-                            throw new UploaderUtilException(__('Failed to remove local temporary file: %s', $filePath));
+                            throw new UploaderException(__('Failed to remove local temporary file: %s', $filePath));
                         }
                     }
                 } catch (\Throwable $e) {
@@ -463,15 +463,15 @@ class Uploader implements UploaderContract
                         }
                     }
 
-                    throw new UploaderUtilException(__('Failed to upload file using driver: %s', $e->getMessage()), previous: $e);
+                    throw new UploaderException(__('Failed to upload file using driver: %s', $e->getMessage()), previous: $e);
                 }
             }
         } elseif (!$this->driver) {
             if (!move_uploaded_file($tmpName, $destination)) {
-                throw new UploaderUtilException(__('Failed to move uploaded file.'));
+                throw new UploaderException(__('Failed to move uploaded file.'));
             }
         } elseif (!$this->handleUpload($tmpName, $destination)) {
-            throw new UploaderUtilException(__('Failed to move uploaded file.'));
+            throw new UploaderException(__('Failed to move uploaded file.'));
         }
 
         return $this->removeUploadDir($destination);
@@ -533,7 +533,7 @@ class Uploader implements UploaderContract
                 }
             }
 
-            throw new UploaderUtilException(
+            throw new UploaderException(
                 __('Image processing failed: %s', $e->getMessage()),
                 previous: $e
             );

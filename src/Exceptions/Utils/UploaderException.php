@@ -4,6 +4,6 @@ namespace Spark\Exceptions\Utils;
 
 use Exception;
 
-class ImageUtilException extends Exception
+class UploaderException extends Exception
 {
 }

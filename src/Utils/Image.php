@@ -4,7 +4,7 @@ namespace Spark\Utils;
 
 use GdImage;
 use Spark\Contracts\Utils\ImageContract;
-use Spark\Exceptions\Utils\ImageUtilException;
+use Spark\Exceptions\Utils\ImageException;
 use Spark\Support\Traits\Macroable;
 use function intval;
 use function is_numeric;
@@ -67,8 +67,8 @@ class Image implements ImageContract
      * images information using the getimagesize and pathinfo functions.
      *
      * @param string $imageSource The source path of the image to be loaded.
-     * @throws ImageUtilException If the GD extension is not loaded, or if the required functions are not enabled in this system.
-     * @throws ImageUtilException If the source image file does not exist.
+     * @throws ImageException If the GD extension is not loaded, or if the required functions are not enabled in this system.
+     * @throws ImageException If the source image file does not exist.
      */
     public function setImageSource(string $imageSource): void
     {
@@ -80,7 +80,7 @@ class Image implements ImageContract
 
         // Check is GD php extension is loaded or not.
         if (!extension_loaded('gd')) {
-            throw new ImageUtilException('Extension: GD is required to create image');
+            throw new ImageException('Extension: GD is required to create image');
         }
 
         // The extensions are required for this image object.
@@ -100,24 +100,24 @@ class Image implements ImageContract
         // Check if all extensions are enabled in this system.
         foreach ($requiredFunctions as $func) {
             if (!function_exists($func)) {
-                throw new ImageUtilException("Required function: {$func}() is not found.");
+                throw new ImageException("Required function: {$func}() is not found.");
             }
         }
 
         // Check if the source image file exist or not.
         if (!file_exists($this->imageSource)) {
-            throw new ImageUtilException("Image file: {$this->imageSource} does not exist.");
+            throw new ImageException("Image file: {$this->imageSource} does not exist.");
         }
 
         // Extract images information, size, dimensions, extension etc...
         $imageSize = @getimagesize($this->imageSource);
 
         if ($imageSize === false) {
-            throw new ImageUtilException("Failed to get image size for: {$this->imageSource}");
+            throw new ImageException("Failed to get image size for: {$this->imageSource}");
         }
 
         if (!isset($imageSize[0], $imageSize[1], $imageSize['mime'])) {
-            throw new ImageUtilException("Unable to read required image metadata for: {$this->imageSource}");
+            throw new ImageException("Unable to read required image metadata for: {$this->imageSource}");
         }
 
         $this->info = [...$imageSize, ...pathinfo($this->imageSource)];
@@ -180,7 +180,7 @@ class Image implements ImageContract
      * 
      * @return GdImage|resource The GD image resource.
      * 
-     * @throws ImageUtilException If the image type is unsupported.
+     * @throws ImageException If the image type is unsupported.
      */
     public function getImage(): GdImage
     {
@@ -189,11 +189,11 @@ class Image implements ImageContract
                 'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($this->imageSource),
                 'image/png' => @imagecreatefrompng($this->imageSource),
                 'image/gif' => @imagecreatefromgif($this->imageSource),
-                default => throw new ImageUtilException("Unsupported image type: {$this->getInfo('mime')}"),
+                default => throw new ImageException("Unsupported image type: {$this->getInfo('mime')}"),
             };
 
             if ($this->image === false) {
-                throw new ImageUtilException("Failed to create image from: {$this->imageSource}");
+                throw new ImageException("Failed to create image from: {$this->imageSource}");
             }
         }
 
@@ -205,7 +205,7 @@ class Image implements ImageContract
      * 
      * @return GdImage|resource The GD image resource.
      * 
-     * @throws ImageUtilException If the image type is unsupported.
+     * @throws ImageException If the image type is unsupported.
      */
     public function image()
     {
@@ -220,12 +220,12 @@ class Image implements ImageContract
      * 
      * @return bool Returns true on success, false on failure.
      * 
-     * @throws ImageUtilException If quality is out of range.
+     * @throws ImageException If quality is out of range.
      */
     public function compress(int $quality = 75, $destination = null): bool
     {
         if ($quality < 0 || $quality > 100) {
-            throw new ImageUtilException("Quality must be between 0 and 100, got: {$quality}");
+            throw new ImageException("Quality must be between 0 and 100, got: {$quality}");
         }
 
         $destination ??= $this->imageSource;
@@ -233,7 +233,7 @@ class Image implements ImageContract
 
         if (file_exists($destination)) {
             if (!@unlink($destination)) {
-                throw new ImageUtilException("Failed to delete existing file: {$destination}");
+                throw new ImageException("Failed to delete existing file: {$destination}");
             }
         }
 
@@ -247,7 +247,7 @@ class Image implements ImageContract
         };
 
         if ($result === false) {
-            throw new ImageUtilException("Failed to save compressed image to: {$destination}");
+            throw new ImageException("Failed to save compressed image to: {$destination}");
         }
 
         $this->setImageSource($destination);
@@ -264,16 +264,16 @@ class Image implements ImageContract
      * 
      * @return bool Returns true on success, false on failure.
      * 
-     * @throws ImageUtilException If dimensions are invalid.
+     * @throws ImageException If dimensions are invalid.
      */
     public function resize(int $imgWidth, int $imgHeight, ?string $destination = null): bool
     {
         if ($imgWidth <= 0 || $imgHeight <= 0) {
-            throw new ImageUtilException("Image dimensions must be positive, got: {$imgWidth}x{$imgHeight}");
+            throw new ImageException("Image dimensions must be positive, got: {$imgWidth}x{$imgHeight}");
         }
 
         if ($imgWidth > 10000 || $imgHeight > 10000) {
-            throw new ImageUtilException("Image dimensions too large (max 10000x10000): {$imgWidth}x{$imgHeight}");
+            throw new ImageException("Image dimensions too large (max 10000x10000): {$imgWidth}x{$imgHeight}");
         }
 
         $destination ??= $this->imageSource;
@@ -282,14 +282,14 @@ class Image implements ImageContract
         $height = $this->getInfo(1);
 
         if (!is_numeric($width) || !is_numeric($height)) {
-            throw new ImageUtilException('Image width and height are not numeric.');
+            throw new ImageException('Image width and height are not numeric.');
         }
 
         $width = (int) $width;
         $height = (int) $height;
 
         if ($width <= 0 || $height <= 0) {
-            throw new ImageUtilException("Invalid source image dimensions: {$width}x{$height}");
+            throw new ImageException("Invalid source image dimensions: {$width}x{$height}");
         }
 
         $image = $this->getImage();
@@ -303,13 +303,13 @@ class Image implements ImageContract
         $destY = (int) floor(($imgHeight - $scaledHeight) / 2);
 
         if ($scaledWidth <= 0 || $scaledHeight <= 0) {
-            throw new ImageUtilException("Failed to calculate resize target for image: {$this->imageSource}");
+            throw new ImageException("Failed to calculate resize target for image: {$this->imageSource}");
         }
 
         $photo = @imagecreatetruecolor($imgWidth, $imgHeight);
 
         if ($photo === false) {
-            throw new ImageUtilException("Failed to create image with dimensions: {$imgWidth}x{$imgHeight}");
+            throw new ImageException("Failed to create image with dimensions: {$imgWidth}x{$imgHeight}");
         }
 
         if ($this->getInfo('mime') === 'image/png') {
@@ -322,7 +322,7 @@ class Image implements ImageContract
         if (file_exists($destination)) {
             if (!@unlink($destination)) {
                 $photo = null;
-                throw new ImageUtilException("Failed to delete existing file: {$destination}");
+                throw new ImageException("Failed to delete existing file: {$destination}");
             }
         }
 
@@ -341,7 +341,7 @@ class Image implements ImageContract
 
         if ($resampled === false) {
             $photo = null;
-            throw new ImageUtilException("Failed to resample image");
+            throw new ImageException("Failed to resample image");
         }
 
         $result = match ($this->getInfo('mime')) {
@@ -352,7 +352,7 @@ class Image implements ImageContract
 
         if ($result === false) {
             $photo = null;
-            throw new ImageUtilException("Failed to save resized image to: {$destination}");
+            throw new ImageException("Failed to save resized image to: {$destination}");
         }
 
         $photo = null;
@@ -377,7 +377,7 @@ class Image implements ImageContract
             $height = (int) $height;
 
             if ($width <= 0 || $height <= 0) {
-                throw new ImageUtilException("Bulk resize dimensions must be positive: {$width}x{$height}");
+                throw new ImageException("Bulk resize dimensions must be positive: {$width}x{$height}");
             }
 
             $savePath = sprintf(
@@ -404,7 +404,7 @@ class Image implements ImageContract
      * 
      * @return bool Returns true on success, false on failure.
      * 
-     * @throws ImageUtilException If rotation fails.
+     * @throws ImageException If rotation fails.
      */
     public function rotate(float $degrees): bool
     {
@@ -420,7 +420,7 @@ class Image implements ImageContract
         $rotated = @imagerotate($image, $degrees, $background);
 
         if ($rotated === false) {
-            throw new ImageUtilException("Failed to rotate image by {$degrees} degrees");
+            throw new ImageException("Failed to rotate image by {$degrees} degrees");
         }
 
         if ($mime === 'image/png') {
@@ -440,7 +440,7 @@ class Image implements ImageContract
             $this->image = $rotated;
         } else {
             $rotated = null;
-            throw new ImageUtilException("Failed to save rotated image to: {$this->imageSource}");
+            throw new ImageException("Failed to save rotated image to: {$this->imageSource}");
         }
 
         $this->setImageSource($this->imageSource);
