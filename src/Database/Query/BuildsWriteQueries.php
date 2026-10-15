@@ -154,7 +154,7 @@ trait BuildsWriteQueries
      *
      * @param array|Arrayable $data  Key-value pairs of columns and their respective values to update.
      * @param null|string|array|Arrayable|Closure $where  Optional WHERE clause to specify which records to update.
-     * @return bool
+     * @return int
      */
     public function update(array|Arrayable $data, null|string|array|Arrayable|Closure $where = null): int
     {
@@ -585,6 +585,7 @@ trait BuildsWriteQueries
         if ($positional && $this->bindings !== []) {
             throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
         }
+
         $bindings = $positional ? [$value, ...$this->parameters] : ['increment' => $value, ...$this->getBindings()];
         $placeholder = $positional ? '?' : ':increment';
         $sql = "UPDATE " . $this->getTableName()
@@ -628,6 +629,7 @@ trait BuildsWriteQueries
         if ($positional && $this->bindings !== []) {
             throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
         }
+
         $bindings = $positional ? [$value, ...$this->parameters] : ['decrement' => $value, ...$this->getBindings()];
         $placeholder = $positional ? '?' : ':decrement';
         $sql = "UPDATE " . $this->getTableName()
