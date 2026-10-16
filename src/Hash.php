@@ -190,13 +190,7 @@ class Hash implements HashContract
      */
     public function hashPassword(string $password): string
     {
-        $hash = password_hash($password, $this->passwordAlgorithm, $this->passwordOptions);
-
-        if ($hash === false) {
-            throw new \RuntimeException('Unable to hash password.');
-        }
-
-        return $hash;
+        return password_hash($password, $this->passwordAlgorithm, $this->passwordOptions);
     }
 
     /**
@@ -541,13 +535,7 @@ class Hash implements HashContract
     public function bcrypt(string $password, array $options = []): string
     {
         $options = ['cost' => 12, ...$options];
-        $hash = password_hash($password, PASSWORD_BCRYPT, $options);
-
-        if ($hash === false) {
-            throw new \RuntimeException('Unable to hash password with bcrypt.');
-        }
-
-        return $hash;
+        return password_hash($password, PASSWORD_BCRYPT, $options);
     }
 
     /**
@@ -564,13 +552,7 @@ class Hash implements HashContract
         }
 
         $options = [...$this->passwordOptions, ...$options];
-        $hash = password_hash($password, PASSWORD_ARGON2I, $options);
-
-        if ($hash === false) {
-            throw new \RuntimeException('Unable to hash password with argon2i.');
-        }
-
-        return $hash;
+        return password_hash($password, PASSWORD_ARGON2I, $options);
     }
 
     /**
@@ -587,13 +569,7 @@ class Hash implements HashContract
         }
 
         $options = [...$this->passwordOptions, ...$options];
-        $hash = password_hash($password, PASSWORD_ARGON2ID, $options);
-
-        if ($hash === false) {
-            throw new \RuntimeException('Unable to hash password with argon2id.');
-        }
-
-        return $hash;
+        return password_hash($password, PASSWORD_ARGON2ID, $options);
     }
 
     /**

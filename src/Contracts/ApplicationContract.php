@@ -53,6 +53,23 @@ interface ApplicationContract
     public function getConfig(string $key, $default = null): mixed;
 
     /**
+     * Sets a configuration value.
+     *
+     * @param string $key The configuration key.
+     * @param mixed $value The configuration value.
+     * @return void
+     */
+    public function setConfig(string $key, mixed $value): void;
+
+    /**
+     * Merges an array of configuration values.
+     *
+     * @param array $config The configuration values to merge.
+     * @return void
+     */
+    public function mergeConfig(array $config): void;
+
+    /**
      * Applies a callback to the application instance.
      * 
      * This method takes a callback function which receives the application
@@ -153,6 +170,18 @@ interface ApplicationContract
     ): self;
 
     /**
+     * Configures the console command system.
+     *
+     * @param null|string $load Directory or file to load commands from.
+     * @param null|callable $then Optional callback for additional command setup.
+     * @return self
+     */
+    public function withCommands(
+        null|string $load = null,
+        null|callable $then = null
+    ): self;
+
+    /**
      * Runs the application.
      *
      * This method takes no arguments and returns no value.
@@ -167,6 +196,15 @@ interface ApplicationContract
 
     /** Whether this application was created in a CLI testing environment. */
     public function isTesting(): bool;
+
+    /** Whether the application is running in debug mode. */
+    public function isDebugMode(): bool;
+
+    /** Determine if the application has been booted. */
+    public function isBooted(): bool;
+
+    /** Determine if the application has terminated. */
+    public function isTerminated(): bool;
 
     /**
      * Runs the command line interface.

@@ -77,4 +77,80 @@ interface AttributesContract
      * @return array An associative array of the retrieved attributes.
      */
     public function props(string|array $keys): array;
+
+    /**
+     * Get the first attribute value in the collection.
+     *
+     * @return string|null
+     */
+    public function first(): ?string;
+
+    /**
+     * Determine if any of the given attribute keys exist.
+     *
+     * @param array|string $keys
+     * @return bool
+     */
+    public function hasAny(array|string $keys): bool;
+
+    /**
+     * Filter attributes using a callback.
+     *
+     * @param callable $callback
+     * @return static
+     */
+    public function filter(callable $callback): static;
+
+    /**
+     * Filter attributes that start with the given string(s).
+     *
+     * @param array|string $needles
+     * @return static
+     */
+    public function whereStartsWith(array|string $needles): static;
+
+    /**
+     * Filter attributes that do not start with the given string(s).
+     *
+     * @param array|string $needles
+     * @return static
+     */
+    public function whereDoesntStartWith(array|string $needles): static;
+
+    /**
+     * Alias for whereStartsWith.
+     *
+     * @param array|string $needles
+     * @return static
+     */
+    public function thatStartWith(array|string $needles): static;
+
+    /**
+     * Get the underlying raw attributes array.
+     *
+     * @return array
+     */
+    public function getAttributes(): array;
+
+    /**
+     * Set the attributes array.
+     *
+     * @param array $attributes
+     * @return static
+     */
+    public function setAttributes(array $attributes): static;
+
+    /**
+     * Determine if the attributes bag is empty.
+     *
+     * @return bool
+     */
+    public function isEmpty(): bool;
+
+    /**
+     * Determine if the attributes bag is not empty.
+     *
+     * @return bool
+     */
+    public function isNotEmpty(): bool;
 }

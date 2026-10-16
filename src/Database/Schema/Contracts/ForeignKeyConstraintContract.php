@@ -56,4 +56,68 @@ interface ForeignKeyConstraintContract
      * @return static
      */
     public function onUpdate(string $action): self;
+
+    /**
+     * Set ON DELETE to CASCADE.
+     *
+     * @return self
+     */
+    public function cascadeOnDelete(): self;
+
+    /**
+     * Set ON UPDATE to CASCADE.
+     *
+     * @return self
+     */
+    public function cascadeOnUpdate(): self;
+
+    /**
+     * Set ON DELETE to SET NULL.
+     *
+     * @return self
+     */
+    public function setNullOnDelete(): self;
+
+    /**
+     * Set ON UPDATE to SET NULL.
+     *
+     * @return self
+     */
+    public function setNullOnUpdate(): self;
+
+    /**
+     * Set ON DELETE to RESTRICT.
+     *
+     * @return self
+     */
+    public function restrictOnDelete(): self;
+
+    /**
+     * Set ON UPDATE to RESTRICT.
+     *
+     * @return self
+     */
+    public function restrictOnUpdate(): self;
+
+    /**
+     * Set ON DELETE to NO ACTION.
+     *
+     * @return self
+     */
+    public function noActionOnDelete(): self;
+
+    /**
+     * Set ON UPDATE to NO ACTION.
+     *
+     * @return self
+     */
+    public function noActionOnUpdate(): self;
+
+    /**
+     * Set the column to nullable.
+     *
+     * @param bool $nullable
+     * @return self
+     */
+    public function nullable(bool $nullable = true): self;
 }

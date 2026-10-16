@@ -16,6 +16,26 @@ use function is_string;
  * A helper class for making HTTP requests in PHP using cURL. Supports GET, POST, PUT, PATCH, and DELETE methods,
  * as well as custom headers, options, user agents, and file downloads.
  * 
+ * @method Http withHeader(string $key, string $value)
+ * @method Http withHeaders(array $headers)
+ * @method Http withContentType(string $type)
+ * @method Http withAccept(string $type)
+ * @method Http withRetry(int $times, int $delayMs = 200)
+ * @method Http withUserAgent(string $userAgent)
+ * @method Http withToken(string $token)
+ * @method Http withBasicAuth(string $username, string $password)
+ * @method Http withCookies(array $cookies)
+ * @method Http withCookieJar(string $cookieJar)
+ * @method Http withProxy(string $proxy, string $proxyAuth = '')
+ * @method Http withOption(int $option, mixed $value)
+ * @method Http withOptions(array $options)
+ * @method Http withTimeout(int $seconds)
+ * @method Http withoutVerifying()
+ * @method Http withVerifying()
+ * @method Http withPostFields(array|string $fields, null|string $contentType = null)
+ * @method Http attach(string $name, mixed $contents, ?string $filename = null, array $headers = [])
+ * @method Http asMultipart()
+ * 
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
@@ -29,33 +49,6 @@ class Http extends HttpRequest implements HttpContract
      * @var null|string
      */
     private ?string $download = null;
-
-    /**
-     * The Http constructor.
-     * 
-     * Initializes a new HTTP request with the specified method, URL, parameters,
-     * data, download file, and key.
-     * 
-     * @param string $method HTTP method
-     * @param string $url Target URL
-     * @param array $params Query parameters
-     * @param string|array $data POST/PUT/PATCH/DELETE data
-     * @throws HttpException If cURL extension is not loaded
-     */
-    public function __construct(
-        string $method = 'GET',
-        string $url = '',
-        array $params = [],
-        string|array $data = []
-    ) {
-        // Check if cURL extension is loaded
-        if (!extension_loaded('curl')) {
-            throw new HttpException('cURL extension is not loaded.');
-        }
-
-        // Call parent constructor
-        parent::__construct($method, $url, $params, $data);
-    }
 
     /**
      * Resets the current configuration back to default, optionally overriding
@@ -244,9 +237,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param int $key The cURL option constant.
      * @param mixed $value The value for the option.
-     * @return self
+     * @return static
      */
-    public function option(int $key, mixed $value): self
+    public function option(int $key, mixed $value): static
     {
         $this->withOption($key, $value);
         return $this;
@@ -256,9 +249,9 @@ class Http extends HttpRequest implements HttpContract
      * Sets the HTTP method for the request.
      * 
      * @param string $method The HTTP method (e.g., 'GET', 'POST').
-     * @return self
+     * @return static
      */
-    public function method(string $method): self
+    public function method(string $method): static
     {
         $this->setMethod($method);
         return $this;
@@ -268,9 +261,9 @@ class Http extends HttpRequest implements HttpContract
      * Sets multiple cURL options at once.
      * 
      * @param array $options Associative array of cURL options.
-     * @return self
+     * @return static
      */
-    public function options(array $options): self
+    public function options(array $options): static
     {
         $this->withOptions($options);
         return $this;
@@ -280,9 +273,9 @@ class Http extends HttpRequest implements HttpContract
      * Sets the User-Agent header for the request.
      * 
      * @param string $useragent The User-Agent string.
-     * @return self
+     * @return static
      */
-    public function useragent(string $useragent): self
+    public function useragent(string $useragent): static
     {
         $this->withUserAgent($useragent);
         return $this;
@@ -292,9 +285,9 @@ class Http extends HttpRequest implements HttpContract
      * Sets the Content-Type header for the request.
      * 
      * @param string $type The Content-Type string (e.g., 'application/json').
-     * @return self
+     * @return static
      */
-    public function contentType(string $type): self
+    public function contentType(string $type): static
     {
         $this->withContentType($type);
         return $this;
@@ -304,9 +297,9 @@ class Http extends HttpRequest implements HttpContract
      * Sets the Accept header for the request.
      * 
      * @param string $type The Accept string (e.g., 'application/json').
-     * @return self
+     * @return static
      */
-    public function accept(string $type): self
+    public function accept(string $type): static
     {
         $this->withAccept($type);
         return $this;
@@ -317,9 +310,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $key Header name.
      * @param string $value Header value.
-     * @return self
+     * @return static
      */
-    public function header(string $key, string $value): self
+    public function header(string $key, string $value): static
     {
         $this->withHeader($key, $value);
         return $this;
@@ -329,9 +322,9 @@ class Http extends HttpRequest implements HttpContract
      * Adds multiple custom headers to the request.
      * 
      * @param array $headers Associative array of headers (key => value).
-     * @return self
+     * @return static
      */
-    public function headers(array $headers): self
+    public function headers(array $headers): static
     {
         $this->withHeaders($headers);
         return $this;
@@ -341,9 +334,9 @@ class Http extends HttpRequest implements HttpContract
      * Add Cookies to the request.
      * 
      * @param array $cookies Associative array of cookies (key => value).
-     * @return self
+     * @return static
      */
-    public function cookie(array $cookies): self
+    public function cookie(array $cookies): static
     {
         $this->withCookies($cookies);
         return $this;
@@ -353,9 +346,9 @@ class Http extends HttpRequest implements HttpContract
      * Sets the cookie jar file path for storing cookies.
      * 
      * @param string $cookieJar The file path to the cookie jar.
-     * @return self
+     * @return static
      */
-    public function cookieJar(string $cookieJar): self
+    public function cookieJar(string $cookieJar): static
     {
         $this->withCookieJar($cookieJar);
         return $this;
@@ -366,9 +359,9 @@ class Http extends HttpRequest implements HttpContract
      * 
      * @param string $proxy The proxy URL (e.g., 'http://proxy.example.com:8080').
      * @param string $proxyAuth Optional proxy authentication in the format 'username:password'.
-     * @return self
+     * @return static
      */
-    public function proxy(string $proxy, string $proxyAuth = ''): self
+    public function proxy(string $proxy, string $proxyAuth = ''): static
     {
         $this->withProxy($proxy, $proxyAuth);
         return $this;
@@ -379,9 +372,9 @@ class Http extends HttpRequest implements HttpContract
      *
      * @param string $location File path for download.
      * @param bool $force Whether to overwrite the file if it already exists (default: false).
-     * @return self
+     * @return static
      */
-    public function download(string $location, bool $force = false): self
+    public function download(string $location, bool $force = false): static
     {
         if (is_file($location) && !$force) {
             throw new \RuntimeException("File already exists at {$location}. Use force=true to overwrite.");
@@ -400,9 +393,9 @@ class Http extends HttpRequest implements HttpContract
      * Sets the timeout for the request in seconds.
      * 
      * @param int $seconds Timeout in seconds.
-     * @return self
+     * @return static
      */
-    public function timeout(int $seconds): self
+    public function timeout(int $seconds): static
     {
         $this->withTimeout($seconds);
         return $this;
@@ -413,9 +406,9 @@ class Http extends HttpRequest implements HttpContract
      *
      * @param array|string $fields The fields to include in the POST body. Can be an array or string.
      * @param string|null $contentType The Content-Type header value (auto-detected if null)
-     * @return self
+     * @return static
      */
-    public function postFields(array|string $fields, null|string $contentType = null): self
+    public function postFields(array|string $fields, null|string $contentType = null): static
     {
         $this->withPostFields($fields, $contentType);
         return $this;

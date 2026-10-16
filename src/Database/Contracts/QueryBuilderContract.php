@@ -3,6 +3,10 @@ namespace Spark\Database\Contracts;
 
 use Closure;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Database\Model;
+use Spark\Database\QueryBuilder;
+use Spark\Database\Relation\Relation;
+use Spark\Utils\Paginator;
 
 /**
  * Interface for the query builder contract.
@@ -115,4 +119,174 @@ interface QueryBuilderContract
      * @return int The number of rows in the result set.
      */
     public function count(): int;
+
+    /**
+     * Find a single record by its primary key.
+     *
+     * @param string|int $value
+     * @return Model|null
+     */
+    public function find(string|int $value): ?Model;
+
+    /**
+     * Get a single column's value from the first result of a query.
+     *
+     * @param string $column
+     * @return mixed
+     */
+    public function value(string $column): mixed;
+
+    /**
+     * Get an array with the values of a given column.
+     *
+     * @param string $column
+     * @param string|null $key
+     * @return array
+     */
+    public function pluck(string $column, ?string $key = null): array;
+
+    /**
+     * Determine if any rows exist for the current query.
+     *
+     * @return bool
+     */
+    public function exists(): bool;
+
+    /**
+     * Set the "limit" and optional "offset" for the query.
+     *
+     * @param string|int $from
+     * @param int|null $to
+     * @return self
+     */
+    public function limit(string|int $from, ?int $to = null): self;
+
+    /**
+     * Set the "offset" value of the query.
+     *
+     * @param int $offset
+     * @return self
+     */
+    public function offset(int $offset): self;
+
+    /**
+     * Add an "order by" clause to the query.
+     *
+     * @param string $field
+     * @param string $sort
+     * @return self
+     */
+    public function orderBy(string $field, string $sort = 'ASC'): self;
+
+    /**
+     * Add a "group by" clause to the query.
+     *
+     * @param array|string $field
+     * @return self
+     */
+    public function groupBy(array|string $field): self;
+
+    /**
+     * Add a "having" clause to the query.
+     *
+     * @param string $having
+     * @return self
+     */
+    public function having(string $having): self;
+
+    /**
+     * Add an "or where" clause to the query.
+     *
+     * @param Arrayable|Closure|array|string|null $column
+     * @param mixed $operator
+     * @param mixed $value
+     * @return self
+     */
+    public function orWhere(Arrayable|Closure|array|string|null $column = null, mixed $operator = null, $value = null): self;
+
+    /**
+     * Add a "where in" clause to the query.
+     *
+     * @param string $column
+     * @param Relation|QueryBuilder|Closure|array|string $values
+     * @return self
+     */
+    public function whereIn(string $column, Relation|QueryBuilder|Closure|array|string $values): self;
+
+    /**
+     * Add a "where not in" clause to the query.
+     *
+     * @param string $column
+     * @param Relation|QueryBuilder|Closure|array|string $values
+     * @return self
+     */
+    public function whereNotIn(string $column, Relation|QueryBuilder|Closure|array|string $values): self;
+
+    /**
+     * Add a "where null" clause to the query.
+     *
+     * @param string $field
+     * @param bool $not
+     * @param string $boolean
+     * @return self
+     */
+    public function whereNull(string $field, bool $not = false, string $boolean = 'AND'): self;
+
+    /**
+     * Add a "where not null" clause to the query.
+     *
+     * @param string $field
+     * @return self
+     */
+    public function whereNotNull(string $field): self;
+
+    /**
+     * Add a "where between" clause to the query.
+     *
+     * @param string $field
+     * @param array $values
+     * @param string $boolean
+     * @param bool $not
+     * @return self
+     */
+    public function whereBetween(string $field, array $values, string $boolean = 'AND', bool $not = false): self;
+
+    /**
+     * Force the query to only return distinct results.
+     *
+     * @param string|null $column
+     * @return self
+     */
+    public function distinct(?string $column = null): self;
+
+    /**
+     * Paginate the given query into a Paginator instance.
+     *
+     * @param int $limit
+     * @param string $keyword
+     * @param array|string|null $fields
+     * @return Paginator
+     */
+    public function paginate(int $limit = 10, string $keyword = 'page', array|string|null $fields = null): Paginator;
+
+    /**
+     * Truncate the table.
+     *
+     * @return int
+     */
+    public function truncate(): int;
+
+    /**
+     * Get the raw SQL representation of the query.
+     *
+     * @return string
+     */
+    public function toSql(): string;
+
+    /**
+     * Get the current query value bindings.
+     *
+     * @return array
+     */
+    public function getBindings(): array;
 }

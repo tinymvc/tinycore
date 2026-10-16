@@ -2109,7 +2109,7 @@ if (!function_exists('uploader')) {
      *
      * @param string|null $uploadTo Optional. The upload destination path. Default is null.
      * @param string|null $uploadDir Optional. The upload directory path. Default is the value of the 'upload_dir' configuration.
-     * @param array $extensions Optional. The array of allowed file extensions. Default is an empty array.
+     * @param null|array $extensions Optional. The array of allowed file extensions. Default is an empty array.
      * @param int|null $maxSize Optional. The maximum allowed file size in KB. Default is 2048 (2MB).
      * @param null|array|float $resize Optional. The resize configuration array. Default is an empty array.
      * @param array|null $resizes Optional. The resizes configuration array. Default is an empty array.
@@ -2120,7 +2120,7 @@ if (!function_exists('uploader')) {
     function uploader(
         null|string $uploadTo = null,
         null|string $uploadDir = null,
-        array $extensions = [],
+        null|array $extensions = null,
         null|int $maxSize = 2048, // Default to 2MB
         null|array|float $resize = null,
         null|array $resizes = null,

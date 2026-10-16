@@ -226,14 +226,15 @@ class Container implements ContainerContract, \ArrayAccess
     public function make(string $abstract, array $parameters = []): mixed
     {
         $abstract = $this->resolveAlias($abstract);
-        $concrete = $this->bindings[$abstract] ?? $abstract;
-        $isSingleton = isset($this->singletons[$abstract]);
 
-        if (!empty($parameters)) {
+        if ($parameters !== []) {
+            $isSingleton = isset($this->singletons[$abstract]);
+
             if ($isSingleton && array_key_exists($abstract, $this->instances)) {
                 return $this->instances[$abstract];
             }
 
+            $concrete = $this->bindings[$abstract] ?? $abstract;
             $instance = $this->build($concrete, $parameters);
 
             if ($isSingleton) {
@@ -276,6 +277,7 @@ class Container implements ContainerContract, \ArrayAccess
         if (is_callable($abstract) && !is_array($abstract)) {
             $reflectionFunction = new ReflectionFunction($abstract);
             $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters, $bindingFields);
+
             return $abstract(...$dependencies); // Call the closure
         }
 

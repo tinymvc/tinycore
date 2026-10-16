@@ -2,6 +2,7 @@
 
 namespace Spark;
 
+use ArrayAccess;
 use Spark\Contracts\TranslatorContract;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
@@ -21,7 +22,7 @@ use function sprintf;
  * @package Spark\Utils
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class Translator implements TranslatorContract
+class Translator implements TranslatorContract, ArrayAccess
 {
     use Macroable, Conditionable;
 
@@ -425,5 +426,32 @@ class Translator implements TranslatorContract
     public function transWithReplace(string $key, array $replace = []): string
     {
         return $this->translate($key, $replace);
+    }
+
+
+    /** ArrayAccess methods. */
+
+    public function offsetExists(mixed $offset): bool
+    {
+        return $this->has((string) $offset);
+    }
+
+    public function offsetGet(mixed $offset): mixed
+    {
+        return $this->get((string) $offset);
+    }
+
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        if (is_string($offset)) {
+            $this->translatedTexts[$offset] = $value;
+        }
+    }
+
+    public function offsetUnset(mixed $offset): void
+    {
+        if (is_string($offset) && isset($this->translatedTexts[$offset])) {
+            unset($this->translatedTexts[$offset]);
+        }
     }
 }

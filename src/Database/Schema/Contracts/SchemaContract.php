@@ -3,6 +3,7 @@
 namespace Spark\Database\Schema\Contracts;
 
 use Closure;
+use PDO;
 use Spark\Database\Schema\Grammar;
 
 /**
@@ -31,6 +32,13 @@ interface SchemaContract
      * @param Closure $callback
      */
     public static function table(string $table, Closure $callback): void;
+
+    /**
+     * Drops a table from the database.
+     *
+     * @param string $table The name of the table to be dropped.
+     */
+    public static function drop(string $table);
 
     /**
      * Drops a table from the database if it exists.
@@ -114,4 +122,11 @@ interface SchemaContract
      * @return Grammar The database grammar instance.
      */
     public static function getGrammar(): Grammar;
+
+    /**
+     * Get the PDO connection instance.
+     *
+     * @return PDO
+     */
+    public static function getConnection(): PDO;
 }

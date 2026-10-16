@@ -317,6 +317,142 @@ interface BlueprintContract
     public function engine(string $engine): self;
 
     /**
+     * Add a 'json' column to the blueprint.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function json(string $name): Column;
+
+    /**
+     * Add a 'uuid' column to the blueprint.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function uuid(string $name): Column;
+
+    /**
+     * Add a 'time' column to the blueprint.
+     *
+     * @param string $name
+     * @param int $precision
+     * @return Column
+     */
+    public function time(string $name, int $precision = 0): Column;
+
+    /**
+     * Add a 'binary' column to the blueprint.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function binary(string $name): Column;
+
+    /**
+     * Add a 'tinyInteger' column to the blueprint.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function tinyInteger(string $name): Column;
+
+    /**
+     * Add an unsigned tiny integer column.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function unsignedTinyInteger(string $name): Column;
+
+    /**
+     * Add an unsigned small integer column.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function unsignedSmallInteger(string $name): Column;
+
+    /**
+     * Add an unsigned medium integer column.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function unsignedMediumInteger(string $name): Column;
+
+    /**
+     * Add an auto-incrementing tiny integer.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function tinyIncrements(string $name): Column;
+
+    /**
+     * Add an auto-incrementing small integer.
+     *
+     * @param string $name
+     * @return Column
+     */
+    public function smallIncrements(string $name): Column;
+
+    /**
+     * Add a nullable timestamp column.
+     *
+     * @param string $name
+     * @param int $precision
+     * @return Column
+     */
+    public function nullableTimestamp(string $name, int $precision = 0): Column;
+
+    /**
+     * Add nullable 'created_at' and 'updated_at' timestamp columns.
+     *
+     * @return void
+     */
+    public function nullableTimestamps(): void;
+
+    /**
+     * Add a 'remember_token' column.
+     *
+     * @return void
+     */
+    public function rememberToken(): void;
+
+    /**
+     * Add a 'deleted_at' timestamp column for soft deletes.
+     *
+     * @return void
+     */
+    public function softDeletes(): void;
+
+    /**
+     * Drop column(s) from the blueprint.
+     *
+     * @param array|string $columns
+     * @return self
+     */
+    public function dropColumn(array|string $columns): self;
+
+    /**
+     * Drop primary key index.
+     *
+     * @param array|string|null $index
+     * @return self
+     */
+    public function dropPrimary(array|string|null $index = null): self;
+
+    /**
+     * Rename a column.
+     *
+     * @param string $from
+     * @param string $to
+     * @return self
+     */
+    public function renameColumn(string $from, string $to): self;
+
+    /**
      * Compile the blueprint into a SQL statement.
      *
      * @return string

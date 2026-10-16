@@ -2,6 +2,8 @@
 
 namespace Spark\Contracts\Http;
 
+use Spark\Contracts\Support\Arrayable;
+
 /**
  * Interface defining the contract for the Response class.
  */
@@ -44,6 +46,23 @@ interface ResponseContract
     public function redirect(string $url, int $httpCode = 0): self;
 
     /**
+     * Redirect to a named route.
+     *
+     * @param string $routeName
+     * @param array $params
+     * @param int $httpCode
+     * @return self
+     */
+    public function routeRedirect(string $routeName, array $params = [], int $httpCode = 302): self;
+
+    /**
+     * Redirect back to the previous URL.
+     *
+     * @return self
+     */
+    public function back(): self;
+
+    /**
      * Sets the HTTP status code for the response.
      *
      * @param int $statusCode The HTTP status code to set (e.g., 200, 404).
@@ -59,6 +78,77 @@ interface ResponseContract
      * @return self Current response instance for method chaining.
      */
     public function setHeader(string $key, string $value): self;
+
+    /**
+     * Merge multiple headers into the response.
+     *
+     * @param array $headers
+     * @return self
+     */
+    public function withHeaders(array $headers): self;
+
+    /**
+     * Determine if a header exists on the response.
+     *
+     * @param string $name
+     * @return bool
+     */
+    public function hasHeader(string $name): bool;
+
+    /**
+     * Remove a header from the response.
+     *
+     * @param string $name
+     * @return void
+     */
+    public function removeHeader(string $name): void;
+
+    /**
+     * Set the response to 204 No Content.
+     *
+     * @return self
+     */
+    public function noContent(): self;
+
+    /**
+     * Disable caching for the response.
+     *
+     * @return self
+     */
+    public function noCache(): self;
+
+    /**
+     * Add cache headers for a given number of seconds.
+     *
+     * @param int $seconds
+     * @return self
+     */
+    public function cache(int $seconds = 3600): self;
+
+    /**
+     * Flash a key-value pair to the session.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return self
+     */
+    public function with(string $key, mixed $value): self;
+
+    /**
+     * Flash validation error messages to the session.
+     *
+     * @param array $errors
+     * @return self
+     */
+    public function withErrors(array $errors): self;
+
+    /**
+     * Flash input data to the session.
+     *
+     * @param Arrayable|array|null $input
+     * @return self
+     */
+    public function withInput(Arrayable|array|null $input = null): self;
 
     /**
      * Sends the HTTP response to the client, including headers, status code, and content.

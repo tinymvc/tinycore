@@ -6,6 +6,61 @@ namespace Spark\View\Contracts;
 interface BladeContract
 {
     /**
+     * Share data across all views.
+     *
+     * @param array|string $key
+     * @param mixed $value
+     * @return void
+     */
+    public static function share(array|string $key, mixed $value = null): void;
+
+    /**
+     * Register a view composer callback for one or more views.
+     *
+     * @param array|string $views
+     * @param callable $composer
+     * @return void
+     */
+    public static function composer(array|string $views, callable $composer): void;
+
+    /**
+     * Set the base path for views.
+     *
+     * @param string $path
+     * @return self
+     */
+    public function setPath(string $path): self;
+
+    /**
+     * Get the base path for views.
+     *
+     * @return string
+     */
+    public function getPath(): string;
+
+    /**
+     * Set the path for compiled cache files.
+     *
+     * @param string $cachePath
+     * @return self
+     */
+    public function setCachePath(string $cachePath): self;
+
+    /**
+     * Get the cache path for compiled views.
+     *
+     * @return string
+     */
+    public function getCachePath(): string;
+
+    /**
+     * Get the underlying compiler instance.
+     *
+     * @return BladeCompilerContract
+     */
+    public function getCompiler(): BladeCompilerContract;
+
+    /**
      * Renders the specified template with the provided context.
      * If the request is AJAX-based, returns a JSON response.
      *

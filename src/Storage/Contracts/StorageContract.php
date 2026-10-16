@@ -13,6 +13,10 @@ use Spark\Storage\Uploader;
  */
 interface StorageContract
 {
+    public static function disk(?string $name = null): self;
+
+    public static function build(array $config): self;
+
     public function put(string $path, string $contents): bool;
 
     public function putFile(string $directory, string $localPath): string;
@@ -32,6 +36,10 @@ interface StorageContract
     public function path(string $path = ''): string;
 
     public function temporaryUrl(string $path, int|DateTimeInterface $expires = 300): string;
+
+    public function temporaryUploadUrl(string $key, int $expires = 300, ?string $contentType = null, ?string $acl = null): string;
+
+    public function downloadFile(string $key, string $localPath): bool;
 
     public function size(string $path): int;
 

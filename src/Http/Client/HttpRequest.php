@@ -83,7 +83,7 @@ class HttpRequest implements HttpRequestContract
      * @param array $params Query parameters
      * @param string|array $data POST/PUT/PATCH data
      * @param string|int $key Request key
-     * @return self
+     * @return static
      */
     public static function make(
         string $method = 'GET',
@@ -91,7 +91,7 @@ class HttpRequest implements HttpRequestContract
         array $params = [],
         string|array $data = [],
         string|int $key = 0
-    ) {
+    ): static {
         return new static($method, $url, $params, $data, $key);
     }
 
@@ -136,7 +136,7 @@ class HttpRequest implements HttpRequestContract
      * 
      * @param string $key Header name
      * @param string $value Header value
-     * @return self
+     * @return static
      */
     public function withHeader(string $key, string $value): static
     {
@@ -152,7 +152,7 @@ class HttpRequest implements HttpRequestContract
      * Add multiple headers to the request.
      * 
      * @param array $headers Associative array of headers
-     * @return self
+     * @return static
      */
     public function withHeaders(array $headers): static
     {
@@ -166,7 +166,7 @@ class HttpRequest implements HttpRequestContract
      * Set the Content-Type header.
      * 
      * @param string $type Content-Type value
-     * @return self
+     * @return static
      */
     public function withContentType(string $type): static
     {
@@ -177,7 +177,7 @@ class HttpRequest implements HttpRequestContract
      * Set the Accept header.
      * 
      * @param string $type Accept value
-     * @return self
+     * @return static
      */
     public function withAccept(string $type): static
     {
@@ -194,7 +194,7 @@ class HttpRequest implements HttpRequestContract
      *
      * @param int $times Number of retry attempts after the initial try
      * @param int $delayMs Delay between attempts, in milliseconds
-     * @return self
+     * @return static
      */
     public function withRetry(int $times, int $delayMs = 200): static
     {
@@ -208,7 +208,7 @@ class HttpRequest implements HttpRequestContract
      * Set the User-Agent header.
      * 
      * @param string $userAgent User-Agent value
-     * @return self
+     * @return static
      */
     public function withUserAgent(string $userAgent): static
     {
@@ -220,7 +220,7 @@ class HttpRequest implements HttpRequestContract
      * Set bearer token authentication.
      * 
      * @param string $token Bearer token
-     * @return self
+     * @return static
      */
     public function withToken(string $token): static
     {
@@ -232,7 +232,7 @@ class HttpRequest implements HttpRequestContract
      * 
      * @param string $username Username
      * @param string $password Password
-     * @return self
+     * @return static
      */
     public function withBasicAuth(string $username, string $password): static
     {
@@ -245,7 +245,7 @@ class HttpRequest implements HttpRequestContract
      * Add cookies to the request.
      * 
      * @param array $cookies Associative array of cookies (key => value)
-     * @return self
+     * @return static
      */
     public function withCookies(array $cookies): static
     {
@@ -263,7 +263,7 @@ class HttpRequest implements HttpRequestContract
      * Set a cookie jar file path for storing cookies.
      * 
      * @param string $cookieJar File path to the cookie jar
-     * @return self
+     * @return static
      */
     public function withCookieJar(string $cookieJar): static
     {
@@ -293,7 +293,7 @@ class HttpRequest implements HttpRequestContract
      * 
      * @param string $proxy Proxy URL
      * @param string $proxyAuth Optional proxy authentication (username:password)
-     * @return self
+     * @return static
      */
     public function withProxy(string $proxy, string $proxyAuth = ''): static
     {
@@ -312,7 +312,7 @@ class HttpRequest implements HttpRequestContract
      * 
      * @param int $option cURL option constant
      * @param mixed $value Option value
-     * @return self
+     * @return static
      */
     public function withOption(int $option, mixed $value): static
     {
@@ -324,7 +324,7 @@ class HttpRequest implements HttpRequestContract
      * Set multiple cURL options.
      * 
      * @param array $options Associative array of cURL options
-     * @return self
+     * @return static
      */
     public function withOptions(array $options): static
     {
@@ -338,7 +338,7 @@ class HttpRequest implements HttpRequestContract
      * Set request timeout in seconds.
      * 
      * @param int $seconds Timeout in seconds
-     * @return self
+     * @return static
      */
     public function withTimeout(int $seconds): static
     {
@@ -348,7 +348,7 @@ class HttpRequest implements HttpRequestContract
     /**
      * Disable SSL verification (not recommended for production).
      * 
-     * @return self
+     * @return static
      */
     public function withoutVerifying(): static
     {
@@ -360,7 +360,7 @@ class HttpRequest implements HttpRequestContract
     /**
      * Enable SSL verification.
      * 
-     * @return self
+     * @return static
      */
     public function withVerifying(): static
     {
@@ -374,7 +374,7 @@ class HttpRequest implements HttpRequestContract
      *
      * @param array|string $fields The fields to include in the POST body. Can be an array or string.
      * @param string|null $contentType The Content-Type header value (auto-detected if null)
-     * @return self
+     * @return static
      */
     public function withPostFields(array|string $fields, null|string $contentType = null): static
     {
@@ -428,7 +428,7 @@ class HttpRequest implements HttpRequestContract
      * @param string|resource $contents The file contents or file path
      * @param string|null $filename The filename to use (optional)
      * @param array $headers Additional headers for this file part (optional)
-     * @return self
+     * @return static
      */
     public function attach(string $name, mixed $contents, ?string $filename = null, array $headers = []): static
     {
@@ -492,7 +492,7 @@ class HttpRequest implements HttpRequestContract
     /**
      * Indicate the request is a multipart form request.
      *
-     * @return self
+     * @return static
      */
     public function asMultipart(): static
     {
@@ -534,44 +534,48 @@ class HttpRequest implements HttpRequestContract
      * Set the HTTP method.
      * 
      * @param string $method
-     * @return void
+     * @return static
      */
-    public function setMethod(string $method): void
+    public function setMethod(string $method): static
     {
         $this->method = $method;
+        return $this;
     }
 
     /**
      * Set the request URL.
      * 
      * @param string $url
-     * @return void
+     * @return static
      */
-    public function setUrl(string $url): void
+    public function setUrl(string $url): static
     {
         $this->url = $url;
+        return $this;
     }
 
     /**
      * Set the query parameters.
      * 
      * @param array $params
-     * @return void
+     * @return static
      */
-    public function setParams(array $params): void
+    public function setParams(array $params): static
     {
         $this->params = $params;
+        return $this;
     }
 
     /**
      * Set the request data.
      * 
      * @param string|array $data
-     * @return void
+     * @return static
      */
-    public function setData(string|array $data): void
+    public function setData(string|array $data): static
     {
         $this->data = $data;
+        return $this;
     }
 
     /**

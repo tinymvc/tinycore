@@ -307,7 +307,7 @@ class Storage implements Contracts\StorageContract
     /** Validate/process HTTP uploads using this disk and return disk-relative keys. */
     public function uploader(
         string $uploadTo = '',
-        array $extensions = [],
+        ?array $extensions = null,
         ?bool $multiple = null,
         ?int $maxSize = 2048,
         null|float|array $resize = null,

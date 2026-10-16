@@ -58,4 +58,117 @@ interface InputContract
      * @return string|null Sanitized URL or null if invalid.
      */
     public function url(string $key): ?string;
+
+    /**
+     * Retrieve a string value.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return string|null
+     */
+    public function string(string $key, $default = null): ?string;
+
+    /**
+     * Retrieve a value from the input.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function get(string $key, $default = null): mixed;
+
+    /**
+     * Set a value in the input.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @return void
+     */
+    public function set(string $key, mixed $value): void;
+
+    /**
+     * Check if a key exists in the input.
+     *
+     * @param string $key
+     * @return bool
+     */
+    public function has(string $key): bool;
+
+    /**
+     * Check if any of the given keys exist in the input.
+     *
+     * @param array|string $keys
+     * @return bool
+     */
+    public function hasAny(array|string $keys): bool;
+
+    /**
+     * Check if all of the given keys exist in the input.
+     *
+     * @param array|string $keys
+     * @return bool
+     */
+    public function hasAll(array|string $keys): bool;
+
+    /**
+     * Get all input items with optional filtering.
+     *
+     * @param array $filter
+     * @return array
+     */
+    public function all(array $filter = []): array;
+
+    /**
+     * Get a subset containing only the specified keys.
+     *
+     * @param array|string $keys
+     * @return self
+     */
+    public function only(array|string $keys): self;
+
+    /**
+     * Get all items except the specified keys.
+     *
+     * @param array|string $keys
+     * @return self
+     */
+    public function except(array|string $keys): self;
+
+    /**
+     * Retrieve an uploaded file or all uploaded files.
+     *
+     * @param string|null $key
+     * @return array|null
+     */
+    public function file(?string $key = null): ?array;
+
+    /**
+     * Retrieve all uploaded files, optionally for a specific key.
+     *
+     * @param string|null $key
+     * @return array
+     */
+    public function files(?string $key = null): array;
+
+    /**
+     * Check if an uploaded file exists.
+     *
+     * @param string|null $key
+     * @return bool
+     */
+    public function hasFile(?string $key = null): bool;
+
+    /**
+     * Check if the input is empty.
+     *
+     * @return bool
+     */
+    public function isEmpty(): bool;
+
+    /**
+     * Check if the input is not empty.
+     *
+     * @return bool
+     */
+    public function isNotEmpty(): bool;
 }

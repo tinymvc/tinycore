@@ -37,6 +37,14 @@ interface RouteResourceContract
     public function name(string $name): self;
 
     /**
+     * Set the name prefix for the resource route (alias for name).
+     *
+     * @param string $name
+     * @return self
+     */
+    public function as(string $name): self;
+
+    /**
      * Set middleware(s) for the resource route.
      *
      * @param string|array $middleware The middleware(s) to be applied.

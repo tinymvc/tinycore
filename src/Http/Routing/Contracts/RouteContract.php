@@ -67,4 +67,12 @@ interface RouteContract
      * @return self Returns the current instance for method chaining.
      */
     public function name(string $name): self;
+
+    /**
+     * Set the name for the route (alias for name).
+     *
+     * @param string $name
+     * @return self
+     */
+    public function as(string $name): self;
 }

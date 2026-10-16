@@ -57,4 +57,37 @@ interface LockContract
      * @return bool True if the lock was forcefully released, false otherwise.
      */
     public function forceUnlock(string $key): bool;
+
+    /**
+     * Execute a callback while holding the acquired lock, then release it.
+     *
+     * @param string $key
+     * @param callable $callback
+     * @param int $timeout
+     * @param int $waitTimeout
+     * @return mixed
+     */
+    public function withLock(string $key, callable $callback, int $timeout = 10, int $waitTimeout = 5): mixed;
+
+    /**
+     * Releases all locks held by the current process/owner.
+     *
+     * @return int Number of locks released.
+     */
+    public function unlockAll(): int;
+
+    /**
+     * Get the current lock owner identifier.
+     *
+     * @return string
+     */
+    public function getLockOwner(): string;
+
+    /**
+     * Get information about a lock.
+     *
+     * @param string $key
+     * @return array|null
+     */
+    public function getLockInfo(string $key): ?array;
 }

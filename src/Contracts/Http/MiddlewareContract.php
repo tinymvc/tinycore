@@ -24,6 +24,39 @@ interface MiddlewareContract
     public function register(string $alias, string|callable $middleware): self;
 
     /**
+     * Register an alias for a middleware (alias for register).
+     *
+     * @param string $alias
+     * @param string|callable $middleware
+     * @return self
+     */
+    public function alias(string $alias, string|callable $middleware): self;
+
+    /**
+     * Register multiple middlewares at once.
+     *
+     * @param array $middlewares
+     * @return self
+     */
+    public function registerMany(array $middlewares): self;
+
+    /**
+     * Determine if a middleware alias exists.
+     *
+     * @param string $alias
+     * @return bool
+     */
+    public function has(string $alias): bool;
+
+    /**
+     * Get a registered middleware by alias.
+     *
+     * @param string $alias
+     * @return string|callable
+     */
+    public function get(string $alias): string|callable;
+
+    /**
      * Adds middleware keys to the execution stack.
      * 
      * @param array|string $middleware The middleware aliases to queue for execution.

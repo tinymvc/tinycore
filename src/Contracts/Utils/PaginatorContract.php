@@ -41,4 +41,60 @@ interface PaginatorContract
      * @return string The pagination links as an HTML string.
      */
     public function links(int $links = 2, array $classes = [], array $entity = []): string;
+
+    /**
+     * Get the total number of items across all pages.
+     *
+     * @return int
+     */
+    public function total(): int;
+
+    /**
+     * Get the current page number.
+     *
+     * @return int
+     */
+    public function page(): int;
+
+    /**
+     * Get the total number of pages.
+     *
+     * @return int
+     */
+    public function pages(): int;
+
+    /**
+     * Get the number of items per page.
+     *
+     * @return int
+     */
+    public function limit(): int;
+
+    /**
+     * Get the record offset for the current page.
+     *
+     * @return int
+     */
+    public function offset(): int;
+
+    /**
+     * Get the items on the current page.
+     *
+     * @return array
+     */
+    public function items(): array;
+
+    /**
+     * Determine if the paginator has no items.
+     *
+     * @return bool
+     */
+    public function isEmpty(): bool;
+
+    /**
+     * Determine if the paginator has items.
+     *
+     * @return bool
+     */
+    public function isNotEmpty(): bool;
 }

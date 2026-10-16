@@ -2,6 +2,7 @@
 
 namespace Spark\Contracts\Http;
 
+use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Model;
 
 /**
@@ -11,6 +12,45 @@ use Spark\Database\Model;
  */
 interface AuthContract
 {
+    /**
+     * Checks if a user is currently authenticated.
+     *
+     * @return bool
+     */
+    public function check(): bool;
+
+    /**
+     * Checks if a user is currently logged in (alias for check).
+     *
+     * @return bool
+     */
+    public function isLogged(): bool;
+
+    /**
+     * Get the authenticated user model or a specific attribute from the user.
+     *
+     * @param string|null $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function user(?string $key = null, $default = null): mixed;
+
+    /**
+     * Get the ID of the currently authenticated user.
+     *
+     * @return int
+     */
+    public function id(): int;
+
+    /**
+     * Attempt to authenticate a user using credentials.
+     *
+     * @param Arrayable|array $credentials
+     * @param bool $remember
+     * @return bool
+     */
+    public function attempt(Arrayable|array $credentials, bool $remember = false): bool;
+
     /**
      * Gets the currently logged in user.
      *

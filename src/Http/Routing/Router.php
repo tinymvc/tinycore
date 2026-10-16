@@ -12,6 +12,7 @@ use Spark\Http\Routing\Exceptions\InvalidNamedRouteException;
 use Spark\Http\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use function count;
 use function in_array;
 use function is_array;
 use function is_int;
@@ -748,35 +749,45 @@ class Router implements RouterContract
     private function escapeRoutePath(string $routePath): string
     {
         $routePath = trim($routePath, '/');
-        $segmentPattern = '[^\/]+';
 
         if ($routePath === '') {
             return '\/';
         }
 
-        $segments = array_filter(explode('/', $routePath), 'strlen');
-        $compiledPath = '';
+        $segments = array_values(array_filter(explode('/', $routePath), 'strlen'));
+        $last = count($segments) - 1;
+        $compiled = '';
 
-        foreach ($segments as $segment) {
+        foreach ($segments as $i => $segment) {
+            // Bare "*": zero or more whole segments
             if ($segment === '*') {
-                $compiledPath .= '\/(?:.*)';
+                $compiled .= match (true) {
+                    $last === 0 => '\/.*',             // "*" or "/*": everything
+                    $i === $last => '(?:\/.*)?',       // "/admin/*": anything below
+                    default => '(?:\/[^\/]+)*',        // "/admin/*/edit": any number of segments
+                };
                 continue;
             }
 
-            if (preg_match('/^\{([a-zA-Z0-9_]+)(?::[a-zA-Z0-9_]+)?\?\}$/', $segment)) {
-                $compiledPath .= "(?:\\/($segmentPattern))?";
-                continue;
+            // Trailing "*" on a segment: "/admin*" or "/{id}*" = the segment plus anything below it
+            $tail = '';
+            if (str_ends_with($segment, '*')) {
+                $segment = substr($segment, 0, -1);
+                $tail = '(?:\/.*)?';
             }
 
-            if (preg_match('/^\{([a-zA-Z0-9_]+)(?::[a-zA-Z0-9_]+)?\}$/', $segment)) {
-                $compiledPath .= "\\/($segmentPattern)";
-                continue;
+            // {name}, {name?}, {name:type}, {name:type?}
+            if (preg_match('/^\{([a-zA-Z0-9_]+)(?::[a-zA-Z0-9_]+)?(\?)?\}$/', $segment, $m)) {
+                $compiled .= ($m[2] ?? '') === '?' ? '(?:\/([^\/]+))?' : '\/([^\/]+)';
+            } else {
+                // Static segment; a "*" inside it matches within one segment ("/files/*.pdf")
+                $compiled .= '\/' . str_replace('\*', '[^\/]*', preg_quote($segment, '#'));
             }
 
-            $compiledPath .= '\/' . preg_quote($segment, '#');
+            $compiled .= $tail;
         }
 
-        return $compiledPath;
+        return $compiled;
     }
 
     /**

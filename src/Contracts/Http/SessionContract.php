@@ -5,6 +5,28 @@ namespace Spark\Contracts\Http;
 interface SessionContract
 {
     /**
+     * Start the session if not already started.
+     *
+     * @return void
+     */
+    public static function start(): void;
+
+    /**
+     * Determine if the session has started.
+     *
+     * @param bool $forceStart
+     * @return bool
+     */
+    public static function isStarted(bool $forceStart = false): bool;
+
+    /**
+     * Get the current session ID.
+     *
+     * @return string
+     */
+    public static function id(): string;
+
+    /**
      * Retrieves a value from the session by key.
      *
      * @param string $key The session variable key to retrieve.
@@ -56,6 +78,13 @@ interface SessionContract
     public static function forget(string|array $keys): void;
 
     /**
+     * Get all session items.
+     *
+     * @return array
+     */
+    public static function all(): array;
+
+    /**
      * Removes all session data.
      *
      * @return void
@@ -95,6 +124,13 @@ interface SessionContract
     public static function destroy(): void;
 
     /**
+     * Close the current session.
+     *
+     * @return void
+     */
+    public static function close(): void;
+
+    /**
      * Sets a flash message that will be available for one request only.
      *
      * @param string $key The flash message key.
@@ -111,4 +147,19 @@ interface SessionContract
      * @return mixed The flash message value or default if not found.
      */
     public static function getFlash(string $key, $default = null): mixed;
+
+    /**
+     * Determine if a flash message exists by key.
+     *
+     * @param string $key
+     * @return bool
+     */
+    public static function hasFlash(string $key): bool;
+
+    /**
+     * Clear all flash messages.
+     *
+     * @return void
+     */
+    public static function clearFlash(): void;
 }

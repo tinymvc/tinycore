@@ -72,7 +72,7 @@ class Uploader implements UploaderContract
     public function __construct(
         null|string $uploadTo = null,
         null|string $uploadDir = null,
-        null|array $extensions = [],
+        null|array $extensions = null,
         null|bool $multiple = null,
         null|int $maxSize = 2048, // Default to 2MB
         null|float|array $resize = null,
@@ -81,15 +81,16 @@ class Uploader implements UploaderContract
         null|UploaderDriverInterface $driver = null,
         null|string $relativeTo = null
     ) {
-        $extensions = $extensions === null ? [] : $extensions;
+        if ($extensions !== null) {
+            $this->extensions = array_values(array_unique(array_filter(
+                array_map(
+                    static fn(string $extension): string => ltrim(strtolower(trim($extension)), '.'),
+                    array_filter($extensions, 'is_string')
+                ),
+                static fn(string $extension): bool => $extension !== ''
+            )));
+        }
 
-        $this->extensions = array_values(array_unique(array_filter(
-            array_map(
-                static fn(string $extension): string => ltrim(strtolower(trim($extension)), '.'),
-                array_filter($extensions, 'is_string')
-            ),
-            static fn(string $extension): bool => $extension !== ''
-        )));
         $this->multiple = $multiple;
         $this->maxSize = $maxSize;
         $this->compress = $compress;
@@ -101,8 +102,13 @@ class Uploader implements UploaderContract
             ? [$size[0] => $size[1]] : (is_numeric($size) ? [$size => $size] : $size);
 
         // Format the resize and resizes options
-        $this->resize = $fmSize($resize);
-        $this->resizes = collect($resizes)->mapWithKeys($fmSize(...))->all();
+        if ($resize !== null) {
+            $this->resize = $fmSize($resize);
+        }
+
+        if ($resizes !== null) {
+            $this->resizes = collect($resizes)->mapWithKeys($fmSize(...))->all();
+        }
 
         $uploadDir ??= config('app.upload_dir');
         $this->relativeTo ??= $uploadDir;

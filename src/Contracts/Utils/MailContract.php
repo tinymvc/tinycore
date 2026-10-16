@@ -87,6 +87,32 @@ interface MailContract
     public function reply($address, $name = null): self;
 
     /**
+     * Attach a file to the email.
+     *
+     * @param string $path
+     * @param string|null $name
+     * @return self
+     */
+    public function attachFile($path, $name = null): self;
+
+    /**
+     * Add a custom header to the email.
+     *
+     * @param string $name
+     * @param string $value
+     * @return self
+     */
+    public function withHeader(string $name, string $value): self;
+
+    /**
+     * Add multiple custom headers to the email.
+     *
+     * @param array $headers
+     * @return self
+     */
+    public function withHeaders(array $headers): self;
+
+    /**
      * Send the email.
      * 
      * @return bool Returns true if the email was sent successfully, false otherwise.

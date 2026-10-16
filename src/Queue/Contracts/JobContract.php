@@ -176,4 +176,13 @@ interface JobContract
 
     /* Gets the unique identifier for the job. */
     public function getId(): null|string;
+
+    /** Get the number of times the job has been attempted. */
+    public function attempts(): int;
+
+    /** Get the creation timestamp of the job. */
+    public function createdAt(): ?Carbon;
+
+    /** Get the failure timestamp of the job. */
+    public function failedAt(): ?Carbon;
 }

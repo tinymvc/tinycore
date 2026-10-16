@@ -36,4 +36,54 @@ interface DBContract
      * @return PDOStatement|false The prepared statement or false on failure.
      */
     public function prepare(string $statement, array $options = []): false|PDOStatement;
+
+    /**
+     * Execute an SQL statement with parameters.
+     *
+     * @param string $statement
+     * @param array $params
+     * @param array $options
+     * @return bool
+     */
+    public function statement(string $statement, array $params = [], array $options = []): bool;
+
+    /**
+     * Execute a raw SQL statement and return the number of affected rows.
+     *
+     * @param string $statement
+     * @return int|false
+     */
+    public function exec(string $statement): int|false;
+
+    /**
+     * Execute a Closure within a database transaction.
+     *
+     * @param callable $callback
+     * @return mixed
+     */
+    public function transaction(callable $callback): mixed;
+
+    /**
+     * Get the PDO driver name for the connection.
+     *
+     * @return string
+     */
+    public function getDriver(): string;
+
+    /**
+     * Check if the database driver matches the given driver(s).
+     *
+     * @param array|string $driver
+     * @return bool
+     */
+    public function isDriver(array|string $driver): bool;
+
+    /**
+     * Get a configuration value for the database connection.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function getConfig(string $key, $default = null): mixed;
 }

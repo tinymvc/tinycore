@@ -7,6 +7,7 @@ use Spark\Http\Response;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Http\Routing\Route;
 use Spark\Http\Routing\RouteGroup;
+use Spark\Http\Routing\RouteResource;
 
 /**
  * Interface for the router that defines the methods for registering
@@ -118,6 +119,63 @@ interface RouterContract
      * @throws \Spark\Exceptions\Routing\InvalidNamedRouteException if the route does not exist.
      */
     public function route(string $name, null|string|array|Arrayable $context = null): string;
+
+    /**
+     * Registers a route matching multiple HTTP methods.
+     *
+     * @param array $methods
+     * @param string $path
+     * @param callable|array|string $callback
+     * @return Route
+     */
+    public function match(array $methods, string $path, callable|array|string $callback): Route;
+
+    /**
+     * Register a redirect route.
+     *
+     * @param string $from
+     * @param string $to
+     * @param int $status
+     * @return Route
+     */
+    public function redirect(string $from, string $to, int $status = 302): Route;
+
+    /**
+     * Register a fallback route handler.
+     *
+     * @param callable|array|string $callback
+     * @return self
+     */
+    public function fallback(callable|array|string $callback): self;
+
+    /**
+     * Register a resourceful controller route.
+     *
+     * @param string $path
+     * @param string $controller
+     * @param string|null $name
+     * @param array|string $middleware
+     * @param array|string $withoutMiddleware
+     * @param array $only
+     * @param array $except
+     * @return RouteResource
+     */
+    public function resource(
+        string $path,
+        string $controller,
+        ?string $name = null,
+        array|string $middleware = [],
+        array|string $withoutMiddleware = [],
+        array $only = [],
+        array $except = []
+    ): RouteResource;
+
+    /**
+     * Get all registered routes.
+     *
+     * @return array
+     */
+    public function getRoutes(): array;
 
     /**
      * Dispatches the incoming HTTP request to the appropriate route handler.

@@ -59,4 +59,76 @@ interface CacheContract
      * @return self The instance of the cache util for method chaining.
      */
     public function flush(): self;
+
+    /**
+     * Get an item from the cache, or execute the given Closure and store the result.
+     *
+     * @param string $key
+     * @param callable $callback
+     * @param string|null $expire
+     * @return mixed
+     */
+    public function remember(string $key, callable $callback, ?string $expire = null): mixed;
+
+    /**
+     * Retrieve an item from the cache and delete it.
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function pull(string $key, mixed $default = null): mixed;
+
+    /**
+     * Store an item in the cache if the key does not already exist.
+     *
+     * @param string $key
+     * @param mixed $value
+     * @param string|null $expire
+     * @return bool
+     */
+    public function add(string $key, mixed $value, ?string $expire = null): bool;
+
+    /**
+     * Increment the value of an item in the cache.
+     *
+     * @param string $key
+     * @param int $amount
+     * @return int|false
+     */
+    public function increment(string $key, int $amount = 1): int|false;
+
+    /**
+     * Decrement the value of an item in the cache.
+     *
+     * @param string $key
+     * @param int $amount
+     * @return int|false
+     */
+    public function decrement(string $key, int $amount = 1): int|false;
+
+    /**
+     * Store multiple items in the cache.
+     *
+     * @param array $items
+     * @param string|null $expire
+     * @return self
+     */
+    public function storeMany(array $items, ?string $expire = null): self;
+
+    /**
+     * Retrieve all items from the cache.
+     *
+     * @param bool $eraseExpired
+     * @return array
+     */
+    public function retrieveAll(bool $eraseExpired = false): array;
+
+    /**
+     * Get remaining time-to-live in seconds for a cache key.
+     *
+     * @param string $key
+     * @return int|null
+     */
+    public function ttl(string $key): ?int;
 }

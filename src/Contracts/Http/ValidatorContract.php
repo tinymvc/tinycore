@@ -11,6 +11,31 @@ namespace Spark\Contracts\Http;
 interface ValidatorContract
 {
     /**
+     * Create a new validator instance.
+     *
+     * @param array|null $rules
+     * @param array|null $data
+     * @return static
+     */
+    public static function make(?array $rules = null, ?array $data = null): static;
+
+    /**
+     * Set global custom error messages.
+     *
+     * @param array $messages
+     * @return void
+     */
+    public static function setErrorMessages(array $messages): void;
+
+    /**
+     * Merge additional global custom error messages.
+     *
+     * @param array $messages
+     * @return void
+     */
+    public static function mergeErrorMessages(array $messages): void;
+
+    /**
      * Validates input data against specified rules.
      *
      * @param array<string,mixed> $rules Array of validation rules where the key is the field name

@@ -60,16 +60,17 @@ abstract class ApplicationTestCase extends TestCase
         $this->environment = getenv();
         $this->previousApp = Application::$app;
         $this->previousTracer = Tracer::$instance;
+
         $root = rtrim($this->testStorageDirectory(), '/\\');
 
         if ($root === '') {
             throw new \LogicException('The test storage directory must not be empty.');
         }
 
-        $directory = $root . '/tinycore-test-' . bin2hex(random_bytes(10));
+        $directory = "$root/tinycore-test-" . bin2hex(random_bytes(10));
 
         if (!mkdir($directory, 0700, true)) {
-            throw new \RuntimeException('Unable to create test storage: ' . $directory);
+            throw new \RuntimeException("Unable to create test storage: $directory");
         }
 
         $this->temporaryDirectory = $this->storagePath = $directory;

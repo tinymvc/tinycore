@@ -76,6 +76,27 @@ final class RoutingTest extends FrameworkTestCase
         Route::fallback(fn(\Spark\Http\Request $request) => new \Spark\Http\Response($request->getPath(), 404));
         $this->get('/unknown')->assertNotFound()->assertContent('/unknown');
     }
+
+    public function test_wildcard_routes_match_prefix_and_subpaths(): void
+    {
+        Route::get('/admin*', fn() => 'admin wildcard');
+        Route::get('/docs/*', fn() => 'docs wildcard');
+        Route::get('/users/{id}*', fn($id) => "user $id");
+
+        $this->get('/admin')->assertContent('admin wildcard');
+        $this->get('/admin/')->assertContent('admin wildcard');
+        $this->get('/admin/login')->assertContent('admin wildcard');
+        $this->get('/admin/users/1/edit')->assertContent('admin wildcard');
+        $this->get('/administrator')->assertNotFound();
+
+        $this->get('/docs')->assertContent('docs wildcard');
+        $this->get('/docs/')->assertContent('docs wildcard');
+        $this->get('/docs/installation')->assertContent('docs wildcard');
+
+        $this->get('/users/42')->assertContent('user 42');
+        $this->get('/users/42/')->assertContent('user 42');
+        $this->get('/users/42/profile')->assertContent('user 42');
+    }
 }
 
 class RoutingResourceFixture

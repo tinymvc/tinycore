@@ -218,7 +218,7 @@ class Assert
     public static function assertThrows(string $class, callable $callback, ?string $message = null): \Throwable
     {
         if (!is_a($class, \Throwable::class, true)) {
-            throw new \InvalidArgumentException($class . ' is not a Throwable class.');
+            throw new \InvalidArgumentException("$class is not a Throwable class.");
         }
 
         try {

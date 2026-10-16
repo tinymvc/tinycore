@@ -37,6 +37,14 @@ interface RouteGroupContract
     public function prefix(string $path): self;
 
     /**
+     * Set a URL prefix for all routes in the group (alias for prefix).
+     *
+     * @param string $path
+     * @return self
+     */
+    public function path(string $path): self;
+
+    /**
      * Set a namespace for all controllers in the group.
      *
      * @param callable|string|array $callback The namespace to set.
@@ -75,6 +83,14 @@ interface RouteGroupContract
      * @return self
      */
     public function name(string $name): self;
+
+    /**
+     * Set a name prefix for all routes in the group (alias for name).
+     *
+     * @param string $name
+     * @return self
+     */
+    public function as(string $name): self;
 
     /**
      * Define routes within the group using a callback.

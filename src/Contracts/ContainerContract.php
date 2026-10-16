@@ -45,6 +45,22 @@ interface ContainerContract
     public function alias(string $alias, string $abstract): void;
 
     /**
+     * Get the alias for an abstract if available.
+     *
+     * @param string $abstract
+     * @return string
+     */
+    public function getAlias(string $abstract): string;
+
+    /**
+     * Determine if a given string is an alias.
+     *
+     * @param string $alias
+     * @return bool
+     */
+    public function isAlias(string $alias): bool;
+
+    /**
      * Registers a service provider.
      *
      * The service provider will register its bindings, and will be tracked
@@ -154,6 +170,21 @@ interface ContainerContract
      * @param string $abstract The abstract name of the class or interface.
      */
     public function forget(string $abstract): void;
+
+    /**
+     * Remove a resolved instance from the container.
+     *
+     * @param string $abstract
+     * @return void
+     */
+    public function forgetInstance(string $abstract): void;
+
+    /**
+     * Flush the container of all bindings and resolved instances.
+     *
+     * @return void
+     */
+    public function flush(): void;
 
     /**
      * Reset a binding in the container.
