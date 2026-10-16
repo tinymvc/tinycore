@@ -616,6 +616,17 @@ class Blade implements BladeContract
     }
 
     /**
+     * Determine if a template exists (alias of templateExists).
+     *
+     * @param string $template
+     * @return bool
+     */
+    public function exists(string $template): bool
+    {
+        return $this->templateExists($template);
+    }
+
+    /**
      * Clear the view cache
      * 
      * @return void

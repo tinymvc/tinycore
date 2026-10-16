@@ -184,30 +184,30 @@ interface HttpRequestContract
 
     /**
      * Determine if the request is an application/json request.
-     * @return bool
+     * @return self
      */
-    public function setMethod(string $method): void;
+    public function setMethod(string $method): self;
 
     /**
      * Set the URL for the request.
      * @param string $url
-     * @return void
+     * @return self
      */
-    public function setUrl(string $url): void;
+    public function setUrl(string $url): self;
 
     /**
      * Set the query parameters for the request.
      * @param array $params
-     * @return void
+     * @return self
      */
-    public function setParams(array $params): void;
+    public function setParams(array $params): self;
 
     /**
      * Set the data for the request.
      * @param string|array $data
-     * @return void
+     * @return self
      */
-    public function setData(string|array $data): void;
+    public function setData(string|array $data): self;
 
     /**
      * Get the HTTP method for the request.

@@ -14,6 +14,16 @@ interface EventDispatcherContract
     public function addListener(string $eventName, string|array|callable $listener, int $priority = 0): void;
 
     /**
+     * Registers a listener for an event or multiple events (alias of addListener).
+     *
+     * @param string|array $eventName
+     * @param string|array|callable $listener
+     * @param int $priority
+     * @return void
+     */
+    public function listen(string|array $eventName, string|array|callable $listener, int $priority = 0): void;
+
+    /**
      * Registers a one-time listener for a specific event.
      *
      * @param string $eventName The name of the event.

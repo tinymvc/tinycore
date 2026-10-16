@@ -79,6 +79,23 @@ interface AuthContract
     public function login(Model $user, bool $remember = false): void;
 
     /**
+     * Set the current authenticated user model.
+     *
+     * @param Model $user
+     * @return self
+     */
+    public function setUser(Model $user): self;
+
+    /**
+     * Log a user into the application by their ID.
+     *
+     * @param int|string $id
+     * @param bool $remember
+     * @return Model|null
+     */
+    public function loginUsingId(int|string $id, bool $remember = false): ?Model;
+
+    /**
      * Logs out the current user by deleting the session and user properties.
      *
      * @return void

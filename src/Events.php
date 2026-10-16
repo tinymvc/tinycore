@@ -59,6 +59,26 @@ class Events implements EventDispatcherContract
     }
 
     /**
+     * Registers a listener for an event or multiple events (alias of addListener).
+     *
+     * @param string|array $eventName
+     * @param string|array|callable $listener
+     * @param int $priority
+     * @return void
+     */
+    public function listen(string|array $eventName, string|array|callable $listener, int $priority = 0): void
+    {
+        if (is_array($eventName)) {
+            foreach ($eventName as $event) {
+                $this->addListener($event, $listener, $priority);
+            }
+            return;
+        }
+
+        $this->addListener($eventName, $listener, $priority);
+    }
+
+    /**
      * Checks if there are any listeners registered for a specific event.
      *
      * @param string $eventName The name of the event.

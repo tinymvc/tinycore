@@ -29,6 +29,7 @@ use Spark\Storage\Storage as StorageInstance;
  * @method static int lastModified(string $path)
  * @method static bool copy(string $from, string $to)
  * @method static bool move(string $from, string $to)
+ * @method static \Spark\Storage\Contracts\UploaderDriverInterface getDriver()
  * @method static \Spark\Storage\Uploader uploader(string $uploadTo = '', array $extensions = [], ?bool $multiple = null, ?int $maxSize = 2048, null|float|array $resize = null, ?array $resizes = null, ?int $compress = null)
  */
 class Storage extends Facade

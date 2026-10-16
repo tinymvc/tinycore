@@ -329,6 +329,70 @@ class Cache implements CacheContract, \ArrayAccess
     }
 
     /**
+     * Retrieve an item from the cache by key (alias of retrieve).
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        if (!$this->has($key)) {
+            return $default;
+        }
+
+        return $this->retrieve($key);
+    }
+
+    /**
+     * Store an item in the cache (alias of store).
+     *
+     * @param string $key
+     * @param mixed $data
+     * @param string|null $expire
+     * @return self
+     */
+    public function set(string $key, mixed $data, ?string $expire = null): self
+    {
+        return $this->store($key, $data, $expire);
+    }
+
+    /**
+     * Store an item in the cache (alias of store).
+     *
+     * @param string $key
+     * @param mixed $data
+     * @param string|null $expire
+     * @return self
+     */
+    public function put(string $key, mixed $data, ?string $expire = null): self
+    {
+        return $this->store($key, $data, $expire);
+    }
+
+    /**
+     * Remove an item from the cache (alias of erase).
+     *
+     * @param string|array $keys
+     * @return self
+     */
+    public function forget(string|array $keys): self
+    {
+        return $this->erase($keys);
+    }
+
+    /**
+     * Delete an item from the cache (alias of erase).
+     *
+     * @param string|array $keys
+     * @return self
+     */
+    public function delete(string|array $keys): self
+    {
+        return $this->erase($keys);
+    }
+
+    /**
      * Determine whether a cache key exists for ArrayAccess.
      */
     public function offsetExists(mixed $offset): bool

@@ -12,6 +12,16 @@ namespace Spark\Contracts;
 interface LoggerInterface
 {
     /**
+     * Logs with an arbitrary level.
+     *
+     * @param string $level The log level.
+     * @param string $message The log message.
+     * @param array $context Optional context array.
+     * @return void
+     */
+    public static function log(string $level, string $message, array $context = []): void;
+
+    /**
      * Logs an informational message.
      *
      * @param string $message The log message.

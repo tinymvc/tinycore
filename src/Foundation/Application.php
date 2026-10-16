@@ -151,6 +151,7 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('lock', \Spark\Cache\Lock::class);
         $this->alias('query', \Spark\Database\QueryBuilder::class);
         $this->alias('validator', \Spark\Http\Validator::class);
+        $this->alias('schema', \Spark\Database\Schema\Schema::class);
         $this->alias('mail', \Spark\Utils\Mail::class);
         $this->alias('jwt', \Spark\Utils\JWT::class);
     }

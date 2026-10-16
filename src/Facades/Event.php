@@ -11,13 +11,16 @@ use Spark\Events;
  * It allows easy access to event management methods such as adding listeners and dispatching events
  * 
  * @method static void addListener(string $eventName, string|array|callable $listener, int $priority = 0)
- * @method static bool hasListeners(string $eventName): bool
+ * @method static void listen(string|array $eventName, string|array|callable $listener, int $priority = 0)
+ * @method static bool hasListeners(string $eventName)
  * @method static array getListeners(?string $eventName = null)
  * @method static void clearListeners(?string $eventName = null)
  * @method static void dispatch(string $eventName, ...$args)
+ * @method static array dispatchWithResponse(string $eventName, ...$args)
  * @method static void dispatchIf(string $eventName, bool $condition, ...$args)
  * @method static void dispatchUnless(string $eventName, bool $condition, ...$args)
  * @method static void once(string $eventName, callable|string|array $listener, int $priority = 0)
+ * @method static void removeListener(string $eventName, callable|string|array $listener)
  * @method static mixed until(string $eventName, ...$args)
  * @method static void halt()
  * @method static int countListeners(?string $eventName = null)

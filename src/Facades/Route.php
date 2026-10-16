@@ -39,6 +39,7 @@ use Spark\Http\Routing\RouteResource;
  * @method static Router callback(callable|string|array $callback)
  * @method static bool has(string $name)
  * @method static array getRoutes()
+ * @method static string route(string $name, \Spark\Contracts\Support\Arrayable|array|string|null $context = null)
  * 
  * @package Spark\Facades
  * 

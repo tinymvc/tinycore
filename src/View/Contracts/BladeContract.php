@@ -91,4 +91,36 @@ interface BladeContract
      * @return string The rendered template content.
      */
     public function include(string $template, array $context = []): string;
+
+    /**
+     * Add a custom directive handler.
+     *
+     * @param string $name
+     * @param callable $callback
+     * @return void
+     */
+    public function directive(string $name, callable $callback): void;
+
+    /**
+     * Clear compiled view cache files.
+     *
+     * @return void
+     */
+    public function clearCache(): void;
+
+    /**
+     * Determine if a template exists.
+     *
+     * @param string $template
+     * @return bool
+     */
+    public function templateExists(string $template): bool;
+
+    /**
+     * Determine if a template exists (alias of templateExists).
+     *
+     * @param string $template
+     * @return bool
+     */
+    public function exists(string $template): bool;
 }

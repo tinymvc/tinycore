@@ -43,6 +43,7 @@ use Spark\Hash as BaseHash;
  * @method static string argon2i(string $password, array $options = [])
  * @method static string argon2id(string $password, array $options = [])
  * @method static string uuid()
+ * @method static BaseHash copy()
  * 
  * @package Spark\Facades
  * 

@@ -11,6 +11,9 @@ use Spark\Cache\Cache as BaseCache;
  * It allows easy access to caching methods such as storing, retrieving, and deleting cache items
  * without needing to instantiate the Cache class directly.
  * 
+ * @method static mixed get(string $key, mixed $default = null)
+ * @method static BaseCache set(string $key, mixed $data, ?string $expire = null)
+ * @method static BaseCache put(string $key, mixed $data, ?string $expire = null)
  * @method static BaseCache store(string $key, mixed $data, ?string $expire = null)
  * @method static bool has(string $key, bool $eraseExpired = false)
  * @method static mixed load(string $key, callable $callback, ?string $expire = null)
@@ -19,6 +22,8 @@ use Spark\Cache\Cache as BaseCache;
  * @method static mixed metadata(string $key)
  * @method static array getExpired()
  * @method static BaseCache erase(string|array $keys)
+ * @method static BaseCache forget(string|array $keys)
+ * @method static BaseCache delete(string|array $keys)
  * @method static BaseCache eraseExpired()
  * @method static BaseCache flush()
  * @method static BaseCache flushIf(bool $condition)

@@ -131,4 +131,49 @@ interface CacheContract
      * @return int|null
      */
     public function ttl(string $key): ?int;
+
+    /**
+     * Retrieve an item from the cache by key (alias of retrieve).
+     *
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    public function get(string $key, mixed $default = null): mixed;
+
+    /**
+     * Store an item in the cache (alias of store).
+     *
+     * @param string $key
+     * @param mixed $data
+     * @param string|null $expire
+     * @return self
+     */
+    public function set(string $key, mixed $data, ?string $expire = null): self;
+
+    /**
+     * Store an item in the cache (alias of store).
+     *
+     * @param string $key
+     * @param mixed $data
+     * @param string|null $expire
+     * @return self
+     */
+    public function put(string $key, mixed $data, ?string $expire = null): self;
+
+    /**
+     * Remove an item from the cache (alias of erase).
+     *
+     * @param string|array $keys
+     * @return self
+     */
+    public function forget(string|array $keys): self;
+
+    /**
+     * Delete an item from the cache (alias of erase).
+     *
+     * @param string|array $keys
+     * @return self
+     */
+    public function delete(string|array $keys): self;
 }

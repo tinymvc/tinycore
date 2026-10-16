@@ -3,8 +3,7 @@
 namespace Spark\Facades;
 
 use Spark\Foundation\Application;
-use Spark\Support\Traits\Macroable;
-use function in_array;
+use function is_object;
 
 /**
  * Class Facade
@@ -27,6 +26,16 @@ abstract class Facade
     abstract protected static function getFacadeAccessor(): string;
 
     /**
+     * Resolve the facade root instance from the container.
+     *
+     * @return mixed
+     */
+    public static function getFacadeRoot(): mixed
+    {
+        return Application::$app !== null ? Application::$app->make(static::getFacadeAccessor()) : null;
+    }
+
+    /**
      * Handle dynamic static method calls into the object instance.
      *
      * @param string $method
@@ -36,15 +45,23 @@ abstract class Facade
      */
     public static function __callStatic(string $method, array $args)
     {
-        $instance = Application::$app->make(static::getFacadeAccessor());
+        $accessor = static::getFacadeAccessor();
+        $instance = static::getFacadeRoot();
 
-        if (
-            method_exists($instance, $method) ||
-            (in_array(Macroable::class, class_uses($instance)) && $instance->hasMacro($method))
-        ) {
-            return $instance->$method(...$args);
+        if ($instance !== null && is_object($instance)) {
+            if (
+                method_exists($instance, $method) ||
+                method_exists($instance, '__call') ||
+                (method_exists($instance, 'hasMacro') && $instance->hasMacro($method))
+            ) {
+                return $instance->$method(...$args);
+            }
         }
 
-        throw new \BadMethodCallException("Method {$method} does not exist on " . static::getFacadeAccessor() . ".");
+        if (class_exists($accessor) && method_exists($accessor, $method)) {
+            return $accessor::$method(...$args);
+        }
+
+        throw new \BadMethodCallException("Method $method does not exist on $accessor.");
     }
 }

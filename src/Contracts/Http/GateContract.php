@@ -53,6 +53,15 @@ interface GateContract
     public function denies(string $ability, mixed ...$arguments): bool;
 
     /**
+     * Determine if the given ability should be granted for the current user (alias for allows/any).
+     *
+     * @param iterable|string $abilities
+     * @param mixed ...$arguments
+     * @return bool
+     */
+    public function check(iterable|string $abilities, mixed ...$arguments): bool;
+
+    /**
      * Authorize the given ability.
      * 
      * Throws an AuthorizationException if the check fails.

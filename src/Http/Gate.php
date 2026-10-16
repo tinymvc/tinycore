@@ -132,6 +132,20 @@ class Gate implements GateContract
     }
 
     /**
+     * Determine if the given ability should be granted for the current user.
+     *
+     * @param iterable|string $abilities
+     * @param mixed ...$arguments
+     * @return bool
+     */
+    public function check(iterable|string $abilities, mixed ...$arguments): bool
+    {
+        return is_string($abilities)
+            ? $this->allows($abilities, ...$arguments)
+            : $this->any($abilities, ...$arguments);
+    }
+
+    /**
      * Authorize the given ability.
      * Throws an AuthorizationException if the check fails.
      *

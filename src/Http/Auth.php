@@ -411,6 +411,41 @@ class Auth implements AuthContract, ArrayAccess
     }
 
     /**
+     * Set the current authenticated user model.
+     *
+     * @param Model $user
+     * @return self
+     */
+    public function setUser(Model $user): self
+    {
+        $this->user = $user;
+        $this->id = (int) $user->id;
+
+        return $this;
+    }
+
+    /**
+     * Log a user into the application by their ID.
+     *
+     * @param int|string $id
+     * @param bool $remember
+     * @return Model|null
+     */
+    public function loginUsingId(int|string $id, bool $remember = false): ?Model
+    {
+        $model = $this->model;
+        if ($model && class_exists($model)) {
+            $user = $model::find($id);
+            if ($user instanceof Model) {
+                $this->login($user, $remember);
+                return $user;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Generates a JWT token for the specified user with an optional payload.
      *
      * This method creates a JWT token that includes the user's ID and an expiration time.

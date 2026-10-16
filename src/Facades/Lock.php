@@ -21,6 +21,7 @@ use Spark\Cache\Lock as BaseLock;
  * @method static string getLockOwner()
  * @method static null|array getLockInfo(string $key)
  * @method static void optimize()
+ * @method static BaseLock make(string $name = 'default')
  * 
  * @package Spark\Facades
  * 

@@ -16,6 +16,7 @@ use Spark\Http\Gate as BaseGate;
  * @method static void after(string|array|callable $callback)
  * @method static bool allows(string $ability, mixed ...$arguments)
  * @method static bool denies(string $ability, mixed ...$arguments)
+ * @method static bool check(iterable|string $abilities, mixed ...$arguments)
  * @method static void authorize(string $ability, mixed ...$arguments)
  * @method static bool any(iterable|string $abilities, mixed ...$arguments)
  * @method static bool none(iterable|string $abilities, mixed ...$arguments)

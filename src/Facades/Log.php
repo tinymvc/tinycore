@@ -14,12 +14,35 @@ use Spark\Tracer;
  * Each method accepts a message string and an optional context array.
  * The context array is converted to a JSON string and appended to the log message.
  *
+ * @method static void log(string $level, string $message, array $context = [])
+ * @method static void info(string $message, array $context = [])
+ * @method static void warning(string $message, array $context = [])
+ * @method static void error(string $message, array $context = [])
+ * @method static void debug(string $message, array $context = [])
+ * @method static void critical(string $message, array $context = [])
+ * @method static void alert(string $message, array $context = [])
+ * @method static void emergency(string $message, array $context = [])
+ * @method static void notice(string $message, array $context = [])
+ *
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  * @package Spark\Facades
  * @version 1.0.0
  */
 class Log implements LoggerInterface
 {
+    /**
+     * Logs with an arbitrary level.
+     *
+     * @param string $level The log level.
+     * @param string $message The log message.
+     * @param array $context Optional context array.
+     * @return void
+     */
+    public static function log(string $level, string $message, array $context = []): void
+    {
+        self::add($level, $message, $context);
+    }
+
     /**
      * Logs an informational message.
      *

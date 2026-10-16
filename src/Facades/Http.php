@@ -40,6 +40,8 @@ use Spark\Http\Client\Http as BaseHttp;
  * @method static BaseHttp withToken(string $token)
  * @method static BaseHttp withBasicAuth(string $username, string $password)
  * @method static BaseHttp withCookies(array $cookies)
+ * @method static BaseHttp withCookieJar(string $cookieJar)
+ * @method static BaseHttp withProxy(string $proxy, string $proxyAuth = '')
  * @method static BaseHttp withOptions(array $options)
  * @method static BaseHttp withOption(int $option, mixed $value)
  * @method static BaseHttp withTimeout(int $seconds)
@@ -49,6 +51,12 @@ use Spark\Http\Client\Http as BaseHttp;
  * @method static BaseHttp withVerifying()
  * @method static BaseHttp withPostFields(array|string $fields, null|string $contentType = null)
  * @method static BaseHttp asMultipart()
+ * @method static BaseHttp addHeader(string $name, string $value)
+ * @method static BaseHttp setOption(int $key, mixed $value)
+ * @method static BaseHttp setMethod(string $method)
+ * @method static BaseHttp setUrl(string $url)
+ * @method static BaseHttp setParams(array $params)
+ * @method static BaseHttp setData(string|array $data)
  * @method static array pool(callable $callback)
  * 
  * @package Spark\Facades

@@ -10,6 +10,11 @@ use Spark\Utils\Mail as BaseMail;
  * This class serves as a facade for the mail system, providing a static interface to the underlying Mail class.
  * It allows easy access to mail methods such as sending emails, retrieving mail settings, and managing mail sessions.
  * 
+ * @method static bool send()
+ * @method static BaseMail make(array $config = [])
+ * @method static BaseMail copy()
+ * @method static BaseMail reset()
+ * @method static BaseMail smtpKeepAlive()
  * @method static BaseMail configure(callable $callback)
  * @method static BaseMail configureSmtp(array $config)
  * @method static BaseMail view(string $template, array $context = [])
@@ -22,6 +27,14 @@ use Spark\Utils\Mail as BaseMail;
  * @method static BaseMail from($address, $name = null)
  * @method static BaseMail mailer($address, $name = null)
  * @method static BaseMail reply($address, $name = null)
+ * @method static BaseMail withHeader(string $name, string $value)
+ * @method static BaseMail withHeaders(array $headers)
+ * @method static BaseMail addAddress(string $address, string $name = '')
+ * @method static BaseMail addCC(string $address, string $name = '')
+ * @method static BaseMail addBCC(string $address, string $name = '')
+ * @method static BaseMail addReplyTo(string $address, string $name = '')
+ * @method static BaseMail setFrom(string $address, string $name = '', bool $auto = true)
+ * @method static BaseMail addAttachment(string $path, string $name = '', string $encoding = 'base64', string $type = '', string $disposition = 'attachment')
  * 
  * @package Spark\Facades
  * 
