@@ -32,42 +32,43 @@ class Uploader implements UploaderContract
     /** @var string Upload directory path. */
     public string $uploadDir;
 
-    /** @var array Supported file extensions.*/
-    public array $extensions;
+    /** @var null|array Supported file extensions. */
+    public null|array $extensions = null;
 
     /** @var null|bool Whether to support multiple file uploads. */
-    public null|bool $multiple;
+    public null|bool $multiple = null;
 
     /** @var null|int Maximum file size (in KB). */
-    public null|int $maxSize;
+    public null|int $maxSize = null;
 
     /** @var null|array Resize options for images. */
-    public null|array $resize;
+    public null|array $resize = null;
 
     /** @var null|array Bulk resize options for images. */
-    public null|array $resizes;
+    public null|array $resizes = null;
 
     /** @var null|int Compression level for images. */
-    public null|int $compress;
+    public null|int $compress = null;
 
-    /** @var ?string Base directory stripped from driver destinations and returned paths. */
-    private ?string $relativeTo = null;
+    /** @var null|string Base directory stripped from driver destinations and returned paths. */
+    private null|string $relativeTo = null;
 
-    /** @var ?UploaderDriverInterface File upload driver. */
-    private ?UploaderDriverInterface $driver;
+    /** @var null|UploaderDriverInterface File upload driver. */
+    private null|UploaderDriverInterface $driver = null;
 
     /**
      * Sets up the uploader configuration.
      *
      * @param null|string $uploadTo Upload directory path.
      * @param null|string $uploadDir Upload directory path.
-     * @param array $extensions Supported file extensions.
+     * @param null|array $extensions Supported file extensions.
      * @param null|bool $multiple Whether to support multiple file uploads.
      * @param null|int $maxSize Maximum file size (in KB).
      * @param null|array $resize Resize options for images.
      * @param null|array $resizes Bulk resize options for images.
      * @param null|int $compress Compression level for images.
-     * @param ?string $relativeTo Base directory stripped from driver destinations and returned paths.
+     * @param null|UploaderDriverInterface $driver File upload driver.
+     * @param null|string $relativeTo Base directory stripped from driver destinations and returned paths.
      */
     public function __construct(
         null|string $uploadTo = null,
@@ -81,7 +82,7 @@ class Uploader implements UploaderContract
         null|UploaderDriverInterface $driver = null,
         null|string $relativeTo = null
     ) {
-        if ($extensions !== null) {
+        if ($extensions !== null && $extensions !== []) {
             $this->extensions = array_values(array_unique(array_filter(
                 array_map(
                     static fn(string $extension): string => ltrim(strtolower(trim($extension)), '.'),
@@ -102,12 +103,14 @@ class Uploader implements UploaderContract
             ? [$size[0] => $size[1]] : (is_numeric($size) ? [$size => $size] : $size);
 
         // Format the resize and resizes options
-        if ($resize !== null) {
+        if ($resize !== null && $resize !== []) {
             $this->resize = $fmSize($resize);
         }
 
-        if ($resizes !== null) {
-            $this->resizes = collect($resizes)->mapWithKeys($fmSize(...))->all();
+        if ($resizes !== null && $resizes !== []) {
+            $this->resizes = collect($resizes)
+                ->mapWithKeys($fmSize(...))
+                ->all();
         }
 
         $uploadDir ??= config('app.upload_dir');
@@ -125,20 +128,20 @@ class Uploader implements UploaderContract
      *
      * @param null|string $uploadTo Upload directory path.
      * @param null|string $uploadDir Upload directory path.
-     * @param array $extensions Supported file extensions.
+     * @param null|array $extensions Supported file extensions.
      * @param null|bool $multiple Whether to support multiple file uploads.
      * @param null|int $maxSize Maximum file size (in KB).
      * @param null|array $resize Resize options for images.
      * @param null|array $resizes Bulk resize options for images.
      * @param null|int $compress Compression level for images.
-     * @param ?string $relativeTo Base directory stripped from driver destinations and returned paths.
+     * @param null|string $relativeTo Base directory stripped from driver destinations and returned paths.
      * @param null|UploaderDriverInterface $driver File upload driver.
      * @return self Returns a new instance of the Uploader class.
      */
     public static function make(
         null|string $uploadTo = null,
         null|string $uploadDir = null,
-        null|array $extensions = [],
+        null|array $extensions = null,
         null|bool $multiple = null,
         null|int $maxSize = 2048, // Default to 2MB
         null|float|array $resize = null,
