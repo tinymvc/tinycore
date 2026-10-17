@@ -41,6 +41,7 @@ class RedisStorage implements CacheStorageContract
 
         $prefix = trim($prefix, ':');
         $hash = md5($name);
+
         $this->cacheKeyPrefix = sprintf('%s:cache:%s:', $prefix, $hash);
         $this->lockNamespace = sprintf('%s:lock:%s', $prefix, $hash);
     }
