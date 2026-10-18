@@ -33,7 +33,7 @@ class Cache implements CacheContract, \ArrayAccess
      * Create a cache repository by name.
      *
      * The name is used by storage drivers to isolate cache data, such as by
-     * database key prefix, file directory or Redis key namespace.
+     * database group, file directory or Redis key namespace.
      */
     public function __construct(string $name = 'default')
     {

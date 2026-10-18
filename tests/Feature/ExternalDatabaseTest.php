@@ -1,13 +1,28 @@
 <?php
 
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
+require_once dirname(__DIR__) . '/Support/DatabaseCacheRegressionChecks.php';
 
 use Spark\Database\DB;
 use Spark\Database\QueryBuilder;
+use Spark\Database\Schema\Blueprint;
+use Spark\Database\Schema\Schema;
 
 /** Optional integration tests: use a dedicated test database, never an application database. */
 final class ExternalDatabaseTest extends FrameworkTestCase
 {
+    use DatabaseCacheRegressionChecks;
+
+    public function test_mysql_cache_identity_and_lock_transactions(): void
+    {
+        $this->verifyDatabase('mysql', 'SPARK_TEST_MYSQL', $this->verifyCacheAndLocks(...));
+    }
+
+    public function test_postgresql_cache_identity_and_lock_transactions(): void
+    {
+        $this->verifyDatabase('pgsql', 'SPARK_TEST_PGSQL', $this->verifyCacheAndLocks(...));
+    }
+
     public function test_mysql_transactions_and_row_locks(): void
     {
         $this->verifyDatabase('mysql', 'SPARK_TEST_MYSQL');
@@ -18,7 +33,7 @@ final class ExternalDatabaseTest extends FrameworkTestCase
         $this->verifyDatabase('pgsql', 'SPARK_TEST_PGSQL');
     }
 
-    private function verifyDatabase(string $driver, string $prefix): void
+    private function verifyDatabase(string $driver, string $prefix, ?callable $verify = null): void
     {
         $dsn = getenv($prefix . '_DSN');
         $adminDsn = getenv($prefix . '_ADMIN_DSN');
@@ -40,7 +55,7 @@ final class ExternalDatabaseTest extends FrameworkTestCase
         }
 
         try {
-            $this->verifyConnection($driver, $prefix, $dsn);
+            $this->verifyConnection($driver, $prefix, $dsn, $verify);
         } finally {
             // verifyConnection() has returned, releasing its PDO connection before DROP DATABASE.
             if ($database !== null) {
@@ -49,7 +64,7 @@ final class ExternalDatabaseTest extends FrameworkTestCase
         }
     }
 
-    private function verifyConnection(string $driver, string $prefix, string $dsn): void
+    private function verifyConnection(string $driver, string $prefix, string $dsn, ?callable $verify): void
     {
         $db = new DB([
             'driver' => $driver,
@@ -57,6 +72,12 @@ final class ExternalDatabaseTest extends FrameworkTestCase
             'user' => getenv($prefix . '_USER') ?: '',
             'password' => getenv($prefix . '_PASSWORD') ?: '',
         ]);
+
+        if ($verify !== null) {
+            $verify($db);
+            return;
+        }
+
         $table = 'spark_test_' . bin2hex(random_bytes(8));
         $query = fn() => (new QueryBuilder($db))->table($table);
         $db->exec("CREATE TABLE {$table} (id INTEGER PRIMARY KEY, name VARCHAR(80) NOT NULL)");
@@ -78,6 +99,46 @@ final class ExternalDatabaseTest extends FrameworkTestCase
             $this->assertSame(1, $query()->count());
         } finally {
             $db->exec("DROP TABLE {$table}");
+        }
+    }
+
+    private function verifyCacheAndLocks(DB $db): void
+    {
+        $previousDb = app(DB::class);
+        $previousConfig = config('database');
+        $table = 'spark_cache_' . bin2hex(random_bytes(8));
+        $lockTable = 'spark_locks_' . bin2hex(random_bytes(8));
+        $this->app->instance(DB::class, $db);
+        $this->app->setConfig('database', ['driver' => $db->getDriver()]);
+
+        try {
+            Schema::create($table, function (Blueprint $table): void {
+                $table->string('key')->charset('binary')->collation('binary');
+                $table->string('group')->charset('binary')->collation('binary');
+                $table->longText('data');
+                $table->bigInteger('expiration')->default(0);
+                $table->primary(['group', 'key']);
+            });
+
+            Schema::create($lockTable, function (Blueprint $table): void {
+                $table->string('key')->charset('binary')->collation('binary')->primary();
+                $table->string('owner')->charset('binary')->collation('binary');
+                $table->bigInteger('expiration');
+            });
+
+            $config = ['table' => $table, 'lock_table' => $lockTable];
+            $this->checkCacheKeyIdentity($config);
+            $this->checkLockKeyAndOwnerIdentity($config);
+            $this->checkLockTransactionIsolation($config);
+        } finally {
+            try {
+                Schema::dropIfExists($lockTable);
+                Schema::dropIfExists($table);
+            } finally {
+                $this->app->instance(DB::class, $previousDb);
+                $this->app->setConfig('database', $previousConfig);
+                Schema::getConnection();
+            }
         }
     }
 }
