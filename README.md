@@ -1,13 +1,18 @@
-# TinyCore/Spark
-The Backbone/Core Classes and Functionalities for TinyMvc/Spark Framework.
+# TinyCore
 
-## Introduction
+**TinyCore** (`tinymvc/tinycore`) is the core engine of **TinyMVC / Spark** (`tinymvc/spark`), a custom PHP web framework. It implements the framework's runtime classes, services, utilities, and helpers under the `Spark\` PHP namespace.
 
-**TinyCore/Spark** is the backbone of the TinyMvc Framework, providing essential core classes, utility functions, and helper methods to streamline for simplified web development.
+Applications built with TinyMVC / Spark start from [Skeleton](https://github.com/tinymvc/skeleton) (`tinymvc/skeleton`), which provides the application structure and installs TinyCore as a Composer dependency under `vendor/tinymvc/tinycore`. This repository contains the core engine's source and regression suite.
 
-* [Learn More](https://tinymvc.github.io)
+Create a new application with:
 
-# TinyCore regression suite
+```sh
+composer create-project tinymvc/skeleton myapp
+```
+
+[Framework documentation](https://tinymvc.github.io)
+
+## TinyCore regression suite
 
 Run from the TinyCore repository after `composer install`:
 
