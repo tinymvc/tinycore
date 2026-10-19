@@ -45,6 +45,8 @@ use function usleep;
  * Table mapping:
  *   caches(group + key PK, data, expiration) -> `group` is the cache name, `key` is the original key
  *   locks(key PK, owner, expiration)         -> `key` is "<namespace hash>:<key>"
+ * Keys and cache groups use the string columns' database collation for equality.
+ * Batch reads return stored keys, as retrieveAll() does. Lock owner tokens match exactly.
  *
  * Design rules (what keeps it stable under concurrency):
  *  - No operation relies on an application-level check-then-write. Writes are single atomic
@@ -112,8 +114,7 @@ class DatabaseStorage implements CacheStorageContract
             [$this->name, $key]
         )->fetch(PDO::FETCH_ASSOC);
 
-        // Exact comparison: MySQL collations are usually case-insensitive.
-        if (!is_array($row) || $row['k'] !== $key) {
+        if (!is_array($row)) {
             return false;
         }
 
@@ -142,14 +143,8 @@ class DatabaseStorage implements CacheStorageContract
         $h = $this->cacheHandle();
 
         if (is_array($keys)) {
-            $wanted = [];
-            foreach ($keys as $key) {
-                $wanted[$this->cacheKey((string) $key)] = (string) $key;
-            }
-
             $results = [];
-
-            $lookupKeys = array_map(static fn($key) => (string) $key, array_keys($wanted));
+            $lookupKeys = array_map(fn($key) => $this->cacheKey((string) $key), $keys);
 
             foreach (array_chunk($lookupKeys, self::CHUNK_SIZE) as $chunk) {
                 $placeholders = implode(', ', array_fill(0, count($chunk), '?'));
@@ -160,17 +155,13 @@ class DatabaseStorage implements CacheStorageContract
                 );
 
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                    if (!isset($wanted[$row['k']])) {
-                        continue; // Case-insensitive collation match of a different key.
-                    }
-
                     if (!$this->isActive((int) $row['e'])) {
                         $eraseExpired && $this->eraseKeyIfExpired($h, $row['k']);
                         continue;
                     }
 
                     [$ok, $value] = $this->decode($row['d']);
-                    $ok && $results[$wanted[$row['k']]] = $value;
+                    $ok && $results[$row['k']] = $value;
                 }
             }
 
@@ -184,7 +175,7 @@ class DatabaseStorage implements CacheStorageContract
             [$this->name, $key]
         )->fetch(PDO::FETCH_ASSOC);
 
-        if (!is_array($row) || $row['k'] !== $key) {
+        if (!is_array($row)) {
             return null;
         }
 
@@ -440,7 +431,7 @@ class DatabaseStorage implements CacheStorageContract
             [$this->name, $key]
         )->fetch(PDO::FETCH_ASSOC);
 
-        if (!is_array($row) || $row['k'] !== $key) {
+        if (!is_array($row)) {
             return null;
         }
 
@@ -544,7 +535,7 @@ class DatabaseStorage implements CacheStorageContract
             [$physical, time()]
         )->fetch(PDO::FETCH_ASSOC);
 
-        return is_array($row) && $row['k'] === $physical;
+        return is_array($row);
     }
 
     public function ownsLock(string $key, string $owner): bool
@@ -558,7 +549,7 @@ class DatabaseStorage implements CacheStorageContract
             [$physical, time()]
         )->fetch(PDO::FETCH_ASSOC);
 
-        return is_array($row) && $row['k'] === $physical && $row['o'] === $owner;
+        return is_array($row) && $row['o'] === $owner;
     }
 
     public function releaseExpiredLocks(): int
@@ -599,7 +590,7 @@ class DatabaseStorage implements CacheStorageContract
             [$physical, time()]
         )->fetch(PDO::FETCH_ASSOC);
 
-        if (!is_array($row) || $row['k'] !== $physical) {
+        if (!is_array($row)) {
             return null;
         }
 
@@ -719,7 +710,7 @@ class DatabaseStorage implements CacheStorageContract
 
         $row = $this->run($h, $select, [$this->name, $key])->fetch(PDO::FETCH_ASSOC);
 
-        return is_array($row) && $row['k'] === $key ? $row : null;
+        return is_array($row) ? $row : null;
     }
 
     private function eraseKeyIfExpired(array $h, string $key): void

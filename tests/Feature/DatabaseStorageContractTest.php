@@ -13,12 +13,12 @@ final class DatabaseStorageContractTest extends StorageDriverContract
 
     protected string $driver = 'database';
 
-    public function test_cache_keys_and_groups_preserve_spaces_colons_and_case(): void
+    public function test_cache_keys_and_groups_preserve_spaces_and_colons(): void
     {
         $this->checkCacheKeyIdentity();
     }
 
-    public function test_lock_keys_and_owners_preserve_spaces_colons_and_case(): void
+    public function test_lock_keys_preserve_spaces_and_colons_and_owners_match_exactly(): void
     {
         $this->checkLockKeyAndOwnerIdentity();
     }
@@ -26,6 +26,11 @@ final class DatabaseStorageContractTest extends StorageDriverContract
     public function test_locks_are_visible_and_survive_application_rollback(): void
     {
         $this->checkLockTransactionIsolation();
+    }
+
+    public function test_keys_and_groups_follow_database_collation(): void
+    {
+        $this->checkKeyCollation();
     }
 
     public function test_lock_owner_checks_override_case_insensitive_sqlite_columns(): void
@@ -75,9 +80,9 @@ final class DatabaseStorageContractTest extends StorageDriverContract
     {
         $cache = new DatabaseStorage();
         $other = new DatabaseStorage('other');
-        $differentCase = new DatabaseStorage('Default');
+        $third = new DatabaseStorage('third');
 
-        foreach ([$cache, $other, $differentCase] as $store) {
+        foreach ([$cache, $other, $third] as $store) {
             $store->store('shared', 10);
         }
 
@@ -109,7 +114,7 @@ final class DatabaseStorageContractTest extends StorageDriverContract
         $cache->flush();
         $this->assertSame([], $cache->retrieveAll());
         $this->assertSame(['shared' => 10], $other->retrieveAll());
-        $this->assertSame(['shared' => 10], $differentCase->retrieveAll());
+        $this->assertSame(['shared' => 10], $third->retrieveAll());
     }
 
     public function test_cache_expiration_cleanup_stays_in_group(): void

@@ -98,6 +98,12 @@ interface ColumnContract
      */
     public function after(string $column);
 
+    /** Set the column character set (MySQL). */
+    public function charset(string $charset): self;
+
+    /** Set the column collation (MySQL and SQLite). */
+    public function collation(string $collation): self;
+
     /**
      * Add a comment to the column.
      *

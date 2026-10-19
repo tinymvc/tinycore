@@ -13,9 +13,8 @@ return new class {
         });
 
         Schema::create('caches', function (Blueprint $table) {
-            // MySQL's binary character set uses VARBINARY, preserving trailing spaces.
-            $table->string('key')->charset('binary')->collation('binary');
-            $table->string('group')->charset('binary')->collation('binary');
+            $table->string('key');
+            $table->string('group');
             $table->longText('data');
             $table->bigInteger('expiration')->default(0)->index();
 
@@ -23,8 +22,8 @@ return new class {
         });
 
         Schema::create('locks', function (Blueprint $table) {
-            $table->string('key')->charset('binary')->collation('binary')->primary();
-            $table->string('owner')->charset('binary')->collation('binary')->index();
+            $table->string('key')->primary();
+            $table->string('owner')->index();
             $table->bigInteger('expiration')->index();
         });
 

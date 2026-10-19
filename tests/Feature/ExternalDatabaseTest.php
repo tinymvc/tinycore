@@ -113,22 +113,23 @@ final class ExternalDatabaseTest extends FrameworkTestCase
 
         try {
             Schema::create($table, function (Blueprint $table): void {
-                $table->string('key')->charset('binary')->collation('binary');
-                $table->string('group')->charset('binary')->collation('binary');
+                $table->string('key');
+                $table->string('group');
                 $table->longText('data');
                 $table->bigInteger('expiration')->default(0);
                 $table->primary(['group', 'key']);
             });
 
             Schema::create($lockTable, function (Blueprint $table): void {
-                $table->string('key')->charset('binary')->collation('binary')->primary();
-                $table->string('owner')->charset('binary')->collation('binary');
+                $table->string('key')->primary();
+                $table->string('owner');
                 $table->bigInteger('expiration');
             });
 
             $config = ['table' => $table, 'lock_table' => $lockTable];
             $this->checkCacheKeyIdentity($config);
             $this->checkLockKeyAndOwnerIdentity($config);
+            $this->checkKeyCollation($config);
             $this->checkLockTransactionIsolation($config);
         } finally {
             try {

@@ -73,7 +73,7 @@ This is **behavioral regression coverage**, not a measured line or branch percen
 | Authentication | Named guards, Basic auth, JWT user binding, persisted/stateless tokens, expiration, revocation, guest/deleted users; HMAC/RSA signatures and algorithm restrictions |
 | HTTP | Named/optional/resource/group routes, route redirects through response preparation and termination; existing lifecycle and real HTTP transport suite; routing, request negotiation, trusted proxies, response preparation, JSON normalization, resources, CORS preflight and early errors |
 | CSRF | Token creation, form/plain/encrypted header tokens, wrong/missing/non-string tokens, excluded paths |
-| Cache and locks | File/database/Redis values and expiration, nulls, case-sensitive keys, namespace isolation, ownership, contention, stale owners, safe cache clearing, callback failures, cached nulls, ArrayAccess, lock callback cleanup after errors |
+| Cache and locks | File/database/Redis values and expiration, nulls, database key collation, namespace isolation, exact lock ownership, contention, stale owners, safe cache clearing, callback failures, cached nulls, ArrayAccess, lock callback cleanup after errors |
 | Queue and session | File/database/Redis job claims, retries, failures, stale reservations, scheduling, transactional dispatch and worker output; session write/read/expiry and named connections; flash consumption, invalidation, job retry/backoff defaults and failure hooks |
 | Storage | Local upload/write/list/delete/metadata, traversal and symlink rejection; S3 signing, altered upload constraints, failed/partial downloads, paginated deletion, copy-before-delete using a local fixture |
 | Blade and core services | Layouts/includes, cache recompilation, output-buffer and section recovery after template errors, reserved render context, escaping, components, attributes, guards, pipeline, dates, events, throttling, container injection/singletons/circular dependencies, resource generation and test isolation; config cache invalidation, translations, URL query immutability and ports |
@@ -86,7 +86,7 @@ This is **behavioral regression coverage**, not a measured line or branch percen
 | Events | `EventDispatcherTest`: listener priority, response order, false short circuiting, recursive once listeners, removal, conditional dispatch and invalid callbacks |
 | View attributes | `ViewAttributesTest`: escaped values, boolean/null attributes, immutable filtering and default/class merging |
 
-Database fixtures explicitly use case-sensitive cache/lock keys. Application migrations must preserve that property too; this suite does not validate another application's migration files.
+Database cache keys, groups and lock keys use plain string columns, with equality determined by their database collation. For example, `Item` and `item` share an entry under a case-insensitive collation. Batch cache reads return stored key names. Lock owner tokens always match exactly. File and Redis keys remain case-sensitive.
 
 ## Focused database scenarios
 

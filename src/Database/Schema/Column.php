@@ -136,7 +136,7 @@ class Column implements ColumnContract
      * @param string $charset The character set
      * @return self
      */
-    public function charset(string $charset)
+    public function charset(string $charset): self
     {
         $this->modifiers[] = ['charset' => $charset];
         return $this;
@@ -148,7 +148,7 @@ class Column implements ColumnContract
      * @param string $collation The collation
      * @return self
      */
-    public function collation(string $collation)
+    public function collation(string $collation): self
     {
         $this->modifiers[] = ['collation' => $collation];
         return $this;

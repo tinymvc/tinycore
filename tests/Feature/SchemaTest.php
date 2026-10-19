@@ -4,11 +4,63 @@ require_once dirname(__DIR__) . '/Support/DatabaseTestCase.php';
 
 use Spark\Database\Schema\Schema;
 use Spark\Database\Schema\Blueprint;
-use Spark\Database\Model;
 use Spark\Facades\DB;
 
 final class SchemaTest extends DatabaseTestCase
 {
+    public function test_binary_column_types_and_modifiers(): void
+    {
+        $grammar = Schema::getGrammar();
+        $property = new \ReflectionProperty(Schema::class, 'grammar');
+
+        try {
+            foreach (['mysql', 'sqlite', 'pgsql'] as $driver) {
+                $property->setValue(null, new \Spark\Database\Schema\Grammar($driver));
+                $table = new Blueprint('binary_types');
+                $fallback = $driver === 'pgsql' ? 'BYTEA' : 'BLOB';
+                $columns = [
+                    [$table->binary('legacy'), 'BLOB'],
+                    [$table->binary('variable', 32), 'VARBINARY(32)'],
+                    [$table->binary('fixed', 16, fixed: true), 'BINARY(16)'],
+                    [$table->binary('without_length', fixed: true), 'BLOB'],
+                    [$table->binary('zero_length', 0), 'BLOB'],
+                    [$table->binary('key', length: 255), 'VARBINARY(255)'],
+                    [$table->binary('custom_key', length: 64), 'VARBINARY(64)'],
+                ];
+
+                foreach ($columns as [$column, $mysqlType]) {
+                    $name = Schema::getGrammar()->getWrapper()->wrapColumn($column->getName());
+                    $type = $driver === 'mysql' ? $mysqlType : $fallback;
+                    $this->assertSame("$name $type NOT NULL", $column->toSql());
+                }
+
+                $sql = $table->binary('optional', length: 255)->nullable()->toSql();
+                $this->assertStringContainsString(' NULL', $sql);
+                $this->assertFalse(str_contains($sql, 'NOT NULL'));
+            }
+        } finally {
+            $property->setValue(null, $grammar);
+        }
+    }
+
+    public function test_binary_columns_preserve_bytes_and_key_identity(): void
+    {
+        Schema::create('binary_values', function (Blueprint $table) {
+            $table->binary('key', length: 255)->primary();
+            $table->binary('payload');
+            $table->binary('fixed', 16, fixed: true)->nullable();
+        });
+
+        $payload = "\0\xffbytes ";
+        foreach (['key', 'Key', 'key '] as $key) {
+            query('binary_values')->insert(['key' => $key, 'payload' => $payload]);
+            $this->assertSame($payload, query('binary_values')->where('key', $key)->value('payload'));
+        }
+
+        $this->assertSame(3, query('binary_values')->count());
+        $this->assertThrows(\PDOException::class, fn() => query('binary_values')->insert(['key' => 'key', 'payload' => 'duplicate']));
+    }
+
     public function test_column_nullability_defaults(): void
     {
         $grammar = Schema::getGrammar();

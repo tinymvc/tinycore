@@ -150,19 +150,17 @@ class Grammar implements GrammarContract
                 'pgsql' => 'SMALLSERIAL PRIMARY KEY'
             ],
             'string' => [
-                'mysql' => "VARCHAR({$parameters['length']})",
                 'sqlite' => 'TEXT COLLATE NOCASE',
-                'pgsql' => "VARCHAR({$parameters['length']})"
+                'default' => "VARCHAR({$parameters['length']})"
             ],
-            'integer' => ['mysql' => 'INT', 'sqlite' => 'INTEGER', 'pgsql' => 'INTEGER'],
-            'smallInteger' => ['mysql' => 'SMALLINT', 'sqlite' => 'INTEGER', 'pgsql' => 'SMALLINT'],
-            'mediumInteger' => ['mysql' => 'MEDIUMINT', 'sqlite' => 'INTEGER', 'pgsql' => 'INTEGER'],
+            'integer' => ['mysql' => 'INT', 'default' => 'INTEGER'],
+            'smallInteger' => ['sqlite' => 'INTEGER', 'default' => 'SMALLINT'],
+            'mediumInteger' => ['mysql' => 'MEDIUMINT', 'default' => 'INTEGER'],
             'tinyInteger' => ['mysql' => 'TINYINT', 'sqlite' => 'INTEGER', 'pgsql' => 'SMALLINT'],
-            'text' => ['mysql' => 'TEXT', 'sqlite' => 'TEXT COLLATE NOCASE', 'pgsql' => 'TEXT'],
+            'text' => ['sqlite' => 'TEXT COLLATE NOCASE', 'default' => 'TEXT'],
             'timestamp' => [
-                'mysql' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0),
                 'sqlite' => 'DATETIME',
-                'pgsql' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0),
+                'default' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0),
             ],
             'boolean' => ['mysql' => 'TINYINT(1)', 'sqlite' => 'INTEGER', 'pgsql' => 'BOOLEAN'],
             'bigIncrements' => [
@@ -170,11 +168,10 @@ class Grammar implements GrammarContract
                 'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
                 'pgsql' => 'BIGSERIAL PRIMARY KEY'
             ],
-            'bigInteger' => ['mysql' => 'BIGINT', 'sqlite' => 'INTEGER', 'pgsql' => 'BIGINT'],
+            'bigInteger' => ['sqlite' => 'INTEGER', 'default' => 'BIGINT'],
             'decimal' => [
-                'mysql' => "DECIMAL({$parameters['precision']}, {$parameters['scale']})",
                 'sqlite' => 'NUMERIC',
-                'pgsql' => "DECIMAL({$parameters['precision']}, {$parameters['scale']})"
+                'default' => "DECIMAL({$parameters['precision']}, {$parameters['scale']})"
             ],
             'double' => [
                 'mysql' => $this->compileFloatingType('DOUBLE', $parameters),
@@ -183,10 +180,9 @@ class Grammar implements GrammarContract
             ],
             'float' => [
                 'mysql' => $this->compileFloatingType('FLOAT', $parameters),
-                'sqlite' => 'REAL',
-                'pgsql' => 'REAL'
+                'default' => 'REAL'
             ],
-            'char' => ['mysql' => "CHAR({$parameters['length']})", 'sqlite' => 'TEXT', 'pgsql' => "CHAR({$parameters['length']})"],
+            'char' => ['sqlite' => 'TEXT', 'default' => "CHAR({$parameters['length']})"],
             'enum' => [
                 'mysql' => 'ENUM(' . $this->wrapper->quoteEnumValues($parameters['allowed']) . ')',
                 'sqlite' => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
@@ -194,25 +190,30 @@ class Grammar implements GrammarContract
                 'pgsql' => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
                     ' IN (' . $this->wrapper->quoteEnumValues($parameters['allowed']) . '))',
             ],
-            'longText' => ['mysql' => 'LONGTEXT', 'sqlite' => 'TEXT', 'pgsql' => 'TEXT'],
+            'longText' => ['mysql' => 'LONGTEXT', 'default' => 'TEXT'],
             'json' => ['mysql' => 'JSON', 'sqlite' => 'TEXT', 'pgsql' => 'JSON'],
-            'date' => ['mysql' => 'DATE', 'sqlite' => 'TEXT', 'pgsql' => 'DATE'],
+            'date' => ['sqlite' => 'TEXT', 'default' => 'DATE'],
             'dateTime' => [
                 'mysql' => $this->compileTypeWithOptionalPrecision('DATETIME', $parameters['precision'] ?? 0),
                 'sqlite' => 'TEXT',
                 'pgsql' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0)
             ],
             'time' => [
-                'mysql' => $this->compileTypeWithOptionalPrecision('TIME', $parameters['precision'] ?? 0),
                 'sqlite' => 'TEXT',
-                'pgsql' => $this->compileTypeWithOptionalPrecision('TIME', $parameters['precision'] ?? 0)
+                'default' => $this->compileTypeWithOptionalPrecision('TIME', $parameters['precision'] ?? 0)
             ],
-            'binary' => ['mysql' => 'BLOB', 'sqlite' => 'BLOB', 'pgsql' => 'BYTEA'],
+            'binary' => [
+                'mysql' => ($parameters['length'] ?? null)
+                    ? (($parameters['fixed'] ?? false) ? 'BINARY' : 'VARBINARY') . "({$parameters['length']})"
+                    : 'BLOB',
+                'pgsql' => 'BYTEA',
+                'default' => 'BLOB',
+            ],
             'uuid' => ['mysql' => 'CHAR(36)', 'sqlite' => 'TEXT', 'pgsql' => 'UUID'],
             default => ['mysql' => 'TEXT', 'sqlite' => 'TEXT', 'pgsql' => 'TEXT'],
         };
 
-        return $map[$this->driver] ?? 'TEXT';
+        return $map[$this->driver] ?? $map['default'] ?? 'TEXT';
     }
 
     /**

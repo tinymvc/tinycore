@@ -486,13 +486,17 @@ class Blueprint implements BlueprintContract
 
     /**
      * Add a 'binary' column to the blueprint.
+     * MySQL uses BLOB without a length, VARBINARY with a length, or BINARY when fixed.
+     * SQLite uses BLOB and PostgreSQL uses BYTEA without enforcing length or padding.
      *
      * @param string $name The name of the column.
+     * @param int|null $length Maximum bytes, or fixed bytes when $fixed is true.
+     * @param bool $fixed Whether to use a fixed-length MySQL BINARY column.
      * @return Column
      */
-    public function binary(string $name): Column
+    public function binary(string $name, ?int $length = null, bool $fixed = false): Column
     {
-        return $this->addColumn('binary', $name);
+        return $this->addColumn('binary', $name, compact('length', 'fixed'));
     }
 
     /**

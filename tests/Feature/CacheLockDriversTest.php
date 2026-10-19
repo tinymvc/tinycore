@@ -52,9 +52,9 @@ final class CacheLockDriversTest extends DriverTestCase
             $cache->store('counter', 1, '+1 minute');
             $this->assertSame(3, $cache->increment('counter', 2));
             $this->assertFalse($cache->increment('missing'));
-            $cache->storeMany(['Foo' => 1, 'foo' => 2, 'numeric' => '3']);
-            $this->assertSame(1, $cache->retrieveAll()['Foo']);
-            $this->assertSame(['Foo' => 1, 'foo' => 2], $cache->retrieve(['Foo', 'foo', 'absent']));
+            $cache->storeMany(['first' => 1, 'second' => 2, 'numeric' => '3']);
+            $this->assertSame(1, $cache->retrieveAll()['first']);
+            $this->assertSame(['first' => 1, 'second' => 2], $cache->retrieve(['first', 'second', 'absent']));
             $this->assertSame(4, $cache->increment('numeric'));
             $cache->storeManyWithExpiry(['short' => ['value' => 'gone', 'expire' => '-1 second']]);
             $this->assertFalse($cache->has('short'));
@@ -88,7 +88,7 @@ final class CacheLockDriversTest extends DriverTestCase
 
     public function test_redis_namespace_patterns_are_literal(): void
     {
-        if (! $this->redisEnabled()) {
+        if (!$this->redisEnabled()) {
             $this->markTestSkipped('Set SPARK_TEST_REDIS_HOST or SPARK_TEST_REDIS_SOCKET to test Redis.');
         }
 
@@ -111,7 +111,7 @@ final class CacheLockDriversTest extends DriverTestCase
 
     public function test_persistent_redis_connections_keep_database_isolation(): void
     {
-        if (! $this->redisEnabled()) {
+        if (!$this->redisEnabled()) {
             $this->markTestSkipped('Set SPARK_TEST_REDIS_HOST or SPARK_TEST_REDIS_SOCKET to test Redis.');
         }
 
