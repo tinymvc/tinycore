@@ -12,6 +12,24 @@ composer create-project tinymvc/skeleton myapp
 
 [Framework documentation](https://tinymvc.github.io)
 
+## Versioned AI development skill
+
+The [TinyMVC Spark skill](skills/tinymvc-spark/SKILL.md), its focused references, and its dependency-free API lookup tool ship with this Composer package under `skills/tinymvc-spark/`. Maintain them alongside framework API and behavior changes so the instructions match each installed release.
+
+Skeleton keeps a small `.agents/skills/tinymvc-spark/SKILL.md` entry point that loads `vendor/tinymvc/tinycore/skills/tinymvc-spark/SKILL.md`. Normal Composer installs and updates deliver the guidance together with the framework; no copying, symlinks, or install hooks are required. Application-specific conventions stay in the application's `AGENTS.md`.
+
+For core development, [AGENTS.md](AGENTS.md) points directly to the bundled skill. Run API lookup from this repository with an explicit source:
+
+```sh
+php skills/tinymvc-spark/scripts/api-lookup.php upsert --source=src
+```
+
+Application developers run the same tool from their application root:
+
+```sh
+php vendor/tinymvc/tinycore/skills/tinymvc-spark/scripts/api-lookup.php upsert
+```
+
 ## TinyCore regression suite
 
 Run from the TinyCore repository after `composer install`:
