@@ -220,3 +220,7 @@ Before finishing code changes:
 3. Verify that all HTTP responses return exact expected contracts (`JsonResource` for entities, `json()` for messages, `noContent()` for deletions).
 4. Run frontend build if assets changed: `npm run build`.
 5. Ensure zero warnings or unhandled exceptions.
+
+## Frontend adapter tests
+
+Test the actual client headers and response contract. [FireLine](fireline.md) visits need `X-FireLine: 1` and recognized envelopes; ordinary HTML alone is not a valid navigation result. [Inertia](inertia.md) form tests use `X-Inertia` and the client's HTML Accept header, followed by a redirect and session errors. A `postJson()` call can select a different validation branch. Do not assume Laravel adapter-specific assertions exist; use Spark's header, JSON-path, and redirect assertions against the installed adapter.

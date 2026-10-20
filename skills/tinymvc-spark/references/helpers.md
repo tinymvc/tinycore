@@ -96,7 +96,7 @@ Spark includes a rich suite of built-in global helper functions defined in `Spar
 - `vite(null|string|array $entrypoints = null)`: Configures and renders the `Spark\Utils\Vite` asset loader tags.
 
 ### 7. Dates & Times (`Spark\Carbon`)
-- `now()`: Returns a `Spark\Carbon` instance set to the current time in application UTC.
+- `now()`: Returns a `Spark\Carbon` instance set to the current time in the configured application timezone (`app.timezone`, default `UTC`).
 - `today()`: Returns a `Spark\Carbon` instance set to today at 00:00:00.
 - `carbon(mixed $date = null)`: Parses a value into a `Spark\Carbon` instance.
 

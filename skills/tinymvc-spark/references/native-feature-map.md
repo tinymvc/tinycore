@@ -1,17 +1,17 @@
 # Spark-Native Feature Map
 
-Read this reference when a task touches a framework service beyond the ordinary route/request/model/resource path. It provides a complete map of all core components across the **TinyMVC / Spark** framework (implemented by the **TinyCore** engine). Confirm exact signatures in `vendor/tinymvc/tinycore/src` using `php vendor/tinymvc/tinycore/skills/tinymvc-spark/scripts/api-lookup.php <term>`.
+Read this reference when a task touches a framework service beyond the ordinary route/request/model/resource path. It maps common core services and optional integrations across **TinyMVC / Spark** (implemented by the **TinyCore** engine). Confirm exact signatures in `vendor/tinymvc/tinycore/src` using `php vendor/tinymvc/tinycore/skills/tinymvc-spark/scripts/api-lookup.php <term>`.
 
 ---
 
-## Complete Core Framework Feature Directory
+## Framework feature directory
 
 | Core Domain | Native Classes / Namespaces | Primary Facade / Helper | Canonical Idiom / Standard | Reference Guide |
 | --- | --- | --- | --- | --- |
 | **REST APIs** | `Spark\Http\Resources\JsonResource`, `ResourceCollection` | `JsonResource::make()`, `JsonResource::collection()`, `json()` | `ThingResource::make($model)`, `ThingResource::collection($paginator)` for entities; `json(['message' => '...'], $code)` for non-resource contracts | [responses.md](responses.md) |
 | **Controller Blade** | `Spark\View\Blade`, `Spark\View\BladeCompiler`, `Spark\View\Attributes` | `view()`, `blade()`, `<x-component>` | Component-first UI (`<x-alert :$message />`), `$attributes->merge()`, global helpers in views, **never** facades in Blade | [views-frontend.md](views-frontend.md) |
-| **FireLine v2** | `Spark\Fire\FireService`, `Spark\Fire\FireMiddleware` | `fire()`, `Spark\Fire\Fire::render()`, `is_fire_js()` | `x-form`, `$form()`, `fire()->success($msg)`, `fire()->error($msg, 400)`, `fire()->navigate($url)` | [frontend-setup.md](frontend-setup.md) |
-| **Inertia + Vite** | `Inertia\Inertia`, `Inertia\Response` (via `tinymvc/inertia-php`) | `Inertia::render()`, `inertia()` | `Inertia::render('Posts/Index', $props)`, `@inertia`, `@vite('app.tsx')`, React refresh via `vite()->reactRefreshTag()` | [frontend-setup.md](frontend-setup.md) |
+| **FireLine v2** | `Spark\Fire\FireService`, `Spark\Fire\FireMiddleware` (optional `tinymvc/fireline-php`) | `fire()`, `Spark\Fire\Fire::render()`, `is_fire_js()` | `x-form`, `$form()`, `fire()->success($msg)`, `fire()->error($msg, 400)`, `fire()->navigate($url)` | [fireline.md](fireline.md) |
+| **Inertia + Vite** | `Inertia\Inertia`, `Spark\Http\Response` (optional `tinymvc/inertia-php`) | `Inertia::render()`, `inertia()` | `Inertia::render('Posts/Index', $props)`, `@inertia`, `@vite('app.tsx')` | [inertia.md](inertia.md) |
 | **Cache** | `Spark\Cache\Cache`, `Spark\Cache\Storage\*` | `Spark\Facades\Cache`, `cache()` | `Cache::remember('key', fn() => ..., '+1 hour')`, `Cache::get()`, `Cache::put()`, `Cache::forget()`, `Cache::make('store')` | [cache-locks.md](cache-locks.md) |
 | **Distributed Lock** | `Spark\Cache\Lock`, `Spark\Cache\Storage\*` | `Spark\Facades\Lock`, `lock()` | `Lock::withLock('order:1', fn() => ..., timeout: 10, waitTimeout: 5)`, `Lock::lock()`, `Lock::unlock()` | [cache-locks.md](cache-locks.md) |
 | **Database: DB** | `Spark\Database\DB`, PDO wrapper | `Spark\Facades\DB`, `db()`, `database()` | `DB::transaction(fn () => ...)`, `DB::table(...)`, `DB::raw(...)`, row-level locking with `lockForUpdate()` | [queries.md](queries.md) |
@@ -38,7 +38,7 @@ Read this reference when a task touches a framework service beyond the ordinary 
 | **Supports: LazyCollection** | `Spark\Support\LazyCollection` | `LazyCollection::make()` | Memory-efficient generators for processing massive data streams without memory exhaustion | [helpers.md](helpers.md) |
 | **Supports: Arr** | `Spark\Support\Arr` | `Arr::*` | `Arr::get($data, 'nested.key', $default)`, `Arr::only()`, `Arr::except()`, `Arr::dot()`, `Arr::undot()`, `Arr::first()`, `Arr::join()` | [helpers.md](helpers.md) |
 | **Supports: Str** | `Spark\Support\Str`, `Spark\Support\Stringable` | `str()`, `Str::*` | `str('My Title')->slug()`, `Str::uuid()`, `Str::random(32)`, `Str::headline()`, `Str::contains()`, `Str::between()`, `Str::markdown()` | [helpers.md](helpers.md) |
-| **Supports: Number** | `Spark\Support\Number` | `Number::*` | `Number::currency($amount, 'USD')`, `Number::fileSize($bytes)`, `Number::percentage($ratio)`, `Number::spell($num)`, `Number::clamp()` | [helpers.md](helpers.md) |
+| **Supports: Number** | `Spark\Support\Number` | `Number::*` | `Number::currency($amount, 'USD')`, `Number::fileSize($bytes)`, `Number::percentage(85)`, `Number::spell($num)`, `Number::clamp()` | [helpers.md](helpers.md) |
 | **Supports: Js** | `Spark\Support\Js` | `Js::from()`, `@json()` | `Js::from($data)` for secure HTML/JS script serialization | [helpers.md](helpers.md) |
 | **Testing** | `Spark\Testing\ApplicationTestCase`, `TestResponse`, `Assert` | `Tests\TestCase` | `php test`, `$this->getJson()`, `$this->postJson()`, `assertOk()`, `assertCreated()`, `assertJsonValidationErrors()`, `assertDatabaseHas()`, `actingAs()` | [workflow-testing.md](workflow-testing.md) |
 | **Utils: File** | `Spark\Utils\File` | `Spark\Utils\File`, `fm()` | `File::exists()`, `File::get()`, `File::put()`, `File::delete()`, `File::ensureDirectoryExists()`, `File::mimeType()`, `File::allFiles()` | [files-storage.md](files-storage.md) |
@@ -46,8 +46,8 @@ Read this reference when a task touches a framework service beyond the ordinary 
 | **Utils: JWT** | `Spark\Utils\JWT` | `Spark\Utils\JWT` | `JWT::encode($payload, $key, 'HS256')`, `JWT::decode($jwt, $key, verify: true)` | [auth-gate.md](auth-gate.md) |
 | **Utils: Mail** | `Spark\Utils\Mail` | `Spark\Facades\Mail` | View-based email: `Mail::to($email, $name)->subject('Hi')->view('emails.welcome', $data)->send()`, queued in jobs | [mail-http.md](mail-http.md) |
 | **Utils: Paginator** | `Spark\Utils\Paginator` | `paginate()` on QueryBuilder/Model | Provides `data()`, `items()`, `total()`, `limit()`, `page()`, `pages()`, `hasLinks()`, automatic serialization in `ResourceCollection` | [responses.md](responses.md) |
-| **Utils: Vite** | `Spark\Utils\Vite` | `vite()`, `@vite()` | `@vite('app.js')`, `@viteReactRefresh`, `vite()->reactRefreshTag()`, dev server detection, manifest asset resolution | [frontend-setup.md](frontend-setup.md) |
-| **Carbon** | `Spark\Carbon` | `now()`, `carbon()`, `today()` | Expressive timezone-aware UTC dates: `now()->toDateTimeString()`, `now()->addDays(7)`, `now()->toIsoUtcString()`; **procedural date functions strictly banned** | [localization-dates.md](localization-dates.md) |
+| **Utils: Vite** | `Spark\Utils\Vite` | `vite()`, `@vite()` | `@vite('app.js')`, dev server detection, manifest asset resolution | [frontend-setup.md](frontend-setup.md) |
+| **Carbon** | `Spark\Carbon` | `now()`, `carbon()`, `today()` | Dates in the configured application timezone: `now()->toDateTimeString()`, `now()->addDays(7)`, `now()->toIsoUtcString()`; resources normalize Carbon output to UTC | [localization-dates.md](localization-dates.md) |
 | **Events (App)** | `Spark\Events` | `Spark\Facades\Event`, `event()` | `Event::listen('order.created', $listener)`, `Event::dispatch('order.created', $order)`, `Event::until()`, `Event::once()` | [container-pipelines.md](container-pipelines.md) |
 | **Events (Model)** | `Spark\Database\Events` | `protected function events(): Events` | `Events::make(created: fn() => ..., updated: fn() => ..., deleted: fn() => ...)` inside Model classes | [models-relations.md](models-relations.md) |
 | **Hash** | `Spark\Hash` | `Spark\Facades\Hash` | `Hash::make('password')`, `Hash::check('password', $hash)`, `Hash::bcrypt()`, `Hash::argon2id()`, `Hash::encrypt()`, `Hash::decrypt()`, `Hash::uuid()` | [helpers.md](helpers.md) |

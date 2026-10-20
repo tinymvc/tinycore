@@ -1,6 +1,6 @@
 # Views and Frontend (Blade)
 
-Read this reference for Blade templates, component-first architecture, view helpers, Blade directives, and frontend integrations in TinyMVC / TinyCore (Spark). All paths are relative to the application root.
+Read this reference for Blade templates, component-first architecture, view helpers, Blade directives, and frontend integrations in TinyMVC / TinyCore (Spark). All paths are relative to the application root. For adapter behavior, read [FireLine](fireline.md) or [Inertia](inertia.md); for asset configuration, read [frontend setup](frontend-setup.md).
 
 ---
 
@@ -83,7 +83,42 @@ TinyCore supports clean, expressive component syntax:
 
 {{-- 5. Action buttons with slot content --}}
 <x-button type="submit" variant="primary">Save Changes</x-button>
+
+{{-- 6. String interpolation in component attributes --}}
+<x-link href="{{ route('register') }}" variant="primary" x-navigate>Register</x-link>
 ```
+
+### Required Escaping and Slot Standards
+
+Follow these rules strictly when generating or reviewing Blade templates:
+
+| Syntax | TinyCore behavior | Use |
+| --- | --- | --- |
+| `{{ $value }}` | Calls `e($value)`; escapes ordinary values and honors `Spark\Contracts\Support\Htmlable` | Default for output, including user data |
+| `{!! $value !!}` | Echoes the value without escaping | Intentionally trusted HTML only |
+| `{{ $slot }}` | Renders an HTML-safe `Spark\Support\HtmlString` containing the already rendered child template | Standard default-slot output; do not require a raw-echo workaround |
+| `title="Hello {{ $name }}"` on `<x-...>` | Builds a string, escaping each `{{ }}` expression | Text interpolation, including URLs such as `href="{{ route('register') }}"` |
+| `title="{!! $value !!}"` on `<x-...>` | Builds a string without escaping that expression | Trusted raw interpolation; subsequent output still follows the component template's escaping rules |
+| `:value="$expression"` / `:$value` | Passes the PHP value, preserving its type | Arrays, booleans, numbers, objects, or direct expressions; escape ordinary values when outputting them |
+| `::class="{ active: isActive }"` | Passes a literal `:class` attribute | Alpine/client expressions |
+| `@{{ clientValue }}` / `@{!! clientHtml !!}` | Removes the leading `@` and leaves the echo syntax literal | Client templates |
+| `@@if(...)` | Outputs literal `@if(...)` | Escaping a Blade directive |
+
+`{{ $slot }}` retaining HTML is standard Laravel-style behavior: safe HTML implements `Htmlable`; the compiler must still call `e()`. TinyCore uses its existing `HtmlString` rather than Laravel's `ComponentSlot` class. Slots support `toHtml()`, `isEmpty()`, `isNotEmpty()`, and string conversion. Do not assume Laravel-only slot methods or attributes exist.
+
+Child markup renders in the calling view's scope, including loop variables. Ordinary `{{ $userInput }}` inside that markup is escaped before it becomes the slot. The component preserves that rendered markup without escaping it again. Slot edges are trimmed; internal whitespace and the text `0` are preserved. Never wrap untrusted, unrendered user input in `HtmlString` to bypass escaping.
+
+Mixed attribute values support literal text and multiple escaped/raw expressions. Interpolated attributes are strings; use `:prop` when the PHP type matters. `$attributes` escapes serialized HTML attribute values without double encoding existing entities. A raw expression in an attribute does not disable escaping when the component later renders it through `{{ $prop }}` or `$attributes`.
+
+These conventions match Laravel's [attribute echo compiler](https://github.com/laravel/framework/blob/13.x/src/Illuminate/View/Compilers/ComponentTagCompiler.php) and [HTML-safe slots](https://github.com/laravel/framework/blob/13.x/src/Illuminate/View/ComponentSlot.php). TinyCore's installed source remains the API authority.
+
+### Supported Surface and Laravel Differences
+
+TinyCore supports anonymous view components, default slots, `@props`, the attribute bag, and the directives listed below. Do not invent support for Laravel class components, named `<x-slot>` slots, `<x-dynamic-component>`, `@aware`, `$loop`, `@forelse`, `@once`, or stack/push directives. Register an explicit custom directive or use the documented native syntax when needed.
+
+Use `@class` and `@style` on ordinary HTML tags. On component tags, pass a bound class/style value, such as `<x-button :class="['active' => $active]" />`. Pass include data explicitly (`@include('document', ['name' => $name])`); TinyCore does not automatically inherit all caller locals for includes. Use `@if($condition) @break @endif` for conditional loop exits; conditional `@break(...)` / `@continue(...)` are not implemented.
+
+Quote component attribute values containing spaces or PHP operators. Use the opposite quote type inside their PHP expressions, following ordinary HTML attribute syntax. Native PHP and `@php ... @endphp` blocks remain opaque to Blade compilation, as do `@verbatim` blocks. Malformed component opening/closing tags, unclosed raw blocks, and unbalanced directive parentheses produce compile-time exceptions. Templates are trusted application source; do not compile user-supplied templates.
 
 ### Component Attributes (`Spark\View\Attributes`)
 

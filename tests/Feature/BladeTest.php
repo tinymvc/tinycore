@@ -11,7 +11,7 @@ final class BladeTest extends FrameworkTestCase
         config(['app.views_dir' => $views]);
         file_put_contents(
             $views . '/components/notice.blade.php',
-            '@props(["tone" => "info"])<div {{ $attributes->merge(["class" => "notice"]) }}><strong>{{ $tone }}</strong>{!! $slot !!}</div>'
+            '@props(["tone" => "info"])<div {{ $attributes->merge(["class" => "notice"]) }}><strong>{{ $tone }}</strong>{{ $slot }}</div>'
         );
         file_put_contents(
             $views . '/example.blade.php',
@@ -20,6 +20,7 @@ final class BladeTest extends FrameworkTestCase
         $rendered = blade()->render('example', ['name' => '<Ada>']);
         $this->assertStringContainsString('&lt;Ada&gt;', $rendered);
         $this->assertStringContainsString('<strong>success</strong>', $rendered);
+        $this->assertStringContainsString('<p>Your changes have been saved.</p>', $rendered);
         $hash = new \Spark\Hash('docs-smoke-private-test-key-32-characters');
         $encrypted = $hash->encryptString('private value');
         $this->assertSame('private value', $hash->decryptString($encrypted));
@@ -32,7 +33,7 @@ final class BladeTest extends FrameworkTestCase
             for ($i = 1; $i <= 1000; $i++)
                 yield $i;
         });
-        $this->assertSame(250500, $numbers->filter(fn ($number) => $number % 2 === 0)->sum());
+        $this->assertSame(250500, $numbers->filter(fn($number) => $number % 2 === 0)->sum());
         $this->assertSame(
             'https://example.com/posts?page=2#results',
             (string) (new \Spark\Url('https://example.com/posts'))->withQuery(['page' => 2])->withFragment('results')

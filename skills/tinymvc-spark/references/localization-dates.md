@@ -4,18 +4,11 @@ Read this reference for translations, locale handling, and date manipulation wit
 
 ---
 
-## Strict Rule: Modern Date Handling with `Spark\Carbon` and `now()`
+## Use Spark Carbon for application dates
 
-> [!CAUTION]
-> **Prohibition of Legacy PHP Date Functions**:
-> **NEVER** use procedural PHP date/time functions in application code:
-> - ❌ `gmdate('Y-m-d H:i:s')`
-> - ❌ `date('Y-m-d')`
-> - ❌ `time()` or `time() + 86400`
-> - ❌ `strtotime('+1 day')`
-> - ❌ `microtime()`
->
-> **Why?** TinyCore's application boot already sets PHP's default timezone to `config('app.timezone', 'UTC')` via `date_default_timezone_set()`. The native **`Spark\Carbon`** class and global **`now()`** helper are fully timezone-aware, elegant, and default to application UTC. Procedural date functions are un-smart, error-prone, and bypass Spark's hydration and serialization pipeline.
+Use `now()`, `carbon()`, and `Spark\Carbon` for calendar dates, timestamps, parsing, and arithmetic instead of procedural `date()`, `gmdate()`, `time()`, or `strtotime()` expressions. Application boot sets PHP's default timezone to `config('app.timezone', 'UTC')`; `now()` follows that timezone unless explicitly overridden. It is UTC only when configured that way. Resource serialization normalizes Carbon to UTC independently of the display timezone.
+
+Calendar arithmetic and elapsed seconds are different across daylight-saving transitions: choose `addDays(1)` or a duration deliberately. Performance measurement is a separate concern from application date handling.
 
 ### The Modern Spark Date Standard
 
@@ -40,7 +33,7 @@ TinyMVC provides **`Spark\Carbon`** as its native date and time library. Use glo
 use Spark\Carbon;
 
 // 1. Current Time & Presets
-$now = now();                  // Current date and time (Spark\Carbon in app UTC)
+$now = now();                  // Current date and time (Spark\Carbon in the configured app timezone)
 $today = Carbon::today();       // Today at 00:00:00
 $tomorrow = Carbon::tomorrow(); // Tomorrow at 00:00:00
 $yesterday = Carbon::yesterday(); // Yesterday at 00:00:00
@@ -51,7 +44,7 @@ $parsed = Carbon::parse('next Monday');
 $fromFormat = Carbon::createFromFormat('d/m/Y', '16/10/2026');
 $fromTimestamp = Carbon::createFromTimestamp(1729094400);
 
-// 3. Relative Calculations (Fluent & Immutable-friendly)
+// 3. Relative calculations
 $nextWeek = now()->addDays(7);
 $nextMonth = now()->addMonth();
 $pastHours = now()->subHours(3);

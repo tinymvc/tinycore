@@ -5,6 +5,7 @@ namespace Spark\View;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Http\Session;
+use Spark\Support\HtmlString;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\View\BladeCompiler;
@@ -376,6 +377,11 @@ class Blade implements BladeContract
         // Extract slot content if provided
         $slot = $context['slot'] ?? '';
         unset($context['slot']);
+
+        // Ensure slot is an instance of HtmlString
+        if (!$slot instanceof HtmlString) {
+            $slot = new HtmlString((string) $slot);
+        }
 
         // Merge shared data with the context
         $context = [

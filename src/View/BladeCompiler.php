@@ -7,6 +7,7 @@ use Spark\Utils\File;
 use Spark\View\Contracts\BladeCompilerContract;
 use function count;
 use function in_array;
+use function is_array;
 use function is_string;
 use function sprintf;
 use function strlen;
@@ -20,6 +21,56 @@ use function strlen;
  */
 class BladeCompiler implements BladeCompilerContract
 {
+    private const TAG_PATTERN = '/<(?<closing>\/)?(?<name>[a-zA-Z][a-zA-Z0-9\-_.:]*)(?=[\s\/>])/';
+
+    private const EXPRESSION_DIRECTIVES = [
+        'use',
+        'extends',
+        'section',
+        'yield',
+        'include',
+        'includeIf',
+        'includeWhen',
+        'php',
+        'if',
+        'elseif',
+        'unless',
+        'isset',
+        'empty',
+        'can',
+        'cannot',
+        'hasSection',
+        'sectionMissing',
+        'session',
+        'switch',
+        'foreach',
+        'for',
+        'while',
+        'dump',
+        'dd',
+        'props',
+        'abort',
+        'old',
+        'share',
+        'authorize',
+        'json',
+        'case',
+        'vite',
+        'auth',
+        'guest',
+        'method',
+        'checked',
+        'disabled',
+        'selected',
+        'readonly',
+        'required',
+        'style',
+        'class',
+        'attributes',
+        'errors',
+        'error',
+    ];
+
     /**
      * Path to store compiled templates
      * 
@@ -40,6 +91,20 @@ class BladeCompiler implements BladeCompilerContract
      * @var array
      */
     private array $rawBlocks = [];
+
+    /**
+     * Literal blocks to preserve during compilation
+     * 
+     * @var array
+     */
+    private array $literalBlocks = [];
+
+    /**
+     * Expression blocks to preserve during compilation
+     * 
+     * @var array
+     */
+    private array $expressionBlocks = [];
 
     public function __construct(string $cachePath)
     {
@@ -84,85 +149,229 @@ class BladeCompiler implements BladeCompilerContract
      */
     public function compileString(string $template): string
     {
-        // Remove Blade comments first
-        $template = $this->compileComments($template);
+        $previousBlocks = [$this->rawBlocks, $this->literalBlocks, $this->expressionBlocks];
+        $this->rawBlocks = [];
+        $this->literalBlocks = [];
+        $this->expressionBlocks = [];
 
-        // Preserve verbatim blocks (add this line)
-        $template = $this->preserveVerbatimBlocks($template);
+        try {
+            $template = $this->preserveRawBlocks($template);
+            $template = $this->compileXComponents($template);
+            $template = $this->compileOutsidePhp($template, $this->compilePhpBlocks(...));
+            $template = $this->compileOutsidePhp($template, $this->compileEchos(...));
 
-        // Preserve raw PHP blocks
-        $template = $this->preserveRawBlocks($template);
+            foreach ([
+                $this->compileUseDirective(...),
+                $this->compileExtends(...),
+                $this->compileSections(...),
+                $this->compileYields(...),
+                $this->compileIncludes(...),
+            ] as $compiler) {
+                $template = $this->compileOutsidePhp($template, $compiler);
+            }
 
-        // Compile @use directive
-        $template = $this->compileUseDirective($template);
+            $template = $this->compileDirectives($template);
 
-        // Compile structural directives
-        $template = $this->compileExtends($template);
-        $template = $this->compileSections($template);
-        $template = $this->compileYields($template);
-        $template = $this->compileIncludes($template);
-        $template = $this->compileXComponents($template);
-
-        // Compile control flow directives
-        $template = $this->compileDirectives($template);
-
-        // Compile PHP blocks
-        $template = $this->compilePhpBlocks($template);
-
-        // Compile echo statements last to avoid conflicts
-        $template = $this->compileEchos($template);
-
-        // Restore raw PHP blocks
-        $template = $this->restoreRawBlocks($template);
-
-        return $template;
+            return strtr($template, $this->rawBlocks + $this->expressionBlocks);
+        } finally {
+            [$this->rawBlocks, $this->literalBlocks, $this->expressionBlocks] = $previousBlocks;
+        }
     }
 
     /**
-     * Preserve verbatim blocks
-     * 
-     * @param string $template
-     * @return string
+     * Keep PHP strings, comments, and generated code out of later Blade passes.
      */
-    private function preserveVerbatimBlocks(string $template): string
+    private function compileOutsidePhp(string $template, callable $compiler): string
     {
-        return preg_replace_callback('/\@verbatim(.*?)\@endverbatim/s', function ($matches) {
-            $key = '__VERBATIM_BLOCK_' . count($this->rawBlocks) . '__';
-            $content = $matches[1];
-            $this->rawBlocks[$key] = $content; // Store as-is, no PHP tags
-            return $key;
-        }, $template);
+        if (!str_contains($template, '<?')) {
+            return $compiler($template);
+        }
+
+        $compiled = '';
+
+        foreach (token_get_all($template) as $token) {
+            $compiled .= is_array($token)
+                ? ($token[0] === T_INLINE_HTML ? $compiler($token[1]) : $token[1])
+                : $token;
+        }
+
+        return $compiled;
+    }
+
+    private function storeRawBlock(string $content, bool $literal = false): string
+    {
+        $key = '__BLADE_RAW_' . bin2hex(random_bytes(16)) . '__';
+        $this->rawBlocks[$key] = $content;
+
+        if ($literal) {
+            $this->literalBlocks[$key] = $content;
+        }
+
+        return $key;
     }
 
     /**
-     * Preserve raw PHP blocks
-     * 
-     * @param string $template
-     * @return string
+     * Preserve raw regions in source order so their contents stay opaque.
      */
     private function preserveRawBlocks(string $template): string
     {
-        return preg_replace_callback('/\@php(.*?)\@endphp/s', function ($matches) {
-            $key = '__RAW_BLOCK_' . count($this->rawBlocks) . '__';
-            $content = trim($matches[1]);
-            $this->rawBlocks[$key] = "<?php" . ($content ? "\n    $content\n" : "") . "?>";
-            return $key;
-        }, $template);
+        $pattern = '/\{\{--|@?\{!!|@?\{\{|@@?[a-zA-Z_]\w*|<\?(?:[pP][hH][pP](?=\s|$)|=)/';
+        $result = '';
+        $offset = 0;
+
+        while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $matches[0][1];
+            $opening = $matches[0][0];
+            $contentStart = $start + strlen($opening);
+            $result .= substr($template, $offset, $start - $offset);
+
+            if ($opening === '{{--') {
+                $end = strpos($template, '--}}', $contentStart);
+
+                if ($end === false) {
+                    return $result . substr($template, $start);
+                }
+
+                $offset = $end + 4;
+                continue;
+            }
+
+            if (str_contains($opening, '{')) {
+                $closing = str_contains($opening, '!!') ? '!!}' : '}}';
+                $end = $this->findExpressionEnd($template, $contentStart, $closing);
+                $content = substr($template, $contentStart, $end - $contentStart);
+
+                if (str_starts_with($opening, '@')) {
+                    $result .= $this->storeRawBlock(substr($opening, 1) . $content . $closing, true);
+                } else {
+                    $result .= $opening . $this->storeExpression($content) . $closing;
+                }
+
+                $offset = $end + strlen($closing);
+                continue;
+            }
+
+            if ($opening[0] === '@') {
+                $directive = ltrim($opening, '@');
+
+                // CSS at-rules and plain text do not contain Blade PHP arguments.
+                if (
+                    $directive !== 'verbatim'
+                    && !in_array($directive, self::EXPRESSION_DIRECTIVES, true)
+                    && !isset($this->customDirectives[$directive])
+                ) {
+                    $result .= str_starts_with($opening, '@@')
+                        ? $this->storeRawBlock(substr($opening, 1), true)
+                        : $opening;
+                    $offset = $contentStart;
+                    continue;
+                }
+
+                $paren = $contentStart;
+
+                while (isset($template[$paren]) && ctype_space($template[$paren])) {
+                    $paren++;
+                }
+
+                if (($template[$paren] ?? '') === '(' && $opening !== '@verbatim') {
+                    $end = $this->findExpressionEnd($template, $paren + 1, ')');
+                    $content = substr($template, $paren + 1, $end - $paren - 1);
+
+                    if (str_starts_with($opening, '@@')) {
+                        $result .= $this->storeRawBlock(substr($template, $start + 1, $end - $start), true);
+                    } else {
+                        $result .= $opening . '(' . $this->storeExpression($content) . ')';
+                    }
+
+                    $offset = $end + 1;
+                    continue;
+                }
+
+                if (str_starts_with($opening, '@@')) {
+                    $result .= $this->storeRawBlock(substr($opening, 1), true);
+                    $offset = $contentStart;
+                    continue;
+                }
+
+                if ($opening !== '@verbatim' && $opening !== '@php') {
+                    $result .= $opening;
+                    $offset = $contentStart;
+                    continue;
+                }
+            }
+
+            if ($opening === '@verbatim' || $opening === '@php') {
+                $closing = $opening === '@verbatim' ? '@endverbatim' : '@endphp';
+                $end = strpos($template, $closing, $contentStart);
+
+                if ($end === false) {
+                    throw new InvalidArgumentException("Missing {$closing} directive.");
+                }
+
+                $content = substr($template, $contentStart, $end - $contentStart);
+                $content = $opening === '@php' ? "<?php\n" . trim($content) . "\n?>" : $content;
+                $result .= $this->storeRawBlock($content, $opening === '@verbatim');
+                $offset = $end + strlen($closing);
+
+                continue;
+            }
+
+            $php = '';
+
+            foreach (token_get_all(substr($template, $start)) as $token) {
+                $php .= is_array($token) ? $token[1] : $token;
+
+                if (is_array($token) && $token[0] === T_CLOSE_TAG) {
+                    break;
+                }
+            }
+
+            $result .= $this->storeRawBlock($php);
+            $offset = $start + strlen($php);
+        }
+
+        return $result . substr($template, $offset);
+    }
+
+    private function storeExpression(string $expression): string
+    {
+        $key = '__BLADE_EXPRESSION_' . bin2hex(random_bytes(16)) . '__';
+        $this->expressionBlocks[$key] = $expression;
+
+        return $key;
     }
 
     /**
-     * Restore raw PHP blocks
-     * 
-     * @param string $template
-     * @return string
+     * PHP tokens keep quotes, comments, heredocs, and nested brackets opaque.
      */
-    private function restoreRawBlocks(string $template): string
+    private function findExpressionEnd(string $template, int $start, string $closing): int
     {
-        foreach ($this->rawBlocks as $key => $block) {
-            $template = str_replace($key, $block, $template);
+        $offset = $start;
+        $depth = 0;
+        $tokens = token_get_all('<?php ' . substr($template, $start));
+        array_shift($tokens);
+
+        foreach ($tokens as $token) {
+            $text = is_array($token) ? $token[1] : $token;
+
+            if (!is_array($token)) {
+                if ($depth === 0 && substr_compare($template, $closing, $offset, strlen($closing)) === 0) {
+                    return $offset;
+                }
+
+                if (in_array($token, ['(', '[', '{'], true)) {
+                    $depth++;
+                } elseif (in_array($token, [')', ']', '}'], true)) {
+                    $depth--;
+                }
+            } elseif (in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                $depth++;
+            }
+
+            $offset += strlen($text);
         }
-        $this->rawBlocks = [];
-        return $template;
+
+        throw new InvalidArgumentException("Unclosed Blade expression; expected [{$closing}].");
     }
 
     /**
@@ -228,16 +437,11 @@ class BladeCompiler implements BladeCompilerContract
             $offset = $matchStart + strlen($replacement);
         }
 
-        // @endsection
-        $template = preg_replace('/\@endsection\b/', '<?php $this->endSection(); ?>', $template);
-
-        // @stop (alias for @endsection)
-        $template = preg_replace('/\@stop\b/', '<?php $this->endSection(); ?>', $template);
-
-        // @show (end section and immediately yield it)
-        $template = preg_replace('/\@show\b/', '<?php echo $this->stopAndYieldSection(); ?>', $template);
-
-        return $template;
+        return $this->compileOutsidePhp($template, function ($source) {
+            return preg_replace_callback('/@(endsection|stop|show)\b/', fn($matches) => $matches[1] === 'show'
+                ? '<?php echo $this->stopAndYieldSection(); ?>'
+                : '<?php $this->endSection(); ?>', $source);
+        });
     }
 
     /**
@@ -282,166 +486,95 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileXComponents(string $template): string
     {
-        // Process components recursively from innermost to outermost
-        $previousTemplate = '';
-        while ($template !== $previousTemplate) {
-            $previousTemplate = $template;
-
-            // Handle self-closing x-components first: <x-component />
-            $template = $this->compileSelfClosingXComponents($template);
-
-            // Handle x-components with content: <x-component>content</x-component>
-            $template = $this->compileXComponentsWithContent($template);
-        }
-
-        return $template;
-    }
-
-    /**
-     * Compile self-closing x-components: <x-component />
-     */
-    private function compileSelfClosingXComponents(string $template): string
-    {
-        $pattern = '/<x-([a-zA-Z0-9\-_.:]+)([^>]*?)\/>/';
-
-        return preg_replace_callback($pattern, function ($matches) {
-            $componentName = $matches[1];
-            $attributesString = trim($matches[2]);
-
-            // Parse attributes
-            $attributes = $this->parseXComponentAttributes($attributesString);
-            $attributesArray = $this->buildAttributesArray($attributes);
-
-            return "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
-        }, $template);
-    }
-
-    /**
-     * Compile x-components with content: <x-component>content</x-component>
-     */
-    private function compileXComponentsWithContent(string $template): string
-    {
         $offset = 0;
-        $length = strlen($template);
 
-        while ($offset < $length) {
-            // Find the start of an x-component
-            $pos = strpos($template, '<x-', $offset);
-            if ($pos === false) {
+        while (preg_match(self::TAG_PATTERN, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $matches[0][1];
+            $tagName = $matches['name'][0];
+            $nameEnd = $start + strlen($matches[0][0]);
+            $tagEnd = $this->findOpeningTagEnd($template, $nameEnd);
+            $isComponent = str_starts_with($tagName, 'x-');
+
+            if ($tagEnd === false) {
+                if ($isComponent) {
+                    throw new InvalidArgumentException("Unclosed opening tag for component [{$tagName}].");
+                }
+
                 break;
             }
 
-            // Find the component name
-            $nameStart = $pos + 3; // Skip '<x-'
-            $nameEnd = $nameStart;
-            while ($nameEnd < $length && (ctype_alnum($template[$nameEnd]) || in_array($template[$nameEnd], ['-', '_', '.', ':']))) {
-                $nameEnd++;
-            }
-
-            if ($nameEnd === $nameStart) {
-                $offset = $pos + 1;
+            if (!$isComponent) {
+                $offset = $tagEnd + 1;
                 continue;
             }
 
-            $componentName = substr($template, $nameStart, $nameEnd - $nameStart);
+            $name = substr($tagName, 2);
 
-            // Now manually find the end of the opening tag by tracking quotes and brackets
-            $tagEnd = $this->findOpeningTagEnd($template, $nameEnd);
-            if ($tagEnd === false) {
-                $offset = $pos + 1;
-                continue;
+            if ($name === '' || $matches['closing'][0] === '/') {
+                throw new InvalidArgumentException("Unexpected component tag [{$tagName}].");
             }
 
-            // Extract attributes string
-            $attributesStart = $nameEnd;
-            while ($attributesStart < $tagEnd && ctype_space($template[$attributesStart])) {
-                $attributesStart++;
+            $attributeSource = rtrim(substr($template, $nameEnd, $tagEnd - $nameEnd));
+            $selfClosing = str_ends_with($attributeSource, '/');
+
+            if ($selfClosing) {
+                $attributeSource = substr($attributeSource, 0, -1);
+                $end = $tagEnd + 1;
+                $slot = null;
+            } else {
+                [$closeStart, $end] = $this->findComponentClose($template, $name, $tagEnd + 1);
+                $slot = $this->compileXComponents(substr($template, $tagEnd + 1, $closeStart - $tagEnd - 1));
             }
 
-            $attributesEnd = $tagEnd;
-            while ($attributesEnd > $attributesStart && ctype_space($template[$attributesEnd - 1])) {
-                $attributesEnd--;
-            }
-
-            $attributesString = '';
-            if ($attributesEnd > $attributesStart) {
-                $attributesString = substr($template, $attributesStart, $attributesEnd - $attributesStart);
-            }
-
-            // Check if it's self-closing
-            if ($tagEnd > 0 && $template[$tagEnd - 1] === '/') {
-                // Self-closing tag - handle it
-                $attributes = $this->parseXComponentAttributes($attributesString);
-                $attributesArray = $this->buildAttributesArray($attributes);
-                $replacement = "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
-
-                $template = substr_replace($template, $replacement, $pos, $tagEnd - $pos + 1);
-                $offset = $pos + strlen($replacement);
-                continue;
-            }
-
-            // Find the matching closing tag
-            $closeTag = "</x-{$componentName}>";
-            $contentStart = $tagEnd + 1;
-            $depth = 1;
-            $searchPos = $contentStart;
-
-            while ($depth > 0 && $searchPos < $length) {
-                $nextOpen = strpos($template, "<x-{$componentName}", $searchPos);
-                $nextClose = strpos($template, $closeTag, $searchPos);
-
-                if ($nextClose === false) {
-                    break;
-                }
-
-                if ($nextOpen !== false && $nextOpen < $nextClose) {
-                    // Make sure it's actually a complete opening tag, not just text containing the string
-                    $checkPos = $nextOpen + strlen("<x-{$componentName}");
-                    if ($checkPos < $length && (ctype_space($template[$checkPos]) || $template[$checkPos] === '>' || $template[$checkPos] === '/')) {
-                        $depth++;
-                        $searchPos = $nextOpen + strlen("<x-{$componentName}");
-                    } else {
-                        $searchPos = $nextOpen + 1;
-                    }
-                } else {
-                    $depth--;
-                    if ($depth === 0) {
-                        // Found our matching closing tag
-                        $slotContent = substr($template, $contentStart, $nextClose - $contentStart);
-
-                        // Parse attributes
-                        $attributes = $this->parseXComponentAttributes($attributesString);
-
-                        // Process slot content
-                        $processedSlotContent = $this->processSlotContent($slotContent);
-
-                        // Add slot content to attributes if not empty
-                        if (!empty(trim($processedSlotContent))) {
-                            $attributes['slot'] = $processedSlotContent;
-                        }
-
-                        $attributesArray = $this->buildAttributesArray($attributes);
-                        $replacement = "<?= \$this->component('{$componentName}', {$attributesArray}); ?>";
-
-                        // Replace the entire component
-                        $totalLength = $nextClose + strlen($closeTag) - $pos;
-                        $template = substr_replace($template, $replacement, $pos, $totalLength);
-
-                        $offset = $pos + strlen($replacement);
-                        break;
-                    } else {
-                        $searchPos = $nextClose + strlen($closeTag);
-                    }
-                }
-            }
-
-            if ($depth > 0) {
-                // No matching closing tag found
-                $offset = $pos + 1;
-            }
+            $attributes = $this->parseXComponentAttributes($attributeSource);
+            $attributesArray = $this->buildAttributesArray($attributes, $slot);
+            $replacement = "<?= \$this->component('{$name}', {$attributesArray}); ?>";
+            $template = substr_replace($template, $replacement, $start, $end - $start);
+            $offset = $start + strlen($replacement);
         }
 
         return $template;
+    }
+
+    /**
+     * Match nested tags without interpreting delimiters inside attribute values.
+     */
+    private function findComponentClose(string $template, string $name, int $offset): array
+    {
+        $stack = [$name];
+
+        while (preg_match(self::TAG_PATTERN, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $matches[0][1];
+            $tagEnd = $this->findOpeningTagEnd($template, $start + strlen($matches[0][0]));
+
+            if ($tagEnd === false) {
+                break;
+            }
+
+            $offset = $tagEnd + 1;
+
+            if (!str_starts_with($matches['name'][0], 'x-')) {
+                continue;
+            }
+
+            $tagName = substr($matches['name'][0], 2);
+            $closing = $matches['closing'][0] === '/';
+            $selfClosing = str_ends_with(rtrim(substr($template, $start, $tagEnd - $start)), '/');
+
+            if ($closing) {
+                if ($tagName !== array_pop($stack)) {
+                    throw new InvalidArgumentException("Mismatched closing tag for component [{$tagName}].");
+                }
+
+                if ($stack === []) {
+                    return [$start, $tagEnd + 1];
+                }
+            } elseif (!$selfClosing) {
+                $stack[] = $tagName;
+            }
+        }
+
+        throw new InvalidArgumentException("Missing closing tag for component [{$name}].");
     }
 
 
@@ -451,38 +584,19 @@ class BladeCompiler implements BladeCompilerContract
     private function findOpeningTagEnd(string $template, int $startPos): int|false
     {
         $length = strlen($template);
-        $inQuote = false;
-        $quoteChar = null;
-        $depth = 0;
-        $escaped = false;
+        $quote = null;
 
         for ($i = $startPos; $i < $length; $i++) {
             $char = $template[$i];
 
-            if ($escaped) {
-                $escaped = false;
-                continue;
-            }
-
-            if ($char === '\\') {
-                $escaped = true;
-                continue;
-            }
-
-            if (!$inQuote && ($char === '"' || $char === "'")) {
-                $inQuote = true;
-                $quoteChar = $char;
-            } elseif ($inQuote && $char === $quoteChar) {
-                $inQuote = false;
-                $quoteChar = null;
-            } elseif (!$inQuote) {
-                if (in_array($char, ['(', '[', '{'])) {
-                    $depth++;
-                } elseif (in_array($char, [')', ']', '}'])) {
-                    $depth--;
-                } elseif ($char === '>' && $depth === 0) {
-                    return $i;
+            if ($quote !== null) {
+                if ($char === $quote) {
+                    $quote = null;
                 }
+            } elseif ($char === '"' || $char === "'") {
+                $quote = $char;
+            } elseif ($char === '>') {
+                return $i;
             }
         }
 
@@ -490,72 +604,18 @@ class BladeCompiler implements BladeCompilerContract
     }
 
     /**
-     * Process slot content, handling nested components and PHP expressions
+     * Capture rendered slot markup in the caller's scope, preserving user escaping.
      */
     private function processSlotContent(string $content): string
     {
-        // Trim the content
         $content = trim($content);
 
-        if (empty($content)) {
-            return '';
+        if (!preg_match('/<\\?|\\{\\{|\\{!!|@[a-zA-Z@]|__BLADE_RAW_/', $content)) {
+            return var_export($content, true);
         }
 
-        // For simple text content, use string directly for better performance
-        if (!$this->containsDynamicContent($content)) {
-            return $this->escapeSlotContent($content);
-        }
-
-        // If it contains dynamic content, use ob_start() buffering
-        return "function() { ob_start(); ?>$content<?php return ob_get_clean(); }";
-    }
-
-    /**
-     * Check if content contains dynamic content that needs ob_start() buffering
-     */
-    private function containsDynamicContent(string $content): bool
-    {
-        // Check for PHP tags
-        if (strpos($content, '<?') !== false) {
-            return true;
-        }
-
-        // Check for template expressions {{ }} or {!! !!}
-        if (preg_match('/\{\{.*?\}\}|\{!!.*?!!\}/', $content)) {
-            return true;
-        }
-
-        // Check for template directives
-        if (preg_match('/@[a-zA-Z]+/', $content)) {
-            return true;
-        }
-
-        // Check for x-components (both self-closing and with content)
-        if (preg_match('/<x-[a-zA-Z0-9\-_.:]+/', $content)) {
-            return true;
-        }
-
-        // Check for HTML tags (any tag suggests potential complexity)
-        if (preg_match('/<[a-zA-Z][^>]*>/', $content)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Escape slot content for safe inclusion in PHP string
-     */
-    private function escapeSlotContent(string $content): string
-    {
-        // Remove extra whitespace while preserving structure
-        $content = preg_replace('/\s+/', ' ', $content);
-        $content = trim($content);
-
-        // Escape single quotes and backslashes for PHP string
-        $escaped = addslashes($content);
-
-        return $escaped;
+        return '(function (array $__bladeSlotContext) { extract($__bladeSlotContext, EXTR_SKIP); '
+            . 'ob_start(); ?>' . $content . '<?php return ob_get_clean(); })(get_defined_vars())';
     }
 
     /**
@@ -579,13 +639,14 @@ class BladeCompiler implements BladeCompilerContract
                 $i++;
             }
 
-            if ($i >= $length)
+            if ($i >= $length) {
                 break;
+            }
 
             // Check for dynamic attribute prefix (:)
             $isDynamic = false;
             if ($attributesString[$i] === ':') {
-                $isDynamic = true;
+                $isDynamic = ($attributesString[$i + 1] ?? '') !== ':';
                 $i++;
             }
 
@@ -613,6 +674,8 @@ class BladeCompiler implements BladeCompilerContract
 
             if ($isDynamic) {
                 $dynamicAttributes[$name] = true;
+            } else {
+                unset($dynamicAttributes[$name]);
             }
 
             // Skip whitespace after name
@@ -631,6 +694,11 @@ class BladeCompiler implements BladeCompilerContract
 
                 // Parse value
                 $value = $this->parseAttributeValue($attributesString, $i);
+
+                if ($isDynamic && trim($value) === '') {
+                    throw new InvalidArgumentException("Missing expression for bound component attribute [{$name}].");
+                }
+
                 $attributes[$name] = $value;
             } else {
                 // Boolean attribute
@@ -661,27 +729,12 @@ class BladeCompiler implements BladeCompilerContract
             $quote = $char;
             $i++; // Skip opening quote
             $valueStart = $i;
-            $depth = 0;
-            $escaped = false;
-
             while ($i < $length) {
-                $currentChar = $attributesString[$i];
+                if ($attributesString[$i] === $quote) {
+                    $value = substr($attributesString, $valueStart, $i - $valueStart);
+                    $position = $i + 1;
 
-                if ($escaped) {
-                    $escaped = false;
-                } elseif ($currentChar === '\\') {
-                    $escaped = true;
-                } else {
-                    if (in_array($currentChar, ['(', '[', '{'])) {
-                        $depth++;
-                    } elseif (in_array($currentChar, [')', ']', '}'])) {
-                        $depth--;
-                    } elseif ($currentChar === $quote && $depth === 0) {
-                        $value = substr($attributesString, $valueStart, $i - $valueStart);
-                        $i++; // Skip closing quote
-                        $position = $i;
-                        return $value;
-                    }
+                    return $value;
                 }
 
                 $i++;
@@ -788,49 +841,59 @@ class BladeCompiler implements BladeCompilerContract
     /**
      * Build PHP array string from attributes
      */
-    private function buildAttributesArray(array $attributes): string
+    private function buildAttributesArray(array $attributes, ?string $slot = null): string
     {
-        // Extract dynamic attribute info
         $dynamicAttributes = $attributes['__dynamic__'] ?? [];
-        unset($attributes['__dynamic__']); // Remove from actual attributes
-
-        if (empty($attributes)) {
-            return '[]';
-        }
+        unset($attributes['__dynamic__']);
 
         $pairs = [];
-        foreach ($attributes as $key => $value) {
-            $escapedKey = addslashes($key);
-            $isDynamic = isset($dynamicAttributes[$key]);
 
-            if ($value === true) {
-                $pairs[] = "'{$escapedKey}' => true";
-            } elseif ($value === false) {
-                $pairs[] = "'{$escapedKey}' => false";
-            } elseif ($key === 'slot') {
-                // Special handling for slot content - always treat as closure
-                if (is_string($value) && strpos($value, 'function()') === 0) {
-                    // It's already a closure for dynamic content
-                    $pairs[] = "'{$escapedKey}' => ({$value})()";
-                } else {
-                    // This shouldn't happen now since we always use ob_start, but keep for safety
-                    $pairs[] = "'{$escapedKey}' => '{$value}'";
-                }
+        foreach ($attributes as $key => $value) {
+            $keyExpression = var_export($key, true);
+
+            if (isset($dynamicAttributes[$key]) && !str_starts_with($key, ':')) {
+                $valueExpression = "($value)";
             } elseif (is_string($value)) {
-                if ($isDynamic && !str_starts_with($key, ':')) {
-                    // Dynamic attribute - treat as PHP expression
-                    $pairs[] = "'{$escapedKey}' => {$value}";
-                } else {
-                    // Static attribute - treat as string
-                    $escapedValue = addslashes($value);
-                    $pairs[] = "'{$escapedKey}' => '{$escapedValue}'";
-                }
+                $valueExpression = $this->compileAttributeEchos($value);
             } else {
-                $pairs[] = "'{$escapedKey}' => {$value}";
+                $valueExpression = var_export($value, true);
             }
+
+            $pairs[] = "$keyExpression => $valueExpression";
+        }
+
+        if ($slot !== null) {
+            $pairs[] = "'slot' => " . $this->processSlotContent($slot);
         }
 
         return '[' . implode(', ', $pairs) . ']';
+    }
+
+    /**
+     * Attribute echoes are string concatenations, never PHP tags inside a string.
+     */
+    private function compileAttributeEchos(string $value): string
+    {
+        if (!str_contains($value, '{{') && !str_contains($value, '{!!')) {
+            return var_export(strtr($value, $this->literalBlocks), true);
+        }
+
+        $parts = preg_split('/(@?\\{!!.*?!!\\}|@?\\{\\{.*?\\}\\})/s', $value, -1, PREG_SPLIT_DELIM_CAPTURE);
+        $expressions = [];
+
+        foreach ($parts as $index => $part) {
+            if ($index % 2 === 0) {
+                $expressions[] = var_export(strtr($part, $this->literalBlocks), true);
+            } elseif (str_starts_with($part, '@')) {
+                $expressions[] = var_export(substr($part, 1), true);
+            } elseif (str_starts_with($part, '{!!')) {
+                $expressions[] = '(' . trim(substr($part, 3, -3)) . ')';
+            } else {
+                $expressions[] = 'e(' . trim(substr($part, 2, -2)) . ')';
+            }
+        }
+
+        return implode(' . ', $expressions);
     }
 
     /**
@@ -864,24 +927,28 @@ class BladeCompiler implements BladeCompilerContract
         ];
 
         foreach ($directives as $directive => $handler) {
-            $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
-            $offset = 0;
+            $template = $this->compileOutsidePhp($template, function ($source) use ($directive, $handler) {
+                $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
+                $offset = 0;
 
-            while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
-                $matchStart = $matches[0][1];
-                $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+                while (preg_match($pattern, $source, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                    $matchStart = $matches[0][1];
+                    $parenStart = $matchStart + strlen($matches[0][0]) - 1;
 
-                $expression = $this->extractBalancedExpression($template, $parenStart);
+                    $expression = $this->extractBalancedExpression($source, $parenStart);
 
-                if ($expression === false) {
-                    throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
+                    if ($expression === false) {
+                        throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
+                    }
+
+                    $replacement = $handler(trim($expression));
+                    $directiveLength = ($parenStart - $matchStart) + strlen($expression) + 2;
+                    $source = substr_replace($source, $replacement, $matchStart, $directiveLength);
+                    $offset = $matchStart + strlen($replacement);
                 }
 
-                $replacement = $handler(trim($expression));
-                $directiveLength = ($parenStart - $matchStart) + strlen($expression) + 2;
-                $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
-                $offset = $matchStart + strlen($replacement);
-            }
+                return $source;
+            });
         }
 
         return $template;
@@ -892,6 +959,7 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function splitDirectiveArguments(string $expression, int $limit = PHP_INT_MAX): array
     {
+        $expression = strtr($expression, $this->expressionBlocks);
         $args = [];
         $depth = 0;
         $inStr = false;
@@ -963,8 +1031,9 @@ class BladeCompiler implements BladeCompilerContract
         return preg_replace_callback(
             '/\@use\s*\(\s*([^,)]+)(?:\s*,\s*([^,)]+))?\s*\)/s',
             function ($matches) {
-                $classExpr = trim($matches[1]);
-                $aliasExpr = isset($matches[2]) ? trim($matches[2]) : null;
+                $arguments = $this->splitDirectiveArguments($matches[1], 2);
+                $classExpr = trim($arguments[0]);
+                $aliasExpr = isset($arguments[1]) ? trim($arguments[1]) : null;
 
                 // Remove quotes from class name for use statement
                 $className = trim($classExpr, '\'"');
@@ -982,19 +1051,6 @@ class BladeCompiler implements BladeCompilerContract
     }
 
     /**
-     * Compile Blade comments {{-- --}}
-     * Remove them completely from the template
-     * 
-     * @param string $template
-     * @return string
-     */
-    private function compileComments(string $template): string
-    {
-        return preg_replace('/\{\{--.*?--\}\}/s', '', $template);
-    }
-
-
-    /**
      * Compile echo statements {{ }} and {!! !!}
      * 
      * @param string $template
@@ -1002,16 +1058,15 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compileEchos(string $template): string
     {
-        // Raw echo {!! !!} - don't escape HTML
-        $template = preg_replace('/\{\!\!\s*(.+?)\s*\!\!\}/s', '<?= $1; ?>', $template);
+        return preg_replace_callback('/(@)?(?:\\{!!\\s*(.+?)\\s*!!\\}|\\{\\{\\s*(.+?)\\s*\\}\\})/s', function ($matches) {
+            if ($matches[1] === '@') {
+                return substr($matches[0], 1);
+            }
 
-        // Escaped echo {{ }} - escape HTML for security
-        $template = preg_replace_callback('/\{\{\s*(.+?)\s*\}\}/s', function ($matches) {
-            $expression = trim($matches[1]);
-            return "<?= e($expression); ?>";
+            return isset($matches[3])
+                ? '<?= e(' . trim($matches[3]) . '); ?>'
+                : '<?= ' . trim($matches[2]) . '; ?>';
         }, $template);
-
-        return $template;
     }
 
     /**
@@ -1087,17 +1142,41 @@ class BladeCompiler implements BladeCompilerContract
 
         // Compile conditional directives
         foreach ($conditionalDirectives as $directive => $config) {
-            $template = $this->compileDirectiveWithExpression($template, $directive, $config['open'], $config['close']);
+            if (!str_contains($template, '@' . $directive) && !str_contains($template, '@end' . $directive)) {
+                continue;
+            }
+
+            $template = $this->compileOutsidePhp($template, fn($source) => $this->compileDirectiveWithExpression(
+                $source,
+                $directive,
+                $config['open'],
+                $config['close']
+            ));
         }
 
         // Compile loop directives
         foreach ($loopDirectives as $directive => $config) {
-            $template = $this->compileDirectiveWithExpression($template, $directive, $config['open'], $config['close']);
+            if (!str_contains($template, '@' . $directive) && !str_contains($template, '@end' . $directive)) {
+                continue;
+            }
+
+            $template = $this->compileOutsidePhp($template, fn($source) => $this->compileDirectiveWithExpression(
+                $source,
+                $directive,
+                $config['open'],
+                $config['close']
+            ));
         }
 
         // Compile output directives
         foreach ($outputDirectives as $directive => $phpCode) {
-            $template = $this->compileDirectiveWithExpression($template, $directive, $phpCode);
+            if (str_contains($template, '@' . $directive)) {
+                $template = $this->compileOutsidePhp($template, fn($source) => $this->compileDirectiveWithExpression(
+                    $source,
+                    $directive,
+                    $phpCode
+                ));
+            }
         }
 
         // Compile custom directives
@@ -1105,7 +1184,13 @@ class BladeCompiler implements BladeCompilerContract
 
         //  Compile single-line directives
         foreach ($singleLineDirectives as $directive => $phpCode) {
-            $template = $this->compileSingleLineDirective($template, $directive, $phpCode);
+            if (str_contains($template, '@' . $directive)) {
+                $template = $this->compileOutsidePhp($template, fn($source) => $this->compileSingleLineDirective(
+                    $source,
+                    $directive,
+                    $phpCode
+                ));
+            }
         }
 
         return $template;
@@ -1145,11 +1230,11 @@ class BladeCompiler implements BladeCompilerContract
         // Handle closing directive if it exists
         if ($closeTemplate) {
             $closeDirective = "end$directive";
-            $template = preg_replace(
+            $template = $this->compileOutsidePhp($template, fn($source) => preg_replace(
                 '/\@' . preg_quote($closeDirective, '/') . '\b/',
                 sprintf('<?php %s ?>', $closeTemplate),
-                $template
-            );
+                $source
+            ));
         }
 
         return $template;
@@ -1246,30 +1331,37 @@ class BladeCompiler implements BladeCompilerContract
     private function compileCustomDirectives(string $template): string
     {
         foreach ($this->customDirectives as $directive => $callback) {
-            // First, handle directives with parentheses: @directive(expression)
-            $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
-            $offset = 0;
-
-            while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
-                $matchStart = $matches[0][1];
-                $parenStart = $matchStart + strlen($matches[0][0]) - 1;
-
-                $expression = $this->extractBalancedExpression($template, $parenStart);
-
-                if ($expression === false) {
-                    throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
-                }
-
-                $replacement = $callback($expression);
-                $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
-                $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
-
-                $offset = $matchStart + strlen($replacement);
+            if (!str_contains($template, "@$directive")) {
+                continue;
             }
 
-            // Then, handle directives without parentheses: @directive
-            $patternWithoutParens = '/\@' . preg_quote($directive, '/') . '\b(?!\s*\()/';
-            $template = preg_replace_callback($patternWithoutParens, fn($matches) => $callback(''), $template);
+            $template = $this->compileOutsidePhp($template, function ($source) use ($directive, $callback) {
+                $pattern = '/\\@' . preg_quote($directive, '/') . '\\b(?:\\s*\\()?/';
+                $offset = 0;
+
+                while (preg_match($pattern, $source, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                    $start = $matches[0][1];
+                    $matched = $matches[0][0];
+                    $length = strlen($matched);
+                    $expression = '';
+
+                    if (str_ends_with($matched, '(')) {
+                        $expression = $this->extractBalancedExpression($source, $start + $length - 1);
+
+                        if ($expression === false) {
+                            throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
+                        }
+
+                        $length += strlen($expression) + 1;
+                    }
+
+                    $replacement = $callback(strtr($expression, $this->expressionBlocks));
+                    $source = substr_replace($source, $replacement, $start, $length);
+                    $offset = $start + strlen($replacement);
+                }
+
+                return $source;
+            });
         }
 
         return $template;
@@ -1283,8 +1375,7 @@ class BladeCompiler implements BladeCompilerContract
      */
     private function compilePhpBlocks(string $template): string
     {
-        // Only match single-line @php() directives
-        return preg_replace('/\@php\s*\(\s*(.+?)\s*\)(?!\s*@endphp)/', '<?php $1; ?>', $template);
+        return $this->compileDirectiveWithExpression($template, 'php', '%s;');
     }
 
     /**

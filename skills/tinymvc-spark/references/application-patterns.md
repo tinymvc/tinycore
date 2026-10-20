@@ -26,6 +26,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePostRequest;
 use App\Http\Requests\UpdatePostRequest;
 use App\Http\Resources\PostResource;
+use App\Jobs\SendPostPublishedMail;
 use App\Models\Post;
 use App\Services\PostService;
 use Spark\Http\Resources\ResourceCollection;
@@ -49,10 +50,9 @@ class PostController extends Controller
         $post = Post::create(
             $request->validated()->merge([
                 'user_id' => $request->user('id'),
-            ])
+            ]),
         );
 
-        // Dispatch background notification job
         SendPostPublishedMail::dispatch($post->id)->onQueue('emails');
 
         return PostResource::make($post)->response(201);
@@ -87,6 +87,8 @@ class PostController extends Controller
 }
 ```
 
+These examples assume the application defines the referenced requests, jobs, resources, scopes, and access policies. Protect read/delete actions with the appropriate gate or route policy; model binding alone does not enforce ownership.
+
 Do not add a service merely to call `Post::create()` or `PostResource::make()`. Inject a service when the action coordinates a transaction, multiple models, relation synchronization, cache/storage invalidation, external effects, or a reusable domain rule.
 
 ## A focused service
@@ -106,7 +108,7 @@ class PostService
     public function update(Post $post, Input $data): Post
     {
         return DB::transaction(function () use ($post, $data): Post {
-            $post->fill($data);
+            $post->fill($data->except('tags'));
 
             if (!$post->save()) {
                 throw new RuntimeException('Unable to save the post.');
@@ -238,8 +240,8 @@ Do not call `Carbon::parse($this->created_at)` or `$this->created_at->toIsoUtcSt
 ## Non-API response modes
 
 - Blade: query through models/services, then `return view('posts.show', ['post' => $post]);`; use redirects for successful writes and normal session validation flow.
-- FireLine: preserve the installed adapter's `fire()`/`Fire::render()` response, message/error envelope, and redirect behavior. Read [frontend setup](frontend-setup.md) before changing a FireLine form.
-- Inertia: use the installed adapter's `inertia()`/`Inertia::render()` response and redirect after writes. Props are public response data, so select fields and authorize them explicitly.
+- FireLine: preserve the installed adapter's `fire()`/`Fire::render()` response, message/error envelope, and redirect behavior. Read [FireLine](fireline.md) before changing a FireLine form.
+- Inertia: use `inertia()`/`Inertia::render()` and adapter redirects after writes. Props are public response data; select fields and authorize them explicitly. Read [Inertia](inertia.md) for redirect, flash, and validation contracts.
 - JSON webhooks or scalar endpoints: use `json()` when the external contract is not an entity resource. Keep the documented keys and status codes stable.
 
 The controller may share a service with all four modes. Keep representation-specific work in the controller/resource/adapter layer rather than leaking JSON envelopes into a Blade or Inertia action.

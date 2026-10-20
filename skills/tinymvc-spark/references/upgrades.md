@@ -10,7 +10,7 @@ Back up the database and files. Stop workers/producers and drain old queues befo
 
 Keep historical migrations unchanged. Add a new migration for missing framework tables; do not replace an already-applied users migration with the fresh skeleton file. Rebuild the public uploads link to `storage/app/public` after moving files; private data belongs under `storage/app/private`. Old SQLite cache/queue files and Redis queue indexes are not automatically migrated.
 
-`fireline()`, `Router::fireline()`, and `Request::isFirelineRequest()` have been removed. The optional `tinymvc/fireline-php` adapter registers `Route::fire()`, `fire()`, and `is_fire_js()` for FireLine v2; these are not core APIs. Follow [frontend setup](frontend-setup.md) for its provider, middleware, and conditional layouts. Use `app.locale`, `app.locale_dir`, and `locale_dir()` for localization. Existing native session locations, cookie names, and old stateless remember-cookie formats may require fresh logins.
+`fireline()`, `Router::fireline()`, and `Request::isFirelineRequest()` have been removed. The optional `tinymvc/fireline-php` adapter registers `Route::fire()`, `fire()`, and `is_fire_js()` for FireLine v2; these are not core APIs. Follow [FireLine](fireline.md) for its provider, middleware, and conditional layouts. Use `app.locale`, `app.locale_dir`, and `locale_dir()` for localization. Existing native session locations, cookie names, and old stateless remember-cookie formats may require fresh logins.
 
 `cache:clear` clears the default cache and compiled views/configuration while preserving active locks and unrelated temporary files. Clear other named caches explicitly with `cache($name)->flush()`. `key:generate` preserves existing application keys.
 
