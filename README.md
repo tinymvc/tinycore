@@ -4,7 +4,7 @@
 
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-49%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1136%20passed-brightgreen.svg)](tests/)
 
 Applications built with TinyMVC / Spark start from [Skeleton](https://github.com/tinymvc/skeleton) (`tinymvc/skeleton`), which provides the application structure and installs TinyCore as a Composer dependency under `vendor/tinymvc/tinycore`. This repository contains the core engine's source and regression suite.
 
