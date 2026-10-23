@@ -16,6 +16,11 @@
             "./src/Support/helpers.php"
         ]
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
     "suggest": {
         "league/commonmark": "Required to use Str::markdown() and Stringable::markdown() (^2.6).",
         "voku/portable-ascii": "Required for Str::ascii(), Str::slug(), Str::isAscii(), and ASCII validation rules (^2.0).",
