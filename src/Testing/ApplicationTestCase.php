@@ -268,11 +268,6 @@ abstract class ApplicationTestCase extends TestCase
 
             $this->app->terminate();
 
-            if ($method === 'HEAD') {
-                // Preserve the GET representation's headers while suppressing its body.
-                $headers = $response->getHeaders();
-                $response->setContent('')->withHeaders($headers);
-            }
 
             return new TestResponse($response);
         } finally {

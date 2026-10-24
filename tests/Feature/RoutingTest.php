@@ -27,7 +27,7 @@ final class RoutingTest extends FrameworkTestCase
         Route::match(['PUT', 'PATCH'], '/items', fn() => 'updated');
         $this->put('/items')->assertContent('updated');
         $this->patch('/items')->assertContent('updated');
-        $this->get('/items')->assertNotFound();
+        $this->get('/items')->assertStatus(405)->assertHeader('Allow', 'PUT, PATCH');
     }
 
     public function test_nested_groups_compose_paths_and_names_without_leaking(): void
@@ -49,7 +49,7 @@ final class RoutingTest extends FrameworkTestCase
         $router = app(Router::class);
         $this->assertSame('/items/7', $router->route('item', ['id' => 7]));
         $this->assertSame('/items/7/edit', $router->route('item', ['id' => 7, 'tab' => 'edit']));
-        $this->assertSame('/items/$1', $router->route('item', '$1'));
+        $this->assertSame('/items/%241', $router->route('item', '$1'));
         $this->assertThrows(InvalidNamedRouteException::class, fn() => $router->route('missing'));
     }
 
@@ -62,7 +62,7 @@ final class RoutingTest extends FrameworkTestCase
         $this->assertFalse($router->has('items.destroy'));
         $this->get('/items')->assertContent('index');
         $this->get('/items/8')->assertContent('show 8');
-        $this->delete('/items/8')->assertNotFound();
+        $this->delete('/items/8')->assertStatus(405)->assertHeader('Allow', 'GET, HEAD');
     }
 
     public function test_redirect_preserves_status_and_location(): void

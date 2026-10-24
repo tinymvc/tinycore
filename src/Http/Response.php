@@ -2,8 +2,11 @@
 
 namespace Spark\Http;
 
-use Nyholm\Psr7\Response as PsrResponse;
+use Nyholm\Psr7\Factory\Psr17Factory;
+use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\StreamInterface;
 
 use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
@@ -15,7 +18,9 @@ use Stringable;
 use function count;
 use function in_array;
 use function is_array;
+use function is_int;
 use function is_string;
+use function sprintf;
 use function strlen;
 
 /**
@@ -30,63 +35,27 @@ class Response implements ResponseContract
 {
     use Macroable, Conditionable;
 
-    /**
-     * This property holds the URL to which the user will be redirected.
-     * It is set when the `redirect` method is called and used in the `send` method
-     * to perform the actual redirection.
-     * 
-     * @var string The URL to redirect to.
-     */
-    private string $redirectUrl;
+    private ResponseInterface $message;
 
-    /**
-     * This property indicates whether the default content type has been set for the response.
-     * It is used to determine if the "Content-Type" header should be automatically set
-     * based on the response content type (e.g., JSON, HTML).
-     *
-     * @var bool True if the default content type is set; false otherwise.
-     */
     private bool $defaultContentType = false;
 
-    /**
-     * This property holds the HTTP response headers as an associative array. Each key represents a header name,
-     * and the corresponding value represents the header value. Headers can be set using the `setHeader` method
-     * or the `withHeaders` method. The headers are sent to the client when the `send` method is called.
-     *
-     * @var array An associative array of HTTP response headers.
-     */
-    private array $headers = [];
-
-    /**
-     * This property holds the HTTP protocol version for the response. It is set to '1.1' by default.
-     * The protocol version is used when sending the response to the client and can be modified if needed.
-     *
-     * @var string The HTTP protocol version (e.g., '1.0', '1.1', '2.0').
-     */
-    private string $protocolVersion = '1.1';
-
-    /**
-     * This property holds the reason phrase associated with the HTTP status code for the response.
-     * It is used to provide a human-readable explanation of the status code. If not set, the default
-     * reason phrase for the status code will be used when sending the response.
-     *
-     * @var string|null The reason phrase for the HTTP status code, or null if not set.
-     */
-    private ?string $reasonPhrase = null;
+    private bool $head = false;
 
     /**
      * Constructor
      * 
      * Initializes a new response instance with the provided content, status code, and headers.
      * 
-     * @param array|string|Arrayable|Stringable $content The response content.
+     * @param array|string|Arrayable|Stringable|StreamInterface $content The response content.
      *   This can be a string, an array, or an Arrayable object that will be converted to a string.
      *   If an array is provided, it will be converted to a JSON string.
      * @param int $statusCode The HTTP status code.
      * @param array $headers An associative array of headers to send with the response.
      */
-    public function __construct(private mixed $content = '', private int $statusCode = 200, array $headers = [])
+    public function __construct(private mixed $content = '', int $statusCode = 200, array $headers = [])
     {
+        $factory = Application::$app?->get(ResponseFactoryInterface::class) ?? new Psr17Factory();
+        $this->message = $factory->createResponse($statusCode);
         $this->withHeaders($headers);
     }
 
@@ -106,10 +75,10 @@ class Response implements ResponseContract
     /**
      * Sets the response content to a specified string, replacing any existing content.
      *
-     * @param array|string|Arrayable|Stringable $content The content to set in the response body.
+     * @param array|string|Arrayable|Stringable|StreamInterface $content The content to set in the response body.
      * @return $this Current response instance for method chaining.
      */
-    public function setContent(array|string|Arrayable|Stringable $content): self
+    public function setContent(array|string|Arrayable|Stringable|StreamInterface $content): self
     {
         $this->clearDefaultContentType();
         $this->content = $content;
@@ -124,7 +93,9 @@ class Response implements ResponseContract
      */
     public function write(string $content): self
     {
-        if (!is_string($this->content)) {
+        if ($this->content instanceof StreamInterface) {
+            $this->content = $this->getContent();
+        } elseif (!is_string($this->content)) {
             $this->content = '';
         }
 
@@ -192,54 +163,38 @@ class Response implements ResponseContract
      */
     public function file(string $filePath, array $headers = []): void
     {
-        if (!file_exists($filePath) || !is_readable($filePath)) {
-            $this->setStatusCode(404);
-            $this->setContent('File not found.');
-            $this->send();
+        if (!is_file($filePath) || !is_readable($filePath)) {
+            $this->setStatusCode(404)->setContent('File not found.')->send();
             return;
         }
 
-        $mimeType = @mime_content_type($filePath) ?: 'application/octet-stream';
+        $factory = Application::$app?->get(StreamFactoryInterface::class) ?? new Psr17Factory();
 
-        header('Content-Description: File Transfer');
-        header("Content-Type: $mimeType");
-        header('Content-Disposition: attachment; filename="' . basename($filePath) . '"');
-        header('Content-Length: ' . (string) filesize($filePath));
-        header('Expires: 0');
-        header('Cache-Control: must-revalidate');
-        header('Pragma: public');
-
-        foreach ($headers as $key => $value) {
-            header("$key: $value");
-        }
-
-        readfile($filePath);
-        exit;
+        $this->setContent($factory->createStreamFromFile($filePath));
+        $this->sendAttachment(basename($filePath), [
+            'Content-Type' => @mime_content_type($filePath) ?: 'application/octet-stream',
+            'Content-Length' => (string) filesize($filePath),
+            ...$headers,
+        ]);
     }
 
-    /**
-     * Sends raw content as a downloadable file to the client.
-     *
-     * @param string $content The content to be sent as a file.
-     * @param string $filename The name of the file to be downloaded.
-     * @param array $headers Optional headers to include in the response.
-     * @return void
-     */
+    /** Send raw content as a download through the normal response lifecycle. */
     public function download(string $content, string $filename, array $headers = []): void
     {
-        header('Content-Description: File Transfer');
-        header('Content-Type: application/octet-stream');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        header('Expires: 0');
-        header('Cache-Control: must-revalidate');
-        header('Pragma: public');
-        header('Content-Length: ' . (string) strlen($content));
+        $this->setContent($content);
+        $this->sendAttachment($filename, ['Content-Length' => (string) strlen($content), ...$headers]);
+    }
 
-        foreach ($headers as $key => $value) {
-            header("$key: $value");
-        }
-
-        echo $content;
+    private function sendAttachment(string $filename, array $headers): void
+    {
+        $this->withHeaders([
+            'Content-Type' => 'application/octet-stream',
+            'Content-Disposition' => "attachment; filename*=UTF-8''" . rawurlencode(basename($filename)),
+            'Cache-Control' => 'must-revalidate',
+            'Expires' => '0',
+            ...$headers,
+        ]);
+        $this->send();
         exit;
     }
 
@@ -269,7 +224,7 @@ class Response implements ResponseContract
      */
     public function redirect(string $url, int $httpCode = 302): self
     {
-        $this->redirectUrl = $url;
+        $this->setHeader('Location', $url);
         $this->setStatusCode($httpCode); // Default to 302 if no code is provided
         return $this;
     }
@@ -296,8 +251,7 @@ class Response implements ResponseContract
      */
     public function setStatusCode(int $statusCode): self
     {
-        $this->statusCode = $statusCode;
-        $this->reasonPhrase = null;
+        $this->message = $this->message->withStatus($statusCode);
         return $this;
     }
 
@@ -310,11 +264,10 @@ class Response implements ResponseContract
      */
     public function setHeader(string $key, string|array $value): self
     {
-        $this->removeHeader($key);
         if (strcasecmp($key, 'Content-Type') === 0) {
             $this->defaultContentType = false;
         }
-        $this->headers[$key] = is_array($value) ? array_values($value) : $value;
+        $this->message = $this->message->withHeader($key, $value);
         return $this;
     }
 
@@ -439,9 +392,11 @@ class Response implements ResponseContract
     public function clear(): void
     {
         // Clear the response content and headers
+        $factory = Application::$app?->get(ResponseFactoryInterface::class) ?? new Psr17Factory();
+
         $this->content = '';
-        $this->statusCode = 200;
-        $this->headers = [];
+        $this->message = $factory->createResponse();
+        $this->head = false;
         $this->defaultContentType = false;
 
         // Clear session flash data
@@ -459,37 +414,57 @@ class Response implements ResponseContract
      */
     public function send(): void
     {
-        // If the application instance is set, prepare the response and handle testing mode.
         if (isset(Application::$app)) {
-            Application::$app->prepareResponse($this);
-
-            // If the application is in testing mode, throw a 
-            // ResponseException instead of sending the response.
             if (Application::$app->isTesting()) {
                 throw new \Spark\Testing\ResponseException($this);
             }
+            if (Application::$app->isHandlingRequest()) {
+                throw new \Spark\Exceptions\Http\ResponseException($this);
+            }
+            Application::$app->prepareResponse($this);
+        } else {
+            $this->head = strcasecmp($_SERVER['REQUEST_METHOD'] ?? 'GET', 'HEAD') === 0;
         }
 
-        $this->prepare(); // Prepare the response content and headers.
-
-        // Set http response code and headers.
-        http_response_code($this->statusCode);
-        foreach ($this->headers as $key => $values) {
-            foreach ((array) $values as $index => $value) {
+        $message = $this->toPsrResponse();
+        $version = $message->getProtocolVersion();
+        if (in_array($version, ['1.0', '1.1'], true)) {
+            header(sprintf('HTTP/%s %d %s', $version, $message->getStatusCode(), $message->getReasonPhrase()));
+        } else {
+            http_response_code($message->getStatusCode());
+        }
+        foreach ($message->getHeaders() as $key => $values) {
+            foreach ($values as $index => $value) {
                 header("$key: $value", $index === 0);
             }
         }
 
-        // Redirects must include prepared headers too (for example CORS headers).
-        if (isset($this->redirectUrl)) {
-            header("Location: {$this->redirectUrl}", true, $this->statusCode);
-            exit;
+        if (!$this->head) {
+            $body = $message->getBody();
+            if ($body->isSeekable()) {
+                $body->rewind();
+            }
+            while (!$body->eof()) {
+                $chunk = $body->read(8192);
+                if ($chunk === '' && !$body->eof()) {
+                    throw new \RuntimeException('Response stream did not produce data.');
+                }
+                echo $chunk;
+            }
         }
 
-        echo $this->content; // send output to client.
+        if ($message->hasHeader('Location') && $message->getStatusCode() >= 300 && $message->getStatusCode() < 400) {
+            exit;
+        }
     }
 
-    /** Return the response body without sending headers or output. */
+    /** Apply transport rules without reading or discarding a stream body. */
+    public function prepareForRequest(Request $request): self
+    {
+        $this->head = $request->isMethod('HEAD');
+        $this->prepare();
+        return $this;
+    }
 
     /**
      * Retrieves the response content as a string.
@@ -502,7 +477,24 @@ class Response implements ResponseContract
     public function getContent(): string
     {
         $this->prepare();
-        return $this->content;
+        if ($this->head) {
+            return '';
+        }
+        if (!$this->content instanceof StreamInterface) {
+            return $this->content;
+        }
+
+        $body = $this->content;
+        if (!$body->isSeekable()) {
+            return $body->getContents();
+        }
+        $position = $body->tell();
+        try {
+            $body->rewind();
+            return $body->getContents();
+        } finally {
+            $body->seek($position);
+        }
     }
 
     /**
@@ -512,34 +504,75 @@ class Response implements ResponseContract
      */
     public function getStatusCode(): int
     {
-        return $this->statusCode;
+        return $this->message->getStatusCode();
     }
 
     public function toPsrResponse(): ResponseInterface
     {
         $this->prepare();
 
-        return new PsrResponse(
-            $this->statusCode,
-            $this->getHeaders(),
-            $this->content,
-            $this->protocolVersion,
-            $this->reasonPhrase,
-        );
+        $body = $this->head ? '' : $this->content;
+        if (!$body instanceof StreamInterface) {
+            $factory = Application::$app?->get(StreamFactoryInterface::class) ?? new Psr17Factory();
+            $body = $factory->createStream($body);
+        }
+
+        return $this->message->withBody($body);
     }
 
     public static function fromPsrResponse(ResponseInterface $response): static
     {
-        $headers = array_map(
-            fn(array $values) => count($values) === 1 ? $values[0] : $values,
-            $response->getHeaders(),
-        );
-
-        $instance = new static((string) $response->getBody(), $response->getStatusCode(), $headers);
-        $instance->protocolVersion = $response->getProtocolVersion();
-        $instance->reasonPhrase = $response->getReasonPhrase();
-
+        $instance = new static($response->getBody());
+        $instance->message = $response;
         return $instance;
+    }
+
+    /** Build an error response without emitting it or ending the middleware pipeline. */
+    public static function error(string|int $error, ?string $message = null, ?int $code = null): static
+    {
+        $code ??= is_int($error) ? $error : 500;
+
+        if (Application::$app?->resolved(Request::class) && request()->expectsJson()) {
+            return new static(['message' => $message ?? _e('Internal Server Error'), 'code' => $code], $code);
+        }
+
+        /** @var \Spark\View\Blade $view */
+        $view = get(\Spark\View\Blade::class);
+
+        $originalPath = $view->getPath();
+        $errorTemplate = "errors/$error";
+
+        // Set the view path to the errors folder
+        if (!$view->templateExists("errors/$error")) {
+            $view->setPath(dirname(__DIR__) . '/Foundation/resources/views');
+        }
+
+        // Set the error template
+        if (!$view->templateExists($errorTemplate)) {
+            $errorTemplate = 'errors/error';
+        }
+
+        // Render the error view
+        try {
+            $viewHtml = $view->render($errorTemplate, compact('code', 'message'));
+        } catch (\Throwable) {
+            $viewHtml = '<div id="error-page"><p id="error-code">' . $code . '</p><span id="error-separator"></span><p>' . _e($message ?? 'Error') . '</p></div>';
+        } finally {
+            $view->setPath($originalPath);
+        }
+
+        return new static($viewHtml, $code);
+    }
+
+    /** Normalize controller, middleware, and exception-handler results in one place. */
+    public static function from(mixed $response): self
+    {
+        return match (true) {
+            $response instanceof self => $response,
+            $response instanceof ResponseInterface => static::fromPsrResponse($response),
+            is_int($response) => new static(statusCode: $response),
+            default => new static($response),
+        };
     }
 
     /**
@@ -553,9 +586,10 @@ class Response implements ResponseContract
     public function getHeaders(): array
     {
         $this->prepare();
-        return isset($this->redirectUrl)
-            ? [...$this->headers, 'Location' => $this->redirectUrl]
-            : $this->headers;
+        return array_map(
+            fn(array $values) => count($values) === 1 ? $values[0] : $values,
+            $this->message->getHeaders(),
+        );
     }
 
     /**
@@ -568,18 +602,24 @@ class Response implements ResponseContract
      */
     private function prepare(): void
     {
+        $statusCode = $this->getStatusCode();
+
         // These statuses have no message content. Do not invent a media type.
         if (
-            ($this->statusCode >= 100 && $this->statusCode < 200)
-            || in_array($this->statusCode, [204, 205, 304], true)
+            ($statusCode >= 100 && $statusCode < 200)
+            || in_array($statusCode, [204, 205, 304], true)
         ) {
             $this->content = '';
             $this->clearDefaultContentType();
-            if ($this->statusCode < 200 || $this->statusCode === 204) {
+            if ($statusCode < 200 || $statusCode === 204) {
                 $this->removeHeader('Content-Length');
-            } elseif ($this->statusCode === 205 && $this->hasHeader('Content-Length')) {
+            } elseif ($statusCode === 205 && $this->hasHeader('Content-Length')) {
                 $this->setHeader('Content-Length', '0');
             }
+            return;
+        }
+
+        if ($this->content instanceof StreamInterface) {
             return;
         }
 
@@ -620,21 +660,12 @@ class Response implements ResponseContract
 
     public function hasHeader(string $name): bool
     {
-        foreach ($this->headers as $key => $value) {
-            if (strcasecmp($key, $name) === 0) {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->message->hasHeader($name);
     }
 
     public function removeHeader(string $name): void
     {
-        foreach (array_keys($this->headers) as $key) {
-            if (strcasecmp($key, $name) === 0) {
-                unset($this->headers[$key]);
-            }
-        }
+        $this->message = $this->message->withoutHeader($name);
     }
+
 }

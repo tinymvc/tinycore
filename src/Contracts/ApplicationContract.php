@@ -2,6 +2,10 @@
 
 namespace Spark\Contracts;
 
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Spark\Http\{Request, Response};
+
 /**
  * Interface defining the contract for the Application class.
  *
@@ -192,7 +196,10 @@ interface ApplicationContract
     public function run(): void;
 
     /** Dispatch a request and return its response. */
-    public function handle(\Spark\Http\Request $request): \Spark\Http\Response;
+    public function handle(Request|ServerRequestInterface $request): Response;
+
+    /** Handle a PSR request without sending output. */
+    public function handlePsr(ServerRequestInterface $request): ResponseInterface;
 
     /** Whether this application was created in a CLI testing environment. */
     public function isTesting(): bool;

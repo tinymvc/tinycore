@@ -71,6 +71,21 @@ public function handle(Request $request, \Closure $next): mixed
 }
 ```
 
+## PSR-15 middleware
+
+Register a class name or instance implementing `Psr\Http\Server\MiddlewareInterface` with the same alias/queue APIs as native middleware:
+
+```php
+app()->withMiddleware(register: [
+    'external' => Vendor\Package\Middleware::class,
+]);
+Route::get('/documents/{id}', $controller)->middleware('external');
+```
+
+Native and PSR middleware share ordering, exclusions, and short-circuit behavior. PSR request changes reach downstream native helpers, dependency injection, and FormRequests. The outer native request is restored when the continuation returns or throws. Routing has already matched: changing a URI inside route middleware does not reroute, and matched route parameters remain separate from general attributes.
+
+Global middleware also wraps fallbacks, 404s, and 405s. Matched routes retain their route parameters before middleware runs. Return the response from `process()`; native early responses can also be decorated by surrounding PSR middleware.
+
 ## Built-In Middleware Base Classes
 
 ### CORS

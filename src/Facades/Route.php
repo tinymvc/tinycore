@@ -13,6 +13,7 @@ use Spark\Http\Routing\RouteResource;
  * This class provides a simple facade for the Router class, allowing for easy 
  * registration and dispatching of routes.
  *
+ * @method static BaseRoute head(string $path, callable|string|array $callback)
  * @method static BaseRoute get(string $path, callable|string|array $callback)
  * @method static BaseRoute post(string $path, callable|string|array $callback)
  * @method static BaseRoute put(string $path, callable|string|array $callback)

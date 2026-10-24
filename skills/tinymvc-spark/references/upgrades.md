@@ -20,3 +20,13 @@ Keep historical migrations unchanged. Add a new migration for missing framework 
 `find()` and `first()` now return `null` when no record matches, replacing `false`. `last()` follows the same empty-result contract; `value()` returns null for a missing row or a SQL NULL column. Change lookup-specific strict false checks and wrapper return annotations to null, and guard property/array access. Use `findOrFail()` / `firstOrFail()` when absence should throw `Spark\Exceptions\NotFoundException` (normally a 404).
 
 Do not replace unrelated false checks: writes, standalone validation, and raw PDO calls retain their own contracts. Scalar fetches can contain zero, false, or an empty string. Re-test absent users/tokens, route-bound records, soft-deleted records, empty relations, and lookup-or-create flows against the installed version.
+
+## HTTP and routing interoperability
+
+- Expect 405 plus `Allow` for an unsupported method on an existing path; fallback handlers apply to missing paths.
+- Global middleware now runs on fallback/404/405 paths too. Review middleware that assumes every request has a particular route parameter.
+- Named-route values are now percent-encoded per segment and required parameters must be supplied. Pass raw values rather than pre-encoded values.
+- `Request::getPath()` retains percent encoding; captured route arguments are decoded once. Forwarded scheme headers require a configured trusted proxy.
+- Raw JSON parsing follows `Content-Type`; use `application/json` or a `+json` media type. URL-encoded PUT/PATCH/DELETE bodies are parsed as forms.
+- Response header names/values and status codes now use Nyholm validation. PSR imports preserve streams and do not infer an absent media type. Read non-seekable bodies only when ready to consume them.
+- The package includes the two PSR-15 interface packages for middleware/handler integration. Native request/response helper APIs remain available.

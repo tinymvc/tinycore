@@ -2,14 +2,20 @@
 
 namespace Spark\Http;
 
-use Nyholm\Psr7\ServerRequest;
+use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7\UploadedFile;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\ServerRequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Http\Message\StreamInterface;
+use Psr\Http\Message\UploadedFileInterface;
+use Psr\Http\Message\UriFactoryInterface;
 
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
 use Spark\Foundation\Application;
+use Spark\Support\Arr;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
@@ -72,8 +78,20 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /** @var Input Validated input data. */
     private Input $cleanData;
 
-    /** @var string Raw request body content. */
-    private string $rawBody = '';
+    /** @var StreamInterface The request body. */
+    private StreamInterface $body;
+
+    /** @var array|object|null Parsed body data (e.g., JSON or form data). */
+    private array|object|null $parsedBody = [];
+
+    /** @var string HTTP protocol version (e.g., 1.1, 2.0). */
+    private string $protocolVersion = '1.1';
+
+    /** @var string|null The request target (e.g., the path and query string). */
+    private ?string $requestTarget = null;
+
+    /** General PSR attributes are separate from controller route arguments. */
+    public array $attributes = [];
 
     /** @var array Cookies sent with the request. */
     private array $cookies = [];
@@ -87,36 +105,109 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /** @var string Header explicitly trusted to convey the client IP. */
     protected string $trustedProxyHeader = 'x-forwarded-for';
 
-    /**
-     * request constructor.
-     * 
-     * Initializes request properties based on global server data.
-     */
+    /** Initializes request properties based on global server data. */
     public function __construct()
     {
-        $this->rawBody = (string) file_get_contents('php://input');
-        $this->cookies = $_COOKIE;
-        $this->serverParams = $_SERVER;
+        $this->initialize(null); // Initialize with null to use global server data.
+    }
 
-        // Parse and set the request method, path, root URL, and full URL.
-        $this->method = $this->parseRequestMethod();
-        $this->path = $this->parsePath();
-        $this->rootUrl = $this->parseRootUrl();
-        $this->url = $this->parseUrl();
+    /** @param ServerRequestInterface|null $request The PSR-7 request to initialize from, or null to use global server data. */
+    private function initialize(?ServerRequestInterface $request): void
+    {
+        isset(Application::$app) && $this->configureAppTrustedProxies();
 
-        // Initialize collections for server parameters, headers, files, query, and post data.
-        $this->headers = collect($this->parseAllHeaders());
-        $this->server = collect($this->parseServerParams());
-        $this->files = collect($_FILES);
-        $this->query = collect($_GET);
-        $this->post = collect([...$_POST, ...$this->parsePhpInput()]);
+        $this->routeParams = [];
 
-        // Configure trusted proxies if the application instance is available.
-        if (isset(Application::$app)) {
-            $this->configureAppTrustedProxies();
+        if ($request !== null) {
+            $this->serverParams = $request->getServerParams();
+            $this->cookies = $request->getCookieParams();
+            $this->method = $request->getMethod();
+            $this->body = $request->getBody();
+            $this->protocolVersion = $request->getProtocolVersion();
+            $this->requestTarget = $request->getRequestTarget();
+            $this->attributes = $request->getAttributes();
+
+            $uri = $request->getUri();
+            $this->url = (string) $uri;
+            $this->rootUrl = ($uri->getScheme() !== '' ? $uri->getScheme() . ':' : '') . ($uri->getAuthority() !== '' ? '//' . $uri->getAuthority() : '');
+            $this->path = $uri->getPath() ?: '/';
+            $this->headers = collect(array_change_key_case(
+                array_map(
+                    fn(array $values) => count($values) === 1 ? $values[0] : $values,
+                    $request->getHeaders()
+                ),
+                CASE_LOWER
+            ));
+            $this->query = collect($request->getQueryParams());
+            $this->files = collect($request->getUploadedFiles());
+            $this->parsedBody = $request->getParsedBody();
+            $this->post = collect((array) $this->parsedBody);
+        } else {
+            $this->serverParams = $_SERVER;
+            $this->cookies = $_COOKIE;
+            $this->method = $this->parseRequestMethod();
+            $this->headers = collect($this->parseAllHeaders());
+            $this->rootUrl = $this->parseRootUrl();
+
+            $factory = Application::$app?->get(UriFactoryInterface::class) ?? new Psr17Factory();
+            $uri = $factory->createUri($this->rootUrl . '/' . ltrim($_SERVER['REQUEST_URI'] ?? '/', '/'));
+
+            $this->path = $uri->getPath() ?: '/';
+            $this->url = (string) $uri;
+            $this->requestTarget = $_SERVER['REQUEST_URI'] ?? '/';
+            $this->protocolVersion = str_replace('HTTP/', '', $_SERVER['SERVER_PROTOCOL'] ?? 'HTTP/1.1');
+
+            $factory = Application::$app?->get(StreamFactoryInterface::class) ?? new Psr17Factory();
+            $this->body = $factory->createStreamFromFile('php://input');
+
+            $this->query = collect($_GET);
+            $this->files = collect($_FILES);
+            $this->parsedBody = $_POST ?: $this->parsePhpInput();
+            $this->post = collect($this->parsedBody);
         }
 
-        $this->routeParams = []; // Initialize empty route parameters.
+        $this->server = collect($this->parseServerParams());
+    }
+
+    /**
+     * Creates a new Request instance from a PSR-7 ServerRequestInterface.
+     *
+     * @param ServerRequestInterface $request The PSR-7 request to convert.
+     * @return self A new base Request populated with data from the PSR-7 request.
+     */
+    public static function fromPsrRequest(ServerRequestInterface $request): self
+    {
+        // Hydrate the base request without reading globals or running FormRequest validation.
+        $instance = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $instance->initialize($request);
+
+        return $instance;
+    }
+
+    /**
+     * Retrieves the request body as a StreamInterface.
+     *
+     * @return StreamInterface The request body stream.
+     */
+    public function getBody(): StreamInterface
+    {
+        return $this->body;
+    }
+
+    /** Read the raw body explicitly; preserve the cursor when seeking is supported. */
+    public function getRawBody(): string
+    {
+        if (!$this->body->isSeekable()) {
+            return $this->body->getContents();
+        }
+
+        $position = $this->body->tell();
+        try {
+            $this->body->rewind();
+            return $this->body->getContents();
+        } finally {
+            $this->body->seek($position);
+        }
     }
 
     /**
@@ -188,7 +279,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private function parseAllHeaders(): array
     {
         $headers = [];
-        foreach ($_SERVER as $key => $value) {
+        foreach ($this->serverParams as $key => $value) {
             if (!str_starts_with($key, 'HTTP_')) {
                 continue; // Skip non-header entries
             }
@@ -241,7 +332,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private function parseServerParams(): array
     {
         $serverParams = [];
-        foreach ($_SERVER as $key => $value) {
+        foreach ($this->serverParams as $key => $value) {
             $serverParams[$this->parseServerKey($key)] = $value;
         }
         return $serverParams;
@@ -254,45 +345,21 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     private function parsePhpInput(): array
     {
-        if (in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE']) && empty($_POST)) {
-            // If the raw POST data is not empty, attempt to decode it
-            // as JSON data.
-            if (!empty($this->rawBody)) {
-                // Decode the raw POST data as JSON data.
-                $params = json_decode($this->rawBody, true);
-
-                // If the JSON decoding was successful, return the decoded
-                // JSON data as an associative array.
-                if (json_last_error() === JSON_ERROR_NONE && is_array($params)) {
-                    return $params;
-                }
-            }
+        if (!in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+            return [];
         }
 
-        // Return an empty array if no valid JSON data is found.
+        $type = strtolower(trim(explode(';', $this->header('Content-Type', ''))[0]));
+        if ($type === 'application/x-www-form-urlencoded') {
+            parse_str($this->getRawBody(), $params);
+            return $params;
+        }
+        if ($type === 'application/json' || str_ends_with($type, '+json')) {
+            $params = json_decode($this->getRawBody(), true);
+            return is_array($params) ? $params : [];
+        }
+
         return [];
-    }
-
-    /**
-     * Parses the requested URI path, excluding query parameters.
-     * 
-     * @return string The URI path of the request.
-     */
-    private function parsePath(): string
-    {
-        $path = $_SERVER['REQUEST_URI'] ?? '/';
-
-        // Remove query parameters
-        $position = strpos($path, '?');
-        if ($position !== false) {
-            $path = substr($path, 0, $position);
-        }
-
-        // URL decode the path to handle encoded characters
-        $path = urldecode($path);
-
-        // Ensure path starts with /
-        return '/' . ltrim($path, '/');
     }
 
     /**
@@ -302,36 +369,29 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     private function parseRootUrl(): string
     {
-        // Reliable HTTPS detection
-        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-            (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
-            (!empty($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on') ||
-            (!empty($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443;
 
-        $protocol = $isHttps ? 'https://' : 'http://';
-
-        // Validate and sanitize host
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
-
-        // Basic host validation to prevent header injection
-        if (!preg_match('/^[a-zA-Z0-9.-]+(?::[0-9]+)?$/', $host)) {
-            throw new InvalidArgumentException('Invalid host header detected');
+        $remote = $this->cleanIp((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        if ($remote !== false && $this->isTrustedProxy($remote)) {
+            $scheme = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+            if (in_array($scheme, ['http', 'https'], true)) {
+                $isHttps = $scheme === 'https';
+            } elseif (($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on') {
+                $isHttps = true;
+            }
         }
 
-        return "$protocol$host";
-    }
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+        if (!preg_match('/\A(?:\[[0-9a-fA-F:.]+\]|[a-zA-Z0-9.-]+)(?::[0-9]+)?\z/', $host)) {
+            throw new InvalidArgumentException('Invalid host header detected');
+        }
+        if ($host[0] === '[' && !filter_var(substr($host, 1, strpos($host, ']') - 1), FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            throw new InvalidArgumentException('Invalid IPv6 host header detected');
+        }
 
-    /**
-     * Builds the full URL of the current request.
-     * 
-     * @return string Full URL including protocol, host, and path.
-     */
-    private function parseUrl(): string
-    {
-        $rootUrl = $this->parseRootUrl();
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-
-        return "$rootUrl$requestUri";
+        $factory = Application::$app?->get(UriFactoryInterface::class) ?? new Psr17Factory();
+        return (string) $factory->createUri(($isHttps ? 'https://' : 'http://') . $host);
     }
 
     /**
@@ -519,18 +579,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         return $this->url;
     }
 
-    /**
-     * Retrieves the URI path without the query string.
-     * 
-     * This method returns the URI path of the current request, excluding any
-     * query parameters that may be present in the URL.
-     * 
-     * @return string The URI path of the request.
-     */
+    /** Retrieves the captured request target, including its query string. */
     public function getUri(): string
     {
-        // Returns the URI path without the query string.
-        return $this->server('request-uri', '/');
+        return $this->requestTarget ?? '/';
     }
 
     /**
@@ -604,6 +656,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function file(string $key, $default = null): mixed
     {
+        $file = $this->files->get($key);
+        if ($file instanceof UploadedFileInterface || (is_array($file) && !$this->isPhpUpload($file))) {
+            return $file;
+        }
         return Input::make($this->files)->file($key) ?: $default;
     }
 
@@ -615,6 +671,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function hasFile(string $key): bool
     {
+        foreach (Arr::flatten([$this->files->get($key)]) as $file) {
+            if ($file instanceof UploadedFileInterface && $file->getError() === UPLOAD_ERR_OK) {
+                return true;
+            }
+        }
         return Input::make($this->files)->hasFile($key);
     }
 
@@ -628,7 +689,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function moveFile(string $key, null|string $disk = null, array $options = []): string|array|false
     {
-        return Input::make($this->files)->moveFile($key, $disk, $options);
+        try {
+            return \Spark\Storage\Storage::disk($disk)->uploader(...$options)->upload($this->file($key));
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -701,7 +766,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function header(string $name, $defaultValue = null): ?string
     {
-        return $this->headers->get($this->parseHeaderKey($name), $defaultValue);
+        $value = $this->headers->get($this->parseHeaderKey($name), $defaultValue);
+        return is_array($value) ? implode(', ', $value) : $value;
     }
 
     /**
@@ -1049,7 +1115,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * @param array $value The file upload array to set.
      * @return void
      */
-    public function setFile(string $key, array $value): void
+    public function setFile(string $key, array|UploadedFileInterface $value): void
     {
         $this->files->put($key, $value);
     }
@@ -1142,31 +1208,41 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /** Export the current request as an immutable PSR-7 message. */
     public function toPsrRequest(): ServerRequestInterface
     {
-        $server = $this->serverParams;
+        $keys = [];
+        foreach (array_keys($this->serverParams) as $key) {
+            $keys[$this->parseServerKey($key)] = $key;
+        }
+        $server = [];
         foreach ($this->server->all() as $name => $value) {
-            $server[strtoupper(str_replace('-', '_', $name))] = $value;
+            $server[$keys[$name] ?? strtoupper(str_replace('-', '_', $name))] = $value;
         }
 
-        $request = new ServerRequest(
-            $this->method,
-            $this->url,
-            $this->headers->all(),
-            $this->rawBody,
-            str_replace('HTTP/', '', $server['SERVER_PROTOCOL'] ?? 'HTTP/1.1'),
-            $server,
-        );
-
-        $request = $request
+        $factory = Application::$app?->get(ServerRequestFactoryInterface::class) ?? new Psr17Factory();
+        $request = $factory->createServerRequest($this->method, $this->url, $server)
+            ->withProtocolVersion($this->protocolVersion)
+            ->withBody($this->body)
             ->withQueryParams($this->query->all())
-            ->withParsedBody($this->post->all())
+            ->withParsedBody($this->post->all() === (array) $this->parsedBody ? $this->parsedBody : $this->post->all())
             ->withCookieParams($this->cookies)
             ->withUploadedFiles($this->psrUploadedFiles($this->files->all()));
 
-        foreach ($this->routeParams as $name => $value) {
+        foreach ($this->headers->all() as $name => $value) {
+            $request = $request->withHeader($name, $value);
+        }
+        if ($this->requestTarget !== null) {
+            $request = $request->withRequestTarget($this->requestTarget);
+        }
+        foreach ([...$this->attributes, ...$this->routeParams] as $name => $value) {
             $request = $request->withAttribute($name, $value);
         }
 
         return $request;
+    }
+
+    /** PHP upload paths are strings; PSR trees may also contain a field named tmp_name. */
+    private function isPhpUpload(array $file): bool
+    {
+        return is_string(Arr::flatten([$file['tmp_name'] ?? null])[0] ?? null);
     }
 
     /** Convert PHP's column-oriented upload arrays, including nested uploads. */
@@ -1174,7 +1250,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         $uploads = [];
         foreach ($files as $name => $file) {
-            if (is_array($file['tmp_name'])) {
+            if ($file instanceof UploadedFileInterface) {
+                $uploads[$name] = $file;
+            } elseif (!$this->isPhpUpload($file)) {
+                $uploads[$name] = $this->psrUploadedFiles($file);
+            } elseif (is_array($file['tmp_name'])) {
                 $nested = [];
                 foreach ($file['tmp_name'] as $key => $path) {
                     foreach (['tmp_name', 'size', 'error', 'name', 'type'] as $field) {

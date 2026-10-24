@@ -1782,64 +1782,12 @@ if (!function_exists('abort')) {
      */
     function abort(string|int $error, ?string $message = null, ?int $code = null): void
     {
-        if ($code === null && is_int($error)) {
-            // If the error is an integer, use it as the HTTP status code
-            $code = $error;
-        }
-
-        $code ??= 500; // Default to 500 (Internal Server Error)
-
-        // Clear the output buffer
         if (!Application::$app->isTesting() && ob_get_length() > 0) {
             ob_end_clean();
         }
-
-        // If the request is an AJAX request or the path starts with /api/, 
-        // return a JSON response
-        if (
-            (is_web() || Application::$app->isTesting())
-            && Application::$app->resolved(Request::class)
-            && request()->expectsJson()
-        ) {
-            // If the request is an AJAX request, return a JSON response
-            json(['message' => $message ?? _e('Internal Server Error'), 'code' => $code], $code)
-                ->send();
-
-            Application::$app->terminate();
-            exit; // Exit the script
-        }
-
-        /** @var Blade The Blade view instance */
-        $view = get(Blade::class);
-
-        $originalPath = $view->getPath();
-        $errorTemplate = "errors/$error";
-
-        // Set the view path to the errors folder
-        if (!$view->templateExists("errors/$error")) {
-            $view->setPath(__DIR__ . '/resources/views');
-        }
-
-        // Set the error template
-        if (!$view->templateExists($errorTemplate)) {
-            $errorTemplate = 'errors/error';
-        }
-
-        // Render the error view
-        try {
-            $viewHtml = $view->render($errorTemplate, compact('code', 'message'));
-        } catch (\Throwable $e) {
-            $viewHtml = '<div id="error-page"><p id="error-code">' . $code . '</p><span id="error-separator"></span><p>' . _e($message ?? 'Error') . '</p></div>';
-        } finally {
-            $view->setPath($originalPath);
-        }
-
-        // Send the response with the error view
-        response($viewHtml, $code)
-            ->send();
-
+        Response::error($error, $message, $code)->send();
         Application::$app->terminate();
-        exit; // Exit the script
+        exit;
     }
 }
 

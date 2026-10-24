@@ -69,9 +69,17 @@ Route::post('/psr-request', function (Request $request) {
     $psr = $request->toPsrRequest();
     return ['raw' => (string) $psr->getBody(), 'parsed' => $psr->getParsedBody()];
 });
-Route::get('/psr-response', fn() => Response::fromPsrResponse(
-    new Nyholm\Psr7\Response(200, ['Set-Cookie' => ['first=1; Path=/', 'second=2; Path=/']], 'cookies'),
-));
+Route::get('/psr-response', fn() => new Nyholm\Psr7\Response(200, ['Set-Cookie' => ['first=1; Path=/', 'second=2; Path=/']], 'cookies'));
+Route::get('/download/{kind}', function (string $kind) use ($storage) {
+    $content = str_repeat('download-content', 8192);
+    if ($kind === 'file') {
+        file_put_contents($storage . '/download.txt', $content);
+        (new Response())->file($storage . '/download.txt');
+    } else {
+        (new Response())->download($content, 'download.txt');
+    }
+});
+Route::get('/pipe', fn() => new Nyholm\Psr7\Response(200, [], Nyholm\Psr7\Stream::create(popen('printf streamed-pipe', 'r'))));
 Route::get('/html', fn() => '<h1>Hello ✓</h1>');
 Route::get('/text', fn() => new Response('literal <b>text</b>', headers: ['content-type' => 'text/plain; charset=utf-8']));
 Route::get('/json', fn() => ['ok' => true]);
@@ -85,4 +93,11 @@ Route::get('/early', function () {
     exit;
 });
 Route::get('/forbidden', fn() => throw new \Spark\Exceptions\Http\AuthorizationException('private'));
+if ($_SERVER['REQUEST_URI'] === '/psr-entry') {
+    $message = $app->handlePsr(new Nyholm\Psr7\ServerRequest('GET', 'http://localhost/early'));
+    header('Content-Type: application/json');
+    echo json_encode(['status' => $message->getStatusCode(), 'body' => (string) $message->getBody(), 'prepared' => $message->getHeaderLine('X-Prepared')]);
+    $app->terminate();
+    return;
+}
 $app->run();

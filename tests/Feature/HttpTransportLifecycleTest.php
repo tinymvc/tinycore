@@ -157,6 +157,44 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
         }
     }
 
+    public function test_downloads_and_nonseekable_streams_use_normal_response_preparation(): void
+    {
+        foreach (['file', 'content'] as $kind) {
+            foreach (['GET', 'HEAD'] as $method) {
+                $response = $this->exchange($method, '/download/' . $kind);
+                $this->assertSame(200, $response['status']);
+                $this->assertSame(['1'], $response['headers']['x-prepared']);
+                $this->assertSame(["attachment; filename*=UTF-8''download.txt"], $response['headers']['content-disposition']);
+                $this->assertSame(['131072'], $response['headers']['content-length']);
+                $this->assertSame($method === 'HEAD' ? '' : str_repeat('download-content', 8192), $response['body']);
+            }
+        }
+        $response = $this->exchange('GET', '/pipe');
+        $this->assertSame(200, $response['status']);
+        $this->assertSame('streamed-pipe', $response['body']);
+        $this->assertSame(['1'], $response['headers']['x-prepared']);
+    }
+
+    public function test_body_parsing_uses_media_type_and_preserves_raw_bytes(): void
+    {
+        foreach ([
+            ['PUT', 'application/x-www-form-urlencoded', 'name=Ada+Lovelace&zero=0', ['name' => 'Ada Lovelace', 'zero' => '0']],
+            ['PATCH', 'application/problem+json', '{"name":"Ada"}', ['name' => 'Ada']],
+            ['POST', 'text/plain', '{"name":"not parsed"}', []],
+        ] as [$method, $type, $body, $parsed]) {
+            $response = $this->exchange($method, '/input/body', $body, ['Content-Type' => $type]);
+            $this->assertSame(200, $response['status']);
+            $this->assertSame($parsed, json_decode($response['body'], true)['body']);
+        }
+    }
+
+    public function test_psr_entry_point_captures_early_sends_without_emitting_or_exiting(): void
+    {
+        $response = $this->exchange('GET', '/psr-entry');
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['status' => 202, 'body' => 'early', 'prepared' => '1'], json_decode($response['body'], true));
+    }
+
     public function testRealJsonBodiesReachCustomInjectedRequestAcrossWriteMethods(): void
     {
         foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {

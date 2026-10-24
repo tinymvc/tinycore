@@ -15,7 +15,7 @@ interface ResponseContract
      * @param string $content The content to set in the response body.
      * @return self Current response instance for method chaining.
      */
-    public function setContent(string $content): self;
+    public function setContent(array|string|Arrayable|\Stringable|\Psr\Http\Message\StreamInterface $content): self;
 
     /**
      * Appends content to the existing response body.
@@ -180,4 +180,7 @@ interface ResponseContract
      * @return array An associative array of headers (key-value pairs).
      */
     public function getHeaders(): array;
+
+    /** Export the response without buffering stream bodies. */
+    public function toPsrResponse(): \Psr\Http\Message\ResponseInterface;
 }

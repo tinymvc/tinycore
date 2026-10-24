@@ -2,6 +2,10 @@
 
 namespace Spark\Http;
 
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Server\MiddlewareInterface as PsrMiddlewareInterface;
+
 use Spark\Contracts\Http\MiddlewareContract;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Exceptions\Http\MiddlewareNotFoundExceptions;
@@ -12,6 +16,7 @@ use Closure;
 use function func_get_args;
 use function in_array;
 use function is_array;
+use function is_object;
 use function is_string;
 
 /**
@@ -48,11 +53,11 @@ class Middleware implements MiddlewareContract
      * The alias can be used to refer to the middleware in the stack.
      *
      * @param string $alias The alias for the middleware.
-     * @param string|callable $middleware The middleware class or callable.
+     * @param string|callable|PsrMiddlewareInterface $middleware The middleware class or callable.
      *
      * @return self
      */
-    public function register(string $alias, string|callable $middleware): self
+    public function register(string $alias, string|callable|PsrMiddlewareInterface $middleware): self
     {
         $this->middlewares[$alias] = $middleware;
         return $this;
@@ -65,11 +70,11 @@ class Middleware implements MiddlewareContract
      * It simply calls the register method internally.
      *
      * @param string $alias The alias for the middleware.
-     * @param string|callable $middleware The middleware class or callable.
+     * @param string|callable|PsrMiddlewareInterface $middleware The middleware class or callable.
      *
      * @return self
      */
-    public function alias(string $alias, string|callable $middleware): self
+    public function alias(string $alias, string|callable|PsrMiddlewareInterface $middleware): self
     {
         return $this->register($alias, $middleware);
     }
@@ -99,7 +104,7 @@ class Middleware implements MiddlewareContract
      *
      * @return string|callable The middleware class name or callable associated with the alias.
      */
-    public function get(string $alias): string|callable
+    public function get(string $alias): string|callable|PsrMiddlewareInterface
     {
         if (!$this->has($alias)) {
             throw new MiddlewareNotFoundExceptions("Middleware with alias '{$alias}' not found.");
@@ -247,7 +252,7 @@ class Middleware implements MiddlewareContract
         return array_values(array_filter(
             $stack,
             fn($middlewareName) => is_string($middlewareName)
-            && !isset($exceptedMiddleware[$nm($middlewareName)])
+                && !isset($exceptedMiddleware[$nm($middlewareName)])
         ));
     }
 
@@ -321,32 +326,38 @@ class Middleware implements MiddlewareContract
      */
     private function getMiddlewareHandler(string $name): callable
     {
-        // Check if registered
         $middleware = $this->middlewares[$name] ?? $name;
+        if (is_string($middleware) && class_exists($middleware)) {
+            $middleware = Application::$app->make($middleware);
+        }
+        if ($middleware instanceof PsrMiddlewareInterface) {
+            return function (Request $request, Closure $next) use ($middleware): Response {
+                $handler = new PsrRequestHandler(function (ServerRequestInterface $incoming) use ($request, $next): ResponseInterface {
+                    $native = Request::fromPsrRequest($incoming);
+                    $native->routeParams = $request->routeParams;
 
-        // Return callable directly
+                    $app = Application::$app;
+                    $previous = $app->get(Request::class);
+                    $app->instance(Request::class, $native);
+
+                    try {
+                        return Response::from($next($native))->toPsrResponse();
+                    } finally {
+                        $app->instance(Request::class, $previous);
+                    }
+                });
+
+                return Response::fromPsrResponse($middleware->process($request->toPsrRequest(), $handler));
+            };
+        }
         if (is_callable($middleware)) {
             return $middleware;
         }
-
-        // Instantiate class and create callable
-        if (is_string($middleware) && class_exists($middleware)) {
-            $instance = Application::$app->make($middleware);
-
-            if (
-                $instance instanceof MiddlewareInterface ||
-                method_exists($instance, 'handle')
-            ) {
-                return [$instance, 'handle'];
-            }
-
-            // Return invoke method if available
-            if (method_exists($instance, '__invoke')) {
-                return $instance;
-            }
+        if (is_object($middleware) && ($middleware instanceof MiddlewareInterface || method_exists($middleware, 'handle'))) {
+            return [$middleware, 'handle'];
         }
 
-        throw new MiddlewareNotFoundExceptions("Cannot resolve middleware '{$name}'.");
+        throw new MiddlewareNotFoundExceptions("Cannot resolve middleware '$name'.");
     }
 
     /**

@@ -12,6 +12,15 @@ use Spark\Http\Input;
  */
 interface RequestContract
 {
+    /** Retrieves the request body as a PSR-7 StreamInterface. */
+    public function getBody(): \Psr\Http\Message\StreamInterface;
+
+    /** Retrieves the raw request body as a string. */
+    public function getRawBody(): string;
+
+    /** Converts the request to a PSR-7 ServerRequestInterface. */
+    public function toPsrRequest(): \Psr\Http\Message\ServerRequestInterface;
+
     /**
      * Retrieves the HTTP request method.
      *

@@ -242,7 +242,7 @@ Important defer notes:
 
 - Deferred callbacks are not a replacement for durable queues; use Queue jobs for work that must survive process crashes, timeouts, or worker restarts.
 - `Application::terminate()` calls `fastcgi_finish_request()` or `litespeed_finish_request()` when available, otherwise it flushes output buffers.
-- `defer()` registers a shutdown fallback so callbacks can still run when code sends a response and exits early.
+- The application registers one shutdown fallback so termination and deferred callbacks also run after an early exit.
 - Exceptions thrown by deferred callbacks are reported/logged and do not stop later deferred callbacks.
 - In debug mode, `app:terminated` is dispatched during application termination.
 
@@ -337,3 +337,15 @@ public/index.php
 ```
 
 Use `Spark\\` classes, app namespaces, and the helpers in this file. When unsure, inspect nearby app files and follow the existing TinyMVC pattern.
+
+## PSR application entry point
+
+`Application::handle()` accepts a native `Request` or PSR `ServerRequestInterface` and returns a native response without emitting it. `handlePsr()` returns a PSR response instead. `app(Psr\Http\Server\RequestHandlerInterface::class)` adapts the latter to PSR-15.
+
+```php
+$response = app()->handlePsr($serverRequest);
+// The embedding host emits $response using its own emitter.
+app()->terminate(); // After emission; safe to call once more during shutdown.
+```
+
+Incoming PSR requests do not replace PHP globals. The host remains responsible for its transport and session integration. Native `run()` continues to capture, handle, emit, and terminate. Request-dependent `input` and `ServerRequestInterface` bindings resolve the current request lazily.

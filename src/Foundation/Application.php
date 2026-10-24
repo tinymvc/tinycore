@@ -4,6 +4,8 @@ namespace Spark\Foundation;
 
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Clock\ClockInterface;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
 use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\EventDispatcher\ListenerProviderInterface;
@@ -91,6 +93,9 @@ class Application extends \Spark\Container implements ApplicationContract
     /** @var bool Whether the application has been booted. */
     private bool $booted = false;
 
+    /** @var bool Whether the application is currently handling a request. */
+    private bool $handlingRequest = false;
+
     /**
      * Application constructor.
      * 
@@ -142,7 +147,7 @@ class Application extends \Spark\Container implements ApplicationContract
             \Psr\Http\Message\UploadedFileFactoryInterface::class,
             \Psr\Http\Message\UriFactoryInterface::class,
         ] as $factory) {
-            $this->alias($factory, Psr17Factory::class);
+            $this->bind($factory, fn() => $this->get(Psr17Factory::class));
         }
 
         $this->alias(EventDispatcherInterface::class, Events::class);
@@ -181,7 +186,19 @@ class Application extends \Spark\Container implements ApplicationContract
             $this->alias('vite', Vite::class);
         }
 
-        $this->bind('input', $this->get(Request::class)->input(...));
+        $this->bind('input', fn() => $this->get(Request::class)->input());
+        $this->bind(
+            ServerRequestInterface::class,
+            fn() => $this->get(Request::class)->toPsrRequest()
+        );
+        $this->bind(
+            \Psr\Http\Server\RequestHandlerInterface::class,
+            fn() => new \Spark\Http\PsrRequestHandler($this->handlePsr(...))
+        );
+
+        if (!$this->testing) {
+            register_shutdown_function([$this, 'terminate']);
+        }
 
         $this->alias('storage', \Spark\Storage\Storage::class);
         $this->alias('uploader', \Spark\Storage\Uploader::class);
@@ -652,14 +669,17 @@ class Application extends \Spark\Container implements ApplicationContract
      * Dispatch a request through providers, routes, and middleware.
      * Testing captures early responses and lets unexpected exceptions reach the runner.
      */
-    public function handle(Request $request): Response
+    public function handle(Request|ServerRequestInterface $request): Response
     {
+        $request = $request instanceof Request ? $request : Request::fromPsrRequest($request);
+
         // Bind the request instance to the container for dependency injection.
         $this->instance(Request::class, $request);
 
         $this->responseCallbacks = [];
         $this->preparedResponses = new \WeakMap();
         $this->terminated = false;
+        $this->handlingRequest = true;
 
         try {
             return $this->prepareResponse($this->dispatchRequest($request));
@@ -668,7 +688,21 @@ class Application extends \Spark\Container implements ApplicationContract
                 $this->deferredCallbacks = [];
             }
             throw $e;
+        } finally {
+            $this->handlingRequest = false;
         }
+    }
+
+    /** Checks if the application is currently handling a request. */
+    public function isHandlingRequest(): bool
+    {
+        return $this->handlingRequest;
+    }
+
+    /** Handle a PSR request without emitting output; the host calls terminate() afterward. */
+    public function handlePsr(ServerRequestInterface $request): ResponseInterface
+    {
+        return $this->handle($request)->toPsrResponse();
     }
 
     /**
@@ -690,7 +724,7 @@ class Application extends \Spark\Container implements ApplicationContract
             ($this->responseCallbacks[$index])($response);
         }
 
-        return $response;
+        return $response->prepareForRequest($this->get(Request::class));
     }
 
     /** Dispatch the request and render its handled exceptions. */
@@ -720,20 +754,20 @@ class Application extends \Spark\Container implements ApplicationContract
                 }
 
                 return $this->get(Router::class)->dispatch($request);
-            } catch (\Spark\Testing\ResponseException $e) {
+            } catch (\Spark\Exceptions\Http\ResponseException $e) {
                 throw $e;
             } catch (RouteNotFoundException) {
-                abort(404, 'Route not found');
+                return Response::error(404, 'Route not found');
             } catch (ItemNotFoundException) {
-                abort(404, 'Item not found');
+                return Response::error(404, 'Item not found');
             } catch (NotFoundException) {
-                abort(404, 'Not found');
+                return Response::error(404, 'Not found');
             } catch (AuthorizationException) {
-                abort(403, 'Forbidden');
+                return Response::error(403, 'Forbidden');
             } catch (InvalidCsrfTokenException) {
-                abort(419, 'Page Expired');
+                return Response::error(419, 'Page Expired');
             } catch (ThrottleException) {
-                abort(429, 'Too many requests');
+                return Response::error(429, 'Too many requests');
             } catch (ValidationException $e) {
                 return $request->prepareValidationError(
                     message: $e->getMessage(),
@@ -744,13 +778,13 @@ class Application extends \Spark\Container implements ApplicationContract
                 $handler = $this->getExceptionHandler($e);
                 $response = $handler !== null ? $handler($e) : null;
 
-                if ($response instanceof Response) {
-                    return $response;
+                if ($response instanceof Response || $response instanceof ResponseInterface) {
+                    return Response::from($response);
                 }
 
                 throw $e;
             }
-        } catch (\Spark\Testing\ResponseException $e) {
+        } catch (\Spark\Exceptions\Http\ResponseException $e) {
             return $e->response;
         }
     }
@@ -804,10 +838,6 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function defer(callable $callback): self
     {
-        if (!$this->testing && empty($this->deferredCallbacks)) {
-            register_shutdown_function([$this, 'terminate']);
-        }
-
         $this->deferredCallbacks[] = $callback;
 
         return $this;

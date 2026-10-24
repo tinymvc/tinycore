@@ -11,7 +11,7 @@ Write clean, spacious Laravel-style PHP using Spark's native APIs. Laravel is a 
 
 - `tinymvc` is the vendor; `tinymvc/spark` (Spark) is the root framework, using the `Spark\` namespace alias, facades, and `php spark` CLI.
 - `tinymvc/tinycore` (TinyCore) is the runtime engine; `tinymvc/skeleton` (Skeleton) is the application boilerplate.
-- PSR integration uses the native container (PSR-11), logger (PSR-3), object events (PSR-14), clock (PSR-20), a cache adapter (PSR-16), and Nyholm HTTP messages/factories (PSR-7/17). Keep native fluent APIs distinct from immutable PSR messages; see the relevant references below.
+- PSR integration uses the native container (PSR-11), logger (PSR-3), object events (PSR-14), clock (PSR-20), a cache adapter (PSR-16), and Nyholm HTTP messages/factories (PSR-7/17), and a PSR-15 middleware adapter. Keep native fluent APIs distinct from immutable PSR messages; see the relevant references below.
 - This skill ships with TinyCore. Application `.agents/skills/tinymvc-spark/SKILL.md` files are discovery entrypoints; maintain framework guidance here.
 - **Application work:** use the installed `vendor/tinymvc/tinycore/skills/tinymvc-spark` and `vendor/tinymvc/tinycore/src`. Vendor files are reference only. A sibling checkout may contain unreleased APIs.
 - **Explicit core work:** use the target checkout's `skills/tinymvc-spark`, `src/`, and `php tests/run.php`. Do not patch application vendor copies.

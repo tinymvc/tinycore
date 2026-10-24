@@ -26,6 +26,16 @@ interface RouterContract
     public function get(string $path, callable|string|array $callback): Route;
 
     /**
+     * Registers a new HEAD route with the router.
+     *
+     * @param string $path The path for the route.
+     * @param callable|string|array $callback The handler or callback for the route.
+     *
+     * @return Route The router instance to allow method chaining.
+     */
+    public function head(string $path, callable|string|array $callback): Route;
+
+    /**
      * Registers a new POST route with the router.
      * 
      * @param string $path The path for the route.

@@ -17,6 +17,15 @@ Route::put('/posts/{post}', [PostController::class, 'update'])->name('posts.upda
 Route::delete('/posts/{post}', [PostController::class, 'destroy'])->name('posts.destroy');
 ```
 
+### HTTP dispatch behavior
+
+- Missing paths produce 404 (or the configured fallback); an existing path with an unsupported method produces 405 with `Allow`.
+- `Route::head()` registers an explicit HEAD route. HEAD otherwise uses GET, retaining its headers without sending a body.
+- Explicit OPTIONS routes take precedence over the preflight fallback to the requested method; CORS middleware still validates preflight policy.
+- Global middleware runs for normal routes, fallbacks, 404s, and 405s, once per request. Route exclusions retain their existing behavior.
+- Route parameters are decoded once after matching encoded path segments. Pass unencoded values to named-route generation: each value is encoded as one segment. Missing required values throw `InvalidNamedRouteException`; unresolved optional segments are removed.
+- Controllers and fallbacks can return native responses or PSR `ResponseInterface` objects directly.
+
 ### Route Model Binding
 
 TinyMVC features native route model binding. When a route parameter matches the name of a type-hinted `Model` in the controller action or closure, Spark automatically retrieves the model via `firstOrFail()`, returning a 404 response if not found.

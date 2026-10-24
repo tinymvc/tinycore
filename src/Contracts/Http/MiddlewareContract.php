@@ -18,19 +18,19 @@ interface MiddlewareContract
      * If $concrete is not given, the $abstract will be used as the class name.
      * 
      * @param string $alias The alias for the middleware.
-     * @param string|callable $middleware The middleware class or callable.
+     * @param string|callable|\Psr\Http\Server\MiddlewareInterface $middleware The middleware class or callable.
      * @return self
      */
-    public function register(string $alias, string|callable $middleware): self;
+    public function register(string $alias, string|callable|\Psr\Http\Server\MiddlewareInterface $middleware): self;
 
     /**
      * Register an alias for a middleware (alias for register).
      *
      * @param string $alias
-     * @param string|callable $middleware
+     * @param string|callable|\Psr\Http\Server\MiddlewareInterface $middleware
      * @return self
      */
-    public function alias(string $alias, string|callable $middleware): self;
+    public function alias(string $alias, string|callable|\Psr\Http\Server\MiddlewareInterface $middleware): self;
 
     /**
      * Register multiple middlewares at once.
@@ -54,7 +54,7 @@ interface MiddlewareContract
      * @param string $alias
      * @return string|callable
      */
-    public function get(string $alias): string|callable;
+    public function get(string $alias): string|callable|\Psr\Http\Server\MiddlewareInterface;
 
     /**
      * Adds middleware keys to the execution stack.

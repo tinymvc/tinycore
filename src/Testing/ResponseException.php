@@ -2,13 +2,7 @@
 
 namespace Spark\Testing;
 
-use Spark\Http\Response;
-
 /** @internal Stops an early response without exiting the test process. */
-final class ResponseException extends \RuntimeException
+final class ResponseException extends \Spark\Exceptions\Http\ResponseException
 {
-    public function __construct(public readonly Response $response)
-    {
-        parent::__construct('The request sent an early response.');
-    }
 }

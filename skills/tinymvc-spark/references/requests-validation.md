@@ -314,6 +314,12 @@ if ($request->hasFile('avatar')) {
 }
 ```
 
-## PSR-7 request export
+## PSR-7 requests and raw bodies
 
-`$request->toPsrRequest()` exports a Nyholm `ServerRequestInterface` snapshot, including the raw body, current headers/query/body fields, captured cookies/server values, nested uploads, and route parameters as attributes. PSR `with*()` calls return new messages; they do not update the native request. The URI and parsed query parameters remain separate, as in PSR-7. Request import and automatic PSR-15 middleware execution are not provided.
+`$request->toPsrRequest()` exports a PSR-7 snapshot using the bound server-request factory. It preserves the body stream, headers/query/body fields, cookies/server values, protocol, request target, and nested uploads. Matched route parameters are exported as attributes. PSR `with*()` methods return new messages; they do not mutate the native request. Streams themselves are shared and mutable.
+
+`Request::fromPsrRequest($message)` hydrates a base native request without reading globals or invoking a subclass constructor. Nullable/object parsed bodies survive export while unchanged; native input edits export an array. General PSR attributes live in `$request->attributes`, separately from route parameters. `file()`, `hasFile()`, and `moveFile()` support imported PSR uploads. FormRequest validation still runs when the container resolves the FormRequest from the current native request.
+
+`getBody()` returns the stream. `getRawBody()` explicitly reads bytes, preserving the cursor on seekable streams; a non-seekable stream is consumed. Native capture parses JSON and `+json` media types and URL-encoded write requests according to `Content-Type`. Invalid/scalar JSON still produces an empty input array. Multipart parsing remains PHP's responsibility.
+
+Request paths remain percent-encoded until routing captures and decodes individual parameters. Literal `+` stays `+`, and encoded slashes do not create extra route segments. `getUri()` returns the captured request target (including its query string), independently of server parameters; `getPath()` returns only the URI path. URI query text and parsed query parameters remain separate. Forwarded HTTPS information is honored only when the immediate peer matches `app.trusted_proxies`; IPv6 hosts and non-default ports are supported.

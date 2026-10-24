@@ -223,21 +223,29 @@ return back()->withErrors(['email' => 'Invalid credentials.'])->withInput();
 return response()->noContent();
 
 // Download a generated file
-return response()->download($fileContents, 'report.pdf', [
+response()->download($fileContents, 'report.pdf', [
     'Content-Type' => 'application/pdf',
 ]);
 ```
 
 ## PSR-7 responses and PSR-17 factories
 
-`$response->toPsrResponse()` exports a prepared immutable PSR-7 message. `Spark\Http\Response::fromPsrResponse($message)` imports a PSR response into the native response lifecycle. Headers with multiple values, including `Set-Cookie`, remain separate; native `setHeader()` accepts a string or an array of strings. Imported responses follow the native content-type and bodyless-status preparation rules.
+Controllers, middleware, fallbacks, and custom exception handlers may return `Psr\Http\Message\ResponseInterface` directly. `Response::from($value)` is the common result normalizer; strings, arrays, resources, and integer status codes retain their native behavior.
 
-The six `Psr\Http\Message\*FactoryInterface` bindings resolve to one `Nyholm\Psr7\Factory\Psr17Factory`. For example:
+`$response->toPsrResponse()` exports a prepared PSR-7 message. `Response::fromPsrResponse($message)` imports it without reading its body. Stream bodies remain the same `StreamInterface`; imported messages without a content type do not gain an HTML default. Repeated headers, including `Set-Cookie`, remain separate. Nyholm owns header/status validation and case-insensitive header operations; native setters remain mutable.
+
+The six `Psr\Http\Message\*FactoryInterface` bindings default to the shared `Nyholm\Psr7\Factory\Psr17Factory`. Each can be replaced independently with `app()->bind(...)`.
 
 ```php
 $factory = app(Psr\Http\Message\ResponseFactoryInterface::class);
-$message = $factory->createResponse(201);
-return Spark\Http\Response::fromPsrResponse($message);
+$streams = app(Psr\Http\Message\StreamFactoryInterface::class);
+return $factory->createResponse(200)
+    ->withHeader('Content-Type', 'application/pdf')
+    ->withBody($streams->createStreamFromFile(storage_dir('report.pdf')));
 ```
+
+Emission reads streams in chunks. `getContent()` explicitly reads a string: it preserves the cursor for seekable streams and consumes the remaining bytes of non-seekable streams. HEAD responses retain representation headers but emit no body; bodyless status codes are handled in the same response path.
+
+`file()` and `download()` retain their early-response behavior and now use normal preparation, emission, and termination. During application handling, `send()` returns control to the application using an internal response exception, so it does not emit twice or exit a PSR host. Prefer returning a response from new controller and middleware code.
 
 Use `Nyholm\Psr7\Uri` for standard URI semantics; `Spark\Url` retains its application URL API. The native outbound HTTP client does not implement PSR-18.

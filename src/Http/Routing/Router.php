@@ -9,13 +9,11 @@ use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Http\Routing\Contracts\RouterContract;
 use Spark\Http\Routing\Exceptions\InvalidNamedRouteException;
-use Spark\Http\Routing\Exceptions\RouteNotFoundException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
 use function in_array;
 use function is_array;
-use function is_int;
 use function sprintf;
 
 /**
@@ -152,6 +150,19 @@ class Router implements RouterContract
     }
 
     /**
+     * Add a HEAD route to the router.
+     *
+     * @param string $path The path for the HEAD route.
+     * @param callable|string|array $callback The handler or callback for the HEAD route.
+     *
+     * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
+     */
+    public function head(string $path, callable|string|array $callback): Route
+    {
+        return new Route($path, 'HEAD', $callback);
+    }
+
+    /**
      * Add a route that matches any HTTP method to the router.
      *
      * @param string $path The path for the route.
@@ -179,7 +190,7 @@ class Router implements RouterContract
 
         // Validate HTTP methods
         if (is_debug_mode()) {
-            $validMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+            $validMethods = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE', 'CONNECT'];
             $invalidMethods = array_filter($methods, fn($method) => !in_array($method, $validMethods));
 
             if (!empty($invalidMethods)) {
@@ -536,30 +547,21 @@ class Router implements RouterContract
             throw new InvalidNamedRouteException(sprintf('Route (%s) does not exist.', $name));
         }
 
-        // Replace dynamic parameters in route path with context, if provided
-        if ($context !== null) {
-            // Convert Arrayable context to array
-            if ($context instanceof Arrayable) {
-                $context = $context->toArray();
+        $context = $context instanceof Arrayable ? $context->toArray() : $context;
+        $route = preg_replace_callback('/(\/?)\{([a-zA-Z0-9_]+)(?::[a-zA-Z0-9_]+)?(\?)?\}/', function ($match) use (&$context, $name) {
+            $optional = ($match[3] ?? '') === '?';
+            $value = is_array($context) ? ($context[$match[2]] ?? null) : ($optional ? null : $context);
+            if (!is_array($context) && !$optional) {
+                $context = null;
             }
-
-            // Function to escape replacement values
-            $escape = fn($val): string => preg_replace('/[\$\\\\]/', '\\\\$0', (string) $val);
-
-            if (is_array($context)) {
-                foreach ($context as $key => $value) {
-                    // Escape the replacement value to prevent regex injection
-                    $pattern = sprintf('/\{%s(?::[a-zA-Z0-9_]+)?\??\}/', preg_quote((string) $key, '/'));
-                    $route = preg_replace($pattern, $escape($value), $route, 1);
+            if ($value === null) {
+                if ($optional) {
+                    return '';
                 }
-            } else {
-                // Replace the first non-optional dynamic parameter
-                $route = preg_replace('/\{[a-zA-Z0-9_]+(?::[a-zA-Z0-9_]+)?\}/', $escape($context), $route, 1);
+                throw new InvalidNamedRouteException(sprintf('Missing parameter (%s) for route (%s).', $match[2], $name));
             }
-        }
-
-        // Remove unresolved optional parameters
-        $route = preg_replace('/\/\{[a-zA-Z0-9_]+(?::[a-zA-Z0-9_]+)?\?\}/', '', $route);
+            return $match[1] . rawurlencode((string) $value);
+        }, $route);
 
         // Remove trailing wildcard
         $route = rtrim($route, '*/');
@@ -596,114 +598,83 @@ class Router implements RouterContract
      */
     public function dispatch(Request $request): Response
     {
-        // Iterate through all routes to find a match
+        $matches = [];
+        $allowed = [];
         foreach ($this->routes as $route) {
-            if ($this->matchRoute($route['method'], $route['path'], $request)) {
-                is_debug_mode() && event('app:routeMatched', $route);
+            $pattern = $this->escapeRoutePath($route['path']);
+            if (!preg_match("#^$pattern/?$#", $request->getPath(), $captures)) {
+                continue;
+            }
+            array_shift($captures);
+            $matches[] = [$route, $this->getRouteParameters($route['path'], $captures)];
+            $allowed = [...$allowed, ...array_map('strtoupper', (array) $route['method'])];
+        }
+        if (in_array('GET', $allowed, true)) {
+            $allowed[] = 'HEAD';
+        }
+        $allowed = array_values(array_unique($allowed));
 
-                /** @var Middleware $middleware */
-                $middleware = Application::$app->make(Middleware::class);
+        $methods = [strtoupper($request->getMethod())];
+        if ($this->isCorsPreflight($request)) {
+            $methods[] = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
+        }
+        if (in_array('HEAD', $methods, true)) {
+            $methods[] = 'GET';
+        }
 
-                // Handle view rendering or instantiate a class for callback if specified
-                if (isset($route['template'])) {
-                    $route['callback'] = fn() => view($route['template']);
+        $matched = null;
+        foreach (array_unique($methods) as $method) {
+            foreach ($matches as [$route, $parameters]) {
+                if ($this->routeAllowsMethod($route['method'], $method)) {
+                    $matched = $route;
+                    $request->mergeRouteParams($parameters);
+                    break 2;
                 }
-
-                $routeHandlesOptions = $this->routeAllowsMethod($route['method'], 'OPTIONS');
-
-                // Execute the matched route through the middleware pipeline.
-                $response = $middleware->process(
-                    request: $request,
-                    queue: (array) ($route['middleware'] ?? []),
-                    except: (array) ($route['withoutMiddleware'] ?? []),
-                    destination: function (Request $request) use ($route, $routeHandlesOptions): Response {
-                        if ($this->isCorsPreflight($request) && !$routeHandlesOptions) {
-                            return new Response('', 204);
-                        }
-
-                        $bindingFields = [];
-                        preg_match_all('/\{([a-zA-Z0-9_]+):([a-zA-Z0-9_]+)\??\}/', $route['path'], $bindings, PREG_SET_ORDER);
-                        foreach ($bindings as $binding) {
-                            $bindingFields[$binding[1]] = $binding[2];
-                        }
-
-                        $response = Application::$app->call($route['callback'], $request->getRouteParams(), $bindingFields);
-
-                        is_debug_mode() && event('app:routeDispatched');
-
-                        return $this->parseHttpResponse($response);
-                    }
-                );
-
-                is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
-
-                // Return the response from the route's callback
-                return $this->parseHttpResponse($response);
             }
         }
-
-        // If no route matched and a fallback is defined, use it
-        if ($this->fallback !== null) {
-            is_debug_mode() && event('app:routeFallback');
-
-            $response = Application::$app->call($this->fallback, $request->getRouteParams());
-
-            is_debug_mode() && event('app:routeDispatched');
-
-            // Return the response from the fallback route's callback
-            return $this->parseHttpResponse($response);
+        if ($matched !== null) {
+            is_debug_mode() && event('app:routeMatched', $matched);
         }
 
-        // Throw an exception for no matching route
-        throw new RouteNotFoundException('No matching route found.');
-    }
+        $middleware = Application::$app->get(Middleware::class);
+        $response = $middleware->process(
+            request: $request,
+            queue: (array) ($matched['middleware'] ?? []),
+            except: (array) ($matched['withoutMiddleware'] ?? []),
+            destination: function (Request $request) use ($matched, $allowed): Response {
+                if ($matched === null) {
+                    if ($allowed !== []) {
+                        return Response::error(405, 'Method not allowed')->setHeader('Allow', implode(', ', $allowed));
+                    }
+                    if ($this->fallback !== null) {
+                        is_debug_mode() && event('app:routeFallback');
+                        $response = Application::$app->call($this->fallback, $request->getRouteParams());
+                        is_debug_mode() && event('app:routeDispatched');
+                        return Response::from($response);
+                    }
+                    return Response::error(404, 'Route not found');
+                }
 
-    /**
-     * Attempts to match the request path with the given route path and method.
-     *
-     * @param string|array $routeMethod The HTTP method(s) allowed for this route.
-     * @param string $routePath The route path to match against the request path.
-     * @param Request $request The request object.
-     *
-     * @return bool True if the route matches the request path and method, false otherwise.
-     */
-    private function matchRoute(array|string $routeMethod, string $routePath, Request $request): bool
-    {
-        $requestMethod = strtoupper($request->getMethod());
+                if ($this->isCorsPreflight($request) && !$this->routeAllowsMethod($matched['method'], 'OPTIONS')) {
+                    return new Response('', 204);
+                }
 
-        // CORS preflight should match the route for the requested method so
-        // route-level CORS middleware can return the preflight response.
-        if ($this->isCorsPreflight($request) && !$this->routeAllowsMethod($routeMethod, 'OPTIONS')) {
-            $requestMethod = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
-        }
+                $bindingFields = [];
+                preg_match_all('/\{([a-zA-Z0-9_]+):([a-zA-Z0-9_]+)\??\}/', $matched['path'], $bindings, PREG_SET_ORDER);
+                foreach ($bindings as $binding) {
+                    $bindingFields[$binding[1]] = $binding[2];
+                }
 
-        // HEAD uses GET routes, including when requested by a CORS preflight.
-        if ($requestMethod === 'HEAD') {
-            $requestMethod = 'GET';
-        }
+                $callback = isset($matched['template']) ? fn() => view($matched['template']) : $matched['callback'];
+                $response = Application::$app->call($callback, $request->getRouteParams(), $bindingFields);
 
-        // Check if the request method is allowed for this route.
-        if (!$this->routeAllowsMethod($routeMethod, $requestMethod)) {
-            return false;
-        }
+                is_debug_mode() && event('app:routeDispatched');
+                return Response::from($response);
+            },
+        );
 
-        // Escape special characters in the route path
-        $pattern = $this->escapeRoutePath($routePath);
-
-        // Attempt to match the request path with the route pattern
-        if (preg_match("#^$pattern/?$#", $request->getPath(), $matches)) {
-            array_shift($matches);
-
-            // Map matched segments to parameter names
-            $matches = $this->getRouteParameters($routePath, $matches);
-
-            // Set router parameters into request class and return as route matched.
-            $request->mergeRouteParams($matches);
-            return true;
-        }
-
-        // returns as route not matched.
-        return false;
+        is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
+        return Response::from($response);
     }
 
     /**
@@ -781,6 +752,8 @@ class Router implements RouterContract
                 $compiled .= ($m[2] ?? '') === '?' ? '(?:\/([^\/]+))?' : '\/([^\/]+)';
             } else {
                 // Static segment; a "*" inside it matches within one segment ("/files/*.pdf")
+                $factory = Application::$app?->get(\Psr\Http\Message\UriFactoryInterface::class) ?? new \Nyholm\Psr7\Factory\Psr17Factory();
+                $segment = $factory->createUri()->withPath($segment)->getPath();
                 $compiled .= '\/' . str_replace('\*', '[^\/]*', preg_quote($segment, '#'));
             }
 
@@ -810,7 +783,7 @@ class Router implements RouterContract
 
             foreach ($names[1] as $index => $name) {
                 $name = explode(':', str_replace('?', '', $name), 2)[0];
-                $parameters[$name] = isset($matches[$index]) && $matches[$index] !== '' ? $matches[$index] : null;
+                $parameters[$name] = isset($matches[$index]) && $matches[$index] !== '' ? rawurldecode($matches[$index]) : null;
             }
 
             return $parameters;
@@ -820,30 +793,4 @@ class Router implements RouterContract
         return [];
     }
 
-    /**
-     * Parses the HTTP response and returns a Response object.
-     *
-     * This method checks the type of the response and converts it to a Response object.
-     * It handles strings, arrays, and Arrayable objects, converting them to JSON responses
-     * when necessary. If the response is already a Response object, it returns it directly.
-     *
-     * @param mixed $response The response to parse.
-     *
-     * @return Response The parsed response object.
-     */
-    private function parseHttpResponse(mixed $response): Response
-    {
-        // If the response is already a Response object, return it
-        if ($response instanceof Response) {
-            return $response;
-        }
-
-        // If the response is an integer, return a Response with that status code
-        // This is useful for returning HTTP status codes directly
-        if (is_int($response)) {
-            return new Response(statusCode: $response);
-        }
-
-        return new Response($response); // Otherwise, convert the response to a string
-    }
 }
