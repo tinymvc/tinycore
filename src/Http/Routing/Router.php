@@ -37,12 +37,12 @@ class Router implements RouterContract
     private array $groupStack = [];
 
     /**
-     * @var null|array $config
+     * @var null|array $groupConfig
      * 
      * Temporary storage for route or group configuration attributes.
      * This is used to apply attributes to routes or groups before they are finalized.
      */
-    private null|array $config = null;
+    private null|array $groupConfig = null;
 
     /**
      * @var array|callable|null $fallback
@@ -245,7 +245,7 @@ class Router implements RouterContract
      */
     public function middleware(string|array $middleware): self
     {
-        $this->config['middleware'] = $middleware;
+        $this->groupConfig['middleware'] = $middleware;
         return $this;
     }
 
@@ -261,7 +261,7 @@ class Router implements RouterContract
      */
     public function withoutMiddleware(string|array $middleware): self
     {
-        $this->config['withoutMiddleware'] = $middleware;
+        $this->groupConfig['withoutMiddleware'] = $middleware;
         return $this;
     }
 
@@ -277,7 +277,7 @@ class Router implements RouterContract
      */
     public function name(string $name): self
     {
-        $this->config['name'] = $name;
+        $this->groupConfig['name'] = $name;
         return $this;
     }
 
@@ -290,7 +290,7 @@ class Router implements RouterContract
      */
     public function as(string $name): self
     {
-        $this->config['name'] = $name;
+        $this->groupConfig['name'] = $name;
         return $this;
     }
 
@@ -306,7 +306,7 @@ class Router implements RouterContract
      */
     public function prefix(string $name): self
     {
-        $this->config['prefix'] = $name;
+        $this->groupConfig['prefix'] = $name;
         return $this;
     }
 
@@ -322,7 +322,7 @@ class Router implements RouterContract
      */
     public function path(string $name): self
     {
-        $this->config['path'] = $name;
+        $this->groupConfig['path'] = $name;
         return $this;
     }
 
@@ -338,7 +338,7 @@ class Router implements RouterContract
      */
     public function method(string $name): self
     {
-        $this->config['method'] = $name;
+        $this->groupConfig['method'] = $name;
         return $this;
     }
 
@@ -354,7 +354,7 @@ class Router implements RouterContract
      */
     public function callback(callable|string|array $callback): self
     {
-        $this->config['callback'] = $callback;
+        $this->groupConfig['callback'] = $callback;
         return $this;
     }
 
@@ -397,7 +397,15 @@ class Router implements RouterContract
         array $only = [],
         array $except = [],
     ): RouteResource {
-        return new RouteResource($path, $controller, $name, $middleware, $withoutMiddleware, $only, $except);
+        $resource = new RouteResource($path, $controller, $name, $middleware, $withoutMiddleware, $only, $except);
+
+        if (isset($this->groupConfig)) {
+            $attributes = $this->groupConfig;
+            $this->groupConfig = null; // Reset config after applying to resource
+            $resource->withAttributes($attributes);
+        }
+
+        return $resource;
     }
 
     /**
@@ -421,9 +429,9 @@ class Router implements RouterContract
             $callback = $attrsOrCallback;
         }
 
-        if (isset($this->config)) {
-            $attributes = [...$this->config, ...$attributes];
-            $this->config = null; // Reset config after applying to group
+        if (isset($this->groupConfig)) {
+            $attributes = [...$this->groupConfig, ...$attributes];
+            $this->groupConfig = null; // Reset config after applying to group
         }
 
         $this->groupStack[] = []; // Initialize a new group context
@@ -454,9 +462,9 @@ class Router implements RouterContract
         string|array $middleware = [],
         string|array $withoutMiddleware = []
     ): self {
-        if (isset($this->config)) {
-            $attributes = $this->config;
-            $this->config = null; // Reset config after applying to route
+        if (isset($this->groupConfig)) {
+            $attributes = $this->groupConfig;
+            $this->groupConfig = null; // Reset config after applying to route
             $this->group(
                 attrsOrCallback: $attributes,
                 callback: fn() => $this->add(
@@ -547,7 +555,10 @@ class Router implements RouterContract
             throw new InvalidNamedRouteException(sprintf('Route (%s) does not exist.', $name));
         }
 
-        $context = $context instanceof Arrayable ? $context->toArray() : $context;
+        if ($context instanceof Arrayable) {
+            $context = $context->toArray();
+        }
+
         $route = preg_replace_callback('/(\/?)\{([a-zA-Z0-9_]+)(?::[a-zA-Z0-9_]+)?(\?)?\}/', function ($match) use (&$context, $name) {
             $optional = ($match[3] ?? '') === '?';
             $value = is_array($context) ? ($context[$match[2]] ?? null) : ($optional ? null : $context);
@@ -792,5 +803,4 @@ class Router implements RouterContract
         // Return the matched parameters
         return [];
     }
-
 }

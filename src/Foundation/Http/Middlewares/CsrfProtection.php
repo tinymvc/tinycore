@@ -44,7 +44,7 @@ abstract class CsrfProtection implements MiddlewareInterface
         }
 
         // Ensure token exists on safe requests where it can be refreshed.
-        $this->checkCsrfToken();
+        $this->checkCsrfToken($request);
 
         // Validate CSRF token on unsafe requests.
         if ($request->isPostBack()) {
@@ -159,11 +159,11 @@ abstract class CsrfProtection implements MiddlewareInterface
      * is configured with session-scope options, HTTPS-only transmission when
      * detected, a session-based lifetime, and Lax same-site policy.
      * 
-     * @return void
+     * @param Request $request The current request.
      */
-    protected function checkCsrfToken(): void
+    protected function checkCsrfToken(Request $request): void
     {
-        if (empty(session('csrf_token'))) {
+        if ($request->session()->has('csrf_token')) {
             $token = Hash::random(32);
             $encrypted = Hash::encrypt($token);
 
@@ -171,11 +171,11 @@ abstract class CsrfProtection implements MiddlewareInterface
             cookie(
                 'XSRF-TOKEN',
                 $encrypted,
-                ['path' => '/', 'secure' => str_starts_with(request()->getRootUrl(), 'https://'), 'httponly' => false, 'samesite' => 'Lax', 'expires' => 0]
+                ['path' => '/', 'secure' => str_starts_with($request->getRootUrl(), 'https://'), 'httponly' => false, 'samesite' => 'Lax', 'expires' => 0]
             );
 
             // Store the token in the session
-            session(['csrf_token' => $token]);
+            $request->session()->put('csrf_token', $token);
         }
     }
 }

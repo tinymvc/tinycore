@@ -22,8 +22,15 @@ class RouteResource implements RouteResourceContract
     use Macroable, Conditionable;
 
     /**
-     * RouteResource constructor.
+     * @var array|null $groupAttributes
      *
+     * Stores attributes for the route group, such as middleware or prefix.
+     */
+    private ?array $groupAttributes = null;
+
+    /**
+     * Create a new RouteResource instance.
+     * 
      * @param string $path The base path for the resource routes.
      * @param string $controller The controller class handling the resource routes.
      * @param string|null $name Optional name prefix for the routes.
@@ -41,6 +48,17 @@ class RouteResource implements RouteResourceContract
         private array $only = [],
         private array $except = [],
     ) {
+    }
+
+    /**
+     * Set group attributes for the resource routes.
+     *
+     * @param array $attributes The group attributes (e.g., middleware, prefix).
+     */
+    public function withAttributes(array $attributes): self
+    {
+        $this->groupAttributes = $attributes;
+        return $this;
     }
 
     /**
@@ -169,13 +187,21 @@ class RouteResource implements RouteResourceContract
         $router = Application::$app->get(Router::class);
 
         // Register each route with the router
-        foreach ($routes as $route) {
+        foreach ($routes as &$route) {
             // Add middleware and withoutMiddleware to each route
             $route['middleware'] = $this->middleware;
             $route['withoutMiddleware'] = $this->withoutMiddleware;
 
             // Register the route in the router
-            $router->add(...$route);
+            empty($this->groupAttributes) && $router->add(...$route);
+        }
+
+        // If group attributes are set, register the routes within a group
+        if (!empty($this->groupAttributes)) {
+            $router->group(
+                attrsOrCallback: $this->groupAttributes,
+                callback: fn() => array_map(fn($route) => $router->add(...$route), $routes)
+            );
         }
     }
 }
