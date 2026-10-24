@@ -125,6 +125,7 @@ Load one primary topic first. The feature map is a discovery aid, not a requirem
 | Concurrent tasks and subprocesses | [Concurrency](references/concurrency.md) |
 | Uploads, storage, files, images | [Files and storage](references/files-storage.md) |
 | Mail and outbound HTTP | [Mail and HTTP](references/mail-http.md) |
+| Relay broadcasting, Pusher clients, channel authorization | [Realtime and Relay](references/realtime-relay.md) |
 | Helpers, strings, collections, numbers, hashing, URLs | [Helpers](references/helpers.md) |
 | Dates, timezones, translations | [Localization and dates](references/localization-dates.md) |
 | Providers, dependency injection, events, pipelines | [Container and pipelines](references/container-pipelines.md) |

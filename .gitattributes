@@ -1,0 +1,2 @@
+# Keep framework regression fixtures in source checkouts, outside release archives.
+/tests export-ignore

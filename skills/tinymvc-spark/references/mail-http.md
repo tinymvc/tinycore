@@ -6,6 +6,8 @@ Read this reference for outbound HTTP requests and email sending. Source paths a
 
 ## HTTP Client: Modern Fluent Requests
 
+For Pusher publishing, channel authorization and the optional Relay daemon, see [Realtime and Relay](realtime-relay.md). SDK prepared requests are not background jobs or ReactPHP promises.
+
 TinyCore includes a modern HTTP client accessible through the **`Spark\Facades\Http`** facade (backed by `Spark\Http\Client\Http`). It mirrors modern Laravel ergonomics.
 
 ### 1. Basic Requests
