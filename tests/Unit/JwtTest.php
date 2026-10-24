@@ -30,9 +30,12 @@ final class JwtTest extends TestCase
             $this->markTestSkipped('RSA tests require OpenSSL.');
         }
 
-        $key = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
+        $cnf = dirname(PHP_BINARY) . '/extras/ssl/openssl.cnf';
+        $config = file_exists($cnf) ? ['config' => $cnf] : [];
+
+        $key = openssl_pkey_new([...$config, 'private_key_type' => OPENSSL_KEYTYPE_RSA, 'private_key_bits' => 2048]);
         $this->assertTrue($key !== false);
-        $this->assertTrue(openssl_pkey_export($key, $private));
+        $this->assertTrue(openssl_pkey_export($key, $private, null, $config));
         $public = openssl_pkey_get_details($key)['key'];
 
         foreach (['RS256', 'RS384', 'RS512'] as $algorithm) {

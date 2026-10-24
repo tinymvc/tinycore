@@ -2,6 +2,7 @@
 
 namespace Spark\Storage\Contracts;
 
+use Psr\Http\Message\UploadedFileInterface;
 use Spark\Contracts\Support\Arrayable;
 
 /**
@@ -15,10 +16,10 @@ interface UploaderContract
     /**
      * Uploads a file or multiple files.
      * 
-     * @param string|array|Arrayable $files Array containing file details (e.g., $_FILES['file']).
+     * @param string|array|Arrayable|UploadedFileInterface $files Array containing file details (e.g., $_FILES['file']).
      * @return string|array Returns the file path(s) of the uploaded file(s).
      */
-    public function upload(string|array|Arrayable $files): string|array;
+    public function upload(string|array|Arrayable|UploadedFileInterface $files): string|array;
 
     /**
      * Deletes a file or multiple files.

@@ -2,17 +2,20 @@
 
 namespace Spark\Storage;
 
+use Psr\Http\Message\UploadedFileInterface;
 use Spark\Storage\Contracts\UploaderContract;
 use Spark\Utils\File;
 use Spark\Utils\Image;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Storage\Contracts\UploaderDriverInterface;
 use Spark\Exceptions\Utils\UploaderException;
+use Spark\Support\Arr;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
 use function in_array;
 use function is_array;
+use function is_int;
 use function is_string;
 use function strlen;
 
@@ -185,10 +188,10 @@ class Uploader implements UploaderContract
     /**
      * Uploads a file or multiple files.
      *
-     * @param string|array|Arrayable $files The file(s) to upload.
+     * @param string|array|Arrayable|UploadedFileInterface $files The file(s) to upload.
      * @return string|array Returns the file path(s) of the uploaded file(s).
      */
-    public function upload(string|array|Arrayable $files): string|array
+    public function upload(string|array|Arrayable|UploadedFileInterface $files): string|array
     {
         if (is_string($files)) {
             $files = app(\Spark\Http\Request::class)->file($files);
@@ -196,129 +199,118 @@ class Uploader implements UploaderContract
             if ($files === null) {
                 throw new UploaderException(__('No files were provided.'));
             }
-        } elseif ($files instanceof Arrayable) {
+        } elseif ($files instanceof Arrayable && !$files instanceof UploadedFileInterface) {
             $files = $files->toArray();
         }
 
-        $files = $this->normalizeFilesArray($files);
+        $single = $files instanceof UploadedFileInterface || is_string($files['name'] ?? null);
+        $multiple = $this->multiple ?? !$single;
 
-        if (!isset($files['name']) || $files['name'] === '' || $files['name'] === []) {
-            throw new UploaderException(__('No files were provided.'));
-        }
-
-        // Local variable: auto-detection must not leak into the next upload() call.
-        $multiple = $this->multiple ?? is_array($files['name']);
-
-        if ($multiple !== is_array($files['name'])) {
+        if ($multiple === $single) {
             throw new UploaderException(__('Invalid upload payload.'));
         }
 
-        if (!$multiple) {
-            if (!is_string($files['name']) || !is_string($files['tmp_name'])) {
-                throw new UploaderException(__('Invalid upload payload.'));
-            }
-
-            $paths = (array) $this->processUpload($files);
-
-            return count($paths) === 1 ? reset($paths) : $paths;
-        }
-
-        if (
-            !is_array($files['tmp_name'] ?? null)
-            || array_keys($files['name']) !== array_keys($files['tmp_name'])
-        ) {
-            throw new UploaderException(__('Invalid multiple upload payload.'));
-        }
-
-        foreach (['error', 'size', 'type'] as $field) {
-            if (isset($files[$field]) && !is_array($files[$field])) {
-                throw new UploaderException(__('Invalid multiple upload payload.'));
-            }
-        }
-
-        // Validate every shape before storing any files; runtime failures can still be partial.
-        foreach ($files['name'] as $key => $name) {
-            if (!is_string($name) || !is_string($files['tmp_name'][$key])) {
-                throw new UploaderException(__('Invalid multiple upload payload.'));
-            }
-        }
-
+        // Normalize and validate the entire batch before consuming any uploads.
+        $files = $this->normalizeFilesArray($files);
         $uploaded = [];
 
         try {
-            foreach ($files['name'] as $key => $name) {
-                $error = (int) ($files['error'][$key] ?? UPLOAD_ERR_OK);
-
-                if ($error === UPLOAD_ERR_NO_FILE) {
-                    continue; // empty slot in a multi-file input
+            foreach ($files as $file) {
+                if ($multiple && $file['error'] === UPLOAD_ERR_NO_FILE) {
+                    continue;
                 }
 
-                $result = $this->processUpload([
-                    'name' => $name,
-                    'type' => $files['type'][$key] ?? '',
-                    'tmp_name' => $files['tmp_name'][$key],
-                    'error' => $error,
-                    'size' => $files['size'][$key] ?? 0,
-                ]);
+                if ($file['name'] === '') {
+                    throw new UploaderException(__('No files were provided.'));
+                }
 
-                foreach ((array) $result as $path) {
+                foreach ((array) $this->processUpload($file) as $path) {
                     $uploaded[] = $path;
                 }
             }
-        } catch (\Throwable $e) {
-            if (!empty($uploaded)) {
-                $this->delete($uploaded); // Rollback any successfully uploaded files
+        } catch (\Throwable $exception) {
+            foreach ($uploaded as $path) {
+                try {
+                    $this->delete($path);
+                } catch (\Throwable) {
+                    // Attempt every rollback and preserve the original upload error.
+                }
             }
-            throw $e;
+            throw $exception;
         }
 
         if ($uploaded === []) {
             throw new UploaderException(__('No files were provided.'));
         }
 
-        return $uploaded;
+        return !$multiple && count($uploaded) === 1 ? $uploaded[0] : $uploaded;
     }
 
     /**
-     * Normalizes the files array to the $_FILES-style structure:
-     * either single (name => string, ...) or columnar (name => [...], tmp_name => [...], ...).
-     *
-     * Accepts a list of per-file arrays too (what Request::files() returns).
+     * Flatten PHP upload arrays and PSR upload trees into validated per-file records.
      */
-    private function normalizeFilesArray(array $files): array
+    private function normalizeFilesArray(array|UploadedFileInterface $files): array
     {
-        // List of per-file arrays -> columnar structure
-        if (array_is_list($files) && isset($files[0]) && is_array($files[0]) && isset($files[0]['name'])) {
-            $normalized = ['name' => [], 'type' => [], 'tmp_name' => [], 'error' => [], 'size' => []];
+        if ($files instanceof UploadedFileInterface) {
+            $files = [
+                'name' => $files->getClientFilename() ?? 'upload',
+                'type' => $files->getClientMediaType() ?? '',
+                'tmp_name' => $files,
+                'error' => $files->getError(),
+                'size' => $files->getSize(),
+            ];
+        }
 
-            foreach ($files as $file) {
-                if (!is_array($file) || !isset($file['name'])) {
-                    continue;
-                }
+        if (is_string($files['name'] ?? null)) {
+            $files += ['type' => '', 'error' => UPLOAD_ERR_OK, 'size' => 0];
 
-                $normalized['name'][] = $file['name'];
-                $normalized['type'][] = $file['type'] ?? '';
-                $normalized['tmp_name'][] = $file['tmp_name'] ?? '';
-                $normalized['error'][] = $file['error'] ?? UPLOAD_ERR_NO_FILE;
-                $normalized['size'][] = $file['size'] ?? 0;
+            if (
+                !isset($files['tmp_name'])
+                || (!is_string($files['tmp_name']) && !$files['tmp_name'] instanceof UploadedFileInterface)
+                || !is_string($files['type'])
+                || !is_int($files['error'])
+                || ($files['size'] !== null && !is_int($files['size']))
+            ) {
+                throw new UploaderException(__('Invalid upload payload.'));
             }
 
-            return $normalized;
+            return [$files];
         }
 
-        // Already columnar
-        if (is_array($files['name'] ?? null)) {
-            return $files;
+        // PHP columns contain filename strings; PSR trees may have fields named "name".
+        $names = is_array($files['name'] ?? null) ? Arr::flatten($files['name']) : [];
+        if ($names !== [] && isset($files['tmp_name']) && count(array_filter($names, 'is_string')) === count($names)) {
+            if (!is_array($files['tmp_name'] ?? null)) {
+                throw new UploaderException(__('Invalid multiple upload payload.'));
+            }
+
+            $columns = array_intersect_key($files, array_flip(['name', 'tmp_name', 'type', 'error', 'size']));
+            foreach ($columns as $values) {
+                if (!is_array($values) || count($values) !== count($files['name']) || array_diff_key($files['name'], $values)) {
+                    throw new UploaderException(__('Invalid multiple upload payload.'));
+                }
+            }
+
+            // Match columns by key, including nested inputs and reordered metadata.
+            $files = [];
+            foreach ($columns['name'] as $key => $name) {
+                $file = [];
+                foreach ($columns as $field => $values) {
+                    $file[$field] = $values[$key];
+                }
+                $files[] = $file;
+            }
         }
 
-        // Single file
-        return [
-            'name' => $files['name'] ?? '',
-            'type' => $files['type'] ?? '',
-            'tmp_name' => $files['tmp_name'] ?? '',
-            'error' => $files['error'] ?? UPLOAD_ERR_NO_FILE,
-            'size' => $files['size'] ?? 0,
-        ];
+        $normalized = [];
+        foreach ($files as $file) {
+            if (!is_array($file) && !$file instanceof UploadedFileInterface) {
+                throw new UploaderException(__('Invalid upload payload.'));
+            }
+            array_push($normalized, ...$this->normalizeFilesArray($file));
+        }
+
+        return $normalized;
     }
 
 
@@ -390,6 +382,39 @@ class Uploader implements UploaderContract
      */
     protected function processUpload(array $file): array|string
     {
+        $upload = $file['tmp_name'] ?? null;
+        if (!$upload instanceof UploadedFileInterface) {
+            return $this->storeUpload($file);
+        }
+        if ($upload->getError() !== UPLOAD_ERR_OK) {
+            throw new UploaderException(__('Upload error: %s', $upload->getError()));
+        }
+
+        $directory = temp_dir('uploads');
+        if (!@File::ensureDirectoryWritable($directory, 0700)) {
+            throw new UploaderException(__('Upload temporary directory is not writable.'));
+        }
+
+        $temporary = tempnam($directory, 'spark-upload-');
+        if ($temporary === false) {
+            throw new UploaderException(__('Cannot create upload temporary file.'));
+        }
+
+        try {
+            $upload->moveTo($temporary);
+            clearstatcache(true, $temporary);
+            $file['tmp_name'] = $temporary;
+
+            return $this->storeUpload($file, true);
+        } catch (\Throwable $exception) {
+            throw new UploaderException($exception->getMessage(), previous: $exception);
+        } finally {
+            File::delete($temporary);
+        }
+    }
+
+    private function storeUpload(array $file, bool $psrUpload = false): array|string
+    {
         if (!isset($file['tmp_name'], $file['name']) || !is_string($file['name'])) {
             throw new UploaderException(__('Invalid file data.'));
         }
@@ -399,7 +424,7 @@ class Uploader implements UploaderContract
             throw new UploaderException(__('Upload error: %s', $file['error'] ?? UPLOAD_ERR_OK));
         }
 
-        if (!is_string($tmpName) || !is_uploaded_file($tmpName)) {
+        if (!is_string($tmpName) || (!$psrUpload && !is_uploaded_file($tmpName))) {
             throw new UploaderException(__('The source is not a valid HTTP upload. Use Storage::putFile() for local files.'));
         }
 
@@ -429,7 +454,7 @@ class Uploader implements UploaderContract
 
         if ($additionalImageOptions) {
             // For image processing we need a local file first.
-            if (!move_uploaded_file($tmpName, $destination)) {
+            if (!($psrUpload ? rename($tmpName, $destination) : move_uploaded_file($tmpName, $destination))) {
                 throw new UploaderException(__('Failed to move uploaded file.'));
             }
 
@@ -476,7 +501,7 @@ class Uploader implements UploaderContract
                 }
             }
         } elseif (!$this->driver) {
-            if (!move_uploaded_file($tmpName, $destination)) {
+            if (!($psrUpload ? rename($tmpName, $destination) : move_uploaded_file($tmpName, $destination))) {
                 throw new UploaderException(__('Failed to move uploaded file.'));
             }
         } elseif (!$this->handleUpload($tmpName, $destination)) {

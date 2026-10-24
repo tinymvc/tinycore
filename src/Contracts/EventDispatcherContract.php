@@ -2,7 +2,7 @@
 
 namespace Spark\Contracts;
 
-interface EventDispatcherContract
+interface EventDispatcherContract extends \Psr\EventDispatcher\EventDispatcherInterface
 {
     /**
      * Registers a listener for a specific event.
@@ -67,10 +67,11 @@ interface EventDispatcherContract
     /**
      * Dispatches an event, invoking all registered listeners.
      *
-     * @param string $eventName The name of the event.
-     * @param mixed  ...$args   Arguments to pass to the event listeners.
+     * @param object|string $eventName An event object or native event name.
+     * @param mixed ...$args Arguments for native string events.
+     * @return object|null
      */
-    public function dispatch(string $eventName, ...$args): void;
+    public function dispatch(object|string $eventName, ...$args): mixed;
 
     /**
      * Dispatches an event and collects return values from all listeners.

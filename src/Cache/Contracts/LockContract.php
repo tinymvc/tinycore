@@ -2,6 +2,10 @@
 
 namespace Spark\Cache\Contracts;
 
+use DateInterval;
+use DateTimeInterface;
+use Spark\Carbon;
+
 /**
  * Contract for lock utility operations.
  */
@@ -11,11 +15,11 @@ interface LockContract
      * Attempts to acquire a lock for the given key.
      *
      * @param string $key The lock key.
-     * @param int $timeout The lock timeout in seconds.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval $timeout Seconds, a date expression, interval, or absolute deadline.
      * @param int $waitTimeout The maximum time to wait for the lock in seconds.
      * @return bool True if the lock was acquired, false otherwise.
      */
-    public function lock(string $key, int $timeout = 10, int $waitTimeout = 5): bool;
+    public function lock(string $key, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5): bool;
 
     /**
      * Releases the lock for the given key.
@@ -63,11 +67,11 @@ interface LockContract
      *
      * @param string $key
      * @param callable $callback
-     * @param int $timeout
+     * @param int|string|DateTimeInterface|Carbon|DateInterval $timeout
      * @param int $waitTimeout
      * @return mixed
      */
-    public function withLock(string $key, callable $callback, int $timeout = 10, int $waitTimeout = 5): mixed;
+    public function withLock(string $key, callable $callback, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5): mixed;
 
     /**
      * Releases all locks held by the current process/owner.

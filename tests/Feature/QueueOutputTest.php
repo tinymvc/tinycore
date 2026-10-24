@@ -71,7 +71,7 @@ final class QueueOutputTest extends FrameworkTestCase
         $empty = $run();
         $this->assertFalse(str_contains($empty, 'timeout reached'));
 
-        foreach (explode("\n", trim($success . $retry . $failure . $empty)) as $line) {
+        foreach (explode("\n", str_replace("\r", "", trim($success . $retry . $failure . $empty))) as $line) {
             $this->assertTrue((bool) preg_match('/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]/', $line));
             $this->assertFalse((bool) preg_match('/[\x00-\x1F\x7F]/', $line));
         }

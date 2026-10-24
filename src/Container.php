@@ -199,21 +199,30 @@ class Container implements ContainerContract, \ArrayAccess
         // Resolve aliases
         $abstract = $this->resolveAlias($abstract);
 
-        if (isset($this->singletons[$abstract])) {
-            if (!array_key_exists($abstract, $this->instances)) {
-                $this->instances[$abstract] = $this->build(
-                    $this->bindings[$abstract] ?? $abstract
-                );
+        if (!$this->has($abstract)) {
+            throw new ClassDoesNotExistsException("Entry [$abstract] does not exist.");
+        }
+
+        try {
+            if (isset($this->singletons[$abstract])) {
+                if (!array_key_exists($abstract, $this->instances)) {
+                    $this->instances[$abstract] = $this->build(
+                        $this->bindings[$abstract] ?? $abstract
+                    );
+                }
+                return $this->instances[$abstract];
             }
-            return $this->instances[$abstract];
-        }
 
-        // If not a singleton, resolve dynamically
-        if (!isset($this->bindings[$abstract])) {
-            return $this->build($abstract);
-        }
+            // If not a singleton, resolve dynamically
+            if (!isset($this->bindings[$abstract])) {
+                return $this->build($abstract);
+            }
 
-        return $this->build($this->bindings[$abstract]);
+            return $this->build($this->bindings[$abstract]);
+        } catch (\Psr\Container\NotFoundExceptionInterface $exception) {
+            // This entry exists; a missing dependency is a construction failure.
+            throw new BuildServiceException("Unable to resolve [$abstract].", previous: $exception);
+        }
     }
 
     /**
@@ -577,7 +586,12 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function has(string $abstract): bool
     {
-        return isset($this->bindings[$abstract]) || isset($this->aliases[$abstract]) || class_exists($abstract);
+        $abstract = $this->resolveAlias($abstract);
+
+        return isset($this->bindings[$abstract])
+            || isset($this->singletons[$abstract])
+            || array_key_exists($abstract, $this->instances)
+            || class_exists($abstract);
     }
 
     /**

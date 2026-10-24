@@ -104,6 +104,59 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
         return ['status' => (int) $match[1], 'headers' => $responseHeaders, 'body' => $content];
     }
 
+    public function testPsrConversionPreservesRawInputAndRepeatedResponseHeaders(): void
+    {
+        foreach (['{"hello":"world"}', '0'] as $body) {
+            $response = $this->exchange('POST', '/psr-request', $body, ['Content-Type' => 'application/json']);
+            $this->assertSame(200, $response['status']);
+            $data = json_decode($response['body'], true, 512, JSON_THROW_ON_ERROR);
+            $this->assertSame($body, $data['raw']);
+            $this->assertSame($body === '0' ? [] : ['hello' => 'world'], $data['parsed']);
+        }
+
+        $response = $this->exchange('GET', '/psr-response');
+        $this->assertSame(200, $response['status']);
+        $this->assertSame(['first=1; Path=/', 'second=2; Path=/'], $response['headers']['set-cookie']);
+        $this->assertSame('cookies', $response['body']);
+    }
+
+    public function testNativeAndPsrUploadsShareTheSameHttpUploadPipeline(): void
+    {
+        $boundary = 'tinycore-upload-boundary';
+        $body = "--{$boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.txt\"\r\n"
+            . "Content-Type: text/plain\r\n\r\nupload content\r\n--{$boundary}--\r\n";
+        foreach (['native', 'psr', 'columns', 'field'] as $kind) {
+            $response = $this->exchange('POST', '/upload/' . $kind, $body, [
+                'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+            ]);
+            $this->assertSame(200, $response['status']);
+            $this->assertSame(['contents' => 'upload content'], json_decode($response['body'], true));
+        }
+    }
+
+    public function test_native_and_psr_upload_batches_support_sparse_and_nested_inputs(): void
+    {
+        $boundary = 'tinycore-upload-boundary';
+        foreach ([false, true] as $nested) {
+            $body = '';
+            foreach ([7 => 'first', 2 => '', 9 => 'last'] as $key => $contents) {
+                $field = $nested ? "file[documents][$key]" : "file[$key]";
+                $name = $contents === '' ? '' : $contents . '.txt';
+                $body .= "--{$boundary}\r\nContent-Disposition: form-data; name=\"{$field}\"; filename=\"{$name}\"\r\n"
+                    . "Content-Type: text/plain\r\n\r\n{$contents}\r\n";
+            }
+            $body .= "--{$boundary}--\r\n";
+            $kinds = $nested ? ['psr', 'columns', 'tree'] : ['native', 'psr', 'columns', 'tree', 'field'];
+            foreach ($kinds as $kind) {
+                $response = $this->exchange('POST', '/upload/' . $kind, $body, [
+                    'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+                ]);
+                $this->assertSame(200, $response['status'], $kind . ': ' . $response['body']);
+                $this->assertSame(['contents' => ['first', 'last']], json_decode($response['body'], true));
+            }
+        }
+    }
+
     public function testRealJsonBodiesReachCustomInjectedRequestAcrossWriteMethods(): void
     {
         foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {

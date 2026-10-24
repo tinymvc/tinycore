@@ -313,3 +313,7 @@ if ($request->hasFile('avatar')) {
     ]);
 }
 ```
+
+## PSR-7 request export
+
+`$request->toPsrRequest()` exports a Nyholm `ServerRequestInterface` snapshot, including the raw body, current headers/query/body fields, captured cookies/server values, nested uploads, and route parameters as attributes. PSR `with*()` calls return new messages; they do not update the native request. The URI and parsed query parameters remain separate, as in PSR-7. Request import and automatic PSR-15 middleware execution are not provided.

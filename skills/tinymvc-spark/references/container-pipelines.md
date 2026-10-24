@@ -35,13 +35,25 @@ For resolution failures, trace imports/autoloading, constructor arguments, inter
 
 Do not capture current users, tenants, requests, or open transactions in long-lived services. Pass operation-specific values to methods. A test fake must be bound before the consumer is resolved. Verify two distinct users/jobs in the same process when changing shared state.
 
+## Standard service interfaces
+
+`ContainerContract` extends PSR-11. `has()` follows aliases; missing entries throw `Psr\Container\NotFoundExceptionInterface`. Container resolution exceptions implement the corresponding PSR-11 interfaces. `app(Psr\Container\ContainerInterface::class)` returns the current application.
+
+Inject `Psr\Log\LoggerInterface` for logging. The default `Spark\Logger` writes through Tracer, supports `{name}` placeholders and rejects unknown levels. `Spark\Facades\Log` forwards to that binding, so replacing the PSR logger also replaces facade logging. `Spark\Contracts\LoggerInterface` is now an instance interface extending PSR-3; call the facade for static logging.
+
+Inject `Psr\Clock\ClockInterface` or resolve `app('clock')` for a `DateTimeImmutable` in the configured application timezone. Use `new Spark\Support\Clock('UTC')` for an explicit timezone. Carbon exports independent dates through `toDateTime()` and `toDateTimeImmutable()`.
+
 ## Events and payload shape
 
 `event($name, $payload = [], $halt = false)` dispatches synchronously. An array payload is an argument list, so use `event('order.created', [$order])` for a single array/object argument and wrap an array record rather than accidentally spreading its fields. Register listeners through `app()->on()` or `Spark\Events` as the application does.
 
-Higher numeric priorities run first. Ordinary `dispatch()` stops on a listener returning `false` or calling `halt()`. `until()` returns the first non-null response, including false. Inspect `Events.php` and `Foundation/helpers.php` before choosing response aggregation or one-time listeners.
+Higher numeric priorities run first. For string events, `dispatch()` stops on a listener returning `false` or calling `halt()`. `until()` returns the first non-null response, including false. Inspect `Events.php` and `Foundation/helpers.php` before choosing response aggregation or one-time listeners.
 
 An event does not establish a durable job or an after-commit boundary. A listener that writes to another service cannot roll back with SQL. Put external effects behind the application's explicit commit/dispatch policy; test listener failure and repeated delivery where relevant.
+
+Object events use PSR-14: register listeners by class, parent class, or interface using `app()->on(OrderPlaced::class, $listener)`, then call `event(new OrderPlaced($order))`. Dispatch returns the same event, ignores listener return values, and propagates exceptions unchanged in every environment. Only `StoppableEventInterface::isPropagationStopped()` stops object dispatch. Higher priorities run first across all matching types. `until()` and response aggregation remain string-event APIs.
+
+`Psr\EventDispatcher\EventDispatcherInterface` and `ListenerProviderInterface` both resolve to the application's `Spark\Events` instance.
 
 ## Staged transformations
 

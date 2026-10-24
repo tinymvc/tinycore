@@ -17,6 +17,7 @@ $app = (new Application($storage))->withApp(config: [
         'debug' => false,
         'key' => str_repeat('a', 32),
         'storage_dir' => $storage,
+        'temp_dir' => "$storage/temp",
         'views_dir' => $storage,
     ]
 ]);
@@ -51,6 +52,26 @@ Route::any('/input/{id}', fn(Request $request, string $id) => [
     'middleware' => $request->getRouteParams()['middleware'],
     'type' => $request->header('Content-Type'),
 ]);
+Route::post('/upload/{kind}', function (Request $request, string $kind) use ($storage) {
+    $file = match ($kind) {
+        'psr' => $request->toPsrRequest()->getUploadedFiles()['file'],
+        'columns' => $_FILES['file'],
+        'tree' => $_FILES,
+        'field' => 'file',
+        default => $request->file('file'),
+    };
+    $uploader = new Spark\Storage\Uploader(uploadDir: $storage . '/uploads', extensions: ['txt']);
+    $path = $uploader->upload($file);
+    $contents = fn(string $path) => file_get_contents($storage . '/uploads/' . $path);
+    return ['contents' => is_array($path) ? array_map($contents, $path) : $contents($path)];
+});
+Route::post('/psr-request', function (Request $request) {
+    $psr = $request->toPsrRequest();
+    return ['raw' => (string) $psr->getBody(), 'parsed' => $psr->getParsedBody()];
+});
+Route::get('/psr-response', fn() => Response::fromPsrResponse(
+    new Nyholm\Psr7\Response(200, ['Set-Cookie' => ['first=1; Path=/', 'second=2; Path=/']], 'cookies'),
+));
 Route::get('/html', fn() => '<h1>Hello ✓</h1>');
 Route::get('/text', fn() => new Response('literal <b>text</b>', headers: ['content-type' => 'text/plain; charset=utf-8']));
 Route::get('/json', fn() => ['ok' => true]);

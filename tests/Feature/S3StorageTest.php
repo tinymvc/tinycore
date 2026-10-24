@@ -77,12 +77,15 @@ final class S3StorageTest extends FrameworkTestCase
             }
             $address = stream_socket_get_name($socket, false);
             fclose($socket);
+            $environment = getenv();
+            unset($environment['PHP_CLI_SERVER_WORKERS']);
+            $environment['SPARK_S3_LOG'] = $dir . '/deleted.log';
             $server = proc_open(
                 [PHP_BINARY, '-S', $address, dirname(__DIR__) . '/Fixtures/s3-server.php'],
                 [0 => ['pipe', 'r'], 1 => ['file', $dir . '/server.log', 'a'], 2 => ['file', $dir . '/server.log', 'a']],
                 $pipes,
                 null,
-                ['SPARK_S3_LOG' => $dir . '/deleted.log'],
+                $environment,
             );
             if (!is_resource($server)) {
                 throw new RuntimeException('Cannot launch fixture.');

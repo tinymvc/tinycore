@@ -2,165 +2,29 @@
 
 namespace Spark\Facades;
 
-use Spark\Contracts\LoggerInterface;
-use Spark\Tracer;
+use Psr\Log\LoggerInterface;
+use Spark\Logger;
 
 /**
- * Facade for logging messages at various severity levels.
- *
- * This class provides static methods to log messages with different levels
- * such as info, warning, error, debug, critical, alert, emergency, and notice.
- *
- * Each method accepts a message string and an optional context array.
- * The context array is converted to a JSON string and appended to the log message.
- *
- * @method static void log(string $level, string $message, array $context = [])
- * @method static void info(string $message, array $context = [])
- * @method static void warning(string $message, array $context = [])
- * @method static void error(string $message, array $context = [])
- * @method static void debug(string $message, array $context = [])
- * @method static void critical(string $message, array $context = [])
- * @method static void alert(string $message, array $context = [])
- * @method static void emergency(string $message, array $context = [])
- * @method static void notice(string $message, array $context = [])
- *
- * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
- * @package Spark\Facades
- * @version 1.0.0
+ * @method static void log($level, string|\Stringable $message, array $context = [])
+ * @method static void emergency(string|\Stringable $message, array $context = [])
+ * @method static void alert(string|\Stringable $message, array $context = [])
+ * @method static void critical(string|\Stringable $message, array $context = [])
+ * @method static void error(string|\Stringable $message, array $context = [])
+ * @method static void warning(string|\Stringable $message, array $context = [])
+ * @method static void notice(string|\Stringable $message, array $context = [])
+ * @method static void info(string|\Stringable $message, array $context = [])
+ * @method static void debug(string|\Stringable $message, array $context = [])
  */
-class Log implements LoggerInterface
+class Log extends Facade
 {
-    /**
-     * Logs with an arbitrary level.
-     *
-     * @param string $level The log level.
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function log(string $level, string $message, array $context = []): void
+    protected static function getFacadeAccessor(): string
     {
-        self::add($level, $message, $context);
+        return LoggerInterface::class;
     }
 
-    /**
-     * Logs an informational message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function info(string $message, array $context = []): void
+    public static function getFacadeRoot(): LoggerInterface
     {
-        self::add('info', $message, $context);
-    }
-
-    /**
-     * Logs a warning message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function warning(string $message, array $context = []): void
-    {
-        self::add('warning', $message, $context);
-    }
-
-    /**
-     * Logs an error message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function error(string $message, array $context = []): void
-    {
-        self::add('error', $message, $context);
-    }
-
-    /**
-     * Logs a debug message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function debug(string $message, array $context = []): void
-    {
-        self::add('debug', $message, $context);
-    }
-
-    /**
-     * Logs a critical message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function critical(string $message, array $context = []): void
-    {
-        self::add('critical', $message, $context);
-    }
-
-    /**
-     * Logs an alert message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function alert(string $message, array $context = []): void
-    {
-        self::add('alert', $message, $context);
-    }
-
-    /**
-     * Logs an emergency message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function emergency(string $message, array $context = []): void
-    {
-        self::add('emergency', $message, $context);
-    }
-
-    /**
-     * Logs a notice message.
-     *
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    public static function notice(string $message, array $context = []): void
-    {
-        self::add('notice', $message, $context);
-    }
-
-    /**
-     * Internal method to add a log entry.
-     *
-     * @param string $level The log level.
-     * @param string $message The log message.
-     * @param array $context Optional context array.
-     * @return void
-     */
-    private static function add(string $level, string $message, array $context = []): void
-    {
-        if (!empty($context)) {
-            $context = ' ' . json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        } else {
-            $context = '';
-        }
-
-        $level = strtoupper($level);
-
-        if (!isset(Tracer::$instance)) {
-            Tracer::start();
-        }
-
-        Tracer::$instance->log("local.$level: $message$context");
+        return parent::getFacadeRoot() ?? new Logger();
     }
 }

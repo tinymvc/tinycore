@@ -72,6 +72,40 @@ if ($token->expires_at->isFuture()) {
 
 ---
 
+## Localized dates
+
+Carbon reuses application language files (`app.locale_dir`) and defaults to `app.locale`, or English. `Carbon::setLocale('bn')` changes the process-wide default; `Carbon::setLocale(null)` restores the application default. Prefer an instance override when serving multiple users in one process:
+
+```php
+$date = Carbon::parse('2026-01-05 12:00:00')->locale('bn'); // returns a copy
+$date->diffForHumans();
+$date->diffForHumansShort();
+$date->translatedFormat('l, j F Y');
+$date->getDayName();
+$date->getMonthName();
+```
+
+Add translations to `resources/languages/bn.php`, for example:
+
+```php
+return [
+    '%d minute ago' => '%d মিনিট আগে',
+    '%d minutes ago' => '%d মিনিট আগে',
+    'in %d minute' => '%d মিনিট পরে',
+    'in %d minutes' => '%d মিনিট পরে',
+    '%dm ago' => '%dমি আগে',
+    'in %dm' => '%dমি পরে',
+    '%dm' => '%dমি',
+    'now' => 'এখন',
+    'a few seconds ago' => 'কয়েক সেকেন্ড আগে',
+    'in a few seconds' => 'কয়েক সেকেন্ড পরে',
+    'Monday' => 'সোমবার',
+    'January' => 'জানুয়ারি',
+];
+```
+
+Translate complete phrases for the other units in the same way: `second`, `minute`, `hour`, `day`, `month`, `year` (plural forms end in `s`); short units are `s`, `m`, `h`, `d`, `mo`, `y`. Complete phrases allow each language to choose word order. Missing translations fall back to English. `translatedFormat()` translates `l`, `D`, `F`, `M`, `a`, and `A` using their English names as keys. `format()`, ISO output, date parsing, and JSON serialization remain locale-independent. Standalone Carbon without an application uses English fallback.
+
 ## Database Queries with Dates
 
 Pass `Carbon` instances, `now()`, or `today()` directly to the query builder:

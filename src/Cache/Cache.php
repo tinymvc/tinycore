@@ -2,6 +2,10 @@
 
 namespace Spark\Cache;
 
+use DateInterval;
+use DateTimeInterface;
+use Spark\Carbon;
+
 use Spark\Cache\Contracts\CacheContract;
 use Spark\Cache\Contracts\CacheStorageContract;
 use Spark\Cache\Storage\FileStorage;
@@ -66,11 +70,11 @@ class Cache implements CacheContract, \ArrayAccess
      *
      * @param ?string $key The key to lock.
      * @param ?callable $callback The callback to execute while the lock is held.
-     * @param int $timeout The timeout for the lock.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval $timeout The timeout for the lock.
      * @param int $waitTimeout The timeout for waiting for the lock.
      * @return mixed The result of the callback or the lock instance.
      */
-    public static function lock(?string $key = null, ?callable $callback = null, int $timeout = 10, int $waitTimeout = 5): mixed
+    public static function lock(?string $key = null, ?callable $callback = null, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5): mixed
     {
         if (\func_num_args() >= 2) {
             return Lock::make()->withLock($key, $callback, $timeout, $waitTimeout);
@@ -92,16 +96,16 @@ class Cache implements CacheContract, \ArrayAccess
     }
 
     /**
-     * Store a value with an optional strtotime-compatible expiration.
+     * Store a value with an optional expiration in seconds, a date expression, or a deadline.
      *
      * @param string $key The cache key.
      * @param mixed $data The value to store.
-     * @param null|string $expire The expiration time.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire The expiration time.
      * @return self
      */
-    public function store(string $key, mixed $data, null|string $expire = null): self
+    public function store(string $key, mixed $data, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self
     {
-        $this->storage->store($key, $data, $expire);
+        $this->storage->store($key, $data, Expiration::forStorage($expire));
 
         return $this;
     }
@@ -111,10 +115,10 @@ class Cache implements CacheContract, \ArrayAccess
      *
      * @param string $key The cache key.
      * @param callable $callback The callback to generate the value if missing.
-     * @param null|string $expire The expiration time.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire The expiration time.
      * @return mixed The cached value or the result of the callback.
      */
-    public function load(string $key, callable $callback, null|string $expire = null): mixed
+    public function load(string $key, callable $callback, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): mixed
     {
         if (!$this->has($key, $expire !== null)) {
             $data = $callback($this);
@@ -206,12 +210,12 @@ class Cache implements CacheContract, \ArrayAccess
      * Store multiple values with one shared expiration.
      *
      * @param array $items An associative array of key-value pairs to store.
-     * @param null|string $expire The expiration time for all items.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire The expiration time for all items.
      * @return self
      */
-    public function storeMany(array $items, null|string $expire = null): self
+    public function storeMany(array $items, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self
     {
-        $this->storage->storeMany($items, $expire);
+        $this->storage->storeMany($items, Expiration::forStorage($expire));
 
         return $this;
     }
@@ -245,12 +249,12 @@ class Cache implements CacheContract, \ArrayAccess
      *
      * @param string $key The cache key.
      * @param mixed $value The value to store.
-     * @param null|string $expire The expiration time.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire The expiration time.
      * @return bool True if the value was stored, false if the key already exists.
      */
-    public function add(string $key, mixed $value, null|string $expire = null): bool
+    public function add(string $key, mixed $value, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): bool
     {
-        return $this->storage->add($key, $value, $expire);
+        return $this->storage->add($key, $value, Expiration::forStorage($expire));
     }
 
     /**
@@ -258,10 +262,10 @@ class Cache implements CacheContract, \ArrayAccess
      *
      * @param string $key The cache key.
      * @param callable $callback The callback to generate the value if missing.
-     * @param null|string $expire The expiration time.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire The expiration time.
      * @return mixed The cached value or the result of the callback.
      */
-    public function remember(string $key, callable $callback, null|string $expire = null): mixed
+    public function remember(string $key, callable $callback, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): mixed
     {
         if ($this->has($key, $expire !== null)) {
             return $this->retrieve($key);
@@ -302,6 +306,10 @@ class Cache implements CacheContract, \ArrayAccess
      */
     public function storeManyWithExpiry(array $items): self
     {
+        foreach ($items as $key => $item) {
+            $items[$key]['expire'] = Expiration::forStorage($item['expire'] ?? null);
+        }
+
         $this->storage->storeManyWithExpiry($items);
 
         return $this;
@@ -349,10 +357,10 @@ class Cache implements CacheContract, \ArrayAccess
      *
      * @param string $key
      * @param mixed $data
-     * @param string|null $expire
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire
      * @return self
      */
-    public function set(string $key, mixed $data, ?string $expire = null): self
+    public function set(string $key, mixed $data, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self
     {
         return $this->store($key, $data, $expire);
     }
@@ -362,10 +370,10 @@ class Cache implements CacheContract, \ArrayAccess
      *
      * @param string $key
      * @param mixed $data
-     * @param string|null $expire
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire
      * @return self
      */
-    public function put(string $key, mixed $data, ?string $expire = null): self
+    public function put(string $key, mixed $data, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self
     {
         return $this->store($key, $data, $expire);
     }

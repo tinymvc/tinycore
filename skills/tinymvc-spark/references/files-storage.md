@@ -63,6 +63,20 @@ $path = Storage::disk('public')
 
 ---
 
+## PSR-7 uploaded files
+
+`Uploader::upload()` accepts `Psr\Http\Message\UploadedFileInterface` as well as native PHP upload arrays, field names, and lists/trees of uploads. The same extension, actual-file-size, image-processing, disk-driver, and batch-rollback rules apply.
+
+```php
+$uploadedFile = $request->toPsrRequest()->getUploadedFiles()['avatar'];
+$path = Storage::disk('public')->uploader('avatars', extensions: ['jpg', 'png'])
+    ->upload($uploadedFile);
+```
+
+Single uploads return a path (or an array when image variants are generated); lists and nested trees return a flat list of paths. Native PHP columns are matched by key, and empty slots (`UPLOAD_ERR_NO_FILE`) are skipped in batches. Invalid structures are rejected before consuming any uploads.
+
+PSR uploads are consumed using `moveTo()` and cannot be reused afterward, including after file validation failure. Staging uses `temp_dir('uploads')`, under the configured `app.temp_dir` (usually `storage/framework/temp`). The directory is created when needed; staged files are cleaned up on success and failure. Keep this directory outside the public web root. Raw array inputs still require genuine HTTP uploads; use `Storage::putFile()` for local paths.
+
 ## S3 Direct Operations and Signed URLs
 
 When using the `s3` storage driver:

@@ -2,6 +2,10 @@
 
 namespace Spark\Http;
 
+use Nyholm\Psr7\ServerRequest;
+use Nyholm\Psr7\UploadedFile;
+use Psr\Http\Message\ServerRequestInterface;
+
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
@@ -68,6 +72,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /** @var Input Validated input data. */
     private Input $cleanData;
 
+    /** @var string Raw request body content. */
+    private string $rawBody = '';
+
+    /** @var array Cookies sent with the request. */
+    private array $cookies = [];
+
+    /** @var array Server parameters, including headers. */
+    private array $serverParams = [];
+
     /** @var array List of trusted proxy IPs or CIDR ranges for accurate client IP detection.*/
     protected array $trustedProxies = [];
 
@@ -81,6 +94,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function __construct()
     {
+        $this->rawBody = (string) file_get_contents('php://input');
+        $this->cookies = $_COOKIE;
+        $this->serverParams = $_SERVER;
+
         // Parse and set the request method, path, root URL, and full URL.
         $this->method = $this->parseRequestMethod();
         $this->path = $this->parsePath();
@@ -238,14 +255,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private function parsePhpInput(): array
     {
         if (in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE']) && empty($_POST)) {
-            // Get the raw POST data from the php://input stream.
-            $params = file_get_contents('php://input');
-
             // If the raw POST data is not empty, attempt to decode it
             // as JSON data.
-            if (!empty($params)) {
+            if (!empty($this->rawBody)) {
                 // Decode the raw POST data as JSON data.
-                $params = json_decode($params, true);
+                $params = json_decode($this->rawBody, true);
 
                 // If the JSON decoding was successful, return the decoded
                 // JSON data as an associative array.
@@ -1123,6 +1137,63 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function getServerParams(): Collection
     {
         return $this->server;
+    }
+
+    /** Export the current request as an immutable PSR-7 message. */
+    public function toPsrRequest(): ServerRequestInterface
+    {
+        $server = $this->serverParams;
+        foreach ($this->server->all() as $name => $value) {
+            $server[strtoupper(str_replace('-', '_', $name))] = $value;
+        }
+
+        $request = new ServerRequest(
+            $this->method,
+            $this->url,
+            $this->headers->all(),
+            $this->rawBody,
+            str_replace('HTTP/', '', $server['SERVER_PROTOCOL'] ?? 'HTTP/1.1'),
+            $server,
+        );
+
+        $request = $request
+            ->withQueryParams($this->query->all())
+            ->withParsedBody($this->post->all())
+            ->withCookieParams($this->cookies)
+            ->withUploadedFiles($this->psrUploadedFiles($this->files->all()));
+
+        foreach ($this->routeParams as $name => $value) {
+            $request = $request->withAttribute($name, $value);
+        }
+
+        return $request;
+    }
+
+    /** Convert PHP's column-oriented upload arrays, including nested uploads. */
+    private function psrUploadedFiles(array $files): array
+    {
+        $uploads = [];
+        foreach ($files as $name => $file) {
+            if (is_array($file['tmp_name'])) {
+                $nested = [];
+                foreach ($file['tmp_name'] as $key => $path) {
+                    foreach (['tmp_name', 'size', 'error', 'name', 'type'] as $field) {
+                        $nested[$key][$field] = $file[$field][$key];
+                    }
+                }
+                $uploads[$name] = $this->psrUploadedFiles($nested);
+            } else {
+                $uploads[$name] = new UploadedFile(
+                    $file['tmp_name'],
+                    $file['size'],
+                    $file['error'],
+                    $file['name'],
+                    $file['type'],
+                );
+            }
+        }
+
+        return $uploads;
     }
 
     /**

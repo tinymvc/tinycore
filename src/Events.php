@@ -2,6 +2,8 @@
 
 namespace Spark;
 
+use Psr\EventDispatcher\ListenerProviderInterface;
+use Psr\EventDispatcher\StoppableEventInterface;
 use Spark\Contracts\EventDispatcherContract;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
@@ -18,7 +20,7 @@ use function is_string;
  *
  * @package Spark\Utils
  */
-class Events implements EventDispatcherContract
+class Events implements EventDispatcherContract, ListenerProviderInterface
 {
     use Macroable, Conditionable;
 
@@ -128,27 +130,48 @@ class Events implements EventDispatcherContract
     /**
      * Dispatches an event, invoking all registered listeners.
      *
-     * @param string $eventName The name of the event.
-     * @param mixed  ...$args   Arguments to pass to the event listeners.
-     * @return void
+     * @param object|string $eventName An event object or native event name.
+     * @param mixed ...$args Arguments for native string events.
+     * @return object|null
      * 
      * @throws \InvalidArgumentException If the event callback is invalid.
      */
-    public function dispatch(string $eventName, ...$args): void
+    public function dispatch(object|string $eventName, ...$args): mixed
     {
-        $this->shouldHalt = false;
+        if (is_object($eventName)) {
+            foreach ($this->getListenersForEvent($eventName) as $listener) {
+                if ($eventName instanceof StoppableEventInterface && $eventName->isPropagationStopped()) {
+                    break;
+                }
 
-        // Check if there are any listeners registered for the event
-        if (!isset($this->listeners[$eventName])) {
-            return;
+                // PSR-14 ignores listener return values and propagates failures unchanged.
+                $listener($eventName);
+            }
+
+            return $eventName;
         }
 
-        foreach ($this->getSortedEventListeners($eventName) as $listener) {
-            $result = $this->callListener($listener['callback'], $args, $eventName);
+        $this->dispatchWithResponse($eventName, ...$args);
 
-            if ($result === false || $this->shouldHalt) {
-                break;
+        return null;
+    }
+
+    public function getListenersForEvent(object $event): iterable
+    {
+        $listeners = [];
+        foreach ($this->listeners as $type => $registered) {
+            if (is_a($event, $type)) {
+                array_push($listeners, ...$registered);
             }
+        }
+
+        usort($listeners, fn(array $a, array $b) => $b['priority'] <=> $a['priority']);
+
+        foreach ($listeners as $listener) {
+            $callback = $listener['callback'];
+            yield is_callable($callback)
+                ? $callback
+                : fn(object $event) => Application::$app->call($callback, [$event]);
         }
     }
 

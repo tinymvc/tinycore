@@ -13,6 +13,7 @@ use Spark\Support\Traits\Macroable;
 use function is_float;
 use function is_string;
 use function sprintf;
+use function strlen;
 
 /**
  * Custom DateTime Utility Class
@@ -33,6 +34,12 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     /** @var string|null */
     private static ?string $defaultTimezone = null;
 
+    /** @var string|null  Default locale for the Carbon instance */
+    private static ?string $defaultLocale = null;
+
+    /** @var string|null  Locale for the current Carbon instance */
+    private ?string $locale = null;
+
     /** ISO 8601 format with microseconds and UTC timezone */
     public const ISO8601_UTC = 'Y-m-d\\TH:i:s.u\\Z';
 
@@ -48,6 +55,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
 
         if ($time instanceof Carbon) {
             $this->dateTime = clone $time->dateTime;
+            $this->locale = $time->locale;
             if ($timezoneObject !== null) {
                 $this->dateTime->setTimezone($timezoneObject);
             }
@@ -222,6 +230,67 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         self::$defaultTimezone = $timezone->getName();
     }
 
+    /** Set the default display language; null restores the application locale. */
+    public static function setLocale(?string $locale): void
+    {
+        self::$defaultLocale = $locale === null ? null : self::normalizeLocale($locale);
+    }
+
+    public static function getLocale(): string
+    {
+        return self::$defaultLocale ?? self::normalizeLocale(
+            config('app.locale', 'en') ?: 'en',
+        );
+    }
+
+    /** Get this date's language, or return a copy with an instance-specific language. */
+    public function locale(?string $locale = null): self|string
+    {
+        if ($locale === null) {
+            return $this->locale ?? self::getLocale();
+        }
+
+        $copy = clone $this;
+        $copy->locale = self::normalizeLocale($locale);
+
+        return $copy;
+    }
+
+    private static function normalizeLocale(string $locale): string
+    {
+        if (!preg_match('/^[a-zA-Z]{2,8}(?:[-_][a-zA-Z0-9]{2,8})*$/D', $locale)) {
+            throw new InvalidArgumentException('Invalid locale identifier.');
+        }
+
+        return str_replace('-', '_', strtolower($locale));
+    }
+
+    private function dateTranslator(): Translator
+    {
+        if ($this->locale() === strtolower(config('app.locale', 'en'))) {
+            return app(Translator::class);
+        }
+        return new Translator(locale_dir($this->locale() . '.php'));
+    }
+
+    /** PHP date format with translated day/month names and AM/PM markers. */
+    public function translatedFormat(string $format): string
+    {
+        $translator = $this->dateTranslator();
+        $result = '';
+        for ($index = 0, $length = strlen($format); $index < $length; $index++) {
+            $token = $format[$index];
+            if ($token === '\\' && $index + 1 < $length) {
+                $result .= $format[++$index];
+                continue;
+            }
+            $value = $this->format($token);
+            $result .= str_contains('lDFMaA', $token) ? $translator->translate($value) : $value;
+        }
+
+        return $result;
+    }
+
     /**
      * Create DateTime from array
      * 
@@ -323,6 +392,26 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
     public function toDateTimeString(): string
     {
         return $this->format('Y-m-d H:i:s');
+    }
+
+    /**
+     * Get the underlying mutable DateTime instance.
+     *
+     * @return DateTime
+     */
+    public function toDateTime(): DateTime
+    {
+        return clone $this->dateTime;
+    }
+
+    /**
+     * Get a DateTimeImmutable instance representing this date and time.
+     *
+     * @return \DateTimeImmutable
+     */
+    public function toDateTimeImmutable(): \DateTimeImmutable
+    {
+        return \DateTimeImmutable::createFromMutable($this->dateTime);
     }
 
     /**
@@ -528,7 +617,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function getDayName(): string
     {
-        return $this->format('l');
+        return $this->translatedFormat('l');
     }
 
     /**
@@ -538,7 +627,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
      */
     public function getMonthName(): string
     {
-        return $this->format('F');
+        return $this->translatedFormat('F');
     }
 
     /**
@@ -974,96 +1063,50 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         return (int) ($this->diffInSeconds($other) / 86400);
     }
 
-    /**
-     * Calculate the difference in months between two DateTime instances
-     * 
-     * @param self $other The other DateTime instance to compare with
-     * @return int The difference in months
-     */
+    /** Human-readable elapsed time using the selected language's translations. */
     public function diffForHumans(?self $other = null): string
     {
-        $other ??= self::now();
-        $diff = $this->getTimestamp() - $other->getTimestamp();
-        $absDiff = abs($diff);
-
-        $future = $diff > 0;
-
-        if ($absDiff < 60) {
-            return $future ? 'in a few seconds' : 'a few seconds ago';
-        } elseif ($absDiff < 3600) {
-            $minutes = round($absDiff / 60);
-            return $future ? "in {$minutes} minutes" : "{$minutes} minutes ago";
-        } elseif ($absDiff < 86400) {
-            $hours = round($absDiff / 3600);
-            return $future ? "in {$hours} hours" : "{$hours} hours ago";
-        } elseif ($absDiff < 2592000) {
-            $days = round($absDiff / 86400);
-            return $future ? "in {$days} days" : "{$days} days ago";
-        } elseif ($absDiff < 31536000) {
-            $months = round($absDiff / 2592000);
-            return $future ? "in {$months} months" : "{$months} months ago";
-        } else {
-            $years = round($absDiff / 31536000);
-            return $future ? "in {$years} years" : "{$years} years ago";
-        }
+        return $this->humanDifference($other, false, true);
     }
 
-    /**
-     * Get a short human-readable difference between two DateTime instances
-     * 
-     * This method returns a shortened version of the time difference, suitable for compact display.
-     * Examples: "1m ago", "2h ago", "3d ago", "1y ago", "5m", "2h", etc.
-     * 
-     * @param self|null $other The other DateTime instance to compare with, defaults to now
-     * @param bool $withSuffix Whether to include "ago" suffix for past times, defaults to true
-     * @return string The short human-readable time difference
-     */
     public function diffForHumansShort(?self $other = null, bool $withSuffix = true): string
     {
-        $other ??= self::now();
-        $diff = $this->getTimestamp() - $other->getTimestamp();
-        $absDiff = abs($diff);
+        return $this->humanDifference($other, true, $withSuffix);
+    }
 
-        $future = $diff > 0;
+    private function humanDifference(?self $other, bool $short, bool $withSuffix): string
+    {
+        $difference = $this->getTimestamp() - ($other ?? self::now())->getTimestamp();
+        $seconds = abs($difference);
+        $translator = $this->dateTranslator();
 
-        // Determine the appropriate unit and value
-        if ($absDiff < 60) {
-            $value = $absDiff;
-            $unit = 's';
-        } elseif ($absDiff < 3600) {
-            $value = round($absDiff / 60);
-            $unit = 'm';
-        } elseif ($absDiff < 86400) {
-            $value = round($absDiff / 3600);
-            $unit = 'h';
-        } elseif ($absDiff < 2592000) { // 30 days
-            $value = round($absDiff / 86400);
-            $unit = 'd';
-        } elseif ($absDiff < 31536000) { // 365 days
-            $value = round($absDiff / 2592000);
-            $unit = 'mo';
-        } else {
-            $value = round($absDiff / 31536000);
-            $unit = 'y';
+        if (!$short && $seconds < 60) {
+            return $translator->translate($difference > 0 ? 'in a few seconds' : 'a few seconds ago');
+        }
+        if ($short && $seconds === 0 && $withSuffix) {
+            return $translator->translate('now');
         }
 
-        // Handle very small differences
-        if ($value == 0) {
-            return $withSuffix ? 'now' : '0s';
-        }
-
-        // Build the result string
-        $result = "{$value}{$unit}";
-
-        if ($withSuffix) {
-            if ($future) {
-                $result = "in {$result}";
-            } else {
-                $result = "{$result} ago";
+        foreach ([
+            [31536000, 'year', 'y'],
+            [2592000, 'month', 'mo'],
+            [86400, 'day', 'd'],
+            [3600, 'hour', 'h'],
+            [60, 'minute', 'm'],
+            [1, 'second', 's'],
+        ] as [$duration, $unit, $abbreviation]) {
+            if ($seconds >= $duration || $duration === 1) {
+                $count = (int) round($seconds / $duration);
+                break;
             }
         }
 
-        return $result;
+        $text = $short ? "%d$abbreviation" : "%d $unit" . ($count === 1 ? '' : 's');
+        if ($withSuffix) {
+            $text = $difference > 0 ? "in $text" : "$text ago";
+        }
+
+        return $translator->translate($text, $count);
     }
 
     /**

@@ -2,6 +2,17 @@
 
 namespace Spark\Foundation;
 
+use Nyholm\Psr7\Factory\Psr17Factory;
+use Psr\Clock\ClockInterface;
+use Psr\Container\ContainerInterface;
+use Psr\EventDispatcher\EventDispatcherInterface;
+use Psr\EventDispatcher\ListenerProviderInterface;
+use Psr\Log\LoggerInterface;
+use Spark\Contracts\LoggerInterface as SparkLoggerInterface;
+use Psr\SimpleCache\CacheInterface;
+use Spark\Cache\SimpleCache;
+use Spark\Logger;
+use Spark\Support\Clock;
 use Spark\Console\Commands;
 use Spark\Console\Console;
 use Spark\Contracts\ApplicationContract;
@@ -114,6 +125,33 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(Router::class);
         $this->singleton(Middleware::class);
         $this->singleton(Events::class);
+        $this->singleton(LoggerInterface::class, Logger::class);
+        $this->singleton(ClockInterface::class, fn() => new Clock());
+        $this->singleton(Psr17Factory::class);
+        $this->instance(ContainerInterface::class, $this);
+        $this->bind(
+            CacheInterface::class,
+            fn() => new SimpleCache($this->get(\Spark\Cache\Cache::class))
+        );
+
+        foreach ([
+            \Psr\Http\Message\RequestFactoryInterface::class,
+            \Psr\Http\Message\ResponseFactoryInterface::class,
+            \Psr\Http\Message\ServerRequestFactoryInterface::class,
+            \Psr\Http\Message\StreamFactoryInterface::class,
+            \Psr\Http\Message\UploadedFileFactoryInterface::class,
+            \Psr\Http\Message\UriFactoryInterface::class,
+        ] as $factory) {
+            $this->alias($factory, Psr17Factory::class);
+        }
+
+        $this->alias(EventDispatcherInterface::class, Events::class);
+        $this->alias(ListenerProviderInterface::class, Events::class);
+        $this->alias(SparkLoggerInterface::class, LoggerInterface::class);
+        $this->alias(Logger::class, LoggerInterface::class);
+        $this->alias(Clock::class, ClockInterface::class);
+        $this->alias('log', LoggerInterface::class);
+        $this->alias('clock', ClockInterface::class);
 
         $this->alias('translator', Translator::class);
         $this->alias('db', DB::class);

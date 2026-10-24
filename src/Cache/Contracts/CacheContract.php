@@ -2,6 +2,10 @@
 
 namespace Spark\Cache\Contracts;
 
+use DateInterval;
+use DateTimeInterface;
+use Spark\Carbon;
+
 /**
  * Interface for cache utilities.
  */
@@ -21,20 +25,20 @@ interface CacheContract
      *
      * @param string $key Unique identifier for the cached data.
      * @param mixed $data The data to cache.
-     * @param string|null $expire Expiration time as a string (e.g., '+1 day').
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire TTL seconds, a date expression, interval, or deadline.
      * @return self The instance of the cache util for method chaining.
      */
-    public function store(string $key, mixed $data, ?string $expire = null): self;
+    public function store(string $key, mixed $data, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self;
 
     /**
      * Loads data from cache or generates it using a callback if not present.
      *
      * @param string $key The cache key.
      * @param callable $callback Function to generate the data if not cached.
-     * @param string|null $expire Optional expiration time.
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire Optional expiration time.
      * @return mixed
      */
-    public function load(string $key, callable $callback, ?string $expire = null): mixed;
+    public function load(string $key, callable $callback, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): mixed;
 
     /**
      * Retrieves data from the cache for given keys, optionally erasing expired entries.
@@ -65,10 +69,10 @@ interface CacheContract
      *
      * @param string $key
      * @param callable $callback
-     * @param string|null $expire
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire
      * @return mixed
      */
-    public function remember(string $key, callable $callback, ?string $expire = null): mixed;
+    public function remember(string $key, callable $callback, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): mixed;
 
     /**
      * Retrieve an item from the cache and delete it.
@@ -84,10 +88,10 @@ interface CacheContract
      *
      * @param string $key
      * @param mixed $value
-     * @param string|null $expire
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire
      * @return bool
      */
-    public function add(string $key, mixed $value, ?string $expire = null): bool;
+    public function add(string $key, mixed $value, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): bool;
 
     /**
      * Increment the value of an item in the cache.
@@ -111,10 +115,10 @@ interface CacheContract
      * Store multiple items in the cache.
      *
      * @param array $items
-     * @param string|null $expire
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire
      * @return self
      */
-    public function storeMany(array $items, ?string $expire = null): self;
+    public function storeMany(array $items, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self;
 
     /**
      * Retrieve all items from the cache.
@@ -146,20 +150,20 @@ interface CacheContract
      *
      * @param string $key
      * @param mixed $data
-     * @param string|null $expire
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire
      * @return self
      */
-    public function set(string $key, mixed $data, ?string $expire = null): self;
+    public function set(string $key, mixed $data, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self;
 
     /**
      * Store an item in the cache (alias of store).
      *
      * @param string $key
      * @param mixed $data
-     * @param string|null $expire
+     * @param int|string|DateTimeInterface|Carbon|DateInterval|null $expire
      * @return self
      */
-    public function put(string $key, mixed $data, ?string $expire = null): self;
+    public function put(string $key, mixed $data, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): self;
 
     /**
      * Remove an item from the cache (alias of erase).

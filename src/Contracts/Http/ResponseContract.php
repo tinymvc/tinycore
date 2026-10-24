@@ -74,10 +74,10 @@ interface ResponseContract
      * Sets a header for the response.
      *
      * @param string $key The header name (e.g., 'Content-Type').
-     * @param string $value The header value (e.g., 'application/json').
+     * @param string|array $value The header value(s) (e.g., 'application/json').
      * @return self Current response instance for method chaining.
      */
-    public function setHeader(string $key, string $value): self;
+    public function setHeader(string $key, string|array $value): self;
 
     /**
      * Merge multiple headers into the response.

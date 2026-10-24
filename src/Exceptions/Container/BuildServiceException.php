@@ -3,7 +3,8 @@
 namespace Spark\Exceptions\Container;
 
 use Exception;
+use Psr\Container\ContainerExceptionInterface;
 
-class BuildServiceException extends Exception
+class BuildServiceException extends Exception implements ContainerExceptionInterface
 {
 }

@@ -2,15 +2,17 @@
 
 namespace Spark\Contracts;
 
+use Psr\Container\ContainerInterface;
+
 /**
  * Interface for a container class.
  *
  * This interface outlines the methods that must be implemented
- * by a container class.
+ * by a container class, extending PSR-11 ContainerInterface.
  *
  * @package Spark\Contracts
  */
-interface ContainerContract
+interface ContainerContract extends ContainerInterface
 {
     /**
      * Bind a class or interface to a concrete implementation.

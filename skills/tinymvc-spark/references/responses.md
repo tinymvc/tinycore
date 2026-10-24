@@ -227,3 +227,17 @@ return response()->download($fileContents, 'report.pdf', [
     'Content-Type' => 'application/pdf',
 ]);
 ```
+
+## PSR-7 responses and PSR-17 factories
+
+`$response->toPsrResponse()` exports a prepared immutable PSR-7 message. `Spark\Http\Response::fromPsrResponse($message)` imports a PSR response into the native response lifecycle. Headers with multiple values, including `Set-Cookie`, remain separate; native `setHeader()` accepts a string or an array of strings. Imported responses follow the native content-type and bodyless-status preparation rules.
+
+The six `Psr\Http\Message\*FactoryInterface` bindings resolve to one `Nyholm\Psr7\Factory\Psr17Factory`. For example:
+
+```php
+$factory = app(Psr\Http\Message\ResponseFactoryInterface::class);
+$message = $factory->createResponse(201);
+return Spark\Http\Response::fromPsrResponse($message);
+```
+
+Use `Nyholm\Psr7\Uri` for standard URI semantics; `Spark\Url` retains its application URL API. The native outbound HTTP client does not implement PSR-18.

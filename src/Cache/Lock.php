@@ -2,6 +2,10 @@
 
 namespace Spark\Cache;
 
+use DateInterval;
+use DateTimeInterface;
+use Spark\Carbon;
+
 use Spark\Cache\Contracts\LockContract;
 use Spark\Cache\Contracts\CacheStorageContract;
 use Spark\Cache\Exceptions\LockException;
@@ -15,6 +19,7 @@ use function gethostname;
 use function getmypid;
 use function in_array;
 use function is_array;
+use function is_int;
 use function sprintf;
 use function strtolower;
 use function uniqid;
@@ -73,13 +78,32 @@ class Lock implements LockContract, \ArrayAccess
      * Attempt to acquire a lock for the current owner.
      *
      * @param string $key The lock key to acquire.
-     * @param int $timeout The lock expiration time in seconds (default is 10).
+     * @param int|string|DateTimeInterface|Carbon|DateInterval $timeout Seconds, a relative date expression, or an absolute deadline.
      * @param int $waitTimeout The maximum time to wait for the lock in seconds (default is 5).
      * @return bool True if the lock was acquired, false otherwise.
      */
-    public function lock(string $key, int $timeout = 10, int $waitTimeout = 5): bool
+    public function lock(string $key, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5): bool
     {
-        return $this->storage->lock($key, $this->owner, $timeout, $waitTimeout);
+        if (is_int($timeout)) {
+            return $this->storage->lock($key, $this->owner, $timeout, $waitTimeout);
+        }
+
+        $expiresAt = Expiration::timestamp($timeout);
+        $waitUntil = microtime(true) + max(0, $waitTimeout);
+
+        do {
+            $seconds = $expiresAt - Carbon::now()->getTimestamp();
+            if ($seconds <= 0) {
+                return false;
+            }
+            if ($this->storage->lock($key, $this->owner, $seconds, 0)) {
+                return true;
+            }
+            if (microtime(true) >= $waitUntil) {
+                return false;
+            }
+            usleep(50000);
+        } while (true);
     }
 
     /**
@@ -152,12 +176,12 @@ class Lock implements LockContract, \ArrayAccess
      *
      * @param string $key The lock key to acquire.
      * @param callable $callback The callback to execute while holding the lock.
-     * @param int $timeout The lock expiration time in seconds (default is 10).
+     * @param int|string|DateTimeInterface|Carbon|DateInterval $timeout Seconds, a relative date expression, or an absolute deadline.
      * @param int $waitTimeout The maximum time to wait for the lock in seconds (default is 5).
      * @return mixed The result of the callback execution.
      * @throws LockException If the lock cannot be acquired.
      */
-    public function withLock(string $key, callable $callback, int $timeout = 10, int $waitTimeout = 5): mixed
+    public function withLock(string $key, callable $callback, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5): mixed
     {
         if (!$this->lock($key, $timeout, $waitTimeout)) {
             throw new LockException("Failed to acquire lock for key: {$key}");
@@ -244,7 +268,7 @@ class Lock implements LockContract, \ArrayAccess
     public function offsetSet(mixed $offset, mixed $value): void
     {
         if (is_array($value)) {
-            $this->lock((string) $offset, (int) ($value['timeout'] ?? 10), (int) ($value['waitTimeout'] ?? 5));
+            $this->lock((string) $offset, $value['timeout'] ?? 10, (int) ($value['waitTimeout'] ?? 5));
             return;
         }
 

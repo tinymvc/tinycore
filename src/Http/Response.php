@@ -2,6 +2,9 @@
 
 namespace Spark\Http;
 
+use Nyholm\Psr7\Response as PsrResponse;
+use Psr\Http\Message\ResponseInterface;
+
 use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
@@ -9,6 +12,7 @@ use Spark\Http\Resources\JsonResource;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Stringable;
+use function count;
 use function in_array;
 use function is_array;
 use function is_string;
@@ -52,6 +56,23 @@ class Response implements ResponseContract
      * @var array An associative array of HTTP response headers.
      */
     private array $headers = [];
+
+    /**
+     * This property holds the HTTP protocol version for the response. It is set to '1.1' by default.
+     * The protocol version is used when sending the response to the client and can be modified if needed.
+     *
+     * @var string The HTTP protocol version (e.g., '1.0', '1.1', '2.0').
+     */
+    private string $protocolVersion = '1.1';
+
+    /**
+     * This property holds the reason phrase associated with the HTTP status code for the response.
+     * It is used to provide a human-readable explanation of the status code. If not set, the default
+     * reason phrase for the status code will be used when sending the response.
+     *
+     * @var string|null The reason phrase for the HTTP status code, or null if not set.
+     */
+    private ?string $reasonPhrase = null;
 
     /**
      * Constructor
@@ -276,6 +297,7 @@ class Response implements ResponseContract
     public function setStatusCode(int $statusCode): self
     {
         $this->statusCode = $statusCode;
+        $this->reasonPhrase = null;
         return $this;
     }
 
@@ -283,16 +305,16 @@ class Response implements ResponseContract
      * Sets a header for the response.
      *
      * @param string $key The header name (e.g., 'Content-Type').
-     * @param string $value The header value (e.g., 'application/json').
+     * @param string|array $value The header value(s) (e.g., 'application/json').
      * @return $this Current response instance for method chaining.
      */
-    public function setHeader(string $key, string $value): self
+    public function setHeader(string $key, string|array $value): self
     {
         $this->removeHeader($key);
         if (strcasecmp($key, 'Content-Type') === 0) {
             $this->defaultContentType = false;
         }
-        $this->headers[$key] = $value;
+        $this->headers[$key] = is_array($value) ? array_values($value) : $value;
         return $this;
     }
 
@@ -452,8 +474,10 @@ class Response implements ResponseContract
 
         // Set http response code and headers.
         http_response_code($this->statusCode);
-        foreach ($this->headers as $key => $value) {
-            header("$key: $value");
+        foreach ($this->headers as $key => $values) {
+            foreach ((array) $values as $index => $value) {
+                header("$key: $value", $index === 0);
+            }
         }
 
         // Redirects must include prepared headers too (for example CORS headers).
@@ -489,6 +513,33 @@ class Response implements ResponseContract
     public function getStatusCode(): int
     {
         return $this->statusCode;
+    }
+
+    public function toPsrResponse(): ResponseInterface
+    {
+        $this->prepare();
+
+        return new PsrResponse(
+            $this->statusCode,
+            $this->getHeaders(),
+            $this->content,
+            $this->protocolVersion,
+            $this->reasonPhrase,
+        );
+    }
+
+    public static function fromPsrResponse(ResponseInterface $response): static
+    {
+        $headers = array_map(
+            fn(array $values) => count($values) === 1 ? $values[0] : $values,
+            $response->getHeaders(),
+        );
+
+        $instance = new static((string) $response->getBody(), $response->getStatusCode(), $headers);
+        $instance->protocolVersion = $response->getProtocolVersion();
+        $instance->reasonPhrase = $response->getReasonPhrase();
+
+        return $instance;
     }
 
     /**

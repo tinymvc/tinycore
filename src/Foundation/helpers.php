@@ -1284,10 +1284,11 @@ if (!function_exists('event')) {
     /**
      * Manage and dispatch events.
      *
-     * @param array|string|null $eventName
+     * @param array|string|object|null $eventName
      *   - `null`: returns the event dispatcher instance.
      *   - `array`: registers listeners from an event => listener map.
-     *   - `string`: dispatches the event.
+     *   - `string`: dispatches the native event with the supplied payload.
+     *   - `object`: dispatches a PSR-14 event; payload and halt apply only to strings.
      * @param mixed $payload
      *   Event payload when dispatching. Can be a single value or an array of arguments.
      * @param bool $halt
@@ -1295,13 +1296,17 @@ if (!function_exists('event')) {
      *
      * @return mixed|Events
      */
-    function event(null|array|string $eventName = null, mixed $payload = [], bool $halt = false): mixed
+    function event(null|array|string|object $eventName = null, mixed $payload = [], bool $halt = false): mixed
     {
         /** @var Events $event */
         $event = get(Events::class);
 
         if ($eventName === null) {
             return $event;
+        }
+
+        if (is_object($eventName)) {
+            return $event->dispatch($eventName);
         }
 
         if (is_array($eventName) && $payload === [] && !$halt) {
@@ -1486,7 +1491,7 @@ if (!function_exists('lock')) {
      *
      * @return ($key is null ? Lock : bool) The Lock instance if no key is provided, or true if the lock was acquired, false otherwise.
      */
-    function lock(null|string $key = null, int $timeout = 10, int $waitTimeout = 5, string $name = 'default'): bool|Lock
+    function lock(null|string $key = null, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5, string $name = 'default'): bool|Lock
     {
         global $locks;
 
