@@ -148,7 +148,7 @@ interface RouterContract
      * @param int $status
      * @return Route
      */
-    public function redirect(string $from, string $to, int $status = 302): Route;
+    public function redirect(string $from, string $to, int $status = Response::STATUS_FOUND): Route;
 
     /**
      * Register a fallback route handler.

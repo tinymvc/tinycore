@@ -6,6 +6,7 @@ use Spark\Console\Commands;
 use Spark\Console\Prompt;
 use Spark\Database\DB;
 use Spark\Foundation\Application;
+use Spark\Http\Request;
 use Spark\Hash;
 use Spark\Queue\Queue;
 use Spark\Http\Routing\Router;
@@ -1047,7 +1048,7 @@ class Tinker
         // Group routes by method for better organization
         $groupedRoutes = [];
         foreach ($routes as $name => $route) {
-            $methods = (array) ($route['method'] ?? 'GET');
+            $methods = (array) ($route['method'] ?? Request::METHOD_GET);
             if (in_array('*', $methods)) {
                 $methods = ['ANY'];
             }
@@ -1071,17 +1072,17 @@ class Tinker
 
         // Method colors
         $methodColors = [
-            'GET' => 'green',
-            'POST' => 'blue',
-            'PUT' => 'yellow',
-            'PATCH' => 'yellow',
-            'DELETE' => 'red',
-            'OPTIONS' => 'gray',
+            Request::METHOD_GET => 'green',
+            Request::METHOD_POST => 'blue',
+            Request::METHOD_PUT => 'yellow',
+            Request::METHOD_PATCH => 'yellow',
+            Request::METHOD_DELETE => 'red',
+            Request::METHOD_OPTIONS => 'gray',
             'ANY' => 'gray',
         ];
 
         // Display routes grouped by method
-        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'ANY'] as $method) {
+        foreach ([Request::METHOD_GET, Request::METHOD_POST, Request::METHOD_PUT, Request::METHOD_PATCH, Request::METHOD_DELETE, Request::METHOD_OPTIONS, 'ANY'] as $method) {
             if (!isset($groupedRoutes[$method])) {
                 continue;
             }

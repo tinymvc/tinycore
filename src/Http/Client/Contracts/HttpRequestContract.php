@@ -2,7 +2,9 @@
 
 namespace Spark\Http\Client\Contracts;
 
-interface HttpRequestContract
+use Fig\Http\Message\RequestMethodInterface;
+
+interface HttpRequestContract extends RequestMethodInterface
 {
     /**
      * Add a header to the request.

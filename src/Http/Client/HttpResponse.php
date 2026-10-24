@@ -176,7 +176,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function isOk(): bool
     {
-        return $this->status >= 200 && $this->status < 300;
+        return $this->status >= self::STATUS_OK && $this->status < self::STATUS_MULTIPLE_CHOICES;
     }
 
     /**
@@ -236,7 +236,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function isClientError(): bool
     {
-        return $this->status >= 400 && $this->status < 500;
+        return $this->status >= self::STATUS_BAD_REQUEST && $this->status < self::STATUS_INTERNAL_SERVER_ERROR;
     }
 
     /**
@@ -256,7 +256,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function isServerError(): bool
     {
-        return $this->status >= 500 && $this->status < 600;
+        return $this->status >= self::STATUS_INTERNAL_SERVER_ERROR && $this->status < 600;
     }
 
     /**
@@ -266,7 +266,7 @@ class HttpResponse implements HttpResponseContract, Arrayable, \ArrayAccess, \St
      */
     public function isRedirect(): bool
     {
-        return $this->status >= 300 && $this->status < 400;
+        return $this->status >= self::STATUS_MULTIPLE_CHOICES && $this->status < self::STATUS_BAD_REQUEST;
     }
 
     /**

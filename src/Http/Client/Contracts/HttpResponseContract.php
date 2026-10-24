@@ -2,6 +2,8 @@
 
 namespace Spark\Http\Client\Contracts;
 
+use Fig\Http\Message\StatusCodeInterface;
+
 /**
  * HttpResponseContract defines the contract for handling HTTP responses.
  * It specifies the methods that any HTTP response class should implement
@@ -12,7 +14,7 @@ namespace Spark\Http\Client\Contracts;
  * 
  * @author Shahin Moyshan <shahin.mosyahn2@gmail.com.>
  */
-interface HttpResponseContract
+interface HttpResponseContract extends StatusCodeInterface
 {
     /**
      * Get the raw body of the response.

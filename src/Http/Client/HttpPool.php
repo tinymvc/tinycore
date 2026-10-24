@@ -53,7 +53,7 @@ class HttpPool implements HttpPoolContract
      */
     public function get(string $url, array $params = []): HttpRequestContract
     {
-        return $this->addRequest('GET', $url, $params);
+        return $this->addRequest(HttpRequestContract::METHOD_GET, $url, $params);
     }
 
     /**
@@ -65,7 +65,7 @@ class HttpPool implements HttpPoolContract
      */
     public function post(string $url, string|array $data = []): HttpRequestContract
     {
-        return $this->addRequest('POST', $url, [], $data);
+        return $this->addRequest(HttpRequestContract::METHOD_POST, $url, [], $data);
     }
 
     /**
@@ -77,7 +77,7 @@ class HttpPool implements HttpPoolContract
      */
     public function put(string $url, string|array $data = []): HttpRequestContract
     {
-        return $this->addRequest('PUT', $url, [], $data);
+        return $this->addRequest(HttpRequestContract::METHOD_PUT, $url, [], $data);
     }
 
     /**
@@ -89,7 +89,7 @@ class HttpPool implements HttpPoolContract
      */
     public function patch(string $url, string|array $data = []): HttpRequestContract
     {
-        return $this->addRequest('PATCH', $url, [], $data);
+        return $this->addRequest(HttpRequestContract::METHOD_PATCH, $url, [], $data);
     }
 
     /**
@@ -101,7 +101,7 @@ class HttpPool implements HttpPoolContract
      */
     public function delete(string $url, string|array $data = []): HttpRequestContract
     {
-        return $this->addRequest('DELETE', $url, [], $data);
+        return $this->addRequest(HttpRequestContract::METHOD_DELETE, $url, [], $data);
     }
 
     /**

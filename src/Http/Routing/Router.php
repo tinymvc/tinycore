@@ -81,7 +81,7 @@ class Router implements RouterContract
      */
     public function get(string $path, callable|string|array $callback): Route
     {
-        return new Route($path, 'GET', $callback);
+        return new Route($path, Request::METHOD_GET, $callback);
     }
 
     /**
@@ -94,7 +94,7 @@ class Router implements RouterContract
      */
     public function post(string $path, callable|string|array $callback): Route
     {
-        return new Route($path, 'POST', $callback);
+        return new Route($path, Request::METHOD_POST, $callback);
     }
 
     /**
@@ -107,7 +107,7 @@ class Router implements RouterContract
      */
     public function put(string $path, callable|string|array $callback): Route
     {
-        return new Route($path, 'PUT', $callback);
+        return new Route($path, Request::METHOD_PUT, $callback);
     }
 
     /**
@@ -120,7 +120,7 @@ class Router implements RouterContract
      */
     public function patch(string $path, callable|string|array $callback): Route
     {
-        return new Route($path, 'PATCH', $callback);
+        return new Route($path, Request::METHOD_PATCH, $callback);
     }
 
     /**
@@ -133,7 +133,7 @@ class Router implements RouterContract
      */
     public function delete(string $path, callable|string|array $callback): Route
     {
-        return new Route($path, 'DELETE', $callback);
+        return new Route($path, Request::METHOD_DELETE, $callback);
     }
 
     /**
@@ -146,7 +146,7 @@ class Router implements RouterContract
      */
     public function options(string $path, callable|string|array $callback): Route
     {
-        return new Route($path, 'OPTIONS', $callback);
+        return new Route($path, Request::METHOD_OPTIONS, $callback);
     }
 
     /**
@@ -159,7 +159,7 @@ class Router implements RouterContract
      */
     public function head(string $path, callable|string|array $callback): Route
     {
-        return new Route($path, 'HEAD', $callback);
+        return new Route($path, Request::METHOD_HEAD, $callback);
     }
 
     /**
@@ -190,7 +190,17 @@ class Router implements RouterContract
 
         // Validate HTTP methods
         if (is_debug_mode()) {
-            $validMethods = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE', 'CONNECT'];
+            $validMethods = [
+                Request::METHOD_GET,
+                Request::METHOD_HEAD,
+                Request::METHOD_POST,
+                Request::METHOD_PUT,
+                Request::METHOD_PATCH,
+                Request::METHOD_DELETE,
+                Request::METHOD_OPTIONS,
+                Request::METHOD_TRACE,
+                Request::METHOD_CONNECT,
+            ];
             $invalidMethods = array_filter($methods, fn($method) => !in_array($method, $validMethods));
 
             if (!empty($invalidMethods)) {
@@ -228,9 +238,9 @@ class Router implements RouterContract
      *
      * @return \Spark\Http\Routing\Route Returns the router instance to allow method chaining.
      */
-    public function redirect(string $from, string $to, int $status = 302): Route
+    public function redirect(string $from, string $to, int $status = Response::STATUS_FOUND): Route
     {
-        return new Route($from, 'GET', fn(): Response => Response::make()->redirect($to, $status));
+        return new Route($from, Request::METHOD_GET, fn(): Response => Response::make()->redirect($to, $status));
     }
 
     /**
@@ -481,7 +491,7 @@ class Router implements RouterContract
         }
 
         $path = '/' . trim($path, '/'); // ensure it starts with a slash
-        $method ??= 'GET'; // Set the default method to GET if not provided
+        $method ??= Request::METHOD_GET; // Set the default method to GET if not provided
 
         // Define the route properties
         $route = [
@@ -620,8 +630,8 @@ class Router implements RouterContract
             $matches[] = [$route, $this->getRouteParameters($route['path'], $captures)];
             $allowed = [...$allowed, ...array_map('strtoupper', (array) $route['method'])];
         }
-        if (in_array('GET', $allowed, true)) {
-            $allowed[] = 'HEAD';
+        if (in_array(Request::METHOD_GET, $allowed, true)) {
+            $allowed[] = Request::METHOD_HEAD;
         }
         $allowed = array_values(array_unique($allowed));
 
@@ -629,8 +639,8 @@ class Router implements RouterContract
         if ($this->isCorsPreflight($request)) {
             $methods[] = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
         }
-        if (in_array('HEAD', $methods, true)) {
-            $methods[] = 'GET';
+        if (in_array(Request::METHOD_HEAD, $methods, true)) {
+            $methods[] = Request::METHOD_GET;
         }
 
         $matched = null;
@@ -655,7 +665,7 @@ class Router implements RouterContract
             destination: function (Request $request) use ($matched, $allowed): Response {
                 if ($matched === null) {
                     if ($allowed !== []) {
-                        return Response::error(405, 'Method not allowed')->setHeader('Allow', implode(', ', $allowed));
+                        return Response::error(Response::STATUS_METHOD_NOT_ALLOWED, 'Method not allowed')->setHeader('Allow', implode(', ', $allowed));
                     }
                     if ($this->fallback !== null) {
                         is_debug_mode() && event('app:routeFallback');
@@ -663,11 +673,11 @@ class Router implements RouterContract
                         is_debug_mode() && event('app:routeDispatched');
                         return Response::from($response);
                     }
-                    return Response::error(404, 'Route not found');
+                    return Response::error(Response::STATUS_NOT_FOUND, 'Route not found');
                 }
 
-                if ($this->isCorsPreflight($request) && !$this->routeAllowsMethod($matched['method'], 'OPTIONS')) {
-                    return new Response('', 204);
+                if ($this->isCorsPreflight($request) && !$this->routeAllowsMethod($matched['method'], Request::METHOD_OPTIONS)) {
+                    return Response::from(Response::STATUS_NO_CONTENT);
                 }
 
                 $bindingFields = [];
@@ -696,7 +706,7 @@ class Router implements RouterContract
      */
     private function isCorsPreflight(Request $request): bool
     {
-        return strtoupper($request->getMethod()) === 'OPTIONS'
+        return strtoupper($request->getMethod()) === Request::METHOD_OPTIONS
             && $request->header('Origin') !== null
             && $request->header('Access-Control-Request-Method') !== null;
     }

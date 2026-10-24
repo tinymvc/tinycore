@@ -45,7 +45,7 @@ final class TestResponse
 
     public function assertOk(): self
     {
-        return $this->assertStatus(200);
+        return $this->assertStatus(Response::STATUS_OK);
     }
 
     public function assertSee(string $text): self
@@ -64,7 +64,7 @@ final class TestResponse
         return $this;
     }
 
-    public function assertRedirect(string $url, int $status = 302): self
+    public function assertRedirect(string $url, int $status = Response::STATUS_FOUND): self
     {
         return $this->assertStatus($status)->assertHeader('Location', $url);
     }
@@ -77,53 +77,53 @@ final class TestResponse
     }
     public function assertCreated(): self
     {
-        return $this->assertStatus(201);
+        return $this->assertStatus(Response::STATUS_CREATED);
     }
 
     public function assertAccepted(): self
     {
-        return $this->assertStatus(202);
+        return $this->assertStatus(Response::STATUS_ACCEPTED);
     }
 
     public function assertUnauthorized(): self
     {
-        return $this->assertStatus(401);
+        return $this->assertStatus(Response::STATUS_UNAUTHORIZED);
     }
 
     public function assertForbidden(): self
     {
-        return $this->assertStatus(403);
+        return $this->assertStatus(Response::STATUS_FORBIDDEN);
     }
 
     public function assertNotFound(): self
     {
-        return $this->assertStatus(404);
+        return $this->assertStatus(Response::STATUS_NOT_FOUND);
     }
 
     public function assertUnprocessable(): self
     {
-        return $this->assertStatus(422);
+        return $this->assertStatus(Response::STATUS_UNPROCESSABLE_ENTITY);
     }
 
     public function assertTooManyRequests(): self
     {
-        return $this->assertStatus(429);
+        return $this->assertStatus(Response::STATUS_TOO_MANY_REQUESTS);
     }
 
     public function assertServerError(): self
     {
-        return $this->assertStatus(500);
+        return $this->assertStatus(Response::STATUS_INTERNAL_SERVER_ERROR);
     }
 
     public function assertSuccessful(): self
     {
         $status = $this->response->getStatusCode();
 
-        Assert::assertTrue($status >= 200 && $status < 300, "Expected a successful response, got HTTP $status.");
+        Assert::assertTrue($status >= Response::STATUS_OK && $status < Response::STATUS_MULTIPLE_CHOICES, "Expected a successful response, got HTTP $status.");
         return $this;
     }
 
-    public function assertNoContent(int $status = 204): self
+    public function assertNoContent(int $status = Response::STATUS_NO_CONTENT): self
     {
         return $this->assertStatus($status)->assertContent('');
     }
@@ -170,7 +170,7 @@ final class TestResponse
     /** Assert TinyCore's 422 response contains errors for each supplied field. */
     public function assertJsonValidationErrors(string|array $fields): self
     {
-        $this->assertStatus(422);
+        $this->assertStatus(Response::STATUS_UNPROCESSABLE_ENTITY);
 
         $errors = $this->requiredJsonPath('errors');
         Assert::assertIsArray($errors);

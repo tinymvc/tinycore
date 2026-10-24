@@ -779,17 +779,17 @@ class Application extends \Spark\Container implements ApplicationContract
             } catch (\Spark\Exceptions\Http\ResponseException $e) {
                 throw $e;
             } catch (RouteNotFoundException) {
-                return Response::error(404, 'Route not found');
+                return Response::error(Response::STATUS_NOT_FOUND, 'Route not found');
             } catch (ItemNotFoundException) {
-                return Response::error(404, 'Item not found');
+                return Response::error(Response::STATUS_NOT_FOUND, 'Item not found');
             } catch (NotFoundException) {
-                return Response::error(404, 'Not found');
+                return Response::error(Response::STATUS_NOT_FOUND, 'Not found');
             } catch (AuthorizationException) {
-                return Response::error(403, 'Forbidden');
+                return Response::error(Response::STATUS_FORBIDDEN, 'Forbidden');
             } catch (InvalidCsrfTokenException) {
-                return Response::error(419, 'Page Expired');
+                return Response::error(Response::STATUS_PAGE_EXPIRED, 'Page Expired');
             } catch (ThrottleException) {
-                return Response::error(429, 'Too many requests');
+                return Response::error(Response::STATUS_TOO_MANY_REQUESTS, 'Too many requests');
             } catch (ValidationException $e) {
                 return $request->prepareValidationError(
                     message: $e->getMessage(),

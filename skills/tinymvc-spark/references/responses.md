@@ -11,12 +11,14 @@ For REST APIs, use **`Spark\Http\Resources\JsonResource`** for all entity and co
 ### Standard Controller Response Patterns
 
 ```php
+use Spark\Http\Response;
+
 // 1. Single Entity (HTTP 200 OK with 'data' envelope)
 return PostResource::make($post);
 
 // 2. Created Entity (HTTP 201 Created)
-return PostResource::make($post)->response(201);
-// Or: return response(PostResource::make($post), 201);
+return PostResource::make($post)->response(Response::STATUS_CREATED);
+// Or: return response(PostResource::make($post), Response::STATUS_CREATED);
 
 // 3. Collection of Entities (HTTP 200 OK with 'data' array)
 return PostResource::collection($posts);
@@ -28,10 +30,10 @@ return PostResource::collection(Post::published()->latest()->paginate(20));
 return response()->noContent();
 
 // 6. Simple Message, Status, or Webhook (NOT for models or entity data)
-return json(['message' => 'Password reset email sent.'], 200);
+return json(['message' => 'Password reset email sent.'], Response::STATUS_OK);
 
 // 7. Explicit Operation Error Message
-return json(['message' => 'The provided invitation code has expired.'], 400);
+return json(['message' => 'The provided invitation code has expired.'], Response::STATUS_BAD_REQUEST);
 ```
 
 ---

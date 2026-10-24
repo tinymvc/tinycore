@@ -113,7 +113,7 @@ class JsonResource implements Arrayable, Jsonable, JsonSerializable
         return ($wrap === null ? $data : [$wrap => $data]) + $extra;
     }
 
-    public function response(int $status = 200, array $headers = []): Response
+    public function response(int $status = Response::STATUS_OK, array $headers = []): Response
     {
         return new Response($this, $status, $headers);
     }

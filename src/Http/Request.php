@@ -14,6 +14,7 @@ use Psr\Http\Message\UriFactoryInterface;
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
+use Spark\Http\Response;
 use Spark\Foundation\Application;
 use Spark\Support\Arr;
 use Spark\Support\Collection;
@@ -250,19 +251,19 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         // Get the request method from $_SERVER['REQUEST_METHOD']
         // or default to 'GET' if not set.
-        $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+        $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? self::METHOD_GET);
 
         // If the request method is POST, check if an HTTP method override
         // is set either in the X-HTTP-METHOD-OVERRIDE header or
         // in the '_method' POST parameter.
-        if ($method === 'POST') {
+        if ($method === self::METHOD_POST) {
             $override = $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'] ?? $_POST['_method'] ?? null;
             $overrideMethod = is_string($override) ? strtoupper($override) : null;
 
             // If an override method is set and is one of the
             // PUT, PATCH, or DELETE methods, return that override
             // method instead of the original POST method.
-            if ($overrideMethod && in_array($overrideMethod, ['PUT', 'PATCH', 'DELETE'])) {
+            if ($overrideMethod && in_array($overrideMethod, [self::METHOD_PUT, self::METHOD_PATCH, self::METHOD_DELETE])) {
                 return $overrideMethod;
             }
         }
@@ -345,7 +346,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     private function parsePhpInput(): array
     {
-        if (!in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+        if (!in_array($this->method, [self::METHOD_POST, self::METHOD_PUT, self::METHOD_PATCH, self::METHOD_DELETE], true)) {
             return [];
         }
 
@@ -450,7 +451,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     public function isPostBack(): bool
     {
         // Check if the current request method is in the list of supported methods
-        return in_array($this->method, ['POST', 'PUT', 'PATCH', 'DELETE']);
+        return in_array($this->method, [
+            self::METHOD_POST,
+            self::METHOD_PUT,
+            self::METHOD_PATCH,
+            self::METHOD_DELETE,
+        ]);
     }
 
     /**
@@ -460,7 +466,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isGet(): bool
     {
-        return $this->method === 'GET';
+        return $this->method === self::METHOD_GET;
     }
 
     /**
@@ -470,7 +476,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isPost(): bool
     {
-        return $this->method === 'POST';
+        return $this->method === self::METHOD_POST;
     }
 
     /**
@@ -480,7 +486,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isPut(): bool
     {
-        return $this->method === 'PUT';
+        return $this->method === self::METHOD_PUT;
     }
 
     /**
@@ -490,7 +496,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isDelete(): bool
     {
-        return $this->method === 'DELETE';
+        return $this->method === self::METHOD_DELETE;
     }
 
     /**
@@ -1780,7 +1786,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $message .= (count($flattenedErrors) > 1 ? ' (and ' . (count($flattenedErrors) - 1) . ' more errors)' : '');
 
             // Return the errors as a JSON response
-            return json(['message' => $message, 'errors' => $errors], 422);
+            return json(['message' => $message, 'errors' => $errors], StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY);
         } else {
             // Store the errors in the session flash data
             if ($this->header('X-Inertia') && function_exists('inertia')) {

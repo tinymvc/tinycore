@@ -80,7 +80,7 @@ abstract class ApplicationTestCase extends TestCase
         $_ENV['APP_ENV'] = 'testing';
         $_ENV['TEST_STORAGE_PATH'] = $this->storagePath;
         $_GET = $_POST = $_FILES = $_COOKIE = $_SESSION = $_REQUEST = [];
-        $_SERVER = $this->server('GET', '/');
+        $_SERVER = $this->server(Request::METHOD_GET, '/');
 
         $this->app = $this->createApplication();
 
@@ -101,12 +101,12 @@ abstract class ApplicationTestCase extends TestCase
 
     protected function get(string $uri, array $headers = []): TestResponse
     {
-        return $this->request('GET', $uri, headers: $headers);
+        return $this->request(Request::METHOD_GET, $uri, headers: $headers);
     }
 
     protected function post(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('POST', $uri, $data, $headers);
+        return $this->request(Request::METHOD_POST, $uri, $data, $headers);
     }
 
     protected function getJson(string $uri, array $headers = []): TestResponse
@@ -116,47 +116,47 @@ abstract class ApplicationTestCase extends TestCase
 
     protected function postJson(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('POST', $uri, $data, $headers, json: true);
+        return $this->request(Request::METHOD_POST, $uri, $data, $headers, json: true);
     }
 
     protected function put(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('PUT', $uri, $data, $headers);
+        return $this->request(Request::METHOD_PUT, $uri, $data, $headers);
     }
 
     protected function patch(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('PATCH', $uri, $data, $headers);
+        return $this->request(Request::METHOD_PATCH, $uri, $data, $headers);
     }
 
     protected function delete(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('DELETE', $uri, $data, $headers);
+        return $this->request(Request::METHOD_DELETE, $uri, $data, $headers);
     }
 
     protected function options(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('OPTIONS', $uri, $data, $headers);
+        return $this->request(Request::METHOD_OPTIONS, $uri, $data, $headers);
     }
 
     protected function head(string $uri, array $headers = []): TestResponse
     {
-        return $this->request('HEAD', $uri, headers: $headers);
+        return $this->request(Request::METHOD_HEAD, $uri, headers: $headers);
     }
 
     protected function putJson(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('PUT', $uri, $data, $headers, json: true);
+        return $this->request(Request::METHOD_PUT, $uri, $data, $headers, json: true);
     }
 
     protected function patchJson(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('PATCH', $uri, $data, $headers, json: true);
+        return $this->request(Request::METHOD_PATCH, $uri, $data, $headers, json: true);
     }
 
     protected function deleteJson(string $uri, array $data = [], array $headers = []): TestResponse
     {
-        return $this->request('DELETE', $uri, $data, $headers, json: true);
+        return $this->request(Request::METHOD_DELETE, $uri, $data, $headers, json: true);
     }
 
     /** Default headers for subsequent requests in this test. */
@@ -253,7 +253,7 @@ abstract class ApplicationTestCase extends TestCase
             parse_str(parse_url($uri, PHP_URL_QUERY) ?? '', $_GET);
             $_POST = $_FILES = [];
 
-            if (in_array($method, ['GET', 'HEAD'], true)) {
+            if (in_array($method, [Request::METHOD_GET, Request::METHOD_HEAD], true)) {
                 $_GET = array_replace($_GET, $data);
                 $_SERVER['QUERY_STRING'] = http_build_query($_GET);
                 $_SERVER['REQUEST_URI'] = (parse_url($uri, PHP_URL_PATH) ?? '/')

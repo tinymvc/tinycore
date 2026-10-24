@@ -6,6 +6,7 @@ use Spark\Console\Prompt;
 use Spark\Contracts\TracerContract;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
+use Spark\Http\Response;
 use Spark\Support\Traits\Macroable;
 use Spark\Facades\Blade;
 use Throwable;
@@ -341,7 +342,7 @@ class Tracer implements TracerContract
         }
 
         if (!headers_sent()) {
-            http_response_code(500);
+            http_response_code(Response::STATUS_INTERNAL_SERVER_ERROR);
             header('Content-Type: ' . ($json ? 'application/json' : 'text/html') . '; charset=UTF-8');
         }
     }

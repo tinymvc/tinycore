@@ -8,6 +8,8 @@ use SimpleXMLElement;
 use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Http;
 use Spark\Http\Client\HttpRequest;
+use Spark\Http\Request;
+use Spark\Http\Response;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function count;
@@ -176,7 +178,7 @@ class S3Storage
             }
         }
 
-        $results = $this->transfer('PUT', $files, $headers);
+        $results = $this->transfer(Request::METHOD_PUT, $files, $headers);
 
         return is_array($filePath) ? $results : $results[$key ?? ''];
     }
@@ -199,7 +201,7 @@ class S3Storage
             $this->objectUrl($item);
         }
 
-        $results = $this->transfer('DELETE', array_fill_keys($keys, null));
+        $results = $this->transfer(Request::METHOD_DELETE, array_fill_keys($keys, null));
 
         return is_array($key) ? $results : $results[$key];
     }
@@ -279,11 +281,11 @@ class S3Storage
         }
 
         try {
-            $response = $this->request('GET', $key)
+            $response = $this->request(Request::METHOD_GET, $key)
                 ->withOptions([CURLOPT_RETURNTRANSFER => false, CURLOPT_FILE => $handle])
                 ->execute();
 
-            $this->checkResponse($response, 200, 'Download file');
+            $this->checkResponse($response, Response::STATUS_OK, 'Download file');
 
             if (!fflush($handle)) {
                 throw new RuntimeException('Cannot flush downloaded file.');
@@ -321,11 +323,11 @@ class S3Storage
         } elseif ($marker !== '') {
             $query['marker'] = $marker;
         }
-        $request = $this->request('GET', '', query: $query);
+        $request = $this->request(Request::METHOD_GET, '', query: $query);
 
         $response = $request->execute();
 
-        $this->checkResponse($response, 200, 'List files');
+        $this->checkResponse($response, Response::STATUS_OK, 'List files');
 
         $xml = $this->parseXml($response->body());
         if ($xml->getName() !== 'ListBucketResult') {
@@ -408,8 +410,8 @@ class S3Storage
     public function getFile(string $key): string
     {
         $this->objectUrl($key);
-        $response = $this->request('GET', $key)->execute();
-        $this->checkResponse($response, 200, 'Read file');
+        $response = $this->request(Request::METHOD_GET, $key)->execute();
+        $this->checkResponse($response, Response::STATUS_OK, 'Read file');
 
         return $response->body();
     }
@@ -418,20 +420,20 @@ class S3Storage
     public function exists(string $key): bool
     {
         $this->objectUrl($key);
-        $response = $this->request('HEAD', $key)->execute();
-        if ($response->status() === 404) {
+        $response = $this->request(Request::METHOD_HEAD, $key)->execute();
+        if ($response->status() === Response::STATUS_NOT_FOUND) {
             return false;
         }
 
-        $this->checkResponse($response, 200, 'Inspect file');
+        $this->checkResponse($response, Response::STATUS_OK, 'Inspect file');
         return true;
     }
 
     public function metadata(string $key): array
     {
         $this->objectUrl($key);
-        $response = $this->request('HEAD', $key)->execute();
-        $this->checkResponse($response, 200, 'Inspect file');
+        $response = $this->request(Request::METHOD_HEAD, $key)->execute();
+        $this->checkResponse($response, Response::STATUS_OK, 'Inspect file');
         $size = $response->header('content-length');
         $modified = strtotime((string) $response->header('last-modified', ''));
 
@@ -465,8 +467,8 @@ class S3Storage
         ];
         if ($acl !== null)
             $headers['x-amz-acl'] = $acl;
-        $response = $this->request('PUT', $to, $headers)->withOptions([CURLOPT_POSTFIELDS => ''])->execute();
-        $this->checkResponse($response, 200, 'Copy file');
+        $response = $this->request(Request::METHOD_PUT, $to, $headers)->withOptions([CURLOPT_POSTFIELDS => ''])->execute();
+        $this->checkResponse($response, Response::STATUS_OK, 'Copy file');
         // S3 may send HTTP 200 with an Error XML body after starting a copy.
         $xml = $this->parseXml($response->body());
         if ($xml->getName() !== 'CopyObjectResult' || (string) $xml->ETag === '') {
@@ -502,7 +504,7 @@ class S3Storage
         $url = $this->objectUrl($key);
         $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $canonical = implode("\n", [
-            'GET',
+            Request::METHOD_GET,
             parse_url($url, PHP_URL_PATH),
             $queryString,
             'host:' . $this->host($url) . "\n",
@@ -579,7 +581,7 @@ class S3Storage
         ksort($query);
         $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $canonical = implode("\n", [
-            'PUT',
+            Request::METHOD_PUT,
             parse_url($url, PHP_URL_PATH),
             $queryString,
             $canonicalHeaders,
@@ -611,7 +613,7 @@ class S3Storage
                     $payloadHash = hash('sha256', '');
                     $fileHeaders = $headers;
 
-                    if ($method === 'PUT') {
+                    if ($method === Request::METHOD_PUT) {
                         $stream = @fopen($path, 'rb');
                         if ($stream === false) {
                             throw new RuntimeException("Cannot open upload source for key: {$key}");
@@ -648,11 +650,11 @@ class S3Storage
 
                 $responses = Http::pool(fn() => $requests);
                 foreach ($responses as $key => $response) {
-                    if ($method !== 'DELETE' || $response->status() !== 404) {
-                        $this->checkResponse($response, $method === 'PUT' ? 200 : 204, "{$method} {$key}");
+                    if ($method !== Request::METHOD_DELETE || $response->status() !== Response::STATUS_NOT_FOUND) {
+                        $this->checkResponse($response, $method === Request::METHOD_PUT ? Response::STATUS_OK : Response::STATUS_NO_CONTENT, "{$method} {$key}");
                     }
 
-                    $results[$key] = $method === 'DELETE' ? true : [
+                    $results[$key] = $method === Request::METHOD_DELETE ? true : [
                         'success' => true,
                         'key' => (string) $key,
                         'url' => $this->getPublicUrl((string) $key),

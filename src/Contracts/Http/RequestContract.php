@@ -2,6 +2,7 @@
 
 namespace Spark\Contracts\Http;
 
+use Fig\Http\Message\RequestMethodInterface;
 use Spark\Http\Input;
 
 /**
@@ -10,7 +11,7 @@ use Spark\Http\Input;
  * This interface provides methods for retrieving and manipulating the
  * properties of an HTTP request.
  */
-interface RequestContract
+interface RequestContract extends RequestMethodInterface
 {
     /** Retrieves the request body as a PSR-7 StreamInterface. */
     public function getBody(): \Psr\Http\Message\StreamInterface;

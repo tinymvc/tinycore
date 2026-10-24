@@ -178,7 +178,7 @@ if (!function_exists('response')) {
      * @param array $headers Optional headers to include in the response.
      * @return Response The response instance.
      */
-    function response(mixed $content = '', int $statusCode = 200, array $headers = []): Response
+    function response(mixed $content = '', int $statusCode = Response::STATUS_OK, array $headers = []): Response
     {
         if (func_num_args() > 0) {
             // Create and return a new Response with the provided arguments.
@@ -222,7 +222,7 @@ if (!function_exists('json')) {
      *
      * @return Response The JSON response instance.
      */
-    function json(array $data, int $statusCode = 200, int $flags = 320, int $depth = 512): Response
+    function json(array $data, int $statusCode = Response::STATUS_OK, int $flags = 320, int $depth = 512): Response
     {
         return response()->json($data, $statusCode, $flags, $depth);
     }
@@ -236,7 +236,7 @@ if (!function_exists('redirect')) {
      * @param int $httpCode The HTTP status code for the redirection. Default is 302.
      * @return Response The response instance after setting the redirect.
      */
-    function redirect(string $url, int $httpCode = 302): Response
+    function redirect(string $url, int $httpCode = Response::STATUS_FOUND): Response
     {
         // If the URL is not a valid URL, try to generate it using route_url or home_url
         if (filter_var($url, FILTER_VALIDATE_URL) === false) {
@@ -270,7 +270,7 @@ if (!function_exists('to_route')) {
      *
      * @return Response The response instance after setting the redirect to the generated route URL.
      */
-    function to_route(string $name, null|string|array|Arrayable $context = null, int $httpCode = 302): Response
+    function to_route(string $name, null|string|array|Arrayable $context = null, int $httpCode = Response::STATUS_FOUND): Response
     {
         return redirect(route_url($name, $context), $httpCode);
     }
@@ -1986,7 +1986,7 @@ if (!function_exists('http')) {
      * @return ($url is null ? \Spark\Http\Client\Contracts\HttpContract : \Spark\Http\Client\Contracts\HttpResponseContract) The HTTP instance or the response from the request.
      */
     function http(
-        string $method = 'GET',
+        string $method = Request::METHOD_GET,
         null|string $url = null,
         array $params = [],
         array $headers = [],

@@ -2,13 +2,16 @@
 
 namespace Spark\Contracts\Http;
 
+use Fig\Http\Message\StatusCodeInterface;
 use Spark\Contracts\Support\Arrayable;
 
 /**
  * Interface defining the contract for the Response class.
  */
-interface ResponseContract
+interface ResponseContract extends StatusCodeInterface
 {
+    /** Custom framework status code for CSRF token expiration. */
+    public const STATUS_PAGE_EXPIRED = 419;
     /**
      * Sets the response content to a specified string, replacing any existing content.
      *
@@ -34,7 +37,7 @@ interface ResponseContract
      * @param int $depth Optional recursion depth. Defaults to 512.
      * @return self Current response instance for method chaining.
      */
-    public function json(array $data, int $statusCode = 200, int $flags = 0, int $depth = 512): self;
+    public function json(array $data, int $statusCode = StatusCodeInterface::STATUS_OK, int $flags = 0, int $depth = 512): self;
 
     /**
      * Redirects the user to a specified URL and optionally terminates script execution.
@@ -53,7 +56,7 @@ interface ResponseContract
      * @param int $httpCode
      * @return self
      */
-    public function routeRedirect(string $routeName, array $params = [], int $httpCode = 302): self;
+    public function routeRedirect(string $routeName, array $params = [], int $httpCode = StatusCodeInterface::STATUS_FOUND): self;
 
     /**
      * Redirect back to the previous URL.

@@ -163,7 +163,7 @@ abstract class CsrfProtection implements MiddlewareInterface
      */
     protected function checkCsrfToken(Request $request): void
     {
-        if ($request->session()->has('csrf_token')) {
+        if (!$request->session()->has('csrf_token')) {
             $token = Hash::random(32);
             $encrypted = Hash::encrypt($token);
 

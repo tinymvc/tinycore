@@ -2,6 +2,7 @@
 
 namespace Spark\Http\Routing;
 
+use Spark\Http\Request;
 use Spark\Foundation\Application;
 use Spark\Http\Routing\Contracts\RouteResourceContract;
 use Spark\Support\Traits\Conditionable;
@@ -166,13 +167,13 @@ class RouteResource implements RouteResourceContract
 
         // Define the resource routes based on the provided path and callback
         $routes = [
-            'index' => ['method' => 'GET', 'path' => $this->path, 'callback' => [$this->controller, 'index'], 'name' => "{$this->name}.index"],
-            'store' => ['method' => 'POST', 'path' => $this->path, 'callback' => [$this->controller, 'store'], 'name' => "{$this->name}.store"],
-            'create' => ['method' => 'GET', 'path' => "{$this->path}/create", 'callback' => [$this->controller, 'create'], 'name' => "{$this->name}.create"],
-            'edit' => ['method' => 'GET', 'path' => "{$this->path}/{id}/edit", 'callback' => [$this->controller, 'edit'], 'name' => "{$this->name}.edit"],
-            'update' => ['method' => ['PUT', 'PATCH'], 'path' => "{$this->path}/{id}", 'callback' => [$this->controller, 'update'], 'name' => "{$this->name}.update"],
-            'destroy' => ['method' => 'DELETE', 'path' => "{$this->path}/{id}", 'callback' => [$this->controller, 'destroy'], 'name' => "{$this->name}.destroy"],
-            'show' => ['method' => 'GET', 'path' => "{$this->path}/{id}", 'callback' => [$this->controller, 'show'], 'name' => "{$this->name}.show"],
+            'index' => ['method' => Request::METHOD_GET, 'path' => $this->path, 'callback' => [$this->controller, 'index'], 'name' => "{$this->name}.index"],
+            'store' => ['method' => Request::METHOD_POST, 'path' => $this->path, 'callback' => [$this->controller, 'store'], 'name' => "{$this->name}.store"],
+            'create' => ['method' => Request::METHOD_GET, 'path' => "{$this->path}/create", 'callback' => [$this->controller, 'create'], 'name' => "{$this->name}.create"],
+            'edit' => ['method' => Request::METHOD_GET, 'path' => "{$this->path}/{id}/edit", 'callback' => [$this->controller, 'edit'], 'name' => "{$this->name}.edit"],
+            'update' => ['method' => [Request::METHOD_PUT, Request::METHOD_PATCH], 'path' => "{$this->path}/{id}", 'callback' => [$this->controller, 'update'], 'name' => "{$this->name}.update"],
+            'destroy' => ['method' => Request::METHOD_DELETE, 'path' => "{$this->path}/{id}", 'callback' => [$this->controller, 'destroy'], 'name' => "{$this->name}.destroy"],
+            'show' => ['method' => Request::METHOD_GET, 'path' => "{$this->path}/{id}", 'callback' => [$this->controller, 'show'], 'name' => "{$this->name}.show"],
         ];
 
         // Filter routes based on 'only' and 'except' parameters

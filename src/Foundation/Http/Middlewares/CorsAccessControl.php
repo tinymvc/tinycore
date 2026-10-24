@@ -78,11 +78,11 @@ abstract class CorsAccessControl implements MiddlewareInterface
                 || !$this->allowsMethod($requestedMethod, $config['methods'])
                 || !$this->allowsHeaders($requestedHeaders, $config['headers'])
             ) {
-                return $this->withVary(response('', 403), $vary);
+                return $this->withVary(Response::from(Response::STATUS_FORBIDDEN), $vary);
             }
 
             return $this->withVary($this->withCorsHeaders(
-                response('', 204),
+                Response::from(Response::STATUS_NO_CONTENT),
                 $allowedOrigin,
                 $this->allowedMethods($requestedMethod, $config['methods']),
                 $this->allowedHeaders($requestedHeaders, $config['headers']),
@@ -116,9 +116,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
         }
 
         if (!$response instanceof Response) {
-            $response = is_int($response)
-                ? new Response('', $response)
-                : response($response);
+            $response = Response::from($response);
         }
 
         return $decorate($response);
@@ -135,7 +133,14 @@ abstract class CorsAccessControl implements MiddlewareInterface
         $credentials = $this->config['credentials'] ?? false;
         $maxAge = (int) ($this->config['age'] ?? 0);
 
-        $methods = $this->normalizeList($this->config['methods'] ?? ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+        $methods = $this->normalizeList($this->config['methods'] ?? [
+            Request::METHOD_GET,
+            Request::METHOD_POST,
+            Request::METHOD_PUT,
+            Request::METHOD_PATCH,
+            Request::METHOD_DELETE,
+            Request::METHOD_OPTIONS,
+        ]);
         $headers = $this->normalizeList($this->config['headers'] ?? ['Content-Type', 'X-Requested-With', 'Authorization', 'X-CSRF-TOKEN', 'X-XSRF-TOKEN']);
 
         return [
@@ -239,7 +244,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     private function isPreflightRequest(Request $request): bool
     {
-        return strtoupper($request->getMethod()) === 'OPTIONS'
+        return strtoupper($request->getMethod()) === Request::METHOD_OPTIONS
             && $request->header('Origin') !== null
             && $request->header('Access-Control-Request-Method') !== null;
     }

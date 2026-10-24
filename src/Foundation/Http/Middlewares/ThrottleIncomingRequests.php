@@ -5,6 +5,7 @@ namespace Spark\Foundation\Http\Middlewares;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Exceptions\ThrottleException;
 use Spark\Http\Request;
+use Spark\Http\Response;
 use Spark\Cache\Cache;
 use Spark\Cache\Lock;
 use function count;
@@ -46,7 +47,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
         $suffix = $args[2] ?? ''; // Optional suffix for cache key differentiation
 
         if (!$this->authorizeCurrentRequest($request, $duration, $attempts, $suffix)) {
-            throw new ThrottleException('Too Many Requests', 429);
+            throw new ThrottleException('Too Many Requests', Response::STATUS_TOO_MANY_REQUESTS);
         }
 
         return $next($request);

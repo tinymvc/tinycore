@@ -423,7 +423,7 @@ class Http extends HttpRequest implements HttpContract
      */
     public function get(string $url, array $params = []): HttpResponseContract
     {
-        $this->setMethod('GET');
+        $this->setMethod(self::METHOD_GET);
         $this->setData([]);
         return $this->send($url, $params);
     }
@@ -437,7 +437,7 @@ class Http extends HttpRequest implements HttpContract
      */
     public function post(string $url, array|string $data = []): HttpResponseContract
     {
-        $this->setMethod('POST');
+        $this->setMethod(self::METHOD_POST);
         $this->setData($data);
 
         return $this->send($url);
@@ -452,7 +452,7 @@ class Http extends HttpRequest implements HttpContract
      */
     public function put(string $url, array|string $data = []): HttpResponseContract
     {
-        $this->setMethod('PUT');
+        $this->setMethod(self::METHOD_PUT);
         $this->setData($data);
 
         return $this->send($url);
@@ -467,7 +467,7 @@ class Http extends HttpRequest implements HttpContract
      */
     public function patch(string $url, array|string $data = []): HttpResponseContract
     {
-        $this->setMethod('PATCH');
+        $this->setMethod(self::METHOD_PATCH);
         $this->setData($data);
 
         return $this->send($url);
@@ -482,7 +482,7 @@ class Http extends HttpRequest implements HttpContract
      */
     public function delete(string $url, array|string $data = []): HttpResponseContract
     {
-        $this->setMethod('DELETE');
+        $this->setMethod(self::METHOD_DELETE);
         $this->setData($data);
 
         return $this->send($url);

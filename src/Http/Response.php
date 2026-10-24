@@ -52,7 +52,7 @@ class Response implements ResponseContract
      * @param int $statusCode The HTTP status code.
      * @param array $headers An associative array of headers to send with the response.
      */
-    public function __construct(private mixed $content = '', int $statusCode = 200, array $headers = [])
+    public function __construct(private mixed $content = '', int $statusCode = self::STATUS_OK, array $headers = [])
     {
         $factory = Application::$app?->get(ResponseFactoryInterface::class) ?? new Psr17Factory();
         $this->message = $factory->createResponse($statusCode);
@@ -67,7 +67,7 @@ class Response implements ResponseContract
      * @param array $headers An associative array of headers to send with the response.
      * @return self A new instance of the Response class.
      */
-    public static function make(mixed $content = '', int $statusCode = 200, array $headers = []): self
+    public static function make(mixed $content = '', int $statusCode = self::STATUS_OK, array $headers = []): self
     {
         return new self($content, $statusCode, $headers);
     }
@@ -149,7 +149,7 @@ class Response implements ResponseContract
      */
     public function noContent(): self
     {
-        $this->setStatusCode(204);
+        $this->setStatusCode(self::STATUS_NO_CONTENT);
         $this->setContent('');
         return $this;
     }
@@ -164,7 +164,7 @@ class Response implements ResponseContract
     public function file(string $filePath, array $headers = []): void
     {
         if (!is_file($filePath) || !is_readable($filePath)) {
-            $this->setStatusCode(404)->setContent('File not found.')->send();
+            $this->setStatusCode(self::STATUS_NOT_FOUND)->setContent('File not found.')->send();
             return;
         }
 
@@ -206,7 +206,7 @@ class Response implements ResponseContract
      * @param int $flags The JSON encoding flags. Defaults to 320.
      * @return $this Current response instance for method chaining.
      */
-    public function json(array|Arrayable $data, int $statusCode = 200, int $flags = 320, int $depth = 512): self
+    public function json(array|Arrayable $data, int $statusCode = self::STATUS_OK, int $flags = 320, int $depth = 512): self
     {
         $content = json_encode(JsonResource::normalize($data), $flags | JSON_THROW_ON_ERROR, $depth);
         $this->setStatusCode($statusCode);
@@ -222,7 +222,7 @@ class Response implements ResponseContract
      * @param int $httpCode Optional HTTP status code for the redirect (default is 302).
      * @return $this Current response instance for method chaining.
      */
-    public function redirect(string $url, int $httpCode = 302): self
+    public function redirect(string $url, int $httpCode = self::STATUS_FOUND): self
     {
         $this->setHeader('Location', $url);
         $this->setStatusCode($httpCode); // Default to 302 if no code is provided
@@ -237,7 +237,7 @@ class Response implements ResponseContract
      * @param int $httpCode Optional HTTP status code for the redirect (default is 302).
      * @return $this Current response instance for method chaining.
      */
-    public function routeRedirect(string $routeName, array $params = [], int $httpCode = 302): self
+    public function routeRedirect(string $routeName, array $params = [], int $httpCode = self::STATUS_FOUND): self
     {
         $url = route_url($routeName, $params);
         return $this->redirect($url, $httpCode);
@@ -304,7 +304,7 @@ class Response implements ResponseContract
      * @param int $flags The JSON encoding flags. Defaults to 0.
      * @return $this Current response instance for method chaining.
      */
-    public function withJson(array|Arrayable $data, int $statusCode = 200, int $flags = 0, int $depth = 512): self
+    public function withJson(array|Arrayable $data, int $statusCode = self::STATUS_OK, int $flags = 0, int $depth = 512): self
     {
         return $this->json($data, $statusCode, $flags, $depth);
     }
@@ -423,7 +423,7 @@ class Response implements ResponseContract
             }
             Application::$app->prepareResponse($this);
         } else {
-            $this->head = strcasecmp($_SERVER['REQUEST_METHOD'] ?? 'GET', 'HEAD') === 0;
+            $this->head = strcasecmp($_SERVER['REQUEST_METHOD'] ?? Request::METHOD_GET, Request::METHOD_HEAD) === 0;
         }
 
         $message = $this->toPsrResponse();
@@ -461,7 +461,7 @@ class Response implements ResponseContract
     /** Apply transport rules without reading or discarding a stream body. */
     public function prepareForRequest(Request $request): self
     {
-        $this->head = $request->isMethod('HEAD');
+        $this->head = $request->isMethod(Request::METHOD_HEAD);
         $this->prepare();
         return $this;
     }
@@ -530,7 +530,7 @@ class Response implements ResponseContract
     /** Build an error response without emitting it or ending the middleware pipeline. */
     public static function error(string|int $error, ?string $message = null, ?int $code = null): static
     {
-        $code ??= is_int($error) ? $error : 500;
+        $code ??= is_int($error) ? $error : self::STATUS_INTERNAL_SERVER_ERROR;
 
         if (Application::$app?->resolved(Request::class) && request()->expectsJson()) {
             return new static(['message' => $message ?? _e('Internal Server Error'), 'code' => $code], $code);
@@ -607,11 +607,15 @@ class Response implements ResponseContract
         // These statuses have no message content. Do not invent a media type.
         if (
             ($statusCode >= 100 && $statusCode < 200)
-            || in_array($statusCode, [204, 205, 304], true)
+            || in_array($statusCode, [
+                self::STATUS_NO_CONTENT,
+                self::STATUS_RESET_CONTENT,
+                self::STATUS_NOT_MODIFIED,
+            ], true)
         ) {
             $this->content = '';
             $this->clearDefaultContentType();
-            if ($statusCode < 200 || $statusCode === 204) {
+            if ($statusCode < 200 || $statusCode === self::STATUS_NO_CONTENT) {
                 $this->removeHeader('Content-Length');
             } elseif ($statusCode === 205 && $this->hasHeader('Content-Length')) {
                 $this->setHeader('Content-Length', '0');

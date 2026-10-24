@@ -5,6 +5,7 @@ namespace Spark\Foundation\Http\Middlewares;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Http\Auth;
 use Spark\Http\Request;
+use Spark\Http\Response;
 
 /**
  * Simple authentication middleware that checks if the user is authenticated using the specified guards. 
@@ -47,7 +48,7 @@ abstract class AuthMiddleware implements MiddlewareInterface
      */
     protected function failed(Request $request, array $guards): mixed
     {
-        abort(401, 'Unauthenticated.');
+        abort(Response::STATUS_UNAUTHORIZED, 'Unauthenticated.');
 
         return null; // This line will never be reached, but is added to satisfy the return type.
     }

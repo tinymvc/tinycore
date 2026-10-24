@@ -64,7 +64,7 @@ class HttpRequest implements HttpRequestContract
      * @param string|int $key Request key
      */
     public function __construct(
-        protected string $method = 'GET',
+        protected string $method = self::METHOD_GET,
         protected string $url = '',
         protected array $params = [],
         protected string|array $data = [],
@@ -86,7 +86,7 @@ class HttpRequest implements HttpRequestContract
      * @return static
      */
     public static function make(
-        string $method = 'GET',
+        string $method = self::METHOD_GET,
         string $url = '',
         array $params = [],
         string|array $data = [],
@@ -585,7 +585,7 @@ class HttpRequest implements HttpRequestContract
      */
     public function getMethod(): string
     {
-        return $this->method ?? 'GET';
+        return $this->method ?? self::METHOD_GET;
     }
 
     /**
@@ -739,15 +739,15 @@ class HttpRequest implements HttpRequestContract
             },
         ];
 
-        if ($method === 'POST') {
+        if ($method === self::METHOD_POST) {
             $defaultOptions[CURLOPT_POST] = true;
-        } elseif ($method === 'HEAD') {
+        } elseif ($method === self::METHOD_HEAD) {
             $defaultOptions[CURLOPT_NOBODY] = true;
         } else {
             $defaultOptions[CURLOPT_CUSTOMREQUEST] = $method;
         }
 
-        if (!in_array($method, ['GET', 'HEAD'], true)) {
+        if (!in_array($method, [self::METHOD_GET, self::METHOD_HEAD], true)) {
             if ($this->isMultipart || !empty($this->attachments)) {
                 $fields = $this->postFieldData ?? $options[CURLOPT_POSTFIELDS] ?? $this->data;
                 if (!is_array($fields)) {
