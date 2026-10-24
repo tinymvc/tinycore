@@ -37,6 +37,10 @@ Do not capture current users, tenants, requests, or open transactions in long-li
 
 ## Standard service interfaces
 
+Native service contracts for Queue, Translator, DB, Blade, Hash, Events, Router, Middleware, and the registered HTTP services resolve their existing shared instances. `ApplicationContract` and `ContainerContract` resolve the application. Contract bindings are lazy and follow replacement request/service instances; they do not create a second singleton. Rebind a concrete service to replace its helper/facade access too, or bind just its contract to replace that interface's consumers.
+
+HTTP service registrations and short aliases (`request`, `response`, `session`, `auth`, `gate`, `inputErrors`, `vite`) are available in CLI as well as web applications. Registration does not capture a request or start a session; services are constructed only when resolved. Native session startup remains SAPI-dependent, and PSR hosts still own session/transport integration.
+
 `ContainerContract` extends PSR-11. `has()` follows aliases; missing entries throw `Psr\Container\NotFoundExceptionInterface`. Container resolution exceptions implement the corresponding PSR-11 interfaces. `app(Psr\Container\ContainerInterface::class)` returns the current application.
 
 Inject `Psr\Log\LoggerInterface` for logging. The default `Spark\Logger` writes through Tracer, supports `{name}` placeholders and rejects unknown levels. `Spark\Facades\Log` forwards to that binding, so replacing the PSR logger also replaces facade logging. `Spark\Contracts\LoggerInterface` is now an instance interface extending PSR-3; call the facade for static logging.

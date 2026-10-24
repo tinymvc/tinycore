@@ -142,7 +142,7 @@ class VerifyCsrfToken extends CsrfProtection
 }
 ```
 
-CSRF validates `POST`, `PUT`, `PATCH`, and `DELETE`. It accepts `_token`, `X-CSRF-TOKEN`, or `X-XSRF-TOKEN`. Invalid tokens throw an exception mapped to HTTP 419.
+CSRF validates `POST`, `PUT`, `PATCH`, and `DELETE`. It accepts `_token`, then `X-CSRF-TOKEN`, then `X-XSRF-TOKEN`. Headers accept plain session tokens or encrypted cookie tokens, including percent-encoded cookie values. An explicit CSRF header takes precedence over a stale XSRF header. Invalid tokens throw an exception mapped to HTTP 419. The XSRF cookie uses the request's HTTPS scheme, including configured trusted proxies.
 
 ### Throttle
 
@@ -168,3 +168,5 @@ Route::get('/api/search', [SearchController::class, 'index'])
 ```
 
 Parameter order is `attempts, minutes, suffix`.
+
+The sliding window is scoped by HTTP method, path, trusted client IP, suffix, and configured limit. It counts admitted requests even if the controller later fails. Cache reads and updates run under a short named lock, released before downstream middleware or controllers run. All application nodes must share the configured cache/lock store for a shared limit. A storage/lock failure propagates instead of admitting an uncounted request.

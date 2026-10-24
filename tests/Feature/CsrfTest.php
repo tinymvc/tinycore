@@ -11,12 +11,12 @@ final class CsrfTest extends FrameworkTestCase
     {
         $this->app->withMiddleware(register: [
             'csrf' => get_class(new class extends CsrfProtection {
-                protected array $except = ['hooks/*'];
+            protected array $except = ['hooks/*'];
             }),
         ]);
-        Route::get('/csrf', fn () => ['token' => session('csrf_token')])->middleware('csrf');
-        Route::post('/csrf', fn () => ['saved' => true])->middleware('csrf');
-        Route::post('/hooks/provider', fn () => ['saved' => true])->middleware('csrf');
+        Route::get('/csrf', fn() => ['token' => session('csrf_token')])->middleware('csrf');
+        Route::post('/csrf', fn() => ['saved' => true])->middleware('csrf');
+        Route::post('/hooks/provider', fn() => ['saved' => true])->middleware('csrf');
     }
 
     public function test_safe_requests_create_a_token_and_valid_tokens_are_accepted(): void
@@ -28,6 +28,9 @@ final class CsrfTest extends FrameworkTestCase
         $this->postJson('/csrf', ['_token' => $token])->assertOk()->assertJsonPath('saved', true);
         $this->postJson('/csrf', [], ['X-CSRF-TOKEN' => $token])->assertOk();
         $this->postJson('/csrf', [], ['X-XSRF-TOKEN' => \Spark\Facades\Hash::encrypt($token)])->assertOk();
+        $encoded = rawurlencode(\Spark\Facades\Hash::encrypt($token));
+        $this->postJson('/csrf', [], ['X-XSRF-TOKEN' => $encoded])->assertOk();
+        $this->postJson('/csrf', [], ['X-CSRF-TOKEN' => $token, 'X-XSRF-TOKEN' => 'stale'])->assertOk();
         $this->assertSame($token, session('csrf_token'));
     }
 

@@ -11,7 +11,6 @@ use function implode;
 use function in_array;
 use function is_array;
 use function microtime;
-use function rand;
 use function sleep;
 use function sprintf;
 use function strlen;
@@ -118,7 +117,7 @@ class Queue implements QueueContract
      * Start the queue worker to process jobs.
      *
      * @param bool $once Whether to process only one job and exit (default is false).
-     * @param int $timeout The maximum time in seconds to run the worker (default is 3600).
+     * @param int $timeout Worker lifetime in seconds, checked between jobs; 0 runs indefinitely.
      * @param int $sleep The number of seconds to sleep between job checks (default is 3).
      * @param int $delay The number of seconds to delay before retrying a failed job (default is 5).
      * @param int $tries The maximum number of attempts for a job before marking it as failed (default is 3).
@@ -132,6 +131,10 @@ class Queue implements QueueContract
         int $tries = 3,
         array|string $queue = 'default'
     ): void {
+        if ($timeout < 0 || $sleep < 0 || $delay < 0 || $tries < 1) {
+            throw new \InvalidArgumentException('Worker timeout, sleep and delay must be non-negative; tries must be at least 1.');
+        }
+
         $ranJobs = 0;
         $failedJobs = 0;
         $startedAt = microtime(true);
@@ -139,11 +142,10 @@ class Queue implements QueueContract
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
         $this->message("Processing jobs from [$queueNames].");
 
-        sleep(rand(0, $sleep));
         $this->recoverStaleJobs();
 
         do {
-            if ((microtime(true) - $startedAt) >= $timeout) {
+            if ($timeout > 0 && (microtime(true) - $startedAt) >= $timeout) {
                 $this->message('Queue worker timeout reached. Shutting down...');
                 break;
             }
@@ -161,20 +163,25 @@ class Queue implements QueueContract
 
             $jobId = (int) $job->getId();
             $attempts = (int) $job->getMetadata('attempts', 0);
-            $maxTries = $job->getTries($tries);
+            $maxTries = $tries;
+            $retryDelay = $delay;
 
             $jobStartedAt = microtime(true);
-            $label = sprintf(
-                '%s [queue=%s, id=%d, attempt=%d/%d]',
-                $job->getDisplayName(),
-                $job->getMetadata('queue', 'default'),
-                $jobId,
-                $attempts + 1,
-                $maxTries,
-            );
-            $this->message($label, 'RUNNING');
+            $label = $job->getDisplayName();
 
             try {
+                // Resolving retry properties may construct the application job and throw.
+                $maxTries = $job->getTries($tries);
+                $retryDelay = $job->getBackoff($delay, $attempts + 1);
+                $label = sprintf(
+                    '%s [queue=%s, id=%d, attempt=%d/%d]',
+                    $label,
+                    $job->getMetadata('queue', 'default'),
+                    $jobId,
+                    $attempts + 1,
+                    $maxTries,
+                );
+                $this->message($label, 'RUNNING');
                 $this->storage->updateJobStatus($jobId, 'processing', $attempts + 1);
 
                 $job->handle();
@@ -201,7 +208,6 @@ class Queue implements QueueContract
 
                     $this->message(sprintf('Job #%d exhausted %d attempts.', $jobId, $newAttempts), 'ERROR');
                 } else {
-                    $retryDelay = $job->getBackoff($delay, $newAttempts);
                     $retryTime = now()->addSeconds($retryDelay);
                     $this->storage->retryJob($jobId, $retryTime, $newAttempts);
 

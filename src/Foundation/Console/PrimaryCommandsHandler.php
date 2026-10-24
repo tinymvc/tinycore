@@ -172,7 +172,7 @@ class PrimaryCommandsHandler
     }
 
     /**
-     * Handles the "queue:run" command by running all the pending queue jobs.
+     * Handles the "queue:work" command by processing pending jobs.
      *
      * @param Queue $queue
      *   An instance of the Queue class for running queue jobs.

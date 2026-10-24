@@ -8,6 +8,10 @@ Read this reference for queue and jobs. Source paths and command working directo
 
 ## Queue and Jobs
 
+`php spark queue:work --queue=emails --once --sleep=0` processes at most one due job and exits. Without `--once`, the worker polls until its lifetime expires. `--timeout` is the worker lifetime checked between jobs, not a hard execution deadline for a job; `--timeout=0` disables that lifetime limit. Timeout, sleep, and retry delay must be non-negative; tries must be at least one. The first poll is immediate. Use a process supervisor to restart exited workers and restart workers after deployments.
+
+Job-construction and retry-policy failures follow the same retry/failure path as handler errors, using worker defaults when job settings cannot be resolved. Stale reservations are recovered at worker startup after 3600 seconds; an indefinitely running worker needs restarting to repeat recovery. Keep job execution below that reservation window. The worker does not forcibly interrupt a running job.
+
 Database queue operations use the configured connection, including their transactions. Default-connection dispatch participates in the business transaction; named connection/file/Redis dispatch does not. MySQL `pushOnce()`/`dispatchOnce()` rejects active transactions; call it after commit so deduplication does not outlive its advisory lock. Queue delivery is at least once: handlers must be idempotent, and stale recovery must exceed the longest execution time. File storage is for local, modest backlogs. Redis queue transitions are atomic and target standalone Redis, not Redis Cluster. Stop workers before clearing or changing storage. `getConnection()` throws for file queues.
 
 Prefer class jobs for application work. A class job implements `Spark\Queue\Contracts\JobInterface` and usually uses `Spark\Queue\Dispatchable`.

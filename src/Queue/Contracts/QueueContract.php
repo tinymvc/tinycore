@@ -40,7 +40,7 @@ interface QueueContract
      * This method will execute the jobs that are scheduled and ready to run.
      *
      * @param bool $once Whether to run the queue only once.
-     * @param int $timeout The maximum time in seconds to allow a job to run.
+     * @param int $timeout Worker lifetime in seconds, checked between jobs; 0 runs indefinitely.
      * @param int $sleep The number of seconds to sleep between job checks.
      * @param int $delay The delay in seconds before retrying a failed job.
      * @param int $tries The maximum number of attempts for a job.

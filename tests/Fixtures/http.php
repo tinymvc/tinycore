@@ -11,6 +11,10 @@ final class TransportRequest extends Request
 {
 }
 
+final class TransportCsrfProtection extends Spark\Foundation\Http\Middlewares\CsrfProtection
+{
+}
+
 $storage = getenv('TINYCORE_HTTP_TEST_STORAGE');
 $app = (new Application($storage))->withApp(config: [
     'app' => [
@@ -22,6 +26,11 @@ $app = (new Application($storage))->withApp(config: [
     ]
 ]);
 $app->singleton(Request::class, TransportRequest::class);
+if ($_SERVER['REQUEST_URI'] === '/csrf/trusted') {
+    $app->setConfig('app.trusted_proxies', ['127.0.0.1']);
+}
+$app->withMiddleware(register: ['csrf' => TransportCsrfProtection::class]);
+Route::get('/csrf/{kind}', fn() => 'ok')->middleware('csrf');
 if ($_SERVER['REQUEST_URI'] === '/events') {
     $app->setConfig('app.debug', true);
     $app->on('app:terminated', fn() => file_put_contents($storage . '/events.log', "terminated\n", FILE_APPEND | LOCK_EX));

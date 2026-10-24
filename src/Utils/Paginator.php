@@ -6,6 +6,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
 use Spark\Contracts\Support\Jsonable;
 use Spark\Contracts\Utils\PaginatorContract;
+use Spark\Support\HtmlString;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
@@ -353,9 +354,9 @@ class Paginator implements PaginatorContract, Arrayable, Htmlable, \Stringable, 
      * @param array $classes CSS classes for pagination elements.
      * @param array $entity Text entities for 'previous' and 'next' links.
      * 
-     * @return string HTML string with pagination links.
+     * @return \Spark\Support\HtmlString The pagination links as an HTML string.
      */
-    public function links(int $links = 2, array $classes = [], array $entity = []): string
+    public function links(int $links = 2, array $classes = [], array $entity = []): HtmlString
     {
         //Add dynamic pagination buttons in unordered list...
         $output = [
@@ -396,7 +397,7 @@ class Paginator implements PaginatorContract, Arrayable, Htmlable, \Stringable, 
         $output[] = '</ul>';
 
         // Returns html output of pagination links.
-        return implode('', $output);
+        return new HtmlString(implode('', $output));
     }
 
     /**
@@ -658,12 +659,8 @@ class Paginator implements PaginatorContract, Arrayable, Htmlable, \Stringable, 
         return $this->toArray();
     }
 
-    /**
-     * Converts the paginator instance to an HTML string.
-     * 
-     * @return string
-     */
-    public function toHtml(): string
+    /** @return HtmlString The pagination links as an HTML string. */
+    public function toHtml(): HtmlString
     {
         return $this->links();
     }
@@ -675,7 +672,7 @@ class Paginator implements PaginatorContract, Arrayable, Htmlable, \Stringable, 
      */
     public function __toString(): string
     {
-        return $this->links();
+        return (string) $this->links();
     }
 
     /**

@@ -6,6 +6,7 @@ use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Exceptions\ThrottleException;
 use Spark\Http\Request;
 use Spark\Cache\Cache;
+use Spark\Cache\Lock;
 use function count;
 use function is_array;
 use function is_numeric;
@@ -66,34 +67,29 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
         $user = (string) $request->ip() ?: '127.0.0.1';
         $path = trim($request->getPath(), '/');
 
-        $storage = Cache::make('throttle:requests');
+        $storage = Cache::make('throttle');
         $identifier = md5($request->getMethod() . "|$path|$user|$suffix");
         $key = "{$duration}m:$attempts:$identifier";
 
-        $now = time();
-        $windowStart = $now - ($duration * 60);
+        // Serialize the read/check/write so simultaneous requests cannot lose hits.
+        return Lock::make('throttle')->withLock($key, function () use ($storage, $key, $duration, $attempts): bool {
+            $now = time();
+            $windowStart = $now - ($duration * 60);
+            $timestamps = $storage->retrieve($key, eraseExpired: true);
+            $timestamps = array_values(array_filter(
+                is_array($timestamps) ? $timestamps : [],
+                fn($timestamp) => is_numeric($timestamp) && (int) $timestamp > $windowStart,
+            ));
 
-        $timestamps = $storage->retrieve($key, eraseExpired: true);
-        if (!is_array($timestamps)) {
-            $timestamps = [];
-        }
+            if (count($timestamps) >= $attempts) {
+                return false;
+            }
 
-        $timestamps = array_values(
-            array_filter(
-                $timestamps,
-                fn($timestamp) => is_numeric($timestamp) && (int) $timestamp > $windowStart
-            )
-        );
+            $timestamps[] = $now;
+            $storage->store($key, $timestamps, sprintf('+%d minutes', $duration));
 
-        if (count($timestamps) >= $attempts) {
-            return false;
-        }
-
-        $timestamps[] = $now;
-
-        $storage->store($key, $timestamps, sprintf('+%d minutes', $duration));
-
-        return true;
+            return true;
+        });
     }
 
     /**

@@ -157,6 +157,17 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
         }
     }
 
+    public function test_csrf_cookie_uses_the_trusted_request_scheme(): void
+    {
+        foreach (['trusted' => true, 'untrusted' => false] as $kind => $secure) {
+            $response = $this->exchange('GET', '/csrf/' . $kind, headers: ['X-Forwarded-Proto' => 'https']);
+            $this->assertSame(200, $response['status']);
+            $cookies = array_values(array_filter($response['headers']['set-cookie'] ?? [], fn($cookie) => str_starts_with($cookie, 'XSRF-TOKEN=')));
+            $this->assertCount(1, $cookies);
+            $this->assertSame($secure, str_contains(strtolower($cookies[0]), '; secure'));
+        }
+    }
+
     public function test_downloads_and_nonseekable_streams_use_normal_response_preparation(): void
     {
         foreach (['file', 'content'] as $kind) {

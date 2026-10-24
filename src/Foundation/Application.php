@@ -167,23 +167,45 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('middleware', Middleware::class);
         $this->alias('events', Events::class);
 
-        // Bind core services to the container for Http Client
-        if (is_web() || $this->testing) {
-            $this->singleton(Session::class);
-            $this->singleton(InputErrors::class);
-            $this->singleton(Request::class);
-            $this->singleton(Response::class);
-            $this->singleton(Gate::class);
-            $this->singleton(Auth::class);
-            $this->singleton(Vite::class);
+        // Registration is lazy, including in CLI jobs and PSR hosts.
+        $this->singleton(Session::class);
+        $this->singleton(InputErrors::class);
+        $this->singleton(Request::class);
+        $this->singleton(Response::class);
+        $this->singleton(Gate::class);
+        $this->singleton(Auth::class);
+        $this->singleton(Vite::class);
 
-            $this->alias('session', Session::class);
-            $this->alias('inputErrors', InputErrors::class);
-            $this->alias('request', Request::class);
-            $this->alias('response', Response::class);
-            $this->alias('gate', Gate::class);
-            $this->alias('auth', Auth::class);
-            $this->alias('vite', Vite::class);
+        $this->alias('session', Session::class);
+        $this->alias('inputErrors', InputErrors::class);
+        $this->alias('request', Request::class);
+        $this->alias('response', Response::class);
+        $this->alias('gate', Gate::class);
+        $this->alias('auth', Auth::class);
+        $this->alias('vite', Vite::class);
+
+        $this->instance(ApplicationContract::class, $this);
+        $this->instance(\Spark\Contracts\ContainerContract::class, $this);
+
+        // Contracts resolve the current service, including request replacements.
+        foreach ([
+            \Spark\Contracts\TranslatorContract::class => Translator::class,
+            \Spark\Database\Contracts\DBContract::class => DB::class,
+            \Spark\Contracts\HashContract::class => Hash::class,
+            \Spark\View\Contracts\BladeContract::class => Blade::class,
+            \Spark\Queue\Contracts\QueueContract::class => Queue::class,
+            \Spark\Http\Routing\Contracts\RouterContract::class => Router::class,
+            \Spark\Contracts\Http\MiddlewareContract::class => Middleware::class,
+            \Spark\Contracts\EventDispatcherContract::class => Events::class,
+            \Spark\Contracts\Http\SessionContract::class => Session::class,
+            \Spark\Contracts\Http\InputErrorsContract::class => InputErrors::class,
+            \Spark\Contracts\Http\RequestContract::class => Request::class,
+            \Spark\Contracts\Http\ResponseContract::class => Response::class,
+            \Spark\Contracts\Http\GateContract::class => Gate::class,
+            \Spark\Contracts\Http\AuthContract::class => Auth::class,
+            \Spark\Contracts\Utils\ViteContract::class => Vite::class,
+        ] as $contract => $service) {
+            $this->bind($contract, fn() => $this->get($service));
         }
 
         $this->bind('input', fn() => $this->get(Request::class)->input());

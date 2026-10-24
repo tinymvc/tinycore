@@ -13,7 +13,7 @@ use function is_string;
  * 
  * CSRF protection middleware class. This class is responsible for
  * validating the CSRF token sent in the request. If the token is
- * invalid or missing, it returns a 403 Forbidden response.
+ * invalid or missing, it returns a 419 Page Expired response.
  */
 abstract class CsrfProtection implements MiddlewareInterface
 {
@@ -31,7 +31,7 @@ abstract class CsrfProtection implements MiddlewareInterface
      * CSRF protection middleware.
      *
      * This middleware validates the CSRF token sent in the request. If the token is
-     * invalid or missing, it returns a 403 Forbidden response.
+     * invalid or missing, it returns a 419 Page Expired response.
      *
      * @param Request $request The current request.
      *
@@ -52,9 +52,8 @@ abstract class CsrfProtection implements MiddlewareInterface
             $token = $request->post('_token');
             $token ??= $this->getXsrfToken($request);
 
-            // Validate the CSRF token against the cookie token
+            // Validate the CSRF token against the session token.
             if (!is_string($token) || $token === '' || !hash_equals(session('csrf_token', ''), $token)) {
-                // Return a 403 Forbidden response if the token is invalid
                 throw new InvalidCsrfTokenException('Invalid CSRF token');
             }
         }
@@ -75,29 +74,15 @@ abstract class CsrfProtection implements MiddlewareInterface
      */
     protected function getXsrfToken(Request $request): ?string
     {
-        $rawToken = null;
-
-        // Legacy header key used by frameworks and JS clients.
-        if (($candidate = $request->header('X-XSRF-TOKEN')) !== null) {
-            $rawToken = $candidate;
-        } elseif (($candidate = $request->header('X-CSRF-TOKEN')) !== null) {
-            // Alternative header name commonly used by Axios/Fetch.
-            $rawToken = $candidate;
-        }
-
-        if ($rawToken === null) {
-            return null;
-        }
-
-        // Retrieve the CSRF token from the request headers
-
-        $token = $rawToken;
+        $token = $request->header('X-CSRF-TOKEN') ?? $request->header('X-XSRF-TOKEN');
 
         // If client sends plain token, use as-is.
         if (!is_string($token) || $token === '') {
             return null;
         }
 
+        // Browser cookie values may still be percent-encoded when copied into a header.
+        $token = rawurldecode($token);
         $sessionToken = session('csrf_token', '');
         if (hash_equals($sessionToken, $token)) {
             return $token;
@@ -106,7 +91,7 @@ abstract class CsrfProtection implements MiddlewareInterface
         // Decrypt the token using the Hash facade
         try {
             $decryptedToken = Hash::decrypt($token);
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return null;
         }
 
@@ -186,7 +171,7 @@ abstract class CsrfProtection implements MiddlewareInterface
             cookie(
                 'XSRF-TOKEN',
                 $encrypted,
-                ['path' => '/', 'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off', 'httponly' => false, 'samesite' => 'Lax', 'expires' => 0]
+                ['path' => '/', 'secure' => str_starts_with(request()->getRootUrl(), 'https://'), 'httponly' => false, 'samesite' => 'Lax', 'expires' => 0]
             );
 
             // Store the token in the session

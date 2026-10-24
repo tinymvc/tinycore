@@ -38,9 +38,9 @@ interface PaginatorContract
      * @param int $links The number of links to show before and after the current page.
      * @param array $classes The CSS classes for the pagination elements.
      * @param array $entity The text entities for the 'previous' and 'next' links.
-     * @return string The pagination links as an HTML string.
+     * @return \Spark\Support\HtmlString The pagination links as an HTML string.
      */
-    public function links(int $links = 2, array $classes = [], array $entity = []): string;
+    public function links(int $links = 2, array $classes = [], array $entity = []): \Spark\Support\HtmlString;
 
     /**
      * Get the total number of items across all pages.
