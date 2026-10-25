@@ -157,6 +157,8 @@ Malformed request pages default to 1; non-positive sizes/pages normalize to 1. O
 
 `Paginator`, `SimplePaginator`, and `CursorPaginator` live in `Spark\Paginator` and share `AbstractPaginator` for collections, iteration, array access, transformations, JSON, escaped HTML links, and resource metadata. Numbered `Paginator` reuses `SimplePaginator` page navigation. Existing numbered `through()` still returns a transformed array without mutation; simple/cursor `through()` transforms items and returns the paginator. Use `map()` for in-place transformations on all three. URL paths and filters are captured when a paginator is constructed.
 
+`firstItem()` / `lastItem()` use the actual stored page items, including partially filled pages; resource `from` and `to` are null on empty pages even when a numbered paginator retains a nonzero total. `paginate()` keeps its existing consuming/reset behavior, while simple/cursor pagination leaves the source builder and mappers reusable.
+
 ## Cursor Pagination
 
 Use `cursorPaginate(int $perPage = 15, array|string $columns = ['*'], string $cursorName = 'cursor', Cursor|string|null $cursor = null)` for next/previous navigation. It returns `Spark\Paginator\CursorPaginator`, fetches at most `$perPage + 1` rows, and uses ordered comparisons instead of a count query or SQL offset.
@@ -188,7 +190,7 @@ $page->hasMorePages();      // Whether a next page exists
 - Repeated `orderBy()` calls now append ordering columns. `order('id ASC')` replaces an existing order; `orderAsc()` / `orderDesc()` retain their replacement behavior.
 - Plain qualified columns and mixed ASC/DESC directions are supported. Ordering expressions, selected aliases, grouped queries, HAVING, and unions are unsupported and fail explicitly.
 - A null cursor reads the named request query parameter. Malformed URL tokens start at the first page; valid cursors missing a required ordered column throw `InvalidArgumentException`. Cursors are encoded values, not authorization tokens; retain all access filters on every request.
-- Existing selections are preserved with the default `$columns`. Cursor values come from database rows before model casting or custom mapping. The source builder remains reusable.
+- Existing selections are preserved with the default `$columns`. Cursor values come from database rows before model casting or custom mapping. Declared model properties are populated before the constructor, matching PDO retrieval. The source builder remains reusable.
 - Links preserve query filters. `items()`, iteration, `count()`, `getCollection()`, `through()`, `links()`, and JSON serialization are supported. `through()` transforms items in place while keeping navigation boundaries. There are no totals, numbered pages, or last-page URL.
 
 ## Date and Time Conditions with `now()`

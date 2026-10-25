@@ -79,16 +79,6 @@ class Paginator extends SimplePaginator implements PaginatorContract
         return array_map($callback, $this->items());
     }
 
-    public function firstItem(): int
-    {
-        return $this->total() === 0 ? 0 : $this->offset() + 1;
-    }
-
-    public function lastItem(): int
-    {
-        return min($this->offset() + $this->perPage(), $this->total());
-    }
-
     public function paginationLinks(): array
     {
         return ['last' => $this->url($this->lastPage())] + parent::paginationLinks();

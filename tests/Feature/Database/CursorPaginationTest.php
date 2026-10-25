@@ -179,6 +179,17 @@ final class CursorPaginationTest extends DatabaseScenarioTestCase
         $this->assertSame($page->toArray(), json_decode(json_encode($page), true));
         $this->assertSame($cursor, Cursor::fromEncoded($cursor)->encode());
     }
+
+    public function test_cursor_hydration_matches_pdo_for_declared_model_properties(): void
+    {
+        $expected = CursorDeclaredPost::orderBy('id')->first();
+        $query = CursorDeclaredPost::orderBy('id');
+        $first = $query->cursorPaginate(2);
+        $this->assertSame($expected->title, $first->items()[0]->title);
+        $this->assertSame($expected->constructorTitle, $first->items()[0]->constructorTitle);
+        $second = $query->cursorPaginate(2, cursor: $first->nextCursor());
+        $this->assertSame(['Gamma', 'Delta'], $this->titles($second));
+    }
 }
 
 class CursorPostResource extends JsonResource
@@ -192,4 +203,16 @@ class CursorPostResource extends JsonResource
 class CursorDatedPost extends ScenarioPost
 {
     protected array $casts = ['published_at' => 'datetime'];
+}
+
+class CursorDeclaredPost extends ScenarioPost
+{
+    public string $title;
+    public ?string $constructorTitle = null;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->constructorTitle = $this->title ?? null;
+    }
 }

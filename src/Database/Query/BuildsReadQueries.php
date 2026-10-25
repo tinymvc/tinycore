@@ -707,7 +707,7 @@ trait BuildsReadQueries
     public function toSql(): string
     {
         if ($this->bindings && $this->parameters) {
-            throw new \Spark\Database\Exceptions\QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
+            throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
         }
 
         if (empty($this->query['select'])) {
@@ -768,7 +768,7 @@ trait BuildsReadQueries
      * Retrieves the first result from the query.
      *
      * @param null|string|array $fields Optional fields to select for the first result.
-     * @return TModel|array|object|null The first result object or null if none found.
+     * @return TModel|array|object|string|null The first result object or null if none found.
      */
     public function first(null|string|array $fields = null): mixed
     {
@@ -797,7 +797,7 @@ trait BuildsReadQueries
      *
      * @param mixed $where Optional WHERE clause to filter results.
      * @param null|string|array $fields Optional fields to select for the first result.
-     * @return TModel|array|object The first result object or throws NotFoundException.
+     * @return TModel|array|object|string The first result object or throws NotFoundException.
      * @throws \Spark\Exceptions\NotFoundException If no results are found.
      */
     public function firstOrFail($where = null, $fields = null): mixed
@@ -1041,7 +1041,13 @@ trait BuildsReadQueries
             $reflection = new \ReflectionClass($modelClass);
             $paginator->through(function (array $attributes) use ($reflection, $fetch) {
                 $model = $reflection->newInstanceWithoutConstructor();
-                $model->setAttributes($attributes);
+                foreach ($attributes as $name => $value) {
+                    if ($reflection->hasProperty($name)) {
+                        $reflection->getProperty($name)->setValue($model, $value);
+                    } else {
+                        $model->$name = $value;
+                    }
+                }
                 $reflection->getConstructor()?->invokeArgs($model, $fetch[2] ?? []);
                 return $model;
             });

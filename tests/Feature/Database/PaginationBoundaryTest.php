@@ -11,7 +11,7 @@ final class PaginationBoundaryTest extends DatabaseScenarioTestCase
         $this->assertSame(5, $page->total());
         $this->assertSame(2, $page->page());
         $this->assertSame(2, $page->offset());
-        $this->assertSame(['Gamma', 'Delta'], array_map(fn ($post) => $post->title, $page->items()));
+        $this->assertSame(['Gamma', 'Delta'], array_map(fn($post) => $post->title, $page->items()));
     }
 
     public function test_out_of_range_page_matches_clamped_paginator_metadata(): void
@@ -19,7 +19,7 @@ final class PaginationBoundaryTest extends DatabaseScenarioTestCase
         request()->query->put('page', 999);
         $page = ScenarioPost::orderBy('id')->paginate(2);
         $this->assertSame(3, $page->page());
-        $this->assertSame(['Orphan'], array_map(fn ($post) => $post->title, $page->items()));
+        $this->assertSame(['Orphan'], array_map(fn($post) => $post->title, $page->items()));
     }
 
     public function test_zero_limit_uses_normalized_page_size(): void
@@ -67,5 +67,32 @@ final class PaginationBoundaryTest extends DatabaseScenarioTestCase
         $this->assertSame(2, $page->total());
         $this->assertCount(1, $page->items());
         $this->assertSame('draft', $page->items()[0]->status);
+    }
+
+    public function test_numbered_metadata_tracks_actual_items_in_partial_and_empty_pages(): void
+    {
+        request()->query->put('page', 2);
+        $page = \Spark\Paginator\Paginator::make(25, 10)->setData([11, 12]);
+        $this->assertSame(11, $page->firstItem());
+        $this->assertSame(12, $page->lastItem());
+        $page->filter(fn() => false);
+        $this->assertNull($page->paginationMeta()['from']);
+        $this->assertNull($page->paginationMeta()['to']);
+        $this->assertSame(25, $page->total());
+    }
+
+    public function test_distinct_and_union_pagination_keep_totals_bindings_and_requested_page(): void
+    {
+        request()->query->put('page', 2);
+        $page = query('scenario_posts')->distinct('status')->orderBy('status')->paginate(1);
+        $this->assertSame(2, $page->total());
+        $this->assertSame(['published'], $page->pluck('status'));
+
+        $query = query('scenario_posts')->select('id', 'title')->where('id', '<=', 2)
+            ->union(query('scenario_posts')->select('id', 'title')->where('id', '>=', 4))
+            ->orderBy('id');
+        $page = $query->paginate(2);
+        $this->assertSame(4, $page->total());
+        $this->assertSame(['Delta', 'Orphan'], $page->pluck('title'));
     }
 }

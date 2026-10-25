@@ -189,6 +189,8 @@ See [queries](queries.md#cursor-pagination) for ordering requirements and the su
 
 `PostResource::collection(Post::orderBy('id')->simplePaginate(20))` includes transformed `data`, `links.first`, `links.prev`, `links.next`, and `meta.current_page`, `meta.per_page`, `meta.from`, `meta.to`. Empty pages have null `from`/`to`. It omits totals and last-page metadata. All paginator resources share the same metadata integration and preserve additional application metadata.
 
+Numbered and simple page ranges reflect the actual stored items. A partial page does not report nonexistent items up to the configured page size, and an empty page has null ranges even if a numbered paginator still holds a nonzero total.
+
 ## Response Wrapping and Custom Metadata
 
 - **Wrapping**: Top-level resources default to a `'data'` envelope.
