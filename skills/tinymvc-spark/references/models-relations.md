@@ -354,6 +354,8 @@ $post->tags()->sync($request->validated('tag_ids', []));
 $post->tags()->toggle([1, 2]);
 ```
 
+Pivot `sync()` and `toggle()` preserve string identifiers as well as integer IDs. Pass string keys in an array, for example `sync(['editor', 'reviewer'])`; existing links are compared without integer coercion. Zero IDs and attribute maps keyed by zero are also supported.
+
 ### 4. Creating Related Records
 
 Create related models directly through relationship instances using `array|Arrayable`:

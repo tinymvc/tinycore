@@ -134,6 +134,10 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(ClockInterface::class, fn() => new Clock());
         $this->singleton(Psr17Factory::class);
         $this->instance(ContainerInterface::class, $this);
+
+        $this->singleton(\Spark\Cache\Lock::class);
+        $this->alias('lock', \Spark\Cache\Lock::class);
+
         $this->bind(
             CacheInterface::class,
             fn() => new SimpleCache($this->get(\Spark\Cache\Cache::class))
@@ -225,7 +229,6 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('storage', \Spark\Storage\Storage::class);
         $this->alias('uploader', \Spark\Storage\Uploader::class);
         $this->alias('cache', \Spark\Cache\Cache::class);
-        $this->alias('lock', \Spark\Cache\Lock::class);
         $this->alias('query', \Spark\Database\QueryBuilder::class);
         $this->alias('validator', \Spark\Http\Validator::class);
         $this->alias('schema', \Spark\Database\Schema\Schema::class);
@@ -919,7 +922,11 @@ class Application extends \Spark\Container implements ApplicationContract
         }
 
         while (ob_get_level() > 0) {
-            @ob_end_flush();
+            if (!@ob_end_flush()) {
+                // A host may own a buffer that PHP is not allowed to remove.
+                @ob_flush();
+                break;
+            }
         }
 
         flush();

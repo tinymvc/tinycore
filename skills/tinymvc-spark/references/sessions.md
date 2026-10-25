@@ -59,8 +59,8 @@ Use the `cookie()` helper for managing HTTP cookies:
 // Read a cookie
 $displayMode = cookie('display_mode');
 
-// Set a simple cookie (name, value, minutes)
-cookie('display_mode', 'compact', 60 * 24 * 30);
+// Set a simple cookie (name, value, seconds)
+cookie('display_mode', 'compact', 60 * 60 * 24 * 30);
 
 // Set a cookie with options array (using now()->addDays(...) for expiration timestamp)
 cookie('display_mode', 'compact', [
@@ -91,3 +91,4 @@ Spark supports `database`, `file`, and `redis` session handlers in `config/sessi
 - **`lifetime`**: Session idle lifetime in **minutes** (default 120).
 - **Regeneration**: Call `Session::regenerate()` after login to prevent session fixation.
 - **Invalidation**: Call `Session::invalidate()` on logout to flush data and change session ID.
+- **Secure cookies**: A null `session.cookie_settings.secure` follows the current request's HTTPS detection, including configured trusted proxies. Explicit true/false settings take precedence; untrusted forwarding headers cannot enable this detection.

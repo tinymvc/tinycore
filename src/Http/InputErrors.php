@@ -274,7 +274,7 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
      */
     public function addMessage(string $field, string $message): void
     {
-        $this->messages[$field][] = $message;
+        $this->messages[$field] = [...(array) ($this->messages[$field] ?? []), $message];
     }
 
     /**
@@ -382,7 +382,7 @@ class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \Iter
      */
     public function __toString(): string
     {
-        return $this->any() ? $this->getFirstError() : '';
+        return $this->getFirstError() ?? '';
     }
 
     /**

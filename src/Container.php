@@ -18,6 +18,7 @@ use Spark\Exceptions\Container\MethodDoesNotExistsException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
+use function array_slice;
 use function count;
 use function get_class;
 use function in_array;
@@ -282,9 +283,9 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function call(array|string|callable $abstract, array $parameters = [], array $bindingFields = []): mixed
     {
-        // If it's a closure or function (but not an array callable), just call it with dependencies
-        if (is_callable($abstract) && !is_array($abstract)) {
-            $reflectionFunction = new ReflectionFunction($abstract);
+        // Reflect callable objects, functions, and static methods without constructing a new receiver.
+        if (is_callable($abstract)) {
+            $reflectionFunction = new ReflectionFunction(\Closure::fromCallable($abstract));
             $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters, $bindingFields);
 
             return $abstract(...$dependencies); // Call the closure
@@ -348,6 +349,14 @@ class Container implements ContainerContract, \ArrayAccess
             $paramName = $param->getName();
             $type = $param->getType();
 
+            if ($param->isVariadic()) {
+                $values = $isAssociative
+                    ? (array) ($parameters[$paramName] ?? [])
+                    : array_slice($parameters, $positionalIndex);
+                array_push($dependencies, ...array_values($values));
+                break;
+            }
+
             // Check if this parameter is a class dependency (not a built-in type)
             $isDependency = $type instanceof ReflectionNamedType && !$type->isBuiltin();
             if ($type instanceof ReflectionUnionType) {
@@ -370,6 +379,23 @@ class Container implements ContainerContract, \ArrayAccess
                 }
             } else {
                 // For indexed arrays, handle positional mapping intelligently
+                if ($isDependency && array_key_exists($positionalIndex, $parameters)) {
+                    $value = $parameters[$positionalIndex];
+                    $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
+
+                    foreach ($types as $candidate) {
+                        if (
+                            $candidate instanceof ReflectionNamedType && (
+                                (is_object($value) && !$candidate->isBuiltin() && is_a($value, $candidate->getName()))
+                                || ($value === null && $param->allowsNull())
+                            )
+                        ) {
+                            $isDependency = false;
+                            break;
+                        }
+                    }
+                }
+
                 if ($isDependency) {
                     // This is a dependency, resolve from container
                     $dependencies[] = $this->resolveParameter($param);
@@ -710,10 +736,7 @@ class Container implements ContainerContract, \ArrayAccess
     private function build(string|callable $concrete, array $parameters = []): mixed
     {
         if (is_callable($concrete)) {
-            $reflectionFunction = new ReflectionFunction($concrete);
-            $dependencies = $this->getReflectorDependencies($reflectionFunction, $parameters);
-
-            return $concrete(...$dependencies);
+            return $this->call($concrete, $parameters);
         }
 
         if (!isset($this->reflectionCache[$concrete])) {

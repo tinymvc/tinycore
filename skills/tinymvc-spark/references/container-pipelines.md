@@ -12,7 +12,7 @@ app()->bind(
     App\Services\RemoteCatalog::class,
 );
 
-app()->singleton(App\Services\RemoteCatalog::class, function ($container) {
+app()->singleton(App\Services\RemoteCatalog::class, function () {
     return new App\Services\RemoteCatalog(config('services.catalog_url'));
 });
 ```
@@ -30,6 +30,8 @@ app()->when(
 ```
 
 Do not use `when()->needs()->give()`. Aliases use `alias($alias, $abstract)` in that order. `make($class, $parameters)` and `call($callback, $parameters, $bindingFields)` provide explicit construction/action parameters; inspect `Container.php` before mixing route scalars with injected types.
+
+Callable factories and `call()` accept invokable objects and static callables. Supplied positional objects matching a declared class type retain their identity; omitted class dependencies are resolved through the container. Variadic parameters accept remaining positional values or an array under their parameter name, including an empty list.
 
 For resolution failures, trace imports/autoloading, constructor arguments, interface binding, provider registration, and circular dependencies. Use `bound()` / `resolved()` for diagnostics. `forgetInstance()` drops a shared instance; it does not replace references already captured by another object. Avoid broad `flush()` during a request.
 
@@ -51,7 +53,7 @@ Inject `Psr\Clock\ClockInterface` or resolve `app('clock')` for a `DateTimeImmut
 
 `event($name, $payload = [], $halt = false)` dispatches synchronously. An array payload is an argument list, so use `event('order.created', [$order])` for a single array/object argument and wrap an array record rather than accidentally spreading its fields. Register listeners through `app()->on()` or `Spark\Events` as the application does.
 
-Higher numeric priorities run first. For string events, `dispatch()` stops on a listener returning `false` or calling `halt()`. `until()` returns the first non-null response, including false. Inspect `Events.php` and `Foundation/helpers.php` before choosing response aggregation or one-time listeners.
+Higher numeric priorities run first. For string events, `dispatch()` stops on a listener returning `false` or calling `halt()`. Nested dispatches keep their halt state separate: an inner event cannot stop or resume its outer event. `until()` returns the first non-null response, including false. Inspect `Events.php` and `Foundation/helpers.php` before choosing response aggregation or one-time listeners.
 
 An event does not establish a durable job or an after-commit boundary. A listener that writes to another service cannot roll back with SQL. Put external effects behind the application's explicit commit/dispatch policy; test listener failure and repeated delivery where relevant.
 

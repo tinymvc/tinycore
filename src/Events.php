@@ -184,21 +184,25 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
      */
     public function dispatchWithResponse(string $eventName, ...$args): array
     {
-        $this->shouldHalt = false;
-
         if (!isset($this->listeners[$eventName])) {
             return [];
         }
 
+        $previousHalt = $this->shouldHalt;
+        $this->shouldHalt = false;
         $responses = [];
 
-        foreach ($this->getSortedEventListeners($eventName) as $listener) {
-            $result = $this->callListener($listener['callback'], $args, $eventName);
-            $responses[] = $result;
+        try {
+            foreach ($this->getSortedEventListeners($eventName) as $listener) {
+                $result = $this->callListener($listener['callback'], $args, $eventName);
+                $responses[] = $result;
 
-            if ($result === false || $this->shouldHalt) {
-                break;
+                if ($result === false || $this->shouldHalt) {
+                    break;
+                }
             }
+        } finally {
+            $this->shouldHalt = $previousHalt;
         }
 
         return $responses;

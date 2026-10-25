@@ -250,6 +250,10 @@ Important defer notes:
 
 Config files return PHP arrays. Use `config('key.path')` and `env('KEY', $default)`.
 
+Quoted environment values stay strings, including when followed by a whitespace-separated comment: `CODE="123" # text`. Hashes inside quotes are preserved. An empty or comment-only `.env` produces a valid empty environment cache.
+
+Environment and configuration caches use atomic file replacement: concurrent readers see a complete old or new cache. During termination, a host-owned non-removable output buffer does not block deferred callbacks. URL helpers construct values from the current context rather than retaining a process-global root URL.
+
 ### Database Config
 
 Expected shape:

@@ -184,6 +184,8 @@ $post = Post::create(
 
 `Input` includes typed extraction helpers:
 
+`text()` and `escapeHtml()` preserve both integer `0` and string `'0'` as `'0'`; missing values still return `null`.
+
 ```php
 $title     = $request->validated()->string('title');          // string or null
 $isActive  = $request->validated()->boolean('is_active');      // bool (handles '1', 'true', 'on', etc.)
@@ -201,6 +203,8 @@ $password  = $request->validated()->password('password', hash: true); // automat
 ---
 
 ## Validation Errors: The `Spark\Http\InputErrors` Class
+
+`addMessage($field, $message)` appends to an existing string or list of messages. Casting the error bag to a string returns its first error or `''` when no first message exists.
 
 When validation fails on a web request, TinyCore flashes errors to the session inside an instance of **`Spark\Http\InputErrors`**, accessible via the global `errors()` helper:
 

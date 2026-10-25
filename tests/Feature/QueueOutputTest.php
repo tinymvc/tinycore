@@ -52,11 +52,16 @@ final class QueueOutputTest extends FrameworkTestCase
         $this->assertStringContainsString('DONE', $success);
         $this->assertStringContainsString('queue=emails', $success);
         $this->assertTrue((bool) preg_match('/\d+\.\d{2}ms DONE/', $success));
+        $this->assertTrue((bool) preg_match('/^\[[^\]]+\] INFO  Processing jobs from \[emails\]\./m', $success));
+        $this->assertTrue((bool) preg_match('/\.{2,} RUNNING$/m', $success));
         $queue->push(new \Spark\Queue\Job('core_queue_output_failure'), 'emails');
         $retry = $run();
         $this->assertStringContainsString('FAIL', $retry);
         $this->assertStringContainsString('RETRY', $retry);
         $this->assertStringContainsString('First line Second line', $retry);
+        $this->assertTrue((bool) preg_match('/^\[[^\]]+\] ERROR  .*First line Second line$/m', $retry));
+        $this->assertTrue((bool) preg_match('/^\[[^\]]+\] RETRY  Job #\d+ scheduled for /m', $retry));
+        $this->assertFalse((bool) preg_match('/First line.*FAIL$/m', $retry));
         $this->assertFalse(str_contains($retry, 'hidden title'));
         $failure = $run();
         $this->assertStringContainsString('attempt=2/2', $failure);
@@ -67,6 +72,10 @@ final class QueueOutputTest extends FrameworkTestCase
         $this->assertStringContainsString('First line Second line', $failed);
         $this->assertFalse(str_contains($failed, "\033"));
         $this->assertFalse(str_contains($failed, 'hidden title'));
+        $queue->push((new \Spark\Queue\Job('strlen', ['repeat']))->repeatEveryMinutes(5), 'emails');
+        $repeated = $run();
+        $this->assertTrue((bool) preg_match('/\.{2,} \d+\.\d{2}ms DONE$/m', $repeated));
+        $this->assertTrue((bool) preg_match('/^\[[^\]]+\] SCHEDULED  Job #\d+ scheduled for /m', $repeated));
         $queue->clearAllJobs();
         $empty = $run();
         $this->assertFalse(str_contains($empty, 'timeout reached'));

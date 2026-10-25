@@ -9,16 +9,16 @@ final class EventDispatcherTest extends FrameworkTestCase
     public function test_priority_and_response_order(): void
     {
         $events = new Events();
-        $events->addListener('run', fn ($n) => $n + 1, 0);
-        $events->addListener('run', fn ($n) => $n + 2, 10);
+        $events->addListener('run', fn($n) => $n + 1, 0);
+        $events->addListener('run', fn($n) => $n + 2, 10);
         $this->assertSame([5, 4], $events->dispatchWithResponse('run', 3));
     }
 
     public function test_false_response_stops_propagation(): void
     {
         $events = new Events();
-        $events->addListener('run', fn () => false);
-        $events->addListener('run', fn () => $this->fail('Listener should not run'));
+        $events->addListener('run', fn() => false);
+        $events->addListener('run', fn() => $this->fail('Listener should not run'));
         $this->assertSame([false], $events->dispatchWithResponse('run'));
     }
 
@@ -39,9 +39,9 @@ final class EventDispatcherTest extends FrameworkTestCase
     public function test_until_returns_first_non_null_including_false(): void
     {
         $events = new Events();
-        $events->addListener('run', fn () => null);
-        $events->addListener('run', fn () => false);
-        $events->addListener('run', fn () => $this->fail('Listener should not run'));
+        $events->addListener('run', fn() => null);
+        $events->addListener('run', fn() => false);
+        $events->addListener('run', fn() => $this->fail('Listener should not run'));
         $this->assertFalse($events->until('run'));
         $this->assertNull($events->until('missing'));
     }
@@ -49,7 +49,7 @@ final class EventDispatcherTest extends FrameworkTestCase
     public function test_removing_listener_preserves_other_events(): void
     {
         $events = new Events();
-        $callback = fn () => 'ok';
+        $callback = fn() => 'ok';
         $events->subscribe(['a' => $callback, 'b' => $callback]);
         $events->removeListener('a', $callback);
         $this->assertFalse($events->hasEvent('a'));
@@ -62,7 +62,8 @@ final class EventDispatcherTest extends FrameworkTestCase
     {
         $events = new Events();
         $calls = 0;
-        $events->addListener('run', function () use (&$calls) { $calls++; });
+        $events->addListener('run', function () use (&$calls) {
+            $calls++; });
         $events->dispatchIf('run', false);
         $events->dispatchUnless('run', true);
         $this->assertSame(0, $calls);
@@ -73,6 +74,22 @@ final class EventDispatcherTest extends FrameworkTestCase
 
     public function test_invalid_listener_rejected_at_registration(): void
     {
-        $this->assertThrows(InvalidArgumentException::class, fn () => (new Events())->addListener('run', 'NoSuchListenerClass'));
+        $this->assertThrows(InvalidArgumentException::class, fn() => (new Events())->addListener('run', 'NoSuchListenerClass'));
+    }
+
+    public function test_nested_dispatch_keeps_halt_state_local_to_each_event(): void
+    {
+        $events = new Events();
+        $events->addListener('inner', fn() => $events->halt());
+        $events->addListener('outer', fn() => $events->dispatch('inner'));
+        $events->addListener('outer', fn() => 'continued');
+        $this->assertSame([null, 'continued'], $events->dispatchWithResponse('outer'));
+
+        $events->addListener('stopped', function () use ($events) {
+            $events->halt();
+            $events->dispatch('missing');
+        });
+        $events->addListener('stopped', fn() => 'must not run');
+        $this->assertSame([null], $events->dispatchWithResponse('stopped'));
     }
 }

@@ -190,7 +190,8 @@ class Queue implements QueueContract
                     $nextRun = now()->modify('+' . $job->getRepeat());
                     $this->storage->rescheduleJob($jobId, $nextRun);
 
-                    $this->message("$label - next run: $nextRun", 'DONE', microtime(true) - $jobStartedAt);
+                    $this->message($label, 'DONE', microtime(true) - $jobStartedAt);
+                    $this->message(sprintf('Job #%d scheduled for %s', $jobId, $nextRun), 'SCHEDULED');
                 } else {
                     $this->removeJobById($jobId);
                     $this->message($label, 'DONE', microtime(true) - $jobStartedAt);
@@ -200,7 +201,8 @@ class Queue implements QueueContract
             } catch (\Throwable $e) {
                 $newAttempts = $attempts + 1;
 
-                $this->message("$label - " . $e->getMessage(), 'FAIL', microtime(true) - $jobStartedAt);
+                $this->message($label, 'FAIL', microtime(true) - $jobStartedAt);
+                $this->message($e->getMessage(), 'ERROR');
 
                 if ($newAttempts >= $maxTries) {
                     $this->storage->markJobAsFailed($jobId, $e, $newAttempts);
@@ -303,15 +305,14 @@ class Queue implements QueueContract
         // Strip terminal escape sequences, then flatten control characters in job/error text.
         $message = preg_replace('/\x1B(?:\][^\x07\x1B]*(?:\x07|\x1B\\\\)|\[[0-?]*[ -\/]*[@-~]|[@-_])/', '', $message) ?? $message;
         $message = trim(preg_replace('/[\x00-\x20\x7F]+/', ' ', $message) ?? $message);
-        $line = '[' . date('Y-m-d H:i:s') . '] ' . $message;
+        $timestamp = '[' . date('Y-m-d H:i:s') . ']';
+        $line = "$timestamp $message";
         $elapsed = $duration === null ? '' : ($duration >= 1
             ? sprintf('%.2fs ', $duration)
             : sprintf('%.2fms ', max(0, $duration) * 1000));
 
         $width = max(40, min(200, (int) (getenv('COLUMNS') ?: 80)));
-        $separator = $terminal
-            ? ' ' . str_repeat('.', max(2, $width - strlen($line) - strlen($elapsed) - strlen($status) - 2)) . ' '
-            : ' ';
+        $separator = ' ' . str_repeat('.', max(2, $width - strlen($line) - strlen($elapsed) - strlen($status) - 2)) . ' ';
 
         $color = match ($status) {
             'DONE' => '32',
@@ -321,7 +322,9 @@ class Queue implements QueueContract
         };
         $badge = $colors ? "\033[{$color}m$status\033[0m" : $status;
 
-        echo "$line$separator$elapsed$badge" . PHP_EOL;
+        echo in_array($status, ['RUNNING', 'DONE', 'FAIL'], true)
+            ? "$line$separator$elapsed$badge" . PHP_EOL
+            : "$timestamp $badge  $message" . PHP_EOL;
     }
 
     /**

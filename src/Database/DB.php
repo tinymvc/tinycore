@@ -35,8 +35,6 @@ use function sprintf;
  * @method static QueryBuilder where(null|string|array|Closure $column = null, mixed $operator = null, mixed $value = null, ?string $boolean = null, bool $not = false)
  * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $boolean = 'AND')
  * @method static QueryBuilder whereIn(string $column, array $values)
- * @method static QueryBuilder when(mixed $value, callable $callback)
- * @method static QueryBuilder unless(mixed $value, callable $callback)
  * @method static QueryBuilder table(string $table, ?string $alias = null)
  * @method static QueryBuilder select(array|string $fields = '*', ...$args)
  * @method static QueryBuilder selectRaw(string $sql, array $bindings = [])
@@ -54,6 +52,11 @@ class DB implements DBContract
         __call as macroCall;
         __callStatic as macroCallStatic;
     }
+
+    /** Database driver constants. */
+    public const DRIVER_MYSQL = 'mysql';
+    public const DRIVER_PGSQL = 'pgsql';
+    public const DRIVER_SQLITE = 'sqlite';
 
     /**
      * Store the PDO connection of database.
@@ -102,7 +105,7 @@ class DB implements DBContract
     public function __construct(array $config = [])
     {
         // If no configuration is provided, use the default configuration.
-        if (empty($config)) {
+        if ($config === []) {
             $config = config('database');
         }
 
@@ -176,7 +179,7 @@ class DB implements DBContract
      */
     public function isMySQL(): bool
     {
-        return $this->isDriver('mysql');
+        return $this->getDriver() === self::DRIVER_MYSQL;
     }
 
     /**
@@ -186,7 +189,7 @@ class DB implements DBContract
      */
     public function isSQLite(): bool
     {
-        return $this->isDriver('sqlite');
+        return $this->getDriver() === self::DRIVER_SQLITE;
     }
 
     /**
@@ -196,7 +199,7 @@ class DB implements DBContract
      */
     public function isPostgreSQL(): bool
     {
-        return $this->isDriver('pgsql');
+        return $this->getDriver() === self::DRIVER_PGSQL;
     }
 
     /**
@@ -451,7 +454,10 @@ class DB implements DBContract
 
         $query = new QueryBuilder($this);
 
-        if (method_exists($query, $name)) {
+        if (
+            method_exists($query, $name) ||
+            $query->hasMacro($name)
+        ) {
             return $query->$name(...$args);
         }
 
@@ -546,8 +552,8 @@ class DB implements DBContract
     private function buildDsn(): string
     {
         return match ($driver = $this->getDriver()) {
-            // create a sqlite data source name, sqlite.db filepath.
-            'sqlite' => sprintf('sqlite:%s', $this->config['database'] ?? $this->config['path'] ?? $this->config['file'] ?? ':memory:'),
+                // create a sqlite data source name, sqlite.db filepath.
+            self::DRIVER_SQLITE => sprintf('sqlite:%s', $this->config['database'] ?? $this->config['path'] ?? $this->config['file'] ?? ':memory:'),
 
             /** create a server side data source name.
              * 

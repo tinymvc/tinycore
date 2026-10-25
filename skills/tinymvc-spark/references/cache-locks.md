@@ -42,14 +42,16 @@ Cache::forget('featured_products'); // Removes specific key
 Cache::erase(['key1', 'key2']);     // Removes array of keys
 Cache::flush();                     // Flushes the entire cache store
 
-// 6. Named Stores
-$redisCache = Cache::make('redis');
-$redisCache->put('user:1:feed', $feed, '+15 minutes');
+// 6. Named namespaces within the configured store
+$feedCache = Cache::make('feeds');
+$feedCache->put('user:1:feed', $feed, '+15 minutes');
 ```
 
 ---
 
 Cache expiration parameters accept `int|string|DateTimeInterface|Spark\Carbon|DateInterval|null`. Integers are TTL seconds, strings use `Carbon::parse()` date semantics, date objects are absolute deadlines, and null means no expiration. This applies to `store`, `set`, `put`, `add`, `load`, `remember`, and both bulk-write methods. Zero/negative TTLs and past deadlines are immediately expired; invalid date strings throw. Date objects are copied, never mutated.
+
+An expired `add()` does not reserve a key against a subsequent fresh value. `cache($name)` retains its instance within the current application; `unload_cache($name)` drops that instance without deleting stored values. Names passed to `Cache::make()` and `Lock::make()` select namespaces, while `cache.default` selects the configured connection.
 
 ## PSR-16 interoperability
 
@@ -89,6 +91,8 @@ Lock `timeout` accepts the same non-null types through `lock()`, `withLock()`, `
 
 ### Manual Lock Acquisition and Release
 
+The default Lock facade, `app(\Spark\Cache\Lock::class)`, and `lock()` share one owner within an application. Named `lock(name: ...)` helpers are also application-scoped. Keep independently created `Lock::make()` instances alive until release. Even the key `'0'` acquires a lock; only a null key requests the manager. Redis bulk release checks ownership atomically so an expired lease's cleanup cannot delete a replacement owner's lock.
+
 ```php
 use Spark\Facades\Lock;
 
@@ -114,6 +118,6 @@ if (Lock::isLocked('report:monthly')) {
     // Report is currently generating
 }
 
-// Named lock store
-$customLock = Lock::make('redis');
+// Named lock namespace
+$customLock = Lock::make('reports');
 ```

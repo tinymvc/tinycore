@@ -31,6 +31,15 @@ if ($_SERVER['REQUEST_URI'] === '/csrf/trusted') {
 }
 $app->withMiddleware(register: ['csrf' => TransportCsrfProtection::class]);
 Route::get('/csrf/{kind}', fn() => 'ok')->middleware('csrf');
+Route::get('/session/{action}', function (string $action) {
+    $session = session();
+    if ($action === 'write') {
+        $session->put('value', 0);
+    } elseif ($action === 'invalidate') {
+        $session->invalidate();
+    }
+    return ['id' => $session->id(), 'value' => $session->get('value')];
+});
 if ($_SERVER['REQUEST_URI'] === '/events') {
     $app->setConfig('app.debug', true);
     $app->on('app:terminated', fn() => file_put_contents($storage . '/events.log', "terminated\n", FILE_APPEND | LOCK_EX));

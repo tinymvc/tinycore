@@ -61,7 +61,7 @@ These are defaults for new and edited application code. Honor explicit product c
 | Queued work | `SendAccountEmail::dispatch($user->id)->onQueue('emails')` |
 | Recurring work | `SyncReports::dispatchOnce()->repeatEveryMinutes(5)`; verify retry/idempotency semantics |
 | Dates and output | `now()->addDays(7)`, `now()->toDateTimeString()`, `Number::currency($amount, 'USD')` |
-| Strings and passwords | `str($title)->slug()`, `Hash::make($password)`, `Hash::check($password, $hash)` |
+| Strings and passwords | `str($title)->slug()`, `Hash::hashPassword($password)`, `Hash::verify($password, $hash)` |
 | Outbound HTTP | `Http::withToken($token)->timeout(10)->post($url, $payload)`; handle failed responses |
 | Foreign keys | `$table->foreignId('user_id')->constrained()->cascadeOnDelete()`; choose deletion policy deliberately |
 

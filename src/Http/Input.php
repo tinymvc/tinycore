@@ -103,7 +103,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        $sanitized = filter_var(trim((string) ($value ?: '')), FILTER_UNSAFE_RAW);
+        $sanitized = filter_var(trim((string) $value), FILTER_UNSAFE_RAW);
 
         return $stripTags ? strip_tags((string) $sanitized) : (string) $sanitized;
     }
@@ -160,7 +160,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
             return null;
         }
 
-        return htmlspecialchars(trim((string) ($value ?: '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        return htmlspecialchars(trim((string) $value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**

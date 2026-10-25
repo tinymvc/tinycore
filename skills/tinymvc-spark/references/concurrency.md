@@ -26,7 +26,7 @@ $results = Concurrency::runWithLimit([
 
 The positive limit bounds tasks only when parallel execution is available. Real parallelism requires a ZTS PHP build and the `parallel` extension; otherwise tasks run sequentially. Keep callables self-contained. Do not capture an open PDO connection, container, request, resource handle, or mutable model and expect it to work in an isolated runtime. Inspect runtime bootstrapping before using application classes inside parallel workers.
 
-Caught task failures are returned at their task key as `['error' => true, 'message' => ...]`; inspect every result before combining successes. Define a result envelope if business results could have the same shape. Do not treat a partially successful batch as an all-or-nothing transaction.
+Caught task failures are returned at their task key as `['error' => true, 'message' => ...]`; inspect every result before combining successes. Pending tasks continue after runtime startup or task failures. Define a result envelope if business results could have the same shape. Do not treat a partially successful batch as an all-or-nothing transaction.
 
 An instance offers `add()`, `limit()`, `execute()`, and `getResults()`. `wait()` executes the batch again; use `getResults()` to inspect completed work without repeating effects. Do not rerun a batch with external writes unless every task has a deliberate idempotency policy.
 
@@ -42,6 +42,8 @@ $process = Process::command([PHP_BINARY, '-v'])
 ```
 
 Prefer an argument array over concatenated shell text. Inspect `Console/Process.php` for the installed result/exit APIs before deciding success. Bound runtime and output, preserve a useful failure message, and avoid passing secrets in command arguments or logs. Spawning a process does not detach durable work from the request automatically.
+
+`input()` supplies stdin while piped execution drains stdout/stderr, so large bidirectional transfers remain subject to `timeout()`. Custom `env()` values override inherited environment values. Inspect `exitCode()`, `successful()`, and `errorOutput()` after execution.
 
 ## Verification
 

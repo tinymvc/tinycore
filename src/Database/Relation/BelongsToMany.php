@@ -164,13 +164,7 @@ class BelongsToMany extends Relation
 
         $records = [];
 
-        // Normalize the input
-        if (!is_array($ids)) {
-            $ids = [$ids => []];
-        } elseif (array_is_list($ids)) {
-            // If it's a sequential array, convert to associative with empty attributes
-            $ids = array_fill_keys($ids, []);
-        }
+        $ids = $this->normalizePivotIds($ids);
 
         foreach ($ids as $relatedId => $attrs) {
             $records[] = [
@@ -244,13 +238,7 @@ class BelongsToMany extends Relation
 
         $changes = ['attached' => [], 'detached' => []];
 
-        // Normalize the input
-        if (!is_array($ids)) {
-            $ids = [$ids => []];
-        } elseif (array_is_list($ids)) {
-            // If it's a sequential array, convert to associative with empty attributes
-            $ids = array_fill_keys($ids, []);
-        }
+        $ids = $this->normalizePivotIds($ids);
 
         /** @var QueryBuilder to insert into pivot table */
         $query = $this->newPivotQuery();
@@ -260,7 +248,6 @@ class BelongsToMany extends Relation
             ->where($this->foreignPivotKey, $parentKeyValue)
             ->select($this->relatedPivotKey)
             ->fetchColumn()
-            ->map('intval')
             ->all();
 
         $syncIds = array_keys($ids);
@@ -322,13 +309,7 @@ class BelongsToMany extends Relation
 
         $changes = ['attached' => [], 'detached' => []];
 
-        // Normalize the input
-        if (!is_array($ids)) {
-            $ids = [$ids => []];
-        } elseif (array_is_list($ids)) {
-            // If it's a sequential array, convert to associative with empty attributes
-            $ids = array_fill_keys($ids, []);
-        }
+        $ids = $this->normalizePivotIds($ids);
 
         /** @var QueryBuilder to insert into pivot table */
         $query = $this->newPivotQuery();
@@ -341,7 +322,6 @@ class BelongsToMany extends Relation
             ->whereIn($this->relatedPivotKey, $syncIds)
             ->select($this->relatedPivotKey)
             ->fetchColumn()
-            ->map('intval')
             ->all();
 
         // Detach currently attached
@@ -362,6 +342,18 @@ class BelongsToMany extends Relation
         }
 
         return $changes;
+    }
+
+    /** Normalize ID lists while preserving attribute maps keyed by zero. */
+    private function normalizePivotIds(int|array $ids): array
+    {
+        if (!is_array($ids)) {
+            return [$ids => []];
+        }
+
+        return array_is_list($ids) && !is_array($ids[0] ?? null)
+            ? array_fill_keys($ids, [])
+            : $ids;
     }
 
     /**

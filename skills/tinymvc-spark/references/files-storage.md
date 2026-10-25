@@ -99,6 +99,8 @@ $signedPutUrl = Storage::disk('s3')->temporaryUploadUrl(
 
 ## Local Filesystem Utility (`Spark\Utils\File` and `fm()`)
 
+`File::putAtomic($path, $contents)` publishes through a unique temporary file in the destination directory. Failed or partial string writes preserve the existing destination; temporary files are cleaned up on failure or exceptions. Environment and configuration caches use this shared helper.
+
 For direct local server filesystem manipulation, use `Spark\Utils\File` (or the global `fm()` helper):
 
 ```php

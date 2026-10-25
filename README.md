@@ -4,7 +4,7 @@
 
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1156%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1208%20passed-brightgreen.svg)](tests/)
 
 Applications built with TinyMVC / Spark start from [Skeleton](https://github.com/tinymvc/skeleton) (`tinymvc/skeleton`), which provides the application structure and installs TinyCore as a Composer dependency under `vendor/tinymvc/tinycore`. This repository contains the core engine's source and regression suite.
 
@@ -54,37 +54,43 @@ The suite uses Spark's native test runner. Fixtures live in this repository; nei
 
 ## Verified test results
 
-Verified on **2026-10-24**, using PHP **8.4.25** on macOS:
+Verified on **2026-10-25**, using PHP **8.4.25** on macOS:
 
 | Command | Result | Assertions | Skipped / failed |
 | --- | --- | --- | --- |
-| `php tests/run.php` | 1,156 passed | 5,672 | 0 / 0 |
-| `php tests/database.php` — SQLite | 417 passed | 911 | 0 / 0 |
-| `php tests/database.php` — MySQL | 417 passed | 911 | 0 / 0 |
-| `php tests/database.php` — PostgreSQL | 417 passed | 911 | 0 / 0 |
+| `php tests/run.php` | 1,208 passed | 6,099 | 0 / 0 |
+| `php tests/database.php` — SQLite | 438 passed | 1,082 | 0 / 0 |
+| `php tests/database.php` — MySQL | 438 passed | 1,082 | 0 / 0 |
+| `php tests/database.php` — PostgreSQL | 438 passed | 1,082 | 0 / 0 |
 
-The database matrix reuses the same 417 scenarios; these are not 1,251 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
+The database matrix reuses the same 438 scenarios; these are not 1,314 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
 
 | Test location | Classes | Independently reported tests |
 | --- | --- | --- |
-| `tests/Unit/` | 8 | 69 |
-| `tests/Feature/Database/` | 20 | 417 |
-| Other `tests/Feature/` classes | 58 | 670 |
-| **Total** | **86** | **1,156** |
+| `tests/Unit/` | 10 | 77 |
+| `tests/Feature/Database/` | 22 | 438 |
+| Other `tests/Feature/` classes | 61 | 693 |
+| **Total** | **93** | **1,208** |
 
-Every test has a descriptive name and fresh test state. The storage driver contract defines 37 shared behaviors and runs each on file, database and Redis storage (111 backend-specific tests), with 10 additional database storage cases. These are included in the 1,156 total. The suite also covers PSR integration and the application lifecycle over real HTTP connections.
+Every test has a descriptive name and fresh test state. The storage driver contract defines 38 shared behaviors and runs each on file, database and Redis storage (114 backend-specific tests), with 10 additional database storage cases. These are included in the 1,208 total. The suite also covers PSR integration and the application lifecycle over real HTTP connections.
 
 | Selected class / contract | Tests | Focus |
 | --- | --- | --- |
 | `ValidationFormatTest` | 100 | Email/URL/IP/MAC/UUID formats, Unicode/ASCII, digit and numeric boundaries, case/prefix/suffix rules, dates, accepted/declined and distinct values; success and failure state |
 | `InputConversionTest` | 58 | Sanitizers, typed conversion, JSON, null/empty values, immutable selection, copying, filtering and array access |
 | `HttpClientResponseTest` | 26 | Status boundaries, JSON scalar/list/object decoding, malformed bodies, decoded-cache invalidation, nested nulls and case-insensitive headers |
-| `FileStorageContractTest`, `DatabaseStorageContractTest`, `RedisStorageContractTest` | 37 / 47 / 37 | Cache replacement/expiry/type preservation, counter errors, ownership, force unlock, queue isolation, reservations, deduplication, retries, failed/repeated cleanup and exception metadata |
+| `FileStorageContractTest`, `DatabaseStorageContractTest`, `RedisStorageContractTest` | 38 / 48 / 38 | Cache replacement/expiry/type preservation, expired additions, counter errors, ownership, force unlock, queue isolation, reservations, deduplication, retries, failed/repeated cleanup and exception metadata |
 | `Database/ScopedMutationTest` | 48 | Update, hard delete, soft delete and restore under IN/NOT IN, null, grouped OR, ranges, raw bindings, subquery, date and column predicates; unaffected-row preservation |
 | `Database/QueryStateContractTest` | 24 | Count/exists/read reuse, scoped aggregates and relation-filtered writes |
 | `Database/ArithmeticWriteTest` | 31 | Increment/decrement scope preservation, positional/named write parameters, multiple SET values, mixed-binding rejection and unchanged neighboring rows |
 | `RequestBoundaryTest` | 34 | Bearer/Basic header parsing, method flags, IPv4/IPv6 proxy ranges, malformed forwarded addresses, ports and trust boundaries |
 | `BladeDirectiveTest` | 27 | Conditional attributes, nested expressions, conditionals, loops, comments, verbatim/PHP blocks and escaped/raw output; first/cached render consistency and output-buffer balance |
+| `StateOwnershipTest` | 5 | Facade lock lifetime, application-scoped cache/lock helpers, zero lock keys, current URL roots and failed pending-dispatch destruction |
+| `UtilityBoundaryTest` | 7 | Atomic environment/config publication, partial file-write cleanup, empty/quoted environment values, error bags and zero-valued input |
+| `RedisLockOwnershipTest` | 1 | Forced owner takeover during bulk lock cleanup using real Redis |
+| `ProcessTest` / `ConcurrencySchedulerTest` | 3 / 1 | Large bidirectional process I/O, input timeouts, inherited environment/exit status, and pending tasks after scheduling failures |
+| `ContainerTest` | 6 | Dependency identity, callable factories, static/invokable callbacks, variadic parameters, singleton/alias behavior and circular resolution |
+| `HttpTransportLifecycleTest` | 15 | Real HTTP transport, uploads, trusted-proxy cookies, session persistence/invalidation, response preparation and termination |
 
 This is **behavioral regression coverage**, not a measured line or branch percentage. No Xdebug/PCOV coverage instrumentation was enabled. `src/Support/` is excluded from dedicated testing and was not modified.
 
@@ -107,14 +113,14 @@ This is **behavioral regression coverage**, not a measured line or branch percen
 | Gate | `GateTest`: deny-by-default, authorization exceptions, argument forwarding, before/after overrides, any/none, short circuiting |
 | Hash | `HashTest`: binary/empty round trips, randomized IVs, tampered envelopes, wrong keys, malformed fields, array encoding errors, password rehash and keyed digests |
 | Validation | `ValidationRulesTest`, `ValidationTest`, `ValidatorStateTest`, `Database/ValidationDatabaseTest`: presence/type/size boundaries, nested wildcards, state reset, confirmation, unique/exists/exclusions, bound values and avoiding database queries after invalid input |
-| Events | `EventDispatcherTest`: listener priority, response order, false short circuiting, recursive once listeners, removal, conditional dispatch and invalid callbacks |
+| Events | `EventDispatcherTest`: listener priority, response order, false short circuiting, recursive once listeners, nested halt isolation, removal, conditional dispatch and invalid callbacks |
 | View attributes | `ViewAttributesTest`: escaped values, boolean/null attributes, immutable filtering and default/class merging |
 
 Database cache keys, groups and lock keys use plain string columns, with equality determined by their database collation. For example, `Item` and `item` share an entry under a case-insensitive collation. Batch cache reads return stored key names. Lock owner tokens always match exactly. File and Redis keys remain case-sensitive.
 
 ## Focused database scenarios
 
-`tests/Feature/Database/` contains 417 independently reported scenarios. Each scenario creates fresh fixtures and verifies returned records, persisted state, exceptions, or query counts. They run unchanged against SQLite, MySQL, and PostgreSQL:
+`tests/Feature/Database/` contains 438 independently reported scenarios. Each scenario creates fresh fixtures and verifies returned records, persisted state, exceptions, or query counts. They run unchanged against SQLite, MySQL, and PostgreSQL:
 
 | Test class | Focus |
 | --- | --- |
@@ -122,7 +128,7 @@ Database cache keys, groups and lock keys use plain string columns, with equalit
 | ReadQueryTest | Hydration, projections, aggregates, joins, sorting, offsets, distinct values and cloned query isolation |
 | WriteQueryTest / SetOperationsTest | Arrayable writes, scoped updates/deletes, increments, rollback/commit, unions, upserts and duplicate handling |
 | ModelStateTest | Creation helpers, persistence, identity, original values, dirty tracking, refresh, casts and serialization |
-| CustomKeyTest | String and zero-valued primary keys, aliases, writes, exclusions and bulk deletion |
+| CustomKeyTest | String and zero-valued primary keys, pivot sync/toggle, aliases, writes, exclusions and bulk deletion |
 | RelationQueryTest | Has-one/has-many/belongs-to, nested existence/absence, eager loading, constrained aggregates and parent scope isolation |
 | PivotQueryTest | Attach/detach/sync/toggle, pivot attributes, parent isolation, eager loading and aggregates |
 | ThroughRelationTest / MorphLoadingTest | Through relations, deleted intermediate models, mixed morph types, nested loading and bounded query counts |
@@ -131,6 +137,7 @@ Database cache keys, groups and lock keys use plain string columns, with equalit
 | TransactionRecoveryTest | Nested rollback/commit, three-level savepoints, caught constraint failures, caller-owned transactions, original errors and connection reuse |
 | ConstraintBehaviorTest | Foreign-key rejection, nullable keys, restrict/cascade/set-null deletes, cascade updates and composite uniqueness |
 | PaginationBoundaryTest | Second/custom pages, invalid and out-of-range pages, zero/negative limits, empty results and grouped totals |
+| CursorPaginationTest / SimplePaginationTest | Forward/backward and compound cursors, casts/resources/eager loading, deleted boundaries, reusable builders, lookahead and count/offset-free reads where applicable |
 | ValidationDatabaseTest | Unique values and exclusions, exists/not-exists, bound hostile strings and rejected-field query suppression |
 | ScopedMutationTest / ArithmeticWriteTest | Scoped writes and arithmetic, raw positional bindings, multiple SET values, IN/NOT IN expansion, soft deletion/restoration and unaffected rows |
 | QueryStateContractTest | Reusable read predicates, aggregate scopes and relation-filtered updates |
@@ -146,7 +153,7 @@ The older database and migration tests also remain, including grammar compilatio
 php tests/run.php
 ```
 
-`composer test` runs the same command. This runs the framework suite with SQLite, plus Redis integration checks and two external SQL transaction/lock checks. Connection defaults come from `tests/config.php`; start your local DBngin services first. The external SQL checks create and remove their own disposable databases. Filters, unit-only runs and test discovery remain available:
+`composer test` runs the same command. This runs the framework suite with SQLite, plus Redis integration checks and four external SQL cache/transaction/lock checks. Connection defaults come from `tests/config.php`; start your local DBngin services first. The external SQL checks create and remove their own disposable databases. Filters, unit-only runs and test discovery remain available:
 
 ```sh
 php tests/run.php --filter AuthenticationTest
@@ -164,7 +171,7 @@ php tests/database.php --filter RelationQueryTest
 php tests/database.php --list-tests
 ```
 
-This runs the 417 focused database scenarios on SQLite, MySQL and PostgreSQL. It creates uniquely named `spark_test_*` databases automatically and removes them afterward, including after test failures. Redis is not needed for this command. Filters apply to all three engines; listing tests does not connect to services.
+This runs the 438 focused database scenarios on SQLite, MySQL and PostgreSQL. It creates uniquely named `spark_test_*` databases automatically and removes them afterward, including after test failures. Redis is not needed for this command. Filters apply to all three engines; listing tests does not connect to services.
 
 Failures produce a nonzero exit code. A failed test phase does not prevent the remaining phases from running. Cleanup errors also fail the command. Unavailable SQL servers or insufficient database permissions produce a setup error. The runner never selects an application's database; administrative credentials must allow creation and deletion of disposable databases. Both commands preserve terminal colors and keep redirected logs plain.
 

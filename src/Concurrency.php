@@ -156,72 +156,39 @@ class Concurrency
         $totalTasks = count($this->tasks);
         $currentIndex = 0;
 
-        // Start initial batch of tasks up to maxProcesses limit
-        while ($currentIndex < min($this->maxProcesses, $totalTasks)) {
-            $key = $taskKeys[$currentIndex];
-            $task = $taskValues[$currentIndex];
+        while ($currentIndex < $totalTasks || $futures !== []) {
+            // Refill available slots after both successful and failed tasks.
+            while ($currentIndex < $totalTasks && count($futures) < $this->maxProcesses) {
+                $key = $taskKeys[$currentIndex];
+                $task = $taskValues[$currentIndex++];
 
-            try {
-                $runtime = new \parallel\Runtime();
-                $futures[$key] = $runtime->run($task);
-                $runtimes[$key] = $runtime;
-            } catch (Throwable $e) {
-                $results[$key] = [
-                    'error' => true,
-                    'message' => $e->getMessage()
-                ];
-            }
-
-            $currentIndex++;
-        }
-
-        // Wait for tasks to complete and start new ones
-        while (!empty($futures)) {
-            foreach ($futures as $key => $future) {
                 try {
-                    // Check if future is done (non-blocking check)
-                    if ($future->done()) {
-                        $results[$key] = $future->value();
-                        unset($futures[$key]);
-                        unset($runtimes[$key]);
-
-                        // Start a new task if available
-                        if ($currentIndex < $totalTasks) {
-                            $newKey = $taskKeys[$currentIndex];
-                            $newTask = $taskValues[$currentIndex];
-
-                            try {
-                                $runtime = new \parallel\Runtime();
-                                $futures[$newKey] = $runtime->run($newTask);
-                                $runtimes[$newKey] = $runtime;
-                            } catch (Throwable $e) {
-                                $results[$newKey] = [
-                                    'error' => true,
-                                    'message' => $e->getMessage()
-                                ];
-                            }
-
-                            $currentIndex++;
-                        }
-                    }
+                    $runtime = new \parallel\Runtime();
+                    $futures[$key] = $runtime->run($task);
+                    $runtimes[$key] = $runtime;
                 } catch (Throwable $e) {
-                    $results[$key] = [
-                        'error' => true,
-                        'message' => $e->getMessage()
-                    ];
-                    unset($futures[$key]);
-                    unset($runtimes[$key]);
+                    $results[$key] = ['error' => true, 'message' => $e->getMessage()];
                 }
             }
 
-            // Small sleep to prevent busy waiting
-            if (!empty($futures)) {
-                usleep(1000); // 1ms
+            foreach ($futures as $key => $future) {
+                try {
+                    if (!$future->done()) {
+                        continue;
+                    }
+
+                    $results[$key] = $future->value();
+                } catch (Throwable $e) {
+                    $results[$key] = ['error' => true, 'message' => $e->getMessage()];
+                }
+
+                unset($futures[$key], $runtimes[$key]);
+            }
+
+            if ($futures !== []) {
+                usleep(1000);
             }
         }
-
-        // Cleanup any remaining runtime instances
-        unset($runtimes);
 
         return $results;
     }

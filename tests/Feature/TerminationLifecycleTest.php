@@ -10,6 +10,15 @@ use Tests\Support\LifecycleTestCase;
 
 final class TerminationLifecycleTest extends LifecycleTestCase
 {
+    public function testNonRemovableOutputBufferDoesNotBlockShutdown(): void
+    {
+        $process = \Spark\Console\Process::run([
+            PHP_BINARY, dirname(__DIR__) . '/Fixtures/non-removable-buffer.php',
+        ], timeout: 2);
+        $this->assertTrue($process->successful(), $process->errorOutput());
+        $this->assertSame('buffered:finished', $process->output());
+    }
+
     public function testLifecycleEventsAreOrderedAndTerminationIsOncePerRequest(): void
     {
         $this->app->setConfig('app.debug', true);

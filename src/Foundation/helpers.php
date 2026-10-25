@@ -464,8 +464,6 @@ if (!function_exists('url')) {
      */
     function url(?string $path = null, array $parameters = []): Url
     {
-        global $home_url, $request_url;
-
         if ($path === null || $path === '') {
             $requestPath = '/';
 
@@ -477,17 +475,7 @@ if (!function_exists('url')) {
                 }
             }
 
-            if (!isset($request_url)) {
-                $request_url = new Url(home_url($requestPath));
-            }
-
-            return !empty($parameters) ? $request_url->withQuery($parameters) : $request_url;
-        } elseif ($path === '/') {
-            if (!isset($home_url)) {
-                $home_url = new Url(home_url('/'));
-            }
-
-            return !empty($parameters) ? $home_url->withQuery($parameters) : $home_url;
+            $path = $requestPath;
         }
 
         $normalizedPath = (string) $path;
@@ -1441,20 +1429,21 @@ if (!function_exists('cache')) {
      *
      * This function returns an existing cache instance by the given name,
      * or creates a new one if it doesn't already exist. Cache instances
-     * are stored globally and can be accessed using their names.
+     * belong to the current application and can be accessed using their names.
      *
      * @param string $name The name of the cache instance to retrieve or create. Default is 'default'.
      * @return Cache The cache instance associated with the specified name.
      */
     function cache(string $name = 'default'): Cache
     {
-        global $caches;
+        $app = Application::$app;
+        $binding = Cache::class . ":$name";
 
-        if (!isset($caches[$name])) {
-            $caches[$name] = new Cache($name);
+        if (!$app->has($binding)) {
+            $app->instance($binding, new Cache($name));
         }
 
-        return $caches[$name];
+        return $app->get($binding);
     }
 }
 
@@ -1463,16 +1452,13 @@ if (!function_exists('unload_cache')) {
      * Unloads a cache instance.
      *
      * This function unloads a cache instance by name. Once unloaded, the cache
-     * will be removed from the global cache list and cannot be accessed again.
+     * will be recreated on its next access in the current application.
      *
      * @param string $name The name of the cache instance to unload. Default is 'default'.
      */
     function unload_cache(string $name = 'default'): void
     {
-        global $caches;
-        if (isset($caches[$name])) {
-            unset($caches[$name]);
-        }
+        app()->forget(Cache::class . ":$name");
     }
 }
 
@@ -1493,17 +1479,16 @@ if (!function_exists('lock')) {
      */
     function lock(null|string $key = null, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5, string $name = 'default'): bool|Lock
     {
-        global $locks;
+        $app = Application::$app;
+        $binding = Lock::class . ($name === 'default' ? '' : ":$name");
 
-        if (!isset($locks[$name])) {
-            $locks[$name] = Lock::make($name);
+        if (!$app->has($binding)) {
+            $app->instance($binding, Lock::make($name));
         }
 
-        if (empty($key)) {
-            return $locks[$name];
-        }
+        $manager = $app->get($binding);
 
-        return $locks[$name]->lock($key, $timeout, $waitTimeout);
+        return $key === null ? $manager : $manager->lock($key, $timeout, $waitTimeout);
     }
 }
 

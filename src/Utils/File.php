@@ -633,13 +633,20 @@ class File
      */
     public static function putAtomic(string $path, mixed $data): bool
     {
-        $tempFile = "$path.tmp." . uniqid();
+        $tempFile = "$path.tmp." . bin2hex(random_bytes(16));
 
-        if (static::put($tempFile, $data) === false) {
-            return false;
+        try {
+            $written = static::put($tempFile, $data);
+            if ($written === false || (is_string($data) && $written !== strlen($data))) {
+                return false;
+            }
+
+            return rename($tempFile, $path);
+        } finally {
+            if (is_file($tempFile)) {
+                @unlink($tempFile);
+            }
         }
-
-        return rename($tempFile, $path);
     }
 
     /**

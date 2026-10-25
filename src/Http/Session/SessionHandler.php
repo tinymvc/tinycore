@@ -57,7 +57,7 @@ class SessionHandler
             'lifetime' => config('session.expire_on_close', false) ? 0 : $lifetime * 60,
             'path' => $cookie['path'] ?? '/',
             'domain' => $cookie['domain'] ?? '',
-            'secure' => $cookie['secure'] ?? (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443),
+            'secure' => $cookie['secure'] ?? str_starts_with(request()->getRootUrl(), 'https://'),
             'httponly' => $cookie['http_only'] ?? $cookie['httponly'] ?? true,
             'samesite' => $cookie['same_site'] ?? $cookie['samesite'] ?? 'Lax',
         ]);

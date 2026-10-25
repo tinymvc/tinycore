@@ -5,6 +5,7 @@ namespace Spark;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use FilesystemIterator;
+use Spark\Utils\File;
 use function array_key_exists;
 use function count;
 use function is_array;
@@ -270,7 +271,7 @@ class DotEnv
             return;
         }
 
-        file_put_contents($cache, '<?php return ' . var_export($payload, true) . ';' . PHP_EOL);
+        File::putAtomic($cache, '<?php return ' . var_export($payload, true) . ';' . PHP_EOL);
     }
 
     /**
@@ -415,7 +416,7 @@ class DotEnv
             return $env;
         }
 
-        file_put_contents(
+        File::putAtomic(
             $this->compilePath,
             '<?php return ' . $this->export($env) . ';' . PHP_EOL
         );
@@ -495,7 +496,7 @@ class DotEnv
                 continue;
             }
 
-            $value = trim($value);
+            $value = trim($this->stripInlineComment(trim($value)));
 
             // Quoted values are always kept as strings (no type casting)
             if ($this->isQuoted($value)) {
@@ -515,9 +516,6 @@ class DotEnv
                 $value = $this->resolveNestedVariables($value, $env);
 
             } else {
-                // Remove inline comments (not inside quotes)
-                $value = trim($this->stripInlineComment($value));
-
                 // Resolve ${VAR} references before casting
                 $value = $this->resolveNestedVariables($value, $env);
 
@@ -588,7 +586,7 @@ class DotEnv
             $lines[] = '  ' . var_export($key, true) . ' => ' . $this->exportScalar($value);
         }
 
-        return "array(\n" . implode(",\n", $lines) . ",\n)";
+        return $lines === [] ? 'array()' : "array(\n" . implode(",\n", $lines) . ",\n)";
     }
 
     /**
@@ -639,13 +637,27 @@ class DotEnv
     }
 
     /**
-     * Strip an inline comment from an unquoted value.
+     * Strip an inline comment while preserving hashes inside quoted values.
      */
     protected function stripInlineComment(string $value): string
     {
-        $parts = preg_split('/\s#/', $value, 2);
+        $quote = null;
+        for ($index = 0, $length = strlen($value); $index < $length; $index++) {
+            $character = $value[$index];
+            if ($quote !== null) {
+                if ($character === '\\' && $quote === '"') {
+                    $index++;
+                } elseif ($character === $quote) {
+                    $quote = null;
+                }
+            } elseif ($character === '"' || $character === "'") {
+                $quote = $character;
+            } elseif ($character === '#' && ($index === 0 || ctype_space($value[$index - 1]))) {
+                return substr($value, 0, $index);
+            }
+        }
 
-        return $parts[0] ?? '';
+        return $value;
     }
 
     /**

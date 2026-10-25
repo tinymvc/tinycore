@@ -223,13 +223,11 @@ class RedisStorage implements CacheStorageContract
     public function add(string $key, mixed $value, null|string $expire = null): bool
     {
         $packed = $this->packValue($key, $value, $expire);
-        $options = ['nx'];
-
-        if ($packed['expire_at'] > 0) {
-            $options['ex'] = max(1, $packed['expire_at'] - time());
-        }
-
-        return $this->redis->set($this->cacheKey($key), $packed['payload'], $options) === true;
+        return (int) $this->redis->eval(
+            "if not redis.call('SET', KEYS[1], ARGV[1], 'NX') then return 0 end; if tonumber(ARGV[2]) > 0 then redis.call('EXPIREAT', KEYS[1], ARGV[2]) end; return 1",
+            [$this->cacheKey($key), $packed['payload'], (string) $packed['expire_at']],
+            1,
+        ) === 1;
     }
 
     public function stats(): array
@@ -334,13 +332,18 @@ class RedisStorage implements CacheStorageContract
 
     public function unlock(string $key, string $owner): bool
     {
+        return $this->releaseLock($this->lockKey($key), $owner);
+    }
+
+    private function releaseLock(string $redisKey, string $owner): bool
+    {
         $script = <<<'LUA'
 local current = redis.call('GET', KEYS[1])
 if not current then
     return 0
 end
 local ok, data = pcall(cjson.decode, current)
-if not ok or not data or not data.owner then
+if not ok or type(data) ~= 'table' or not data.owner then
     return 0
 end
 if data.owner == ARGV[1] then
@@ -349,18 +352,14 @@ end
 return 0
 LUA;
 
-        return (int) $this->redis->eval($script, [$this->lockKey($key), $owner], 1) > 0;
+        return (int) $this->redis->eval($script, [$redisKey, $owner], 1) > 0;
     }
 
     public function unlockAll(string $owner): int
     {
         $deleted = 0;
         $this->scanKeys($this->prefixPattern($this->lockNamespace . ':'), function (string $redisKey) use (&$deleted, $owner) {
-            $payload = $this->decodeLockPayload($redisKey);
-
-            if (($payload[self::REDIS_OWNER_KEY] ?? null) === $owner) {
-                $deleted += (int) $this->redis->del($redisKey);
-            }
+            $deleted += (int) $this->releaseLock($redisKey, $owner);
         });
 
         return $deleted;

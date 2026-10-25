@@ -103,11 +103,12 @@ class Process implements \Stringable
     private function executePiped(): static
     {
         $start = microtime(true);
-        $env = empty($this->env) ? null : [...$_ENV, ...$this->env];
+        $env = empty($this->env) ? null : [...getenv(), ...$_ENV, ...$this->env];
         $options = $this->procOptions();
         $pipes = [];
         $process = null;
         $timedOut = false;
+        $exitCode = null;
 
         $process = proc_open(
             $this->command,
@@ -122,10 +123,12 @@ class Process implements \Stringable
             throw new ProcessFailedException("Failed to start: {$this->stringifyCommand()}");
         }
 
-        if ($this->input !== null) {
-            @fwrite($pipes[0], $this->input);
+        $inputOffset = 0;
+        $inputLength = strlen($this->input ?? '');
+        stream_set_blocking($pipes[0], false);
+        if ($inputLength === 0) {
+            $this->closePipe($pipes[0]);
         }
-        fclose($pipes[0]);
 
         @stream_set_blocking($pipes[1], false);
         @stream_set_blocking($pipes[2], false);
@@ -142,6 +145,14 @@ class Process implements \Stringable
                     break;
                 }
 
+                if (is_resource($pipes[0])) {
+                    $written = @fwrite($pipes[0], substr($this->input, $inputOffset, 65_536));
+                    $inputOffset += $written === false ? 0 : $written;
+                    if ($written === false || $inputOffset >= $inputLength) {
+                        $this->closePipe($pipes[0]);
+                    }
+                }
+
                 foreach ([$pipes[1], $pipes[2]] as $stream) {
                     $chunk = @fread($stream, 65_536);
                     if ($chunk !== '' && $chunk !== false) {
@@ -150,6 +161,9 @@ class Process implements \Stringable
                 }
 
                 $status = proc_get_status($process);
+                if (($status['exitcode'] ?? -1) >= 0) {
+                    $exitCode = $status['exitcode'];
+                }
                 if (($status['running'] ?? false) === false && feof($pipes[1]) && feof($pipes[2])) {
                     break;
                 }
@@ -171,7 +185,8 @@ class Process implements \Stringable
                     $this->terminate($process);
                 }
 
-                $this->exitCode = proc_close($process);
+                $closedCode = proc_close($process);
+                $this->exitCode = $exitCode ?? $closedCode;
             }
 
             $this->executionTime = microtime(true) - $start;
@@ -192,7 +207,7 @@ class Process implements \Stringable
     private function executeTty(): static
     {
         $start = microtime(true);
-        $env = empty($this->env) ? null : [...$_ENV, ...$this->env];
+        $env = empty($this->env) ? null : [...getenv(), ...$_ENV, ...$this->env];
         $pipes = [];
         $options = $this->procOptions();
         $process = null;
@@ -211,9 +226,13 @@ class Process implements \Stringable
         }
 
         $timedOut = false;
+        $exitCode = null;
         try {
             while (true) {
                 $status = proc_get_status($process);
+                if (($status['exitcode'] ?? -1) >= 0) {
+                    $exitCode = $status['exitcode'];
+                }
                 if (($status['running'] ?? false) === false) {
                     break;
                 }
@@ -237,7 +256,8 @@ class Process implements \Stringable
                     $this->terminate($process);
                 }
 
-                $this->exitCode = proc_close($process);
+                $closedCode = proc_close($process);
+                $this->exitCode = $exitCode ?? $closedCode;
             }
 
             $this->executionTime = microtime(true) - $start;

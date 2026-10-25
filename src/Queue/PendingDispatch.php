@@ -142,13 +142,14 @@ class PendingDispatch
     public function send(): JobContract
     {
         if (!$this->dispatched) {
+            // A transport failure may follow a successful write; never retry on destruction.
+            $this->dispatched = true;
+
             if ($this->once) {
                 $this->job->dispatchOnce($this->queue);
             } else {
                 $this->job->dispatch($this->queue);
             }
-
-            $this->dispatched = true;
         }
 
         return $this->job;

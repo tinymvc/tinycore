@@ -165,7 +165,31 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
             $cookies = array_values(array_filter($response['headers']['set-cookie'] ?? [], fn($cookie) => str_starts_with($cookie, 'XSRF-TOKEN=')));
             $this->assertCount(1, $cookies);
             $this->assertSame($secure, str_contains(strtolower($cookies[0]), '; secure'));
+            $sessionCookies = array_values(array_filter($response['headers']['set-cookie'] ?? [], fn($cookie) => str_starts_with($cookie, 'PHPSESSID=')));
+            $this->assertCount(1, $sessionCookies);
+            $this->assertSame($secure, str_contains(strtolower($sessionCookies[0]), '; secure'));
         }
+    }
+
+    public function test_session_cookie_persists_data_and_invalidation_rejects_the_old_id(): void
+    {
+        $created = $this->exchange('GET', '/session/write');
+        $this->assertSame(200, $created['status']);
+        $original = json_decode($created['body'], true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame(0, $original['value']);
+        $headers = ['Cookie' => 'PHPSESSID=' . $original['id']];
+
+        $read = $this->exchange('GET', '/session/read', headers: $headers);
+        $this->assertSame($original, json_decode($read['body'], true, flags: JSON_THROW_ON_ERROR));
+        $invalidated = $this->exchange('GET', '/session/invalidate', headers: $headers);
+        $fresh = json_decode($invalidated['body'], true, flags: JSON_THROW_ON_ERROR);
+        $this->assertNotSame($original['id'], $fresh['id']);
+        $this->assertNull($fresh['value']);
+
+        $replayed = $this->exchange('GET', '/session/read', headers: $headers);
+        $rejected = json_decode($replayed['body'], true, flags: JSON_THROW_ON_ERROR);
+        $this->assertNotSame($original['id'], $rejected['id']);
+        $this->assertNull($rejected['value']);
     }
 
     public function test_downloads_and_nonseekable_streams_use_normal_response_preparation(): void

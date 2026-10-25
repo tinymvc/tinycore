@@ -23,6 +23,35 @@ final class CustomKeyTest extends DatabaseScenarioTestCase
         $this->assertSame('Alpha', ScenarioCustomKey::findOrFail('a')->name);
     }
 
+    public function test_pivot_sync_and_toggle_preserve_string_keys(): void
+    {
+        \Spark\Database\Schema\Schema::create('scenario_custom_pivot', function ($table) {
+            $table->string('parent_code');
+            $table->string('related_code');
+            $table->unique(['parent_code', 'related_code']);
+        });
+        $relation = new \Spark\Database\Relation\BelongsToMany(
+            related: ScenarioCustomKey::class,
+            table: 'scenario_custom_pivot',
+            foreignPivotKey: 'parent_code',
+            relatedPivotKey: 'related_code',
+            parentKey: 'code',
+            relatedKey: 'code',
+            model: ScenarioCustomKey::findOrFail('a'),
+        );
+        $relation->attach(['b']);
+        $this->assertSame(['attached' => [], 'detached' => []], $relation->sync(['b']));
+        $this->assertSame(['attached' => [], 'detached' => ['b']], $relation->toggle(['b']));
+        $this->assertSame(0, query('scenario_custom_pivot')->count());
+        $relation->attach(['b']);
+        $this->assertSame(['attached' => [], 'detached' => ['b']], $relation->sync([]));
+        $this->assertSame(0, query('scenario_custom_pivot')->count());
+        $this->assertSame(['attached' => [0], 'detached' => []], $relation->sync(['0']));
+        $this->assertSame(1, query('scenario_custom_pivot')->count());
+        $this->assertSame(['attached' => [], 'detached' => [0]], $relation->toggle(['0']));
+        $this->assertSame(0, query('scenario_custom_pivot')->count());
+    }
+
     public function test_find_zero_string(): void
     {
         $this->assertSame('Zero', ScenarioCustomKey::findOrFail('0')->name);

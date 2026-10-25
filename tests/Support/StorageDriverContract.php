@@ -114,6 +114,17 @@ abstract class StorageDriverContract extends DriverTestCase
         $this->assertNull($c->retrieve('key'));
     }
 
+    public function test_expired_add_does_not_reserve_key_against_a_fresh_value(): void
+    {
+        $cache = $this->cacheStore();
+        $this->assertTrue($cache->add('expired-add', 'expired', '-1 minute'));
+        $this->assertFalse($cache->has('expired-add'));
+        $this->assertTrue($cache->add('expired-add', 'fresh'));
+        $this->assertSame('fresh', $cache->retrieve('expired-add'));
+        $this->assertFalse($cache->add('expired-add', 'expired', '-1 minute'));
+        $this->assertSame('fresh', $cache->retrieve('expired-add'));
+    }
+
     public function test_cache_add_false_prevents_replacement(): void
     {
         $c = $this->cacheStore();
