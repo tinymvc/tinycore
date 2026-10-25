@@ -315,7 +315,7 @@ class Storage implements Contracts\StorageContract
         ?int $compress = null,
     ): Uploader {
         $uploadTo = StoragePath::normalize($uploadTo, true);
-        $staging = storage_dir('temp/storage-uploads');
+        $staging = temp_dir('storage-uploads');
 
         if (!is_dir($staging) && !@mkdir($staging, 0700, true) && !is_dir($staging)) {
             throw new RuntimeException('Cannot create the private disk upload staging directory.');
