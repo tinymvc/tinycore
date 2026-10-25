@@ -1265,13 +1265,26 @@ final class Header
      */
     public const PRECOGNITION_VALIDATE_ONLY = 'Precognition-Validate-Only';
 
-    /**
-     * @var string
-     */
-    public const X_INERTIA = 'X-Inertia';
+    /** @var string tinycore/spark specific headers. */
 
-    /**
-     * @var string
-     */
     public const X_XSRF_TOKEN = 'X-XSRF-TOKEN';
+
+    // Inertia.js specific headers.
+    public const X_INERTIA = 'X-Inertia';
+    public const X_INERTIA_LOCATION = 'X-Inertia-Location';
+    public const X_INERTIA_VERSION = 'X-Inertia-Version';
+    public const X_INERTIA_REDIRECT = 'X-Inertia-Redirect';
+    public const X_INERTIA_ERROR_BAG = 'X-Inertia-Error-Bag';
+    public const X_INERTIA_PARTIAL_COMPONENT = 'X-Inertia-Partial-Component';
+    public const X_INERTIA_PARTIAL_DATA = 'X-Inertia-Partial-Data';
+    public const X_INERTIA_PARTIAL_EXCEPT = 'X-Inertia-Partial-Except';
+    public const X_INERTIA_RESET = 'X-Inertia-Reset';
+    public const X_INERTIA_EXCEPT_ONCE_PROPS = 'X-Inertia-Except-Once-Props';
+    public const X_INERTIA_INFINITE_SCROLL_MERGE_INTENT = 'X-Inertia-Infinite-Scroll-Merge-Intent';
+
+    // FireLine specific headers.
+    public const X_FIRELINE = 'X-FireLine';
+    public const X_FIRELINE_PRELOAD = 'X-FireLine-Preload';
+    public const X_FIRELINE_PARTIAL = 'X-FireLine-Partial';
+    public const X_FIRELINE_ASSET_VERSION = 'X-FireLine-Asset-Version';
 }
