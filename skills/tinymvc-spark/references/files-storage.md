@@ -85,12 +85,12 @@ When using the `s3` storage driver:
 use Spark\Facades\Storage;
 
 // 1. Temporary Download URL (signed S3 URL with expiry in seconds)
-$downloadUrl = Storage::disk('s3')->temporaryUrl('invoices/inv-101.pdf', seconds: 3600);
+$downloadUrl = Storage::disk('s3')->temporaryUrl('invoices/inv-101.pdf', expires: 3600);
 
 // 2. Direct Browser Upload Signed URL
 $signedPutUrl = Storage::disk('s3')->temporaryUploadUrl(
     'uploads/raw-video.mp4',
-    seconds: 300,
+    expires: 300,
     contentType: 'video/mp4',
 );
 ```

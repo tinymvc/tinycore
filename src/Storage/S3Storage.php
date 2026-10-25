@@ -103,8 +103,14 @@ class S3Storage
             throw new InvalidArgumentException('IP endpoints and dotted HTTPS bucket names require path-style URLs.');
         }
 
+        // Browsers omit default ports from Host; sign that same authority.
+        $port = $parts['port'] ?? null;
+        if ($port === ($parts['scheme'] === 'https' ? 443 : 80)) {
+            $port = null;
+        }
+
         $origin = $parts['scheme'] . '://' . ($usePathStyleEndpoint ? '' : "$bucket.") . strtolower($parts['host'])
-            . (isset($parts['port']) ? ':' . $parts['port'] : '');
+            . ($port === null ? '' : ":$port");
 
         $this->bucket = $bucket;
         $this->baseUrl = $origin . ($usePathStyleEndpoint ? "/$bucket" : '');
