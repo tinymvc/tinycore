@@ -2,10 +2,11 @@
 
 namespace Spark\Database\Schema;
 
+use Spark\Database\Contracts\DatabaseDriver;
 use Spark\Database\Schema\Contracts\WrapperContract;
 use function strlen;
 
-class Wrapper implements WrapperContract
+class Wrapper implements WrapperContract, DatabaseDriver
 {
     /**
      * @var array $wrapper Character wrappers for SQL identifiers.
@@ -17,7 +18,7 @@ class Wrapper implements WrapperContract
      */
     public function __construct(private string $driver)
     {
-        $this->wrapper = ['mysql' => ['`', '`'], 'sqlite' => ['"', '"'], 'pgsql' => ['"', '"']][$driver];
+        $this->wrapper = [self::DRIVER_MYSQL => ['`', '`'], self::DRIVER_SQLITE => ['"', '"'], self::DRIVER_PGSQL => ['"', '"']][$driver];
     }
 
     /**
@@ -28,7 +29,7 @@ class Wrapper implements WrapperContract
      */
     public function quoteEnumValues(array $values): string
     {
-        $escaped = array_map(fn($v) => "'" . str_replace("'", "''", $this->driver === 'mysql' ? str_replace('\\', '\\\\', $v) : $v) . "'", $values);
+        $escaped = array_map(fn($v) => "'" . str_replace("'", "''", $this->driver === self::DRIVER_MYSQL ? str_replace('\\', '\\\\', $v) : $v) . "'", $values);
         return implode(',', $escaped);
     }
 
@@ -85,7 +86,7 @@ class Wrapper implements WrapperContract
         }
 
         // Validate identifier length (PostgreSQL limit is 63, MySQL is 64)
-        $limit = match ($this->driver) { 'mysql' => 64, 'pgsql' => 63, default => 255};
+        $limit = match ($this->driver) { self::DRIVER_MYSQL => 64, self::DRIVER_PGSQL => 63, default => 255};
         if (strlen($value) > $limit) {
             throw new \InvalidArgumentException(
                 "Identifier '{$value}' exceeds maximum length of $limit characters"

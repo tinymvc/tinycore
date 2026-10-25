@@ -5,6 +5,7 @@ namespace Spark\Http\Client;
 use Spark\Http\Client\Contracts\HttpRequestContract;
 use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Exceptions\HttpException;
+use Spark\Http\Header;
 use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function in_array;
@@ -170,7 +171,7 @@ class HttpRequest implements HttpRequestContract
      */
     public function withContentType(string $type): static
     {
-        return $this->withHeader('Content-Type', $type);
+        return $this->withHeader(Header::CONTENT_TYPE, $type);
     }
 
     /**
@@ -181,7 +182,7 @@ class HttpRequest implements HttpRequestContract
      */
     public function withAccept(string $type): static
     {
-        return $this->withHeader('Accept', $type);
+        return $this->withHeader(Header::ACCEPT, $type);
     }
 
     /**
@@ -224,7 +225,7 @@ class HttpRequest implements HttpRequestContract
      */
     public function withToken(string $token): static
     {
-        return $this->withHeader('Authorization', "Bearer $token");
+        return $this->withHeader(Header::AUTHORIZATION, "Bearer $token");
     }
 
     /**
@@ -437,7 +438,7 @@ class HttpRequest implements HttpRequestContract
                 throw new HttpException("Unable to read attachment file: {$contents}");
             }
 
-            $mimeType = $headers['Content-Type'] ?? (function_exists('mime_content_type')
+            $mimeType = $headers[Header::CONTENT_TYPE] ?? (function_exists('mime_content_type')
                 ? (mime_content_type($contents) ?: 'application/octet-stream')
                 : 'application/octet-stream');
             $filename ??= basename($contents);
@@ -480,7 +481,7 @@ class HttpRequest implements HttpRequestContract
             throw new HttpException('Failed to write temporary upload file.');
         }
 
-        $mimeType = $headers['Content-Type'] ?? 'application/octet-stream';
+        $mimeType = $headers[Header::CONTENT_TYPE] ?? 'application/octet-stream';
         $filename ??= 'file';
 
         $this->attachments[$name] = new \CURLFile($tempFile, $mimeType, $filename);
@@ -757,18 +758,18 @@ class HttpRequest implements HttpRequestContract
                 $options[CURLOPT_POSTFIELDS] = array_replace($this->flattenArray($fields), $this->attachments);
                 // cURL must generate the multipart boundary and its Content-Type.
                 $headers = array_values(array_filter($headers, fn(string $header): bool =>
-                    strcasecmp(trim(explode(':', $header, 2)[0]), 'Content-Type') !== 0));
+                    strcasecmp(trim(explode(':', $header, 2)[0]), Header::CONTENT_TYPE) !== 0));
             } elseif (!array_key_exists(CURLOPT_POSTFIELDS, $options) && $this->data !== []) {
                 $contentType = null;
                 foreach ($headers as $header) {
-                    if (strcasecmp(trim(explode(':', $header, 2)[0]), 'Content-Type') === 0) {
+                    if (strcasecmp(trim(explode(':', $header, 2)[0]), Header::CONTENT_TYPE) === 0) {
                         $contentType = trim(explode(':', $header, 2)[1] ?? '');
                     }
                 }
 
                 [$options[CURLOPT_POSTFIELDS], $detectedContentType] = $this->encodePostFields($this->data, $contentType);
                 if ($contentType === null) {
-                    $headers[] = "Content-Type: $detectedContentType";
+                    $headers[] = Header::CONTENT_TYPE . ": $detectedContentType";
                 }
             }
         }

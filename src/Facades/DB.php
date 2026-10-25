@@ -2,11 +2,11 @@
 
 namespace Spark\Facades;
 
+use Spark\Database\Contracts\DatabaseDriver;
 use Spark\Database\DB as Database;
 use Spark\Database\QueryBuilder;
 use PDO;
 use PDOStatement;
-use function func_get_args;
 
 /**
  * Facade DB
@@ -21,6 +21,7 @@ use function func_get_args;
  * @method static false|PDOStatement query(string $query, ...$args)
  * @method static false|PDOStatement prepare(string $statement, array $options = [])
  * @method static PDO getPdo()
+ * @method static PDO pdo()
  * @method static string getDriver()
  * @method static bool isMySQL()
  * @method static bool isSQLite()
@@ -54,6 +55,11 @@ use function func_get_args;
  * @method static bool|string lastInsertId()
  * @method static string quote(string $string, int $type = PDO::PARAM_STR)
  * @method static bool beginTransaction()
+ * @method static bool setAttribute(int $attribute, mixed $value)
+ * @method static mixed getAttribute(int $attribute)
+ * @method static array getAvailableDrivers()
+ * @method static array errorInfo()
+ * @method static ?string errorCode()
  * @method static bool commit()
  * @method static bool rollBack()
  * @method static bool inTransaction()
@@ -63,7 +69,7 @@ use function func_get_args;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class DB extends Facade
+class DB extends Facade implements DatabaseDriver
 {
     /**
      * Get the registered name of the component.
@@ -73,133 +79,5 @@ class DB extends Facade
     protected static function getFacadeAccessor(): string
     {
         return Database::class;
-    }
-
-    /**
-     * Begin a query on a specific table.
-     *
-     * @param string $table The name of the table to query.
-     * @param string|null $alias The alias for the table.
-     * @return QueryBuilder The query builder instance for the specified table.
-     */
-    public static function table(string $table, ?string $alias = null): QueryBuilder
-    {
-        return Database::table($table, $alias);
-    }
-
-    /**
-     * Perform a select query.
-     *
-     * @param string $fields The fields to select.
-     * @param mixed ...$args Additional arguments for the select query.
-     * @return QueryBuilder The query builder instance for the select query.
-     */
-    public static function select(string $fields = '*', ...$args): QueryBuilder
-    {
-        return Database::select(...func_get_args());
-    }
-
-    /**
-     * Executes a raw SQL query with optional bindings.
-     *
-     * @param string $sql The raw SQL query.
-     * @param array $bindings Optional parameter bindings.
-     * @return array
-     */
-    public static function raw(string $sql, array $bindings = []): array
-    {
-        return self::connection()->raw($sql, $bindings);
-    }
-
-    /**
-     * Get the database connection instance.
-     *
-     * @param string|array|null $config The database configuration or driver name.
-     * @return Database The database connection instance.
-     */
-    public static function connection(null|string|array $config = null): Database
-    {
-        if ($config !== null) {
-            return Database::connection($config);
-        }
-
-        return app(Database::class);
-    }
-
-    /**
-     * Get the ID of the last inserted row.
-     *
-     * @return bool|string The ID of the last inserted row, or false on failure.
-     */
-    public static function lastInsertId(): bool|string
-    {
-        return self::connection()->lastInsertId();
-    }
-
-    /**
-     * Quote a string for use in a query.
-     *
-     * @param string $string The string to quote.
-     * @param int $type The data type of the parameter (default is PDO::PARAM_STR).
-     * @return string The quoted string.
-     */
-    public static function quote(string $string, int $type = PDO::PARAM_STR): string
-    {
-        return self::connection()->quote($string, $type);
-    }
-
-    /* Transaction Methods */
-
-    /**
-     * Commit the current transaction.
-     *
-     * @return bool True on success, false on failure.
-     */
-    public static function commit(): bool
-    {
-        return self::connection()->commit();
-    }
-
-    /**
-     * Roll back the current transaction.
-     *
-     * @return bool True on success, false on failure.
-     */
-    public static function rollBack(): bool
-    {
-        return self::connection()->rollBack();
-    }
-
-    /**
-     * Check if a transaction is currently active.
-     *
-     * @return bool True if a transaction is active, false otherwise.
-     */
-    public static function inTransaction(): bool
-    {
-        return self::connection()->inTransaction();
-    }
-
-    /**
-     * Begin a new transaction.
-     *
-     * @return bool True on success, false on failure.
-     */
-    public static function beginTransaction(): bool
-    {
-        return self::connection()->beginTransaction();
-    }
-
-    /**
-     * Execute a callback within a transaction.
-     *
-     * @param callable $callback The callback to execute.
-     * @return mixed The result of the callback.
-     *
-     * @throws \Throwable Rethrows any exception thrown within the transaction.
-     */
-    public static function transaction(callable $callback): mixed
-    {
-        return self::connection()->transaction($callback(...));
     }
 }

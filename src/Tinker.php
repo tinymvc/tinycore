@@ -1163,7 +1163,7 @@ class Tinker
             echo "  Connection: " . $this->color($connection, 'yellow') . "\n";
             echo "  Driver: " . $this->color($driver, 'yellow') . "\n";
 
-            if ($driver === 'sqlite') {
+            if ($driver === DB::DRIVER_SQLITE) {
                 $dbFile = (string) $db->getConfig('database', 'N/A');
                 $dbFile = $dbFile !== 'N/A' ? $this->removeRootDir($dbFile) : 'N/A';
                 echo "  File: " . $this->color($dbFile, 'yellow') . "\n";

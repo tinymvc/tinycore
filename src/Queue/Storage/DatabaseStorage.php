@@ -95,11 +95,11 @@ class DatabaseStorage implements QueueStorageContract
 
         $this->driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
-        if (!in_array($this->driver, ['mysql', 'pgsql', 'sqlite'], true)) {
-            throw new RuntimeException("Unsupported database driver [{$this->driver}] for the queue. Use mysql, pgsql or sqlite.");
+        if (!in_array($this->driver, DB::SUPPORTED_DRIVERS, true)) {
+            throw new RuntimeException("Unsupported database driver [{$this->driver}] for the queue.");
         }
 
-        $q = $this->driver === 'mysql' ? '`' : '"';
+        $q = $this->driver === DB::DRIVER_MYSQL ? '`' : '"';
         $quote = static fn(string $identifier): string => $q . str_replace($q, $q . $q, $identifier) . $q;
 
         $this->map = [
@@ -446,7 +446,7 @@ class DatabaseStorage implements QueueStorageContract
      */
     private function withDedupeLock(string $fingerprint, callable $callback): mixed
     {
-        if ($this->driver === 'mysql') {
+        if ($this->driver === DB::DRIVER_MYSQL) {
             if ($this->pdo->inTransaction()) {
                 throw new \LogicException('MySQL pushOnce() must run after the application transaction commits.');
             }
@@ -465,7 +465,7 @@ class DatabaseStorage implements QueueStorageContract
         }
 
         return $this->db->transaction(function () use ($fingerprint, $callback) {
-            if ($this->driver === 'pgsql') {
+            if ($this->driver === DB::DRIVER_PGSQL) {
                 $this->run('SELECT pg_advisory_xact_lock(hashtext(?))', [$fingerprint]);
             } else {
                 // SQLite: a write statement takes the database write lock until the transaction ends.

@@ -9,8 +9,8 @@ use Spark\Support\Collection;
 use Spark\Support\HtmlString;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use function array_key_exists;
 use function in_array;
+use function is_array;
 
 /** Shared item handling, URL generation, rendering, and serialization. */
 abstract class AbstractPaginator implements Arrayable, Htmlable, Jsonable, \JsonSerializable, \IteratorAggregate, \Countable, \ArrayAccess, \Stringable
@@ -209,7 +209,7 @@ abstract class AbstractPaginator implements Arrayable, Htmlable, Jsonable, \Json
             $labelKey = $type === 'previous' ? 'prev' : $type;
             $label = e($entity[$labelKey] ?? $link['label']);
             if ($type === 'ellipsis') {
-                $output .= '<li class="' . e($itemClass . ' disabled') . '"><span class="' . e($linkClass) . '">' . $label . '</span></li>';
+                $output .= '<li class="' . e("$itemClass disabled") . '"><span class="' . e($linkClass) . '">' . $label . '</span></li>';
                 continue;
             }
 
@@ -246,22 +246,22 @@ abstract class AbstractPaginator implements Arrayable, Htmlable, Jsonable, \Json
 
     public function offsetExists(mixed $offset): bool
     {
-        return array_key_exists($offset, $this->items());
+        return $this->collection->has($offset);
     }
 
     public function offsetGet(mixed $offset): mixed
     {
-        return $this->collection[$offset] ?? null;
+        return $this->collection->get($offset);
     }
 
     public function offsetSet(mixed $offset, mixed $value): void
     {
-        $this->collection[$offset] = $value;
+        $this->collection->put($offset, $value);
     }
 
     public function offsetUnset(mixed $offset): void
     {
-        unset($this->collection[$offset]);
+        $this->collection->forget($offset);
     }
 
     public function copy(): static

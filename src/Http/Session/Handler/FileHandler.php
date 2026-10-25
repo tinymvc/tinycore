@@ -186,6 +186,6 @@ class FileHandler implements SessionHandlerInterface, SessionUpdateTimestampHand
             throw new \InvalidArgumentException('Invalid session ID.');
         }
 
-        return $this->path . '/sess_' . $id;
+        return $this->path . "/sess_$id";
     }
 }

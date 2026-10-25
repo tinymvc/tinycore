@@ -7,6 +7,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Relation\Relation;
+use Spark\Facades\DB;
 use function func_num_args;
 use function in_array;
 use function is_array;
@@ -663,8 +664,8 @@ trait BuildsConditionalClauses
 
         $fieldSql = $this->wrapper->wrapColumn($field);
         $where = match ($this->database->getDriver()) {
-            'mysql' => "{$type}FIND_IN_SET(:$columnPlaceholder, $fieldSql)",
-            'pgsql' => "{$type}(:$columnPlaceholder = ANY(string_to_array($fieldSql, ',')))",
+            DB::DRIVER_MYSQL => "{$type}FIND_IN_SET(:$columnPlaceholder, $fieldSql)",
+            DB::DRIVER_PGSQL => "{$type}(:$columnPlaceholder = ANY(string_to_array($fieldSql, ',')))",
             default => "{$type}(instr(',' || $fieldSql || ',', ',' || :$columnPlaceholder || ',') > 0)",
         };
 

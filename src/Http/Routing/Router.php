@@ -4,6 +4,7 @@ namespace Spark\Http\Routing;
 
 use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
+use Spark\Http\Header;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -637,7 +638,7 @@ class Router implements RouterContract
 
         $methods = [strtoupper($request->getMethod())];
         if ($this->isCorsPreflight($request)) {
-            $methods[] = strtoupper(trim((string) $request->header('Access-Control-Request-Method', '')));
+            $methods[] = strtoupper(trim((string) $request->header(Header::ACCESS_CONTROL_REQUEST_METHOD, '')));
         }
         if (in_array(Request::METHOD_HEAD, $methods, true)) {
             $methods[] = Request::METHOD_GET;
@@ -665,7 +666,7 @@ class Router implements RouterContract
             destination: function (Request $request) use ($matched, $allowed): Response {
                 if ($matched === null) {
                     if ($allowed !== []) {
-                        return Response::error(Response::STATUS_METHOD_NOT_ALLOWED, 'Method not allowed')->setHeader('Allow', implode(', ', $allowed));
+                        return Response::error(Response::STATUS_METHOD_NOT_ALLOWED, 'Method not allowed')->setHeader(Header::ALLOW, implode(', ', $allowed));
                     }
                     if ($this->fallback !== null) {
                         is_debug_mode() && event('app:routeFallback');
@@ -707,8 +708,8 @@ class Router implements RouterContract
     private function isCorsPreflight(Request $request): bool
     {
         return strtoupper($request->getMethod()) === Request::METHOD_OPTIONS
-            && $request->header('Origin') !== null
-            && $request->header('Access-Control-Request-Method') !== null;
+            && $request->header(Header::ORIGIN) !== null
+            && $request->header(Header::ACCESS_CONTROL_REQUEST_METHOD) !== null;
     }
 
     /**

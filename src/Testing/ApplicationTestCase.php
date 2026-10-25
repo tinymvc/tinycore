@@ -3,6 +3,7 @@
 namespace Spark\Testing;
 
 use Spark\Foundation\Application;
+use Spark\Http\Header;
 use Spark\Http\Request;
 use Spark\Tracer;
 use function in_array;
@@ -111,7 +112,7 @@ abstract class ApplicationTestCase extends TestCase
 
     protected function getJson(string $uri, array $headers = []): TestResponse
     {
-        return $this->get($uri, ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest', ...$headers]);
+        return $this->get($uri, [Header::ACCEPT => 'application/json', Header::X_REQUESTED_WITH => 'XMLHttpRequest', ...$headers]);
     }
 
     protected function postJson(string $uri, array $data = [], array $headers = []): TestResponse
@@ -174,7 +175,7 @@ abstract class ApplicationTestCase extends TestCase
 
     protected function withToken(string $token, string $type = 'Bearer'): static
     {
-        return $this->withHeaders(['Authorization' => $type . ' ' . $token]);
+        return $this->withHeaders([Header::AUTHORIZATION => $type . ' ' . $token]);
     }
 
     protected function withSession(array $data): static
@@ -245,7 +246,7 @@ abstract class ApplicationTestCase extends TestCase
             $headers = array_replace($this->defaultHeaders, array_change_key_case($headers, CASE_LOWER));
 
             if ($json) {
-                $headers = ['Accept' => 'application/json', 'Content-Type' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest', ...$headers];
+                $headers = [Header::ACCEPT => 'application/json', Header::CONTENT_TYPE => 'application/json', Header::X_REQUESTED_WITH => 'XMLHttpRequest', ...$headers];
                 $data = json_decode(json_encode($data, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
             }
 

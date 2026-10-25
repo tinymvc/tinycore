@@ -660,7 +660,7 @@ class DatabaseStorage implements CacheStorageContract
         $placeholders = implode(', ', array_fill(0, count($params), '?'));
         $sql = "INSERT INTO {$h['table']} ($columns) VALUES ($placeholders)";
 
-        if ($h['driver'] !== 'mysql') {
+        if ($h['driver'] !== DB::DRIVER_MYSQL) {
             return $this->run($h, "$sql ON CONFLICT DO NOTHING", $params)->rowCount() === 1;
         }
 
@@ -682,7 +682,7 @@ class DatabaseStorage implements CacheStorageContract
     {
         $insert = "INSERT INTO {$h['table']} ({$h['key']}, {$h['group']}, {$h['data']}, {$h['exp']}) VALUES (?, ?, ?, ?)";
 
-        if ($h['driver'] === 'mysql') {
+        if ($h['driver'] === DB::DRIVER_MYSQL) {
             return "$insert ON DUPLICATE KEY UPDATE {$h['data']} = VALUES({$h['data']}), {$h['exp']} = VALUES({$h['exp']})";
         }
 
@@ -702,7 +702,7 @@ class DatabaseStorage implements CacheStorageContract
     {
         $select = "SELECT {$h['key']} AS k, {$h['data']} AS d, {$h['exp']} AS e FROM {$h['table']} WHERE {$h['group']} = ? AND {$h['key']} = ?";
 
-        if ($h['driver'] === 'sqlite') {
+        if ($h['driver'] === DB::DRIVER_SQLITE) {
             $this->run($h, "UPDATE {$h['table']} SET {$h['exp']} = {$h['exp']} WHERE {$h['group']} = ? AND {$h['key']} = ?", [$this->name, $key]);
         } else {
             $select .= ' FOR UPDATE';
@@ -822,8 +822,8 @@ class DatabaseStorage implements CacheStorageContract
         }
 
         $driver = $db->getDriver();
-        if (!in_array($driver, ['mysql', 'pgsql', 'sqlite'], true)) {
-            throw new CacheException("Unsupported database driver [{$driver}] for cache/locks. Use mysql, pgsql or sqlite.");
+        if (!in_array($driver, DB::SUPPORTED_DRIVERS, true)) {
+            throw new CacheException("Unsupported database driver [$driver] for cache/locks.");
         }
 
         try {
@@ -831,14 +831,14 @@ class DatabaseStorage implements CacheStorageContract
                 $db->resetPdo();
             }
 
-            if ($owned && $driver === 'sqlite') {
+            if ($owned && $driver === DB::DRIVER_SQLITE) {
                 $db->getPdo()->exec('PRAGMA busy_timeout = 5000');
             }
         } catch (PDOException $e) {
             throw new CacheException('Cache database error: ' . $e->getMessage(), 0, $e);
         }
 
-        $q = $driver === 'mysql' ? '`' : '"';
+        $q = $driver === DB::DRIVER_MYSQL ? '`' : '"';
         $quote = static fn(string $identifier): string => $q . str_replace($q, $q . $q, $identifier) . $q;
 
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $table) !== 1) {
@@ -855,8 +855,8 @@ class DatabaseStorage implements CacheStorageContract
             'exp' => $quote('expiration'),
             'owner' => $quote('owner'),
             'owner_match' => match ($driver) {
-                'mysql' => 'CAST(' . $quote('owner') . ' AS BINARY)',
-                'sqlite' => $quote('owner') . ' COLLATE BINARY',
+                DB::DRIVER_MYSQL => 'CAST(' . $quote('owner') . ' AS BINARY)',
+                DB::DRIVER_SQLITE => $quote('owner') . ' COLLATE BINARY',
                 default => $quote('owner'),
             },
         ];

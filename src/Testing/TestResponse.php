@@ -2,6 +2,7 @@
 
 namespace Spark\Testing;
 
+use Spark\Http\Header;
 use Spark\Http\Response;
 use function array_key_exists;
 use function is_array;
@@ -66,7 +67,7 @@ final class TestResponse
 
     public function assertRedirect(string $url, int $status = Response::STATUS_FOUND): self
     {
-        return $this->assertStatus($status)->assertHeader('Location', $url);
+        return $this->assertStatus($status)->assertHeader(Header::LOCATION, $url);
     }
 
     /** Assert the complete decoded JSON value, including types. */

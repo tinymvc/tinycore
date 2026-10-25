@@ -4,6 +4,7 @@ namespace Spark\Database;
 
 use PDO;
 use PDOStatement;
+use Spark\Database\Contracts\DatabaseDriver;
 use Spark\Database\Contracts\DBContract;
 use Spark\Database\Exceptions\InvalidDatabaseConfigException;
 use Spark\Support\Traits\Conditionable;
@@ -30,6 +31,11 @@ use function sprintf;
  * @method bool inTransaction()
  * @method bool|string lastInsertId()
  * @method bool|string quote(string $string, int $type = PDO::PARAM_STR)
+ * @method bool setAttribute(int $attribute, mixed $value)
+ * @method mixed getAttribute(int $attribute)
+ * @method array getAvailableDrivers()
+ * @method array errorInfo()
+ * @method ?string errorCode()
  * 
  * @method static array raw(string $sql, array $bindings = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, mixed $operator = null, mixed $value = null, ?string $boolean = null, bool $not = false)
@@ -46,17 +52,12 @@ use function sprintf;
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
-class DB implements DBContract
+class DB implements DBContract, DatabaseDriver
 {
     use Conditionable, Macroable {
         __call as macroCall;
         __callStatic as macroCallStatic;
     }
-
-    /** Database driver constants. */
-    public const DRIVER_MYSQL = 'mysql';
-    public const DRIVER_PGSQL = 'pgsql';
-    public const DRIVER_SQLITE = 'sqlite';
 
     /**
      * Store the PDO connection of database.
@@ -73,7 +74,7 @@ class DB implements DBContract
     private array $config = [];
 
     /** @var string The default database driver. */
-    public const DEFAULT_DRIVER = 'mysql';
+    public const DEFAULT_DRIVER = self::DRIVER_MYSQL;
 
     /**
      * PDO driver names that may double as connection names.
@@ -84,17 +85,17 @@ class DB implements DBContract
      * @var string[]
      */
     private const KNOWN_DRIVERS = [
-        'mysql',
-        'pgsql',
-        'sqlite',
-        'sqlsrv',
-        'oci',
-        'odbc',
-        'firebird',
-        'ibm',
-        'informix',
-        'dblib',
-        'cubrid',
+        self::DRIVER_MYSQL,
+        self::DRIVER_PGSQL,
+        self::DRIVER_SQLITE,
+        self::DRIVER_SQLSRV,
+        self::DRIVER_OCI,
+        self::DRIVER_ODBC,
+        self::DRIVER_FIREBIRD,
+        self::DRIVER_IBM,
+        self::DRIVER_INFORMIX,
+        self::DRIVER_DBLIB,
+        self::DRIVER_CUBRID
     ];
 
     /**
@@ -270,15 +271,15 @@ class DB implements DBContract
             $config['user'] = $config['username'];
         }
 
-        if (isset($config['database']) && !isset($config['name']) && ($config['driver'] ?? null) !== 'sqlite') {
+        if (isset($config['database']) && !isset($config['name']) && ($config['driver'] ?? null) !== self::DRIVER_SQLITE) {
             $config['name'] = $config['database'];
         }
 
-        if (isset($config['file']) && !isset($config['database']) && ($config['driver'] ?? null) === 'sqlite') {
+        if (isset($config['file']) && !isset($config['database']) && ($config['driver'] ?? null) === self::DRIVER_SQLITE) {
             $config['database'] = $config['file'];
         }
 
-        if (isset($config['path']) && !isset($config['database']) && ($config['driver'] ?? null) === 'sqlite') {
+        if (isset($config['path']) && !isset($config['database']) && ($config['driver'] ?? null) === self::DRIVER_SQLITE) {
             $config['database'] = $config['path'];
         }
 
@@ -326,6 +327,12 @@ class DB implements DBContract
         }
 
         return $this->pdo;
+    }
+
+    /** Returns the PDO connection instance. */
+    public function pdo(): PDO
+    {
+        return $this->getPdo();
     }
 
     /**
@@ -452,16 +459,26 @@ class DB implements DBContract
             return $this->macroCall($name, $args);
         }
 
-        $query = new QueryBuilder($this);
+        $proxy = [
+            'beginTransaction',
+            'commit',
+            'rollBack',
+            'inTransaction',
+            'getAttribute',
+            'setAttribute',
+            'quote',
+            'lastInsertId',
+            'errorCode',
+            'errorInfo',
+            'getAvailableDrivers',
+        ];
 
-        if (
-            method_exists($query, $name) ||
-            $query->hasMacro($name)
-        ) {
-            return $query->$name(...$args);
+        if (in_array($name, $proxy)) {
+            return $this->getPdo()->$name(...$args);
         }
 
-        return $this->getPdo()->$name(...$args);
+        $query = new QueryBuilder($this);
+        return $query->$name(...$args);
     }
 
     /**
@@ -568,7 +585,7 @@ class DB implements DBContract
                 sprintf('port=%s;', $this->config['port']) : '',
                 isset($this->config['name']) ?
                 sprintf('dbname=%s;', $this->config['name']) : '',
-                isset($this->config['charset']) && $driver === 'mysql' ?
+                isset($this->config['charset']) && $driver === self::DRIVER_MYSQL ?
                 sprintf('charset=%s;', $this->config['charset']) : '',
             ),
         };

@@ -56,11 +56,11 @@ class DatabaseHandler implements SessionHandlerInterface, SessionUpdateTimestamp
 
         $this->driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
-        if (!in_array($this->driver, ['mysql', 'pgsql', 'sqlite'], true)) {
+        if (!in_array($this->driver, DB::SUPPORTED_DRIVERS, true)) {
             throw new \RuntimeException('Unsupported session database driver.');
         }
 
-        $quote = $this->driver === 'mysql' ? '`' : '"';
+        $quote = $this->driver === DB::DRIVER_MYSQL ? '`' : '"';
         $this->table = implode('.', array_map(
             static fn(string $part): string => $quote . $part . $quote,
             explode('.', (string) ($this->config['table'] ?? 'sessions')),
@@ -99,7 +99,7 @@ class DatabaseHandler implements SessionHandlerInterface, SessionUpdateTimestamp
     public function write(string $id, string $data): bool
     {
         $sql = "INSERT INTO {$this->table} (id, payload, last_activity) VALUES (?, ?, ?)";
-        $sql .= $this->driver === 'mysql'
+        $sql .= $this->driver === DB::DRIVER_MYSQL
             ? ' ON DUPLICATE KEY UPDATE payload = VALUES(payload), last_activity = VALUES(last_activity)'
             : ' ON CONFLICT (id) DO UPDATE SET payload = excluded.payload, last_activity = excluded.last_activity';
 

@@ -5,6 +5,7 @@ namespace Spark;
 use Spark\Console\Prompt;
 use Spark\Contracts\TracerContract;
 use Spark\Foundation\Application;
+use Spark\Http\Header;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Support\Traits\Macroable;
@@ -343,7 +344,7 @@ class Tracer implements TracerContract
 
         if (!headers_sent()) {
             http_response_code(Response::STATUS_INTERNAL_SERVER_ERROR);
-            header('Content-Type: ' . ($json ? 'application/json' : 'text/html') . '; charset=UTF-8');
+            header(Header::CONTENT_TYPE . ': ' . ($json ? 'application/json' : 'text/html') . '; charset=UTF-8');
         }
     }
 

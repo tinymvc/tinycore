@@ -142,6 +142,8 @@ class Queue implements QueueContract
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
         $this->message("Processing jobs from [$queueNames].");
 
+        usleep(1000 * rand(100, 500)); // Random micro-delay to reduce race conditions on startup.
+
         $this->recoverStaleJobs();
 
         do {

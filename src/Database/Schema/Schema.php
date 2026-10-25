@@ -126,8 +126,8 @@ class Schema implements SchemaContract
         $pdo = self::getConnection();
 
         $sql = match ($grammar->getDriver()) {
-            'sqlite' => "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-            'pgsql' => "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
+            DB::DRIVER_SQLITE => "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            DB::DRIVER_PGSQL => "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
             default => "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
         };
 
@@ -186,7 +186,7 @@ class Schema implements SchemaContract
         }
 
         $sql = match ($grammar->getDriver()) {
-            'pgsql' => "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? ORDER BY ordinal_position",
+            DB::DRIVER_PGSQL => "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? ORDER BY ordinal_position",
             default => "SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? ORDER BY ordinal_position",
         };
 
@@ -227,10 +227,10 @@ class Schema implements SchemaContract
         $pdo = self::getConnection();
         $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
-        if ($driver === 'pgsql') {
+        if ($driver === DB::DRIVER_PGSQL) {
             throw new \LogicException('PostgreSQL cannot disable foreign keys this way. Use explicitly DEFERRABLE constraints inside a transaction.');
         }
-        $enabled = (bool) $pdo->query($driver === 'sqlite' ? 'PRAGMA foreign_keys' : 'SELECT @@FOREIGN_KEY_CHECKS')->fetchColumn();
+        $enabled = (bool) $pdo->query($driver === DB::DRIVER_SQLITE ? 'PRAGMA foreign_keys' : 'SELECT @@FOREIGN_KEY_CHECKS')->fetchColumn();
         self::disableForeignKeyConstraints();
         try {
             return $callback();
@@ -308,14 +308,14 @@ class Schema implements SchemaContract
     {
         $grammar = self::getGrammar();
 
-        if ($grammar->getDriver() === 'pgsql') {
+        if ($grammar->getDriver() === DB::DRIVER_PGSQL) {
             throw new \LogicException('PostgreSQL does not support toggling all foreign keys. Use explicitly DEFERRABLE constraints inside a transaction.');
         }
         if ($grammar->isSQLite() && self::getConnection()->inTransaction()) {
             throw new \LogicException('SQLite foreign keys must be toggled before starting a transaction.');
         }
         $sql = match ($grammar->getDriver()) {
-            'sqlite' => 'PRAGMA foreign_keys = ' . ($enabled ? 'ON' : 'OFF'),
+            DB::DRIVER_SQLITE => 'PRAGMA foreign_keys = ' . ($enabled ? 'ON' : 'OFF'),
             default => 'SET FOREIGN_KEY_CHECKS=' . ($enabled ? '1' : '0'),
         };
 

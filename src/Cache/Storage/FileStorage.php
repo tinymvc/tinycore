@@ -5,15 +5,12 @@ namespace Spark\Cache\Storage;
 use Generator;
 use Spark\Cache\Contracts\CacheStorageContract;
 use Spark\Cache\Exceptions\CacheException;
+use Spark\Utils\File;
 use function array_keys;
 use function bin2hex;
-use function chmod;
 use function clearstatcache;
 use function dirname;
 use function fclose;
-use function file_exists;
-use function file_get_contents;
-use function filemtime;
 use function filesize;
 use function flock;
 use function fflush;
@@ -34,11 +31,9 @@ use function max;
 use function md5;
 use function microtime;
 use function min;
-use function mkdir;
 use function octdec;
 use function preg_match;
 use function random_bytes;
-use function rename;
 use function rtrim;
 use function scandir;
 use function serialize;
@@ -50,7 +45,6 @@ use function substr;
 use function time;
 use function touch;
 use function trim;
-use function unlink;
 use function unserialize;
 use function usleep;
 
@@ -211,7 +205,7 @@ class FileStorage implements CacheStorageContract
             [$dir, $path] = $this->target($this->cacheRoot, (string) $key, self::ENTRY_EXT);
 
             $this->withGuard($dir, function () use ($path) {
-                @unlink($path);
+                File::delete($path);
             });
         }
     }
@@ -236,7 +230,7 @@ class FileStorage implements CacheStorageContract
                     return 0;
                 }
 
-                return file_exists($path) && @unlink($path) ? 1 : 0;
+                return File::delete($path) ? 1 : 0;
             });
         }
 
@@ -264,7 +258,7 @@ class FileStorage implements CacheStorageContract
             $this->withGuard($dir, function () use ($dir) {
                 foreach ($this->listDir($dir) as $file) {
                     if (str_ends_with($file, self::ENTRY_EXT)) {
-                        @unlink($dir . DIRECTORY_SEPARATOR . $file);
+                        File::delete($dir . DIRECTORY_SEPARATOR . $file);
                     }
                 }
             });
@@ -373,7 +367,7 @@ class FileStorage implements CacheStorageContract
                     return $default;
                 }
 
-                @unlink($path);
+                File::delete($path);
 
                 return $this->entryValue($entry);
             });
@@ -477,7 +471,7 @@ class FileStorage implements CacheStorageContract
                     return false;
                 }
 
-                return @unlink($path) || !file_exists($path);
+                return File::delete($path) || !File::exists($path);
             });
         } catch (CacheException) {
             return false;
@@ -532,7 +526,7 @@ class FileStorage implements CacheStorageContract
                         return 0;
                     }
 
-                    return file_exists($path) && @unlink($path) ? 1 : 0;
+                    return File::delete($path) ? 1 : 0;
                 });
             }
         } catch (CacheException) {
@@ -587,7 +581,7 @@ class FileStorage implements CacheStorageContract
         [$dir, $path] = $this->target($this->lockRoot, $key, self::LOCK_EXT);
 
         try {
-            return (bool) $this->withGuard($dir, fn() => file_exists($path) && @unlink($path));
+            return (bool) $this->withGuard($dir, fn() => File::delete($path));
         } catch (CacheException) {
             return false;
         }
@@ -705,17 +699,17 @@ class FileStorage implements CacheStorageContract
             }
         } catch (\Throwable $e) {
             fclose($handle);
-            @unlink($tmp);
+            File::delete($tmp);
             throw $e;
         }
 
         fclose($handle);
-        @chmod($tmp, $this->fileMode);
+        File::chmod($tmp, $this->fileMode);
 
         // rename() is atomic on POSIX. On Windows it can fail briefly while a reader holds the target
         // open, so retry a few times before giving up.
         for ($attempt = 1; $attempt <= 5; $attempt++) {
-            if (@rename($tmp, $path)) {
+            if (File::move($tmp, $path)) {
                 return;
             }
 
@@ -723,7 +717,7 @@ class FileStorage implements CacheStorageContract
             clearstatcache(true, $path);
         }
 
-        @unlink($tmp);
+        File::delete($tmp);
 
         throw new CacheException("Unable to move cache file into place [{$path}].");
     }
@@ -751,7 +745,7 @@ class FileStorage implements CacheStorageContract
      */
     private function readEntry(string $path, ?string $key = null): ?array
     {
-        $raw = @file_get_contents($path);
+        $raw = File::get($path);
 
         if (!is_string($raw) || $raw === '') {
             return null;
@@ -801,7 +795,7 @@ class FileStorage implements CacheStorageContract
                 $entry = $this->readEntry($path, $key);
 
                 if ($entry !== null && $this->isExpired($entry)) {
-                    @unlink($path);
+                    File::delete($path);
                 }
             });
         } catch (CacheException) {
@@ -823,7 +817,7 @@ class FileStorage implements CacheStorageContract
      */
     private function readLock(string $path, ?string $key = null): ?array
     {
-        $raw = @file_get_contents($path);
+        $raw = File::get($path);
 
         if (!is_string($raw) || $raw === '') {
             return null;
@@ -922,10 +916,10 @@ class FileStorage implements CacheStorageContract
                 }
 
                 $path = $dir . DIRECTORY_SEPARATOR . $file;
-                $mtime = @filemtime($path);
+                $mtime = File::lastModified($path);
 
                 if ($mtime !== false && $mtime < $limit) {
-                    @unlink($path);
+                    File::delete($path);
                 }
             }
         }
@@ -946,7 +940,7 @@ class FileStorage implements CacheStorageContract
 
         $marker = $this->cacheRoot . DIRECTORY_SEPARATOR . '.gc';
         clearstatcache(true, $marker);
-        $mtime = @filemtime($marker);
+        $mtime = File::lastModified($marker);
 
         if ($mtime !== false && time() - $mtime < $this->gcInterval) {
             return;
@@ -960,13 +954,13 @@ class FileStorage implements CacheStorageContract
 
     private function ensureDirectory(string $directory): void
     {
-        if ($directory === '' || is_dir($directory)) {
+        if ($directory === '' || File::isDirectory($directory)) {
             return;
         }
 
         // Another process may create it between the check and mkdir(), so re-check on failure.
-        if (!@mkdir($directory, $this->dirMode, true) && !is_dir($directory)) {
-            throw new CacheException("Unable to create cache directory [{$directory}].");
+        if (!File::ensureDirectoryExists($directory, $this->dirMode)) {
+            throw new CacheException("Unable to create cache directory [$directory].");
         }
     }
 
@@ -975,7 +969,7 @@ class FileStorage implements CacheStorageContract
         $path = trim((string) $path);
 
         if ($path === '') {
-            $path = (string) storage_dir('cache');
+            $path = (string) temp_dir('cache');
         }
 
         return rtrim($path, '/\\');

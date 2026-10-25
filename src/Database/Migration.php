@@ -50,11 +50,11 @@ class Migration implements MigrationContract
 
         $this->pdo = DB::getPdo();
 
-        if (!in_array($driver = DB::getDriver(), ['sqlite', 'mysql', 'pgsql'], true)) {
+        if (!in_array($driver = DB::getDriver(), [DB::DRIVER_SQLITE, DB::DRIVER_MYSQL, DB::DRIVER_PGSQL], true)) {
             throw new \RuntimeException('Unsupported migration database driver.');
         }
 
-        $quote = $driver === 'mysql' ? '`' : '"';
+        $quote = $driver === DB::DRIVER_MYSQL ? '`' : '"';
         $this->table = $quote . $this->table . $quote;
     }
 
@@ -287,14 +287,14 @@ class Migration implements MigrationContract
         $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 
         $sql = match ($driver) {
-            'sqlite' => "CREATE TABLE IF NOT EXISTS {$this->table} (
+            DB::DRIVER_SQLITE => "CREATE TABLE IF NOT EXISTS {$this->table} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 migration TEXT NOT NULL UNIQUE,
                 type TEXT NOT NULL DEFAULT 'migration',
                 batch INTEGER NOT NULL,
                 applied_at INTEGER NOT NULL
             )",
-            'pgsql' => "CREATE TABLE IF NOT EXISTS {$this->table} (
+            DB::DRIVER_PGSQL => "CREATE TABLE IF NOT EXISTS {$this->table} (
                 id SERIAL PRIMARY KEY,
                 migration VARCHAR(255) NOT NULL UNIQUE,
                 type VARCHAR(10) NOT NULL DEFAULT 'migration',

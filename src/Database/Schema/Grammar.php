@@ -2,6 +2,7 @@
 
 namespace Spark\Database\Schema;
 
+use Spark\Database\Contracts\DatabaseDriver;
 use Spark\Database\Schema\Contracts\GrammarContract;
 use Spark\Database\Schema\Contracts\WrapperContract;
 use Spark\Database\Schema\Exceptions\SqliteAlterFailedException;
@@ -23,7 +24,7 @@ use function strlen;
  * 
  * @package Spark\Database\Schema
  */
-class Grammar implements GrammarContract
+class Grammar implements GrammarContract, DatabaseDriver
 {
     use Macroable;
 
@@ -40,7 +41,7 @@ class Grammar implements GrammarContract
      */
     public function __construct(private string $driver)
     {
-        if (!in_array(strtolower($driver), ['mysql', 'sqlite', 'pgsql'])) {
+        if (!in_array(strtolower($driver), [self::DRIVER_MYSQL, self::DRIVER_SQLITE, self::DRIVER_PGSQL], true)) {
             throw new UnsupportedDatabaseDriverException(
                 'Unsupported database driver. Supported drivers: mysql, sqlite, pgsql.'
             );
@@ -56,7 +57,7 @@ class Grammar implements GrammarContract
      */
     public function isSQLite(): bool
     {
-        return $this->driver === 'sqlite';
+        return $this->driver === self::DRIVER_SQLITE;
     }
 
     /**
@@ -66,7 +67,7 @@ class Grammar implements GrammarContract
      */
     public function isPostgreSQL(): bool
     {
-        return $this->driver === 'pgsql';
+        return $this->driver === self::DRIVER_PGSQL;
     }
 
     /**
@@ -77,7 +78,7 @@ class Grammar implements GrammarContract
 
     public function isMySQL(): bool
     {
-        return $this->driver === 'mysql';
+        return $this->driver === self::DRIVER_MYSQL;
     }
 
     /**
@@ -130,87 +131,87 @@ class Grammar implements GrammarContract
         $map = match ($type) {
             // Mapping of general types to specific SQL types per driver.
             'id' => [
-                'mysql' => 'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
-                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
-                'pgsql' => 'BIGSERIAL PRIMARY KEY'
+                self::DRIVER_MYSQL => 'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                self::DRIVER_SQLITE => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                self::DRIVER_PGSQL => 'BIGSERIAL PRIMARY KEY'
             ],
             'increments' => [
-                'mysql' => 'INT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
-                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
-                'pgsql' => 'SERIAL PRIMARY KEY'
+                self::DRIVER_MYSQL => 'INT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                self::DRIVER_SQLITE => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                self::DRIVER_PGSQL => 'SERIAL PRIMARY KEY'
             ],
             'tinyIncrements' => [
-                'mysql' => 'TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
-                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
-                'pgsql' => 'SMALLSERIAL PRIMARY KEY'
+                self::DRIVER_MYSQL => 'TINYINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                self::DRIVER_SQLITE => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                self::DRIVER_PGSQL => 'SMALLSERIAL PRIMARY KEY'
             ],
             'smallIncrements' => [
-                'mysql' => 'SMALLINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
-                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
-                'pgsql' => 'SMALLSERIAL PRIMARY KEY'
+                self::DRIVER_MYSQL => 'SMALLINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                self::DRIVER_SQLITE => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                self::DRIVER_PGSQL => 'SMALLSERIAL PRIMARY KEY'
             ],
             'string' => [
-                'sqlite' => 'TEXT COLLATE NOCASE',
+                self::DRIVER_SQLITE => 'TEXT COLLATE NOCASE',
                 'default' => "VARCHAR({$parameters['length']})"
             ],
-            'integer' => ['mysql' => 'INT', 'default' => 'INTEGER'],
-            'smallInteger' => ['sqlite' => 'INTEGER', 'default' => 'SMALLINT'],
-            'mediumInteger' => ['mysql' => 'MEDIUMINT', 'default' => 'INTEGER'],
-            'tinyInteger' => ['mysql' => 'TINYINT', 'sqlite' => 'INTEGER', 'pgsql' => 'SMALLINT'],
-            'text' => ['sqlite' => 'TEXT COLLATE NOCASE', 'default' => 'TEXT'],
+            'integer' => [self::DRIVER_MYSQL => 'INT', 'default' => 'INTEGER'],
+            'smallInteger' => [self::DRIVER_SQLITE => 'INTEGER', 'default' => 'SMALLINT'],
+            'mediumInteger' => [self::DRIVER_MYSQL => 'MEDIUMINT', 'default' => 'INTEGER'],
+            'tinyInteger' => [self::DRIVER_MYSQL => 'TINYINT', self::DRIVER_SQLITE => 'INTEGER', self::DRIVER_PGSQL => 'SMALLINT'],
+            'text' => [self::DRIVER_SQLITE => 'TEXT COLLATE NOCASE', 'default' => 'TEXT'],
             'timestamp' => [
-                'sqlite' => 'DATETIME',
+                self::DRIVER_SQLITE => 'DATETIME',
                 'default' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0),
             ],
-            'boolean' => ['mysql' => 'TINYINT(1)', 'sqlite' => 'INTEGER', 'pgsql' => 'BOOLEAN'],
+            'boolean' => [self::DRIVER_MYSQL => 'TINYINT(1)', self::DRIVER_SQLITE => 'INTEGER', self::DRIVER_PGSQL => 'BOOLEAN'],
             'bigIncrements' => [
-                'mysql' => 'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
-                'sqlite' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
-                'pgsql' => 'BIGSERIAL PRIMARY KEY'
+                self::DRIVER_MYSQL => 'BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY',
+                self::DRIVER_SQLITE => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+                self::DRIVER_PGSQL => 'BIGSERIAL PRIMARY KEY'
             ],
-            'bigInteger' => ['sqlite' => 'INTEGER', 'default' => 'BIGINT'],
+            'bigInteger' => [self::DRIVER_SQLITE => 'INTEGER', 'default' => 'BIGINT'],
             'decimal' => [
-                'sqlite' => 'NUMERIC',
+                self::DRIVER_SQLITE => 'NUMERIC',
                 'default' => "DECIMAL({$parameters['precision']}, {$parameters['scale']})"
             ],
             'double' => [
-                'mysql' => $this->compileFloatingType('DOUBLE', $parameters),
-                'sqlite' => 'REAL',
-                'pgsql' => 'DOUBLE PRECISION'
+                self::DRIVER_MYSQL => $this->compileFloatingType('DOUBLE', $parameters),
+                self::DRIVER_SQLITE => 'REAL',
+                self::DRIVER_PGSQL => 'DOUBLE PRECISION'
             ],
             'float' => [
-                'mysql' => $this->compileFloatingType('FLOAT', $parameters),
+                self::DRIVER_MYSQL => $this->compileFloatingType('FLOAT', $parameters),
                 'default' => 'REAL'
             ],
-            'char' => ['sqlite' => 'TEXT', 'default' => "CHAR({$parameters['length']})"],
+            'char' => [self::DRIVER_SQLITE => 'TEXT', 'default' => "CHAR({$parameters['length']})"],
             'enum' => [
-                'mysql' => 'ENUM(' . $this->wrapper->quoteEnumValues($parameters['allowed']) . ')',
-                'sqlite' => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
+                self::DRIVER_MYSQL => 'ENUM(' . $this->wrapper->quoteEnumValues($parameters['allowed']) . ')',
+                self::DRIVER_SQLITE => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
                     ' IN (' . $this->wrapper->quoteEnumValues($parameters['allowed']) . '))',
-                'pgsql' => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
+                self::DRIVER_PGSQL => 'TEXT CHECK(' . $this->wrapper->wrapColumn($parameters['name']) .
                     ' IN (' . $this->wrapper->quoteEnumValues($parameters['allowed']) . '))',
             ],
-            'longText' => ['mysql' => 'LONGTEXT', 'default' => 'TEXT'],
-            'json' => ['mysql' => 'JSON', 'sqlite' => 'TEXT', 'pgsql' => 'JSON'],
-            'date' => ['sqlite' => 'TEXT', 'default' => 'DATE'],
+            'longText' => [self::DRIVER_MYSQL => 'LONGTEXT', 'default' => 'TEXT'],
+            'json' => [self::DRIVER_MYSQL => 'JSON', self::DRIVER_SQLITE => 'TEXT', self::DRIVER_PGSQL => 'JSON'],
+            'date' => [self::DRIVER_SQLITE => 'TEXT', 'default' => 'DATE'],
             'dateTime' => [
-                'mysql' => $this->compileTypeWithOptionalPrecision('DATETIME', $parameters['precision'] ?? 0),
-                'sqlite' => 'TEXT',
-                'pgsql' => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0)
+                self::DRIVER_MYSQL => $this->compileTypeWithOptionalPrecision('DATETIME', $parameters['precision'] ?? 0),
+                self::DRIVER_SQLITE => 'TEXT',
+                self::DRIVER_PGSQL => $this->compileTypeWithOptionalPrecision('TIMESTAMP', $parameters['precision'] ?? 0)
             ],
             'time' => [
-                'sqlite' => 'TEXT',
+                self::DRIVER_SQLITE => 'TEXT',
                 'default' => $this->compileTypeWithOptionalPrecision('TIME', $parameters['precision'] ?? 0)
             ],
             'binary' => [
-                'mysql' => ($parameters['length'] ?? null)
+                self::DRIVER_MYSQL => ($parameters['length'] ?? null)
                     ? (($parameters['fixed'] ?? false) ? 'BINARY' : 'VARBINARY') . "({$parameters['length']})"
                     : 'BLOB',
-                'pgsql' => 'BYTEA',
+                self::DRIVER_PGSQL => 'BYTEA',
                 'default' => 'BLOB',
             ],
-            'uuid' => ['mysql' => 'CHAR(36)', 'sqlite' => 'TEXT', 'pgsql' => 'UUID'],
-            default => ['mysql' => 'TEXT', 'sqlite' => 'TEXT', 'pgsql' => 'TEXT'],
+            'uuid' => [self::DRIVER_MYSQL => 'CHAR(36)', self::DRIVER_SQLITE => 'TEXT', self::DRIVER_PGSQL => 'UUID'],
+            default => [self::DRIVER_MYSQL => 'TEXT', self::DRIVER_SQLITE => 'TEXT', self::DRIVER_PGSQL => 'TEXT'],
         };
 
         return $map[$this->driver] ?? $map['default'] ?? 'TEXT';
@@ -231,8 +232,8 @@ class Grammar implements GrammarContract
             'unique' => 'UNIQUE',
             'unsigned' => $this->isMySQL() ? 'UNSIGNED' : '',
             'auto_increment' => match ($this->driver) {
-                    'mysql' => 'AUTO_INCREMENT',
-                    'sqlite' => 'AUTOINCREMENT',
+                    self::DRIVER_MYSQL => 'AUTO_INCREMENT',
+                    self::DRIVER_SQLITE => 'AUTOINCREMENT',
                     default => ''
                 },
             'default' => match (true) {
@@ -457,7 +458,7 @@ class Grammar implements GrammarContract
         $indexName = $this->resolveIndexName($table, $index);
 
         return match ($this->driver) {
-            'mysql' => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP INDEX {$this->wrapper->wrap($indexName)}",
+            self::DRIVER_MYSQL => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP INDEX {$this->wrapper->wrap($indexName)}",
             default => "DROP INDEX {$this->wrapper->wrap($indexName)}",
         };
     }
@@ -476,7 +477,7 @@ class Grammar implements GrammarContract
         }
 
         return match ($this->driver) {
-            'mysql' => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP PRIMARY KEY",
+            self::DRIVER_MYSQL => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP PRIMARY KEY",
             default => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP CONSTRAINT "
                 . $this->wrapper->wrap($primary['name'] ?? "{$table}_pkey"),
         };
@@ -499,7 +500,7 @@ class Grammar implements GrammarContract
         $constraintName = $fk['name'] ?? $this->makeForeignKeyName($table, $fk['columns']);
 
         return "ALTER TABLE {$this->wrapper->wrapTable($table)} " . match ($this->driver) {
-            'mysql' => "DROP FOREIGN KEY {$this->wrapper->wrap($constraintName)}",
+            self::DRIVER_MYSQL => "DROP FOREIGN KEY {$this->wrapper->wrap($constraintName)}",
             default => "DROP CONSTRAINT {$this->wrapper->wrap($constraintName)}",
         };
     }
@@ -624,8 +625,8 @@ class Grammar implements GrammarContract
     private function generateIndexName(string $table, array $index): string
     {
         $prefix = match ($this->driver) {
-            'pgsql', 'mysql' => "{$table}_{$index['type']}_",
-            'sqlite' => "idx_{$table}_"
+            self::DRIVER_PGSQL, self::DRIVER_MYSQL => "{$table}_{$index['type']}_",
+            self::DRIVER_SQLITE => "idx_{$table}_"
         };
 
         $columnPart = implode('_', $index['columns']);
@@ -656,8 +657,8 @@ class Grammar implements GrammarContract
     private function limitIdentifier(string $name): string
     {
         $limit = match ($this->driver) {
-            'mysql' => 64,
-            'pgsql' => 63,
+            self::DRIVER_MYSQL => 64,
+            self::DRIVER_PGSQL => 63,
             default => 255,
         };
         if (strlen($name) <= $limit) {

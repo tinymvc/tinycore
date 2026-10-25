@@ -14,6 +14,7 @@ use Psr\Http\Message\UriFactoryInterface;
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
+use Spark\Http\Header;
 use Spark\Foundation\Application;
 use Spark\Support\Arr;
 use Spark\Support\Collection;
@@ -103,7 +104,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     protected array $trustedProxies = [];
 
     /** @var string Header explicitly trusted to convey the client IP. */
-    protected string $trustedProxyHeader = 'x-forwarded-for';
+    protected string $trustedProxyHeader = Header::X_FORWARDED_FOR;
 
     /** Initializes request properties based on global server data. */
     public function __construct()
@@ -234,10 +235,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         ));
 
         if (
-            is_string($header = Application::$app->getConfig('app.trusted_proxy_header', 'x-forwarded-for'))
-            && strtolower(trim($header)) === 'cf-connecting-ip'
+            is_string($header = Application::$app->getConfig('app.trusted_proxy_header', Header::X_FORWARDED_FOR))
+            && strtolower(trim($header)) === strtolower(Header::CF_CONNECTING_IP)
         ) {
-            $this->trustedProxyHeader = 'cf-connecting-ip';
+            $this->trustedProxyHeader = Header::CF_CONNECTING_IP;
         }
     }
 
@@ -349,7 +350,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             return [];
         }
 
-        $type = strtolower(trim(explode(';', $this->header('Content-Type', ''))[0]));
+        $type = strtolower(trim(explode(';', $this->header(Header::CONTENT_TYPE, ''))[0]));
         if ($type === 'application/x-www-form-urlencoded') {
             parse_str($this->getRawBody(), $params);
             return $params;
@@ -527,7 +528,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isAjax(): bool
     {
-        return strtolower($this->header('x-requested-with', '')) === 'xmlhttprequest';
+        return strtolower($this->header(Header::X_REQUESTED_WITH, '')) === 'xmlhttprequest';
     }
 
     /**
@@ -542,7 +543,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function isPrecognitive(): bool
     {
-        return $this->headers->has('precognition');
+        return $this->headers->has(strtolower(Header::PRECOGNITION));
     }
 
     /**
@@ -784,7 +785,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     {
         $types = [];
 
-        foreach (preg_split('/,(?=(?:[^"]*"[^"]*")*[^"]*$)/', strtolower((string) $this->header('accept', ''))) as $part) {
+        foreach (preg_split('/,(?=(?:[^"]*"[^"]*")*[^"]*$)/', strtolower((string) $this->header(Header::ACCEPT, ''))) as $part) {
             $segments = preg_split('/;(?=(?:[^"]*"[^"]*")*[^"]*$)/', $part);
             $type = trim(array_shift($segments));
 
@@ -831,7 +832,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $types = $this->acceptedTypes();
 
         if ($types === []) {
-            return trim((string) $this->header('accept', '')) === '';
+            return trim((string) $this->header(Header::ACCEPT, '')) === '';
         }
 
         // Most specific match wins: exact, then type/*, then */*.
@@ -874,11 +875,11 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 
         // Generic trusted proxies may pass through a client-supplied Cloudflare
         // header. Trust it only when the deployment explicitly selects it.
-        if ($this->trustedProxyHeader === 'cf-connecting-ip') {
-            return $this->cleanIp((string) $this->header('cf-connecting-ip', '')) ?: $remote;
+        if ($this->trustedProxyHeader === Header::CF_CONNECTING_IP) {
+            return $this->cleanIp((string) $this->header(Header::CF_CONNECTING_IP, '')) ?: $remote;
         }
 
-        $forwarded = trim((string) $this->header('x-forwarded-for', ''));
+        $forwarded = trim((string) $this->header(Header::X_FORWARDED_FOR, ''));
         if ($forwarded === '') {
             return $remote;
         }
@@ -983,7 +984,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function bearerToken(): ?string
     {
-        $authorizationHeader = $this->header('authorization');
+        $authorizationHeader = $this->header(Header::AUTHORIZATION);
 
         if ($authorizationHeader && preg_match('/^Bearer[ \t]+(\S+)$/iD', trim($authorizationHeader), $matches)) {
             return $matches[1];
@@ -999,7 +1000,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function basicAuth(): ?array
     {
-        $authHeader = $this->header('authorization');
+        $authHeader = $this->header(Header::AUTHORIZATION);
 
         if ($authHeader && preg_match('/^Basic[ \t]+(\S+)$/iD', trim($authHeader), $matches)) {
             $encodedCredentials = $matches[1];
@@ -1023,7 +1024,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function useragent(): ?string
     {
-        return $this->header('user-agent');
+        return $this->header(Header::USER_AGENT);
     }
 
     /**
@@ -1054,7 +1055,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function referer(): ?string
     {
-        return $this->header('referer');
+        return $this->header(Header::REFERER);
     }
 
     /**
@@ -1353,7 +1354,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function acceptsAnyContentType(): bool
     {
-        if (trim((string) $this->header('accept', '')) === '') {
+        if (trim((string) $this->header(Header::ACCEPT, '')) === '') {
             return true;
         }
 
@@ -1735,10 +1736,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 
         // If the request is precognitive and has the 'precognition-validate-only' header, 
         // filter the rules to only validate the specified fields
-        if ($this->isPrecognitive() && $this->headers->has('precognition-validate-only')) {
+        if ($this->isPrecognitive() && $this->headers->has(strtolower(Header::PRECOGNITION_VALIDATE_ONLY))) {
             $rules = collect($rules)
                 ->only(
-                    explode(',', $this->headers->get('precognition-validate-only') ?: '')
+                    explode(',', $this->headers->get(strtolower(Header::PRECOGNITION_VALIDATE_ONLY)) ?: '')
                 )
                 ->all();
         }
@@ -1757,9 +1758,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             response()
                 ->noContent()
                 ->withHeaders([
-                    'Precognition' => 'true',
-                    'Precognition-Success' => 'true',
-                    'Vary' => 'Precognition',
+                    Header::PRECOGNITION => 'true',
+                    Header::PRECOGNITION_SUCCESS => 'true',
+                    Header::VARY => Header::PRECOGNITION,
                 ])
                 ->send();
             exit; // Exit the script to prevent further execution
@@ -1788,7 +1789,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             return json(['message' => $message, 'errors' => $errors], Response::STATUS_UNPROCESSABLE_ENTITY);
         } else {
             // Store the errors in the session flash data
-            if ($this->header('X-Inertia') && function_exists('inertia')) {
+            if ($this->header(Header::X_INERTIA) && function_exists('inertia')) {
                 $resp = inertia()->back();
             } else {
                 $resp = back();

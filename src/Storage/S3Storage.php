@@ -8,6 +8,7 @@ use SimpleXMLElement;
 use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Http;
 use Spark\Http\Client\HttpRequest;
+use Spark\Http\Header;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Support\Traits\Conditionable;
@@ -440,8 +441,8 @@ class S3Storage
         $this->objectUrl($key);
         $response = $this->request(Request::METHOD_HEAD, $key)->execute();
         $this->checkResponse($response, Response::STATUS_OK, 'Inspect file');
-        $size = $response->header('content-length');
-        $modified = strtotime((string) $response->header('last-modified', ''));
+        $size = $response->header(Header::CONTENT_LENGTH);
+        $modified = strtotime((string) $response->header(Header::LAST_MODIFIED, ''));
 
         if (!is_scalar($size) || !ctype_digit((string) $size) || $modified === false) {
             throw new RuntimeException('S3 metadata is missing size or modification time.');
@@ -450,7 +451,7 @@ class S3Storage
         return [
             'size' => (int) $size,
             'last_modified' => $modified,
-            'mime_type' => $response->header('content-type', 'application/octet-stream')
+            'mime_type' => $response->header(Header::CONTENT_TYPE, 'application/octet-stream')
         ];
     }
 

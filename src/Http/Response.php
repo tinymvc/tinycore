@@ -11,6 +11,7 @@ use Psr\Http\Message\StreamInterface;
 use Spark\Contracts\Http\ResponseContract;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Foundation\Application;
+use Spark\Http\Header;
 use Spark\Http\Resources\JsonResource;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
@@ -114,9 +115,9 @@ class Response implements ResponseContract
      */
     public function noCache(): self
     {
-        $this->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-        $this->setHeader('Pragma', 'no-cache');
-        $this->setHeader('Expires', '0');
+        $this->setHeader(Header::CACHE_CONTROL, 'no-store, no-cache, must-revalidate, max-age=0');
+        $this->setHeader(Header::PRAGMA, 'no-cache');
+        $this->setHeader(Header::EXPIRES, '0');
         return $this;
     }
 
@@ -132,9 +133,9 @@ class Response implements ResponseContract
      */
     public function cache(int $seconds = 3600): self
     {
-        $this->setHeader('Cache-Control', "public, max-age=$seconds");
-        $this->setHeader('Pragma', 'cache');
-        $this->setHeader('Expires', gmdate('D, d M Y H:i:s', time() + $seconds) . ' GMT');
+        $this->setHeader(Header::CACHE_CONTROL, "public, max-age=$seconds");
+        $this->setHeader(Header::PRAGMA, 'cache');
+        $this->setHeader(Header::EXPIRES, gmdate('D, d M Y H:i:s', time() + $seconds) . ' GMT');
         return $this;
     }
 
@@ -182,16 +183,16 @@ class Response implements ResponseContract
     public function download(string $content, string $filename, array $headers = []): void
     {
         $this->setContent($content);
-        $this->sendAttachment($filename, ['Content-Length' => (string) strlen($content), ...$headers]);
+        $this->sendAttachment($filename, [Header::CONTENT_LENGTH => (string) strlen($content), ...$headers]);
     }
 
     private function sendAttachment(string $filename, array $headers): void
     {
         $this->withHeaders([
-            'Content-Type' => 'application/octet-stream',
-            'Content-Disposition' => "attachment; filename*=UTF-8''" . rawurlencode(basename($filename)),
-            'Cache-Control' => 'must-revalidate',
-            'Expires' => '0',
+            Header::CONTENT_TYPE => 'application/octet-stream',
+            Header::CONTENT_DISPOSITION => "attachment; filename*=UTF-8''" . rawurlencode(basename($filename)),
+            Header::CACHE_CONTROL => 'must-revalidate',
+            Header::EXPIRES => '0',
             ...$headers,
         ]);
         $this->send();
@@ -210,7 +211,7 @@ class Response implements ResponseContract
     {
         $content = json_encode(JsonResource::normalize($data), $flags | JSON_THROW_ON_ERROR, $depth);
         $this->setStatusCode($statusCode);
-        $this->setHeader('Content-Type', 'application/json; charset=utf-8');
+        $this->setHeader(Header::CONTENT_TYPE, 'application/json; charset=utf-8');
         $this->setContent($content);
         return $this;
     }
@@ -224,7 +225,7 @@ class Response implements ResponseContract
      */
     public function redirect(string $url, int $httpCode = self::STATUS_FOUND): self
     {
-        $this->setHeader('Location', $url);
+        $this->setHeader(Header::LOCATION, $url);
         $this->setStatusCode($httpCode); // Default to 302 if no code is provided
         return $this;
     }
@@ -377,7 +378,7 @@ class Response implements ResponseContract
      */
     public function back(): self
     {
-        $referer = request()->header('referer', '/'); // Get the referer URL
+        $referer = request()->header(Header::REFERER, '/'); // Get the referer URL
         return $this->redirect($referer);
     }
 
@@ -453,7 +454,7 @@ class Response implements ResponseContract
             }
         }
 
-        if ($message->hasHeader('Location') && $message->getStatusCode() >= self::STATUS_MULTIPLE_CHOICES && $message->getStatusCode() < self::STATUS_BAD_REQUEST) {
+        if ($message->hasHeader(Header::LOCATION) && $message->getStatusCode() >= self::STATUS_MULTIPLE_CHOICES && $message->getStatusCode() < self::STATUS_BAD_REQUEST) {
             exit;
         }
     }
@@ -616,9 +617,9 @@ class Response implements ResponseContract
             $this->content = '';
             $this->clearDefaultContentType();
             if ($statusCode < self::STATUS_OK || $statusCode === self::STATUS_NO_CONTENT) {
-                $this->removeHeader('Content-Length');
-            } elseif ($statusCode === self::STATUS_RESET_CONTENT && $this->hasHeader('Content-Length')) {
-                $this->setHeader('Content-Length', '0');
+                $this->removeHeader(Header::CONTENT_LENGTH);
+            } elseif ($statusCode === self::STATUS_RESET_CONTENT && $this->hasHeader(Header::CONTENT_LENGTH)) {
+                $this->setHeader(Header::CONTENT_LENGTH, '0');
             }
             return;
         }
@@ -648,8 +649,8 @@ class Response implements ResponseContract
 
     public function setDefaultContentType(string $value): void
     {
-        if (!$this->hasHeader('Content-Type')) {
-            $this->setHeader('Content-Type', $value);
+        if (!$this->hasHeader(Header::CONTENT_TYPE)) {
+            $this->setHeader(Header::CONTENT_TYPE, $value);
             $this->defaultContentType = true;
         }
     }
@@ -657,7 +658,7 @@ class Response implements ResponseContract
     public function clearDefaultContentType(): void
     {
         if ($this->defaultContentType) {
-            $this->removeHeader('Content-Type');
+            $this->removeHeader(Header::CONTENT_TYPE);
             $this->defaultContentType = false;
         }
     }

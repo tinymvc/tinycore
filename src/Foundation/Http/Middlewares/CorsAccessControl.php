@@ -4,6 +4,7 @@ namespace Spark\Foundation\Http\Middlewares;
 
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Foundation\Application;
+use Spark\Http\Header;
 use Spark\Http\Response;
 use Spark\Http\Request;
 use function in_array;
@@ -62,16 +63,16 @@ abstract class CorsAccessControl implements MiddlewareInterface
             return $next($request);
         }
 
-        $origin = $request->header('Origin');
+        $origin = $request->header(Header::ORIGIN);
         $allowedOrigin = $origin === null ? null : $this->determineAllowedOrigin($origin);
         $config = $this->normalizeConfig();
 
         // Detect by header presence, then validate their values. Malformed preflight
         // attempts must not fall through to an explicit OPTIONS route callback.
         if ($this->isPreflightRequest($request)) {
-            $requestedMethod = strtoupper(trim($request->header('Access-Control-Request-Method', ''), " \t"));
+            $requestedMethod = strtoupper(trim($request->header(Header::ACCESS_CONTROL_REQUEST_METHOD, ''), " \t"));
             $requestedHeaders = $this->requestedHeaders($request);
-            $vary = ['Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers'];
+            $vary = [Header::ORIGIN, Header::ACCESS_CONTROL_REQUEST_METHOD, Header::ACCESS_CONTROL_REQUEST_HEADERS];
 
             if (
                 $allowedOrigin === null
@@ -95,7 +96,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
         // Validation and other exceptions may be rendered outside this middleware.
         // Early send()/abort() calls also need headers before anything is emitted.
         $decorate = function (Response $response) use ($allowedOrigin, $config): Response {
-            $this->withVary($response, ['Origin']);
+            $this->withVary($response, [Header::ORIGIN]);
 
             return $allowedOrigin === null ? $response : $this->withCorsHeaders(
                 $response,
@@ -141,7 +142,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
             Request::METHOD_DELETE,
             Request::METHOD_OPTIONS,
         ]);
-        $headers = $this->normalizeList($this->config['headers'] ?? ['Content-Type', 'X-Requested-With', 'Authorization', 'X-CSRF-TOKEN', 'X-XSRF-TOKEN']);
+        $headers = $this->normalizeList($this->config['headers'] ?? [Header::CONTENT_TYPE, Header::X_REQUESTED_WITH, Header::AUTHORIZATION, Header::X_CSRF_TOKEN, Header::X_XSRF_TOKEN]);
 
         return [
             'origin' => $origin,
@@ -183,22 +184,22 @@ abstract class CorsAccessControl implements MiddlewareInterface
         bool $isPreflight = false
     ): Response {
         $response
-            ->setHeader('Access-Control-Allow-Origin', $allowedOrigin);
+            ->setHeader(Header::ACCESS_CONTROL_ALLOW_ORIGIN, $allowedOrigin);
 
         if ($allowCredentials) {
-            $response->setHeader('Access-Control-Allow-Credentials', 'true');
+            $response->setHeader(Header::ACCESS_CONTROL_ALLOW_CREDENTIALS, 'true');
         }
 
         if ($isPreflight) {
-            $response->setHeader('Access-Control-Max-Age', (string) max(0, $maxAge));
+            $response->setHeader(Header::ACCESS_CONTROL_MAX_AGE, (string) max(0, $maxAge));
         }
 
         if ($isPreflight && $methods !== []) {
-            $response->setHeader('Access-Control-Allow-Methods', implode(', ', $methods));
+            $response->setHeader(Header::ACCESS_CONTROL_ALLOW_METHODS, implode(', ', $methods));
         }
 
         if ($isPreflight && $headers !== []) {
-            $response->setHeader('Access-Control-Allow-Headers', implode(', ', $headers));
+            $response->setHeader(Header::ACCESS_CONTROL_ALLOW_HEADERS, implode(', ', $headers));
         }
 
         return $response;
@@ -212,7 +213,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
         $keys = [];
         $values = [];
         foreach ($response->getHeaders() as $key => $value) {
-            if (strcasecmp($key, 'Vary') === 0) {
+            if (strcasecmp($key, Header::VARY) === 0) {
                 $keys[] = $key;
                 $values = [...$values, ...$this->normalizeList($value)];
             }
@@ -224,7 +225,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
         }
 
         $value = isset($vary['*']) ? '*' : implode(', ', array_values($vary));
-        foreach ($keys ?: ['Vary'] as $key) {
+        foreach ($keys ?: [Header::VARY] as $key) {
             $response->setHeader($key, $value);
         }
 
@@ -245,8 +246,8 @@ abstract class CorsAccessControl implements MiddlewareInterface
     private function isPreflightRequest(Request $request): bool
     {
         return strtoupper($request->getMethod()) === Request::METHOD_OPTIONS
-            && $request->header('Origin') !== null
-            && $request->header('Access-Control-Request-Method') !== null;
+            && $request->header(Header::ORIGIN) !== null
+            && $request->header(Header::ACCESS_CONTROL_REQUEST_METHOD) !== null;
     }
 
     /**
@@ -265,7 +266,7 @@ abstract class CorsAccessControl implements MiddlewareInterface
      */
     private function requestedHeaders(Request $request): array
     {
-        $headers = $request->header('Access-Control-Request-Headers', '');
+        $headers = $request->header(Header::ACCESS_CONTROL_REQUEST_HEADERS, '');
 
         // HTTP list syntax permits empty list members, but not invalid tokens.
         return array_values(array_filter(

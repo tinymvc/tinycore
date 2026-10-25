@@ -7,6 +7,7 @@ use PDO;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
+use Spark\Facades\DB;
 use Spark\Support\Collection;
 use Spark\Paginator\AbstractPaginator;
 use Spark\Paginator\SimplePaginator;
@@ -1256,8 +1257,8 @@ trait BuildsReadQueries
 
         if (isset($this->query['offset'])) {
             $limit = match ($this->database->getDriver()) {
-                'sqlite' => ' LIMIT -1',
-                'mysql' => ' LIMIT 18446744073709551615',
+                DB::DRIVER_SQLITE => ' LIMIT -1',
+                DB::DRIVER_MYSQL => ' LIMIT 18446744073709551615',
                 default => '',
             };
             return "$limit OFFSET " . $this->query['offset'];

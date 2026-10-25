@@ -5,6 +5,7 @@ namespace Spark\Foundation\Http\Middlewares;
 use Spark\Contracts\Http\MiddlewareInterface;
 use Spark\Facades\Hash;
 use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
+use Spark\Http\Header;
 use Spark\Http\Request;
 use function is_string;
 
@@ -74,7 +75,7 @@ abstract class CsrfProtection implements MiddlewareInterface
      */
     protected function getXsrfToken(Request $request): ?string
     {
-        $token = $request->header('X-CSRF-TOKEN') ?? $request->header('X-XSRF-TOKEN');
+        $token = $request->header(Header::X_CSRF_TOKEN) ?? $request->header(Header::X_XSRF_TOKEN);
 
         // If client sends plain token, use as-is.
         if (!is_string($token) || $token === '') {
