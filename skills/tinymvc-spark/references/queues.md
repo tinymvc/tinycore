@@ -137,7 +137,7 @@ public function store(StoreUserRequest $request): Response
 
     SendAccountMail::dispatch($user->id)->onQueue('emails');
 
-    return UserResource::make($user)->response(201);
+    return UserResource::make($user)->response(Response::STATUS_CREATED);
 }
 ```
 

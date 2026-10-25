@@ -101,7 +101,7 @@ if (Lock::lock($key, timeout: 30, waitTimeout: 5)) {
         Lock::unlock($key);
     }
 } else {
-    abort(409, 'Invoice is currently being processed by another worker.');
+    abort(\Spark\Http\Response::STATUS_CONFLICT, 'Invoice is currently being processed by another worker.');
 }
 ```
 

@@ -86,16 +86,24 @@ Route::group(function () {
 ```php
 Route::resource('/posts', PostController::class, name: 'posts')
     ->except(['show', 'edit']); // ->only([]) ...
+
+Route::prefix('api')->middleware('auth:api')
+    ->resource('/posts', PostController::class)
+    ->only(['index', 'show']);
 ```
+
+Fluent attributes before `resource()` apply to every resource action and compose with surrounding groups without leaking to subsequent routes.
 
 Mapped resource actions:
 - `GET /posts` -> `index`
 - `GET /posts/create` -> `create`
 - `POST /posts` -> `store`
-- `GET /posts/{post}` -> `show`
-- `GET /posts/{post}/edit` -> `edit`
-- `PUT/PATCH /posts/{post}` -> `update`
-- `DELETE /posts/{post}` -> `destroy`
+- `GET /posts/{id}` -> `show`
+- `GET /posts/{id}/edit` -> `edit`
+- `PUT/PATCH /posts/{id}` -> `update`
+- `DELETE /posts/{id}` -> `destroy`
+
+Resource routes currently use `{id}`. For controller arguments named `$post`, register explicit `{post}` routes as shown above so implicit model binding matches the argument name.
 
 ---
 
@@ -139,7 +147,7 @@ class PostController extends Controller
     {
         $post = Post::create($request->validated());
 
-        return PostResource::make($post)->response(201);
+        return PostResource::make($post)->response(Response::STATUS_CREATED);
     }
 
     /**
@@ -161,7 +169,7 @@ class PostController extends Controller
         $post->fill($request->validated());
 
         if (!$post->save()) {
-            abort(500, 'Unable to save the post.');
+            abort(Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to save the post.');
         }
 
         return PostResource::make($post);
@@ -173,7 +181,7 @@ class PostController extends Controller
     public function destroy(Post $post): Response
     {
         if (!$post->remove()) {
-            abort(500, 'Unable to remove the post.');
+            abort(Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to remove the post.');
         }
 
         return response()->noContent();

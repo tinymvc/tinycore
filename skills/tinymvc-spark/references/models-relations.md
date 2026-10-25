@@ -239,13 +239,13 @@ $post = Post::createOrUpdate(
 // 5. In-Memory Filling & Saving
 $post->fill($request->validated());
 if (!$post->save()) {
-    abort(500, 'Unable to update the post.');
+    abort(\Spark\Http\Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to update the post.');
 }
 
 // 6. Deleting a Model Instance
 // Always use ->remove() to delete a loaded model instance:
 if (!$post->remove()) {
-    abort(500, 'Unable to remove the post.');
+    abort(\Spark\Http\Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to remove the post.');
 }
 
 // 7. Destroy by Primary Key

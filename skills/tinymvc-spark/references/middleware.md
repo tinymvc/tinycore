@@ -24,7 +24,7 @@ class EnsureAdmin implements MiddlewareInterface
     public function handle(Request $request, \Closure $next): mixed
     {
         if (!auth()->check() || !auth()->user('is_admin')) {
-            abort(403, 'Forbidden');
+            abort(\Spark\Http\Response::STATUS_FORBIDDEN, 'Forbidden');
         }
 
         return $next($request);
@@ -107,7 +107,15 @@ class Cors extends CorsAccessControl
             'origin' => ['https://example.com', 'https://*.example.com'],
             'credentials' => true,
             'age' => 600,
-            'methods' => ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+            'methods' => [
+                \Spark\Http\Request::METHOD_GET,
+                \Spark\Http\Request::METHOD_HEAD,
+                \Spark\Http\Request::METHOD_POST,
+                \Spark\Http\Request::METHOD_PUT,
+                \Spark\Http\Request::METHOD_PATCH,
+                \Spark\Http\Request::METHOD_DELETE,
+                \Spark\Http\Request::METHOD_OPTIONS,
+            ],
             'headers' => ['Content-Type', 'Authorization', 'X-XSRF-TOKEN'],
         ]);
     }

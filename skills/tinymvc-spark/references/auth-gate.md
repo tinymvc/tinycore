@@ -124,7 +124,7 @@ if (Gate::allows('update-post', $post)) {
 
 // 2. Gate::denies() - Returns boolean
 if (Gate::denies('update-post', $post)) {
-    abort(403, 'Unauthorized.');
+    abort(\Spark\Http\Response::STATUS_FORBIDDEN, 'Unauthorized.');
 }
 
 // 3. Gate::authorize() - Automatically throws Spark\Exceptions\Http\AuthorizationException (HTTP 403)

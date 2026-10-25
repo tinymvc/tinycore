@@ -29,17 +29,18 @@ final class JsonResourceTest extends FrameworkTestCase
         $model->setRelation('child', (new CoreFixtureResourceModel)->fill(['id' => 2, 'name' => 'Grace']));
         $this->assertSame(['id' => 2, 'name' => 'Grace'], $modelResource->resolve()['child']);
 
-        $conditional = new class([]) extends \Spark\Http\Resources\JsonResource {
-            public function toArray(?\Spark\Http\Request $request = null): array {
+        $conditional = new class ([]) extends \Spark\Http\Resources\JsonResource {
+            public function toArray(?\Spark\Http\Request $request = null): array
+            {
                 return [
-                    'omit' => $this->when(false, fn () => throw new \LogicException('Not lazy')),
-                    'keep_null' => $this->when(true, null),
-                    'zero' => $this->whenNotNull(0),
-                    'false' => $this->unless(false, false),
-                    'default' => $this->when(false, 'unused', fn () => 'fallback'),
-                    'deferred_omit' => fn () => $this->when(false, 'unused'),
-                    'list' => [1, $this->whenNotNull(null), 3],
-                    'date' => new \DateTimeImmutable('2026-09-29T00:00:00+00:00'),
+                'omit' => $this->when(false, fn() => throw new \LogicException('Not lazy')),
+                'keep_null' => $this->when(true, null),
+                'zero' => $this->whenNotNull(0),
+                'false' => $this->unless(false, false),
+                'default' => $this->when(false, 'unused', fn() => 'fallback'),
+                'deferred_omit' => fn() => $this->when(false, 'unused'),
+                'list' => [1, $this->whenNotNull(null), 3],
+                'date' => new \DateTimeImmutable('2026-09-29T00:00:00+00:00'),
                 ];
             }
         };
@@ -55,13 +56,14 @@ final class JsonResourceTest extends FrameworkTestCase
         $collection = CoreFixtureResource::collection(collect([9 => $user]));
         $this->assertSame([$expected], $collection->resolve());
         $this->assertSame([9 => $expected], $collection->preserveKeys()->resolve());
-        $generator = (function () use ($user) { yield $user; })();
+        $generator = (function () use ($user) {
+            yield $user; })();
         $generated = CoreFixtureResource::collection($generator);
         $this->assertSame($generated->resolve(), $generated->resolve());
         $this->assertSame(['data' => []], CoreFixtureResource::collection([])->responseData());
 
         request()->setQueryParam('page', 2);
-        $page = new \Spark\Utils\Paginator(total: 3, limit: 2);
+        $page = new \Spark\Paginator\Paginator(total: 3, limit: 2);
         $page->setData([$user]);
         $document = CoreFixtureResource::collection($page)->withoutWrapping()->additional(['meta' => ['version' => 1]])->responseData();
         $this->assertSame([$expected], $document['data']);
@@ -72,11 +74,11 @@ final class JsonResourceTest extends FrameworkTestCase
         $this->assertSame($user, $page->items()[0]);
 
         $this->app->withMiddleware(register: ['cors' => CoreFixtureCors::class]);
-        \Spark\Facades\Route::get('/resources', fn () => CoreFixtureResource::make($user))->middleware('cors');
+        \Spark\Facades\Route::get('/resources', fn() => CoreFixtureResource::make($user))->middleware('cors');
         $this->getJson('/resources', ['Origin' => 'https://app.example.com'])->assertOk()
             ->assertJson(['data' => $expected])->assertHeader('Access-Control-Allow-Origin', 'https://app.example.com');
         $this->getJson('/resources', ['X-Show-Secret' => 'yes'])->assertJsonPath('data.secret', 'hidden');
-        \Spark\Facades\Route::post('/resources', fn () => CoreFixtureResource::make($user)->response(201, ['X-Resource' => 'created']));
+        \Spark\Facades\Route::post('/resources', fn() => CoreFixtureResource::make($user)->response(201, ['X-Resource' => 'created']));
         $this->postJson('/resources')->assertCreated()->assertHeader('X-Resource', 'created')->assertJson(['data' => $expected]);
     }
 }

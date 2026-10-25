@@ -71,6 +71,31 @@ final class RoutingTest extends FrameworkTestCase
         $this->get('/old')->assertStatus(301)->assertHeader('Location', '/new');
     }
 
+    public function test_resource_inherits_fluent_attributes_and_nested_group_without_leaking(): void
+    {
+        $this->app->withMiddleware(register: [
+            'resource' => get_class(new class implements \Spark\Contracts\Http\MiddlewareInterface {
+            public function handle(\Spark\Http\Request $request, \Closure $next): mixed
+            {
+                return \Spark\Http\Response::from($next($request))->setHeader('X-Resource', 'yes');
+            }
+            }),
+        ]);
+        Route::group(['prefix' => 'api'], function () {
+            Route::prefix('v1')->middleware('resource')->resource('/items', RoutingResourceFixture::class)->only(['index', 'show']);
+            Route::get('/health', fn() => 'healthy')->name('health');
+        });
+        Route::get('/outside', fn() => 'outside')->name('outside');
+
+        $router = app(Router::class);
+        $this->assertSame('/api/v1/items/7', $router->route('api.v1.items.show', ['id' => 7]));
+        $this->assertSame('/api/health', $router->route('api.health'));
+        $this->assertSame('/outside', $router->route('outside'));
+        $this->get('/api/v1/items')->assertOk()->assertContent('index')->assertHeader('X-Resource', 'yes');
+        $this->get('/api/v1/items/7')->assertOk()->assertContent('show 7')->assertHeader('X-Resource', 'yes');
+        $this->get('/api/health')->assertOk()->assertContent('healthy');
+    }
+
     public function test_fallback_receives_current_request(): void
     {
         Route::fallback(fn(\Spark\Http\Request $request) => new \Spark\Http\Response($request->getPath(), 404));

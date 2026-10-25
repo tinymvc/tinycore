@@ -25,7 +25,7 @@ use Spark\Http\Routing\RouteResource;
  * @method static BaseRoute view(string $path, string $template)
  * @method static BaseRoute fire(string $path, string $template, array $context = [])
  * @method static BaseRoute inertia(string $path, string $component, array $props = [])
- * @method static BaseRoute redirect(string $from, string $to, int $status = 302)
+ * @method static BaseRoute redirect(string $from, string $to, int $status = \Spark\Http\Response::STATUS_FOUND)
  * @method static RouteResource resource(string $path,string $controller,string|null $name = null,string|array $middleware = [],string|array $withoutMiddleware = [],array $only = [],array $except = [])
  * @method static RouteGroup group(array|callable|null $attrsOrCallback = null, callable|null $callback = null)
  * @method static Router add(string $path, string|array|null $method = null, callable|string|array|null $callback = null, string|null $template = null, string|null $name = null, string|array $middleware = [], string|array $withoutMiddleware = [])

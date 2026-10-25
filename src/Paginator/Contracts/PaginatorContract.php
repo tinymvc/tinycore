@@ -1,13 +1,8 @@
 <?php
 
-namespace Spark\Contracts\Utils;
+namespace Spark\Paginator\Contracts;
 
-/**
- * Interface PaginatorUtilContract
- *
- * This interface defines the contract for the PaginatorUtil class.
- * It outlines the methods that must be implemented by the class.
- */
+/** The existing numbered paginator API, including totals and page counts. */
 interface PaginatorContract
 {
     /**

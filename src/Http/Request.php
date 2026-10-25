@@ -14,7 +14,6 @@ use Psr\Http\Message\UriFactoryInterface;
 use ArrayIterator;
 use InvalidArgumentException;
 use Spark\Contracts\Http\RequestContract;
-use Spark\Http\Response;
 use Spark\Foundation\Application;
 use Spark\Support\Arr;
 use Spark\Support\Collection;
@@ -1786,7 +1785,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $message .= (count($flattenedErrors) > 1 ? ' (and ' . (count($flattenedErrors) - 1) . ' more errors)' : '');
 
             // Return the errors as a JSON response
-            return json(['message' => $message, 'errors' => $errors], StatusCodeInterface::STATUS_UNPROCESSABLE_ENTITY);
+            return json(['message' => $message, 'errors' => $errors], Response::STATUS_UNPROCESSABLE_ENTITY);
         } else {
             // Store the errors in the session flash data
             if ($this->header('X-Inertia') && function_exists('inertia')) {

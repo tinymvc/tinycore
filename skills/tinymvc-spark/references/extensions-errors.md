@@ -61,8 +61,8 @@ Follow existing app command style.
 Use:
 
 ```php
-abort(404, 'Post not found');
-abort(403, 'Forbidden');
+abort(\Spark\Http\Response::STATUS_NOT_FOUND, 'Post not found');
+abort(\Spark\Http\Response::STATUS_FORBIDDEN, 'Forbidden');
 ```
 
 Framework mappings:

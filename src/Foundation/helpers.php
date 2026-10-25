@@ -27,7 +27,7 @@ use Spark\Utils\File;
 use Spark\Utils\Image;
 use Spark\Cache\Lock;
 use Spark\Utils\Mail;
-use Spark\Utils\Paginator;
+use Spark\Paginator\Paginator;
 use Spark\Tracer;
 use Spark\Storage\Uploader;
 use Spark\Utils\Vite;

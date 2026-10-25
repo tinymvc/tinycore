@@ -6,7 +6,7 @@ final class FrameworkServicesTest extends FrameworkTestCase
 {
     public function test_http(): void
     {
-        \Spark\Facades\Route::get('/health', fn () => ['status' => 'ok']);
+        \Spark\Facades\Route::get('/health', fn() => ['status' => 'ok']);
         $this->getJson('/health')->assertOk()->assertJsonPath('status', 'ok');
         $this->getJson('/missing')->assertNotFound();
     }
@@ -14,16 +14,18 @@ final class FrameworkServicesTest extends FrameworkTestCase
     public function test_response_preparation_lifecycle(): void
     {
         $calls = 0;
-        $this->app->withMiddleware(register: ['prepare' => function ($request, $next) use (&$calls) {
-            $this->app->prepareResponseUsing(function ($response) use (&$calls) {
-                $calls++;
-                $response->setHeader('X-Prepared', (string) $calls);
-            });
-            return $next($request);
-        }]);
-        \Spark\Facades\Route::get('/prepared', fn () => response('ok'))->middleware('prepare');
-        \Spark\Facades\Route::get('/sent', fn () => response('early')->send())->middleware('prepare');
-        \Spark\Facades\Route::get('/plain', fn () => response('plain'));
+        $this->app->withMiddleware(register: [
+            'prepare' => function ($request, $next) use (&$calls) {
+                $this->app->prepareResponseUsing(function ($response) use (&$calls) {
+                    $calls++;
+                    $response->setHeader('X-Prepared', (string) $calls);
+                });
+                return $next($request);
+            }
+        ]);
+        \Spark\Facades\Route::get('/prepared', fn() => response('ok'))->middleware('prepare');
+        \Spark\Facades\Route::get('/sent', fn() => response('early')->send())->middleware('prepare');
+        \Spark\Facades\Route::get('/plain', fn() => response('plain'));
         $response = $this->get('/prepared')->assertOk()->assertHeader('X-Prepared', '1')->response;
         $this->app->prepareResponse($response);
         $this->assertSame(1, $calls);
@@ -86,7 +88,7 @@ final class FrameworkServicesTest extends FrameworkTestCase
             $request->path = $path;
             $this->assertFalse($request->expectsJson());
         }
-        \Spark\Facades\Route::post('/profile-errors', fn () => throw \Spark\Foundation\Exceptions\ValidationException::withMessages(['name' => ['Required']]));
+        \Spark\Facades\Route::post('/profile-errors', fn() => throw \Spark\Foundation\Exceptions\ValidationException::withMessages(['name' => ['Required']]));
         $this->request('POST', '/profile-errors', [], ['Accept' => 'text/html;q=0.1, application/json;q=0.9'])->assertStatus(422)->assertJsonPath('errors.name.0', 'Required');
         $this->request('POST', '/profile-errors', [], ['Accept' => 'application/json;q=0, text/html'])->assertStatus(302);
     }
@@ -174,7 +176,8 @@ final class FrameworkServicesTest extends FrameworkTestCase
     {
         $missing = \Spark\Http\Resources\MissingValue::Missing;
         $serializable = new class implements \JsonSerializable {
-            public function jsonSerialize(): array {
+            public function jsonSerialize(): array
+            {
                 return ['date' => new \DateTimeImmutable('2026-09-29T12:00:00+06:00')];
             }
         };
@@ -182,7 +185,7 @@ final class FrameworkServicesTest extends FrameworkTestCase
             'url' => new \Spark\Url('https://example.com/items'),
             'date' => new \DateTimeImmutable('2026-09-29T00:00:00+00:00'),
             'carbon' => \Spark\Carbon::parse('2026-09-29T06:00:00+06:00'),
-            'lazy' => fn () => collect([CoreFixtureResource::make(['id' => 1, 'name' => 'Ada'])]),
+            'lazy' => fn() => collect([CoreFixtureResource::make(['id' => 1, 'name' => 'Ada'])]),
             'object' => $serializable,
             'omit' => $missing,
             'values' => [null, false, 0, $missing, ''],
@@ -222,21 +225,21 @@ final class FrameworkServicesTest extends FrameworkTestCase
         $r->getHeaders()->put('authorization', 'Basic Bearer token-123');
         $this->assertNull($r->bearerToken());
         $r->setQueryParam('page', '2');
-        $p = \Spark\Utils\Paginator::make(25, 10)->setData([11, 12]);
+        $p = \Spark\Paginator\Paginator::make(25, 10)->setData([11, 12]);
         $this->assertSame(2, $p->currentPage());
         $this->assertSame(3, $p->lastPage());
-        $this->assertSame([22, 24], $p->through(fn ($n) => $n * 2));
+        $this->assertSame([22, 24], $p->through(fn($n) => $n * 2));
         $this->assertSame([11, 12], $p->items());
         $this->assertSame(2, $p->toArray()['current_page']);
         $this->assertFalse(array_key_exists('page', $p->toArray()));
         $r->setQueryParam('page', 'invalid');
-        $empty = \Spark\Utils\Paginator::make(0, 10);
+        $empty = \Spark\Paginator\Paginator::make(0, 10);
         $this->assertSame(1, $empty->currentPage());
         $this->assertNull($empty->toArray()['from']);
         $date = carbon('2026-01-10 12:00:00', 'UTC');
         $this->assertSame('18:00', $date->setTimezone('Asia/Dhaka')->format('H:i'));
         $this->assertSame('12:00 +06:00', $date->shiftTimezone('Asia/Dhaka')->format('H:i P'));
-        $this->assertSame('2026-01-11', $date->modify(fn ($d) => $d->modify('+1 day'))->toDateString());
+        $this->assertSame('2026-01-11', $date->modify(fn($d) => $d->modify('+1 day'))->toDateString());
         $this->assertSame('2026-01-10', $date->toDateString());
     }
 
@@ -245,17 +248,17 @@ final class FrameworkServicesTest extends FrameworkTestCase
         $middleware = new class extends \Spark\Foundation\Http\Middlewares\ThrottleIncomingRequests {};
         $request = request();
         $request->getHeaders()->put('user-agent', 'first');
-        $this->assertSame('ok', $middleware->handle($request, fn () => 'ok', 1, 1, 'docs'));
+        $this->assertSame('ok', $middleware->handle($request, fn() => 'ok', 1, 1, 'docs'));
         $request->getHeaders()->put('user-agent', 'different');
         $this->expectException(\Spark\Foundation\Exceptions\ThrottleException::class);
-        $middleware->handle($request, fn () => 'incorrect', 1, 1, 'docs');
+        $middleware->handle($request, fn() => 'incorrect', 1, 1, 'docs');
     }
 
     public function test_scoped_gate_and_service_examples(): void
     {
         $record = (object) ['owner_id' => 7];
         $gate = new \Spark\Http\Gate;
-        $gate->define('update', fn ($post, int $viewer) => $post->owner_id === $viewer);
+        $gate->define('update', fn($post, int $viewer) => $post->owner_id === $viewer);
         $this->assertTrue($gate->allows('update', $record, 7));
         $this->assertFalse($gate->allows('update', $record, 8));
         $events = new \Spark\Events;
@@ -273,7 +276,7 @@ final class FrameworkServicesTest extends FrameworkTestCase
         $this->assertSame('Saved', session()->getFlash('notice'));
         $this->assertFalse(session()->hasFlash('notice'));
         $lock = lock(name: 'docs-smoke');
-        $this->assertSame('completed', $lock->withLock('report', fn () => 'completed', 10, 0));
+        $this->assertSame('completed', $lock->withLock('report', fn() => 'completed', 10, 0));
         $this->assertFalse($lock->isLocked('report'));
         $cache = cache('batch');
         $cache->storeManyWithExpiry([
@@ -285,7 +288,7 @@ final class FrameworkServicesTest extends FrameworkTestCase
         $cache->store('nullable', null);
         $this->assertTrue($cache->has('nullable'));
         $results = \Spark\Concurrency::run([
-            'ok' => fn () => 4,
+            'ok' => fn() => 4,
             'failure' => function () {
                 throw new \RuntimeException('Task failed');
             },

@@ -185,7 +185,7 @@ try {
     $decoded = JWT::decode($jwt, key: config('app.key'), verify: true);
     $userId = $decoded['sub'];
 } catch (\Throwable $e) {
-    abort(401, 'Invalid or expired token.');
+    abort(\Spark\Http\Response::STATUS_UNAUTHORIZED, 'Invalid or expired token.');
 }
 ```
 

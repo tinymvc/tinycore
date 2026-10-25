@@ -100,7 +100,7 @@ public function store(StorePostRequest $request): Response
     // Pass $request->validated() directly to Model::create() - it implements Arrayable!
     $post = Post::create($request->validated());
 
-    return PostResource::make($post)->response(201);
+    return PostResource::make($post)->response(Response::STATUS_CREATED);
 }
 ```
 

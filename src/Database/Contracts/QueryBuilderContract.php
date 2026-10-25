@@ -6,7 +6,10 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Relation\Relation;
-use Spark\Utils\Paginator;
+use Spark\Paginator\Paginator;
+use Spark\Paginator\SimplePaginator;
+use Spark\Paginator\Cursor;
+use Spark\Paginator\CursorPaginator;
 
 /**
  * Interface for the query builder contract.
@@ -268,6 +271,12 @@ interface QueryBuilderContract
      * @return Paginator
      */
     public function paginate(int $limit = 10, string $keyword = 'page', array|string|null $fields = null): Paginator;
+
+    /** Paginate with one lookahead row and no total-count query. */
+    public function simplePaginate(int $perPage = 15, array|string $columns = ['*'], string $pageName = 'page', ?int $page = null): SimplePaginator;
+
+    /** Paginate a unique, non-null ordering without counting or offsetting rows. */
+    public function cursorPaginate(int $perPage = 15, array|string $columns = ['*'], string $cursorName = 'cursor', Cursor|string|null $cursor = null): CursorPaginator;
 
     /**
      * Truncate the table.

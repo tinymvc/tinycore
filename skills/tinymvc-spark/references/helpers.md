@@ -53,10 +53,10 @@ Spark includes a rich suite of built-in global helper functions defined in `Spar
 
 ### 2. HTTP Requests & Responses
 - `request(?string $key = null, mixed $default = null)`: Returns the current `Spark\Http\Request` instance or reads an input key.
-- `response(mixed $content = '', int $statusCode = 200, array $headers = [])`: Returns the `Spark\Http\Response` factory or creates a new response instance.
-- `json(array $data, int $statusCode = 200)`: Creates a JSON HTTP response (ideal for non-resource contracts, messages, or webhooks).
-- `redirect(string $url, int $httpCode = 302)`: Creates a redirect response.
-- `to_route(string $name, mixed $context = null, int $httpCode = 302)`: Redirects to a named route.
+- `response(mixed $content = '', int $statusCode = \Spark\Http\Response::STATUS_OK, array $headers = [])`: Returns the `Spark\Http\Response` factory or creates a new response instance.
+- `json(array $data, int $statusCode = \Spark\Http\Response::STATUS_OK)`: Creates a JSON HTTP response (ideal for non-resource contracts, messages, or webhooks).
+- `redirect(string $url, int $httpCode = \Spark\Http\Response::STATUS_FOUND)`: Creates a redirect response.
+- `to_route(string $name, mixed $context = null, int $httpCode = \Spark\Http\Response::STATUS_FOUND)`: Redirects to a named route.
 - `back()`: Redirects back to the previous request URL.
 
 ### 3. URLs and Asset Paths

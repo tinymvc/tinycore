@@ -9,7 +9,7 @@ use Spark\Contracts\Support\Jsonable;
 use Spark\Database\Model;
 use Spark\Http\Request;
 use Spark\Http\Response;
-use Spark\Utils\Paginator;
+use Spark\Paginator\AbstractPaginator;
 use function array_key_exists;
 use function is_array;
 use function is_object;
@@ -49,10 +49,10 @@ class JsonResource implements Arrayable, Jsonable, JsonSerializable
     /**
      * Create a new resource collection instance.
      * 
-     * @param iterable<TResource>|Paginator<TResource> $resource
+     * @param iterable<TResource>|AbstractPaginator $resource
      * @return ResourceCollection
      */
-    public static function collection(iterable|Paginator $resource): ResourceCollection
+    public static function collection(iterable|AbstractPaginator $resource): ResourceCollection
     {
         return new ResourceCollection($resource, static::class);
     }

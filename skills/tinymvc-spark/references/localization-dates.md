@@ -199,7 +199,7 @@ To dynamically switch locale per request:
 ```php
 $locale = $request->query('lang', 'en');
 
-abort_unless(in_array($locale, ['en', 'bn', 'es'], true), 400, 'Unsupported language.');
+abort_unless(in_array($locale, ['en', 'bn', 'es'], true), \Spark\Http\Response::STATUS_BAD_REQUEST, 'Unsupported language.');
 
 app()->instance(
     \Spark\Translator::class,

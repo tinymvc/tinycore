@@ -141,7 +141,7 @@ return [
 
 ## Collections and Pagination Envelopes
 
-`PostResource::collection($items)` automatically detects whether `$items` is an iterable collection or a `Spark\Utils\Paginator`:
+`PostResource::collection($items)` accepts iterable collections and every `Spark\Paginator\AbstractPaginator` implementation: `Paginator`, `SimplePaginator`, and `CursorPaginator`.
 
 1. **When given an array or Collection**:
    Wraps items under the top-level `'data'` key:
@@ -178,6 +178,16 @@ return [
    Do not manually format pagination envelopes; let `ResourceCollection` handle it.
 
 ---
+
+### Cursor pagination envelopes
+
+`PostResource::collection(Post::orderBy('id')->cursorPaginate(20))` keeps transformed items in `data`, navigation URLs in `links.prev` / `links.next`, and `path`, `per_page`, `next_cursor`, and `prev_cursor` in `meta`. Boundary cursors and URLs are null when unavailable. It does not invent totals, page numbers, or first/last links. Additional metadata is preserved, with pagination fields controlled by the paginator.
+
+See [queries](queries.md#cursor-pagination) for ordering requirements and the supported API.
+
+### Simple pagination envelopes
+
+`PostResource::collection(Post::orderBy('id')->simplePaginate(20))` includes transformed `data`, `links.first`, `links.prev`, `links.next`, and `meta.current_page`, `meta.per_page`, `meta.from`, `meta.to`. Empty pages have null `from`/`to`. It omits totals and last-page metadata. All paginator resources share the same metadata integration and preserve additional application metadata.
 
 ## Response Wrapping and Custom Metadata
 

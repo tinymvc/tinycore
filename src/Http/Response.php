@@ -453,7 +453,7 @@ class Response implements ResponseContract
             }
         }
 
-        if ($message->hasHeader('Location') && $message->getStatusCode() >= 300 && $message->getStatusCode() < 400) {
+        if ($message->hasHeader('Location') && $message->getStatusCode() >= self::STATUS_MULTIPLE_CHOICES && $message->getStatusCode() < self::STATUS_BAD_REQUEST) {
             exit;
         }
     }
@@ -606,7 +606,7 @@ class Response implements ResponseContract
 
         // These statuses have no message content. Do not invent a media type.
         if (
-            ($statusCode >= 100 && $statusCode < 200)
+            ($statusCode >= self::STATUS_CONTINUE && $statusCode < self::STATUS_OK)
             || in_array($statusCode, [
                 self::STATUS_NO_CONTENT,
                 self::STATUS_RESET_CONTENT,
@@ -615,9 +615,9 @@ class Response implements ResponseContract
         ) {
             $this->content = '';
             $this->clearDefaultContentType();
-            if ($statusCode < 200 || $statusCode === self::STATUS_NO_CONTENT) {
+            if ($statusCode < self::STATUS_OK || $statusCode === self::STATUS_NO_CONTENT) {
                 $this->removeHeader('Content-Length');
-            } elseif ($statusCode === 205 && $this->hasHeader('Content-Length')) {
+            } elseif ($statusCode === self::STATUS_RESET_CONTENT && $this->hasHeader('Content-Length')) {
                 $this->setHeader('Content-Length', '0');
             }
             return;

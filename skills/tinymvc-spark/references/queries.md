@@ -34,7 +34,7 @@ Use raw query builders **only** for:
 
 ## Collection-First Querying
 
-Always prefer `->get()` (which returns a `Spark\Support\Collection`) or `->paginate($limit)` (which returns a `Spark\Utils\Paginator`) over `->all()` (which returns a raw array):
+Always prefer `->get()` (which returns a `Spark\Support\Collection`) or `->paginate($limit)` (which returns a `Spark\Paginator\Paginator`) over `->all()` (which returns a raw array):
 
 ```php
 // Collections (Preferred) vs Raw Arrays
@@ -137,6 +137,60 @@ $users = User::where(function ($query) {
 
 ---
 
+## Simple Pagination
+
+Use `simplePaginate(int $perPage = 15, array|string $columns = ['*'], string $pageName = 'page', ?int $page = null)` when you need next/previous links without a total count. It returns `Spark\Paginator\SimplePaginator`, reads the named page query parameter by default, and fetches `$perPage + 1` rows using LIMIT/OFFSET. Only page items reach eager loading and custom mappers. The source builder remains reusable.
+
+```php
+$posts = Post::with('author')->orderBy('id')->simplePaginate(20);
+return PostResource::collection($posts);
+
+// Explicit page, selected columns, and a separate query parameter:
+$page = Post::orderBy('id')->simplePaginate(20, ['id', 'title'], 'posts_page', 2);
+$page->items();
+$page->currentPage();
+$page->hasMorePages();
+$page->nextPageUrl();
+```
+
+Malformed request pages default to 1; non-positive sizes/pages normalize to 1. Out-of-range pages remain empty at the requested page number because there is no total to clamp against. There are no `total()`, `lastPage()`, or last-page URL methods on simple pagination.
+
+`Paginator`, `SimplePaginator`, and `CursorPaginator` live in `Spark\Paginator` and share `AbstractPaginator` for collections, iteration, array access, transformations, JSON, escaped HTML links, and resource metadata. Numbered `Paginator` reuses `SimplePaginator` page navigation. Existing numbered `through()` still returns a transformed array without mutation; simple/cursor `through()` transforms items and returns the paginator. Use `map()` for in-place transformations on all three. URL paths and filters are captured when a paginator is constructed.
+
+## Cursor Pagination
+
+Use `cursorPaginate(int $perPage = 15, array|string $columns = ['*'], string $cursorName = 'cursor', Cursor|string|null $cursor = null)` for next/previous navigation. It returns `Spark\Paginator\CursorPaginator`, fetches at most `$perPage + 1` rows, and uses ordered comparisons instead of a count query or SQL offset.
+
+```php
+$posts = Post::with('author')
+    ->where('published', true)
+    ->orderBy('created_at', 'DESC')
+    ->orderBy('id', 'DESC')
+    ->cursorPaginate(20);
+
+return PostResource::collection($posts);
+
+// Explicit cursor, selected columns, and an independent URL parameter:
+$page = Post::orderBy('id')->cursorPaginate(
+    perPage: 20,
+    columns: ['id', 'title'],
+    cursorName: 'posts_cursor',
+    cursor: $encodedCursor,
+);
+
+$page->items();             // Hydrated models; eager loading and soft deletes still apply
+$page->nextCursor();        // Cursor|null; ->encode() produces the URL token
+$page->previousPageUrl();   // string|null
+$page->hasMorePages();      // Whether a next page exists
+```
+
+- Explicit ordering is required, including on model queries. The ordered columns must be selected, non-null, and uniquely identify a row together (usually add the primary key as the last order). Index the ordering columns for large lists.
+- Repeated `orderBy()` calls now append ordering columns. `order('id ASC')` replaces an existing order; `orderAsc()` / `orderDesc()` retain their replacement behavior.
+- Plain qualified columns and mixed ASC/DESC directions are supported. Ordering expressions, selected aliases, grouped queries, HAVING, and unions are unsupported and fail explicitly.
+- A null cursor reads the named request query parameter. Malformed URL tokens start at the first page; valid cursors missing a required ordered column throw `InvalidArgumentException`. Cursors are encoded values, not authorization tokens; retain all access filters on every request.
+- Existing selections are preserved with the default `$columns`. Cursor values come from database rows before model casting or custom mapping. The source builder remains reusable.
+- Links preserve query filters. `items()`, iteration, `count()`, `getCollection()`, `through()`, `links()`, and JSON serialization are supported. `through()` transforms items in place while keeping navigation boundaries. There are no totals, numbered pages, or last-page URL.
+
 ## Date and Time Conditions with `now()`
 
 Use `now()`, `today()`, or `Spark\Carbon` directly in date conditions:
@@ -169,7 +223,7 @@ Common QueryBuilder / Model methods:
 - **Relations**: `with()`, `withExists()`, `withCount()`, `withSum()`, `withAvg()`, `whereHas()`, `whereDoesntHave()`, `whereRelation()`
 - **Ordering**: `orderBy('id', 'DESC')`, `orderDesc('id')`, `orderAsc('name')`, `latest('created_at')`, `oldest('created_at')`, `random()`
 - **Limiting**: `take(10)`, `skip(20)`, `limit(offset: 0, limit: 10)`
-- **Terminal Execution**: `first()`, `firstOrFail()`, `get()`, `all()`, `paginate(limit: 20)`, `pluck('name', 'id')`, `value('title')`
+- **Terminal Execution**: `first()`, `firstOrFail()`, `get()`, `all()`, `paginate(limit: 20)`, `simplePaginate(perPage: 20)`, `cursorPaginate(perPage: 20)`, `pluck('name', 'id')`, `value('title')`
 - **Mutations & Writes**: `create([...])`, `firstOrCreate([...], [...])`, `firstOrNew([...], [...])`, `createOrUpdate([...])`, `upsert(...)`, `update([...])`, `delete()`, `destroy($id)`, `increment('views')`, `decrement('stock')`
 
 ---
@@ -216,7 +270,7 @@ $order = DB::transaction(function () use ($userId, $items): Order {
             ->lockForUpdate()
             ->firstOrFail();
 
-        abort_if($product->stock < $item['quantity'], 422, 'Insufficient stock.');
+        abort_if($product->stock < $item['quantity'], \Spark\Http\Response::STATUS_UNPROCESSABLE_ENTITY, 'Insufficient stock.');
 
         $product->decrement('stock', $item['quantity']);
 

@@ -55,7 +55,7 @@ class PostController extends Controller
 
         SendPostPublishedMail::dispatch($post->id)->onQueue('emails');
 
-        return PostResource::make($post)->response(201);
+        return PostResource::make($post)->response(Response::STATUS_CREATED);
     }
 
     public function show(Post $post): PostResource
@@ -79,7 +79,7 @@ class PostController extends Controller
     public function destroy(Post $post): Response
     {
         if (!$post->remove()) {
-            abort(500, 'Unable to remove the post.');
+            abort(Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to remove the post.');
         }
 
         return response()->noContent();

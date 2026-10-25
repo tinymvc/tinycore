@@ -4,9 +4,15 @@ namespace Spark\Database\Query;
 
 use Closure;
 use PDO;
+use Spark\Database\Exceptions\QueryBuilderException;
+use Spark\Database\Model;
 use Spark\Database\QueryBuilder;
 use Spark\Support\Collection;
-use Spark\Utils\Paginator;
+use Spark\Paginator\AbstractPaginator;
+use Spark\Paginator\SimplePaginator;
+use Spark\Paginator\Cursor;
+use Spark\Paginator\CursorPaginator;
+use Spark\Paginator\Paginator;
 use function func_get_args;
 use function func_num_args;
 use function is_array;
@@ -479,7 +485,7 @@ trait BuildsReadQueries
     }
 
     /**
-     * Sets the ordering clause for the query.
+     * Append a column to the ordering clause for the query.
      *
      * @param string $field The field to order by.
      * @param string $sort The sorting direction, defaults to 'ASC'.
@@ -487,7 +493,8 @@ trait BuildsReadQueries
      */
     public function orderBy(string $field, string $sort = 'ASC'): QueryBuilder
     {
-        $this->query['order'] = $this->wrapper->wrapColumn($field) . " $sort";
+        $order = $this->wrapper->wrapColumn($field) . ' ' . strtoupper($sort);
+        $this->query['order'] = empty($this->query['order']) ? $order : $this->query['order'] . ', ' . $order;
         return $this;
     }
 
@@ -914,13 +921,7 @@ trait BuildsReadQueries
         $this->limit($paginator->offset(), $paginator->limit())
             ->executeSelectQuery();
 
-        // Set database records into paginator class.
-        $paginator->setData(
-            $this->applyMapper(
-                $this->getStatement()
-                    ->fetchAll(...$this->query['fetch'] ?? [PDO::FETCH_OBJ])
-            )
-        );
+        $this->paginateResults(fn(array $items) => $paginator->setData($items));
 
         // Re-initialize paginator pages.
         $paginator->reset();
@@ -930,6 +931,162 @@ trait BuildsReadQueries
 
         // A paginator instance containing paginated results.
         return $paginator;
+    }
+
+    /** Paginate with a lookahead row, without running a count query. */
+    public function simplePaginate(
+        int $perPage = 15,
+        array|string $columns = ['*'],
+        string $pageName = 'page',
+        ?int $page = null,
+    ): SimplePaginator {
+        $query = $this->paginationQuery($columns);
+        $perPage = max(1, $perPage);
+        $page = max(1, $page ?? SimplePaginator::resolveCurrentPage($pageName));
+
+        $query->limit(($page - 1) * $perPage, $perPage + 1)->executeSelectQuery();
+
+        return $query->paginateResults(
+            fn(array $items) => new SimplePaginator($items, $perPage, $page, ['pageName' => $pageName]),
+        );
+    }
+
+    /** Create a new pagination query. */
+    private function paginationQuery(array|string $columns): QueryBuilder
+    {
+        $query = clone $this;
+        if ($columns !== ['*'] && $columns !== '*') {
+            $query->select($columns);
+        }
+        return $query;
+    }
+
+    /**
+     * Paginate using selected, non-null ordered columns forming a unique key.
+     * Fetches one extra row without COUNT or OFFSET. Raw expressions, grouped
+     * queries and unions are intentionally unsupported.
+     */
+    public function cursorPaginate(
+        int $perPage = 15,
+        array|string $columns = ['*'],
+        string $cursorName = 'cursor',
+        Cursor|string|null $cursor = null,
+    ): CursorPaginator {
+        $query = $this->paginationQuery($columns);
+        $perPage = max(1, $perPage);
+
+        if (!empty($query->query['group']) || !empty($query->query['having']) || !empty($query->query['unions'])) {
+            throw new QueryBuilderException('Cursor pagination does not support grouped queries or unions.');
+        }
+
+        $orders = $query->cursorOrders();
+        $cursor ??= request()->query($cursorName);
+        $cursor = $cursor instanceof Cursor ? $cursor : Cursor::fromEncoded(is_string($cursor) ? $cursor : null);
+        $backwards = $cursor?->pointsToPreviousItems() ?? false;
+
+        if ($cursor !== null) {
+            // Group the existing filters so a top-level OR cannot bypass the boundary.
+            if ($query->hasWhere()) {
+                $query->where['sql'] = '(' . trim($query->where['sql']) . ')';
+            }
+
+            $query->where(function (QueryBuilder $boundary) use ($orders, $cursor, $backwards) {
+                foreach ($orders as $index => [$column, $direction]) {
+                    $boundary->orWhere(function (QueryBuilder $part) use ($orders, $cursor, $backwards, $index, $column, $direction) {
+                        for ($previous = 0; $previous < $index; $previous++) {
+                            $field = $orders[$previous][0];
+                            $part->cursorWhere($field, '=', $cursor->parameter($field));
+                        }
+
+                        $operator = ($direction === 'ASC') !== $backwards ? '>' : '<';
+                        $part->cursorWhere($column, $operator, $cursor->parameter($column));
+                    });
+                }
+            });
+        }
+
+        $query->query['order'] = implode(', ', array_map(
+            fn($order) => $query->wrapper->wrapColumn($order[0]) . ' '
+                . (($order[1] === 'ASC') !== $backwards ? 'ASC' : 'DESC'),
+            $orders,
+        ));
+
+        unset($query->query['offset']);
+        $query->limit($perPage + 1)->executeSelectQuery();
+
+        $parameters = [];
+        foreach ($orders as [$column]) {
+            $parameters[$column] = $query->resultColumnName($column);
+        }
+
+        return $query->paginateResults(
+            fn(array $items) => new CursorPaginator($items, $perPage, $cursor, [
+                'parameters' => $parameters,
+                'cursorName' => $cursorName,
+            ]),
+            rawModel: true,
+        );
+    }
+
+    /** Fetch once, retain page boundaries, then apply eager loading and custom mappers. */
+    private function paginateResults(callable $factory, bool $rawModel = false): AbstractPaginator
+    {
+        $fetch = $this->query['fetch'] ?? [PDO::FETCH_OBJ];
+        $modelClass = $rawModel && $fetch[0] === PDO::FETCH_CLASS && is_a($fetch[1], Model::class, true) ? $fetch[1] : null;
+        $paginator = $factory($this->getStatement()->fetchAll(...($modelClass === null ? $fetch : [PDO::FETCH_ASSOC])));
+
+        // PDO normally populates models before invoking their constructor. Defer
+        // that hydration until the paginator has captured the raw cursor values.
+        if ($modelClass !== null) {
+            $reflection = new \ReflectionClass($modelClass);
+            $paginator->through(function (array $attributes) use ($reflection, $fetch) {
+                $model = $reflection->newInstanceWithoutConstructor();
+                $model->setAttributes($attributes);
+                $reflection->getConstructor()?->invokeArgs($model, $fetch[2] ?? []);
+                return $model;
+            });
+        }
+
+        $paginator->setCollection(new Collection($this->applyMapper($paginator->items())));
+
+        return $paginator;
+    }
+
+    /** Only plain ordered columns can be compared portably in a WHERE clause. */
+    private function cursorOrders(): array
+    {
+        $order = $this->query['order'] ?? '';
+        if (trim($order) === '') {
+            throw new QueryBuilderException('Cursor pagination requires an orderBy clause with a unique column or combination.');
+        }
+
+        $identifier = '(?:[a-zA-Z_][a-zA-Z0-9_]*|`[a-zA-Z_][a-zA-Z0-9_]*`|"[a-zA-Z_][a-zA-Z0-9_]*")';
+        $orders = [];
+        foreach (explode(',', $order) as $part) {
+            if (!preg_match('/^\s*(' . $identifier . '(?:\.' . $identifier . ')*)(?:\s+(ASC|DESC))?\s*$/iD', $part, $match)) {
+                throw new QueryBuilderException('Cursor pagination requires plain column ordering without expressions.');
+            }
+
+            $column = str_replace(['`', '"'], '', $match[1]);
+            // Selected aliases cannot be used in WHERE on every supported driver.
+            $alias = preg_quote($this->resultColumnName($column), '/');
+            if (preg_match('/\s+AS\s+[`"]?' . $alias . '[`"]?(?:\s*,|\s*$)/i', $this->query['select'])) {
+                throw new QueryBuilderException('Cursor pagination does not support ordering by selected aliases.');
+            }
+            $orders[] = [$column, strtoupper($match[2] ?? 'ASC')];
+        }
+
+        return $orders;
+    }
+
+    /** Preserve the binding style of existing raw conditions. */
+    private function cursorWhere(string $column, string $operator, mixed $value): void
+    {
+        if ($this->parameters !== []) {
+            $this->whereRaw($this->wrapper->wrapColumn($column) . " $operator ?", [$value]);
+        } else {
+            $this->where($column, $operator, $value);
+        }
     }
 
     /**
