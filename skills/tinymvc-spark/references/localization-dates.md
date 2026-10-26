@@ -12,9 +12,9 @@ Calendar arithmetic and elapsed seconds are different across daylight-saving tra
 
 ### The Modern Spark Date Standard
 
-| Legacy / Non-Smart Pattern | Smart, Elegant Spark / Carbon Standard |
+| Intent / existing expression | Spark / Carbon pattern |
 | --- | --- |
-| `gmdate('Y-m-d H:i:s')` | `now()->toDateTimeString()` |
+| UTC timestamp: `gmdate('Y-m-d H:i:s')` | `now('UTC')->toDateTimeString()` |
 | `date('Y-m-d')` | `now()->toDateString()` or `today()->toDateString()` |
 | `time()` | `now()->timestamp` |
 | `time() + 86400` | `now()->addDay()->timestamp` or `now()->addSeconds(86400)->timestamp` |
@@ -161,7 +161,7 @@ $data = [
 ];
 ```
 
-In API responses, always pass the Carbon instance directly to the resource array. Format dates using `format(...)` or `diffForHumans()` only when specifically generating human-readable display strings for HTML views or notification emails.
+Pass Carbon directly to resources for the default UTC serialization. Format explicitly when an existing API contract requires another representation, or when producing human-readable display strings for views or notifications.
 
 ---
 

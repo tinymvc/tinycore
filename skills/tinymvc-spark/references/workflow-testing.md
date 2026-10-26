@@ -59,7 +59,7 @@ final class SlugTest extends TestCase
 
 ### 2. Feature Tests (`tests/Feature/*Test.php`)
 
-Feature tests extend **`Tests\TestCase`** (which extends `Spark\Testing\ApplicationTestCase`). They boot a fresh application instance in an isolated temporary storage and testing database environment:
+Feature tests extend **`Tests\TestCase`** (which extends `Spark\Testing\ApplicationTestCase`). The base class allocates temporary storage and calls the application's `createApplication()`. Inspect that method and the testing configuration to verify database isolation; the base class does not automatically create a database, run migrations, or roll back database writes. Use the project's fixtures and testing connection.
 
 ```php
 <?php
@@ -149,7 +149,7 @@ In feature tests, `$this` provides modern HTTP verbs and state configurators:
 - `$this->withToken(string $token, string $type = 'Bearer')`: Sets the Authorization header.
 - `$this->withHeaders(array $headers)`: Adds custom HTTP headers.
 - `$this->flushHeaders()`: Clears default headers.
-- `$this->withSession(array $data)`: Flashes session variables.
+- `$this->withSession(array $data)`: Stores session values using `Session::put()`; it does not flash them.
 - `$this->withCookie(string $name, string $value)` / `$this->withCookies(array $cookies)`.
 
 ---
@@ -221,7 +221,7 @@ $this->assertGuest();
 Before finishing code changes:
 1. Run `php -l` on every created or edited PHP file.
 2. Run focused tests: `php test --filter=YourTestName`.
-3. Verify that all HTTP responses return exact expected contracts (`JsonResource` for entities, `json()` for messages, `noContent()` for deletions).
+3. Verify the consumer's response contract: resources for API entities, intentional message JSON, browser redirects, or adapter envelopes. Use `noContent()` only when the endpoint's contract calls for it.
 4. Run frontend build if assets changed: `npm run build`.
 5. Ensure zero warnings or unhandled exceptions.
 

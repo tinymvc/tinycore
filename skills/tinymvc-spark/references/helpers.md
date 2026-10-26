@@ -20,7 +20,7 @@ TinyCore provides first-class static facades under `Spark\Facades\*`. They provi
 | `Spark\Facades\Hash` | `Spark\Hash` | Password hashing (`hashPassword()`, `bcrypt()`, `argon2id()`) and verification (`verify()`), encryption (`encrypt()`, `decrypt()`), and UUIDs (`uuid()`). `make()` / `check()` are keyed HMAC helpers, not password hashing. |
 | `Spark\Facades\Http` | `Spark\Http\Client\Http` | Fluent outbound HTTP client with JSON handling and authentication (`Http::withToken()`, `Http::timeout()`, `Http::post()`, `Http::get()`, `Http::pool()`). |
 | `Spark\Facades\Lock` | `Spark\Cache\Lock` | Atomic distributed locking (`Lock::withLock()`, `Lock::lock()`, `Lock::unlock()`, `Lock::isLocked()`, `Lock::make('store')`). |
-| `Spark\Facades\Log` | `Spark\Log` | Application logging (`Log::info()`, `Log::error()`, `Log::warning()`, `Log::debug()`). |
+| `Spark\Facades\Log` | `Psr\Log\LoggerInterface` (native `Spark\Logger`) | Application logging (`Log::info()`, `Log::error()`, `Log::warning()`, `Log::debug()`). |
 | `Spark\Facades\Mail` | `Spark\Utils\Mail` | Fluent email sending with Blade view rendering (`Mail::to()`, `Mail::subject()`, `Mail::view()`, `Mail::send()`). |
 | `Spark\Facades\Queue` | `Spark\Queue\Queue` | Background queue operations, queue size inspection, clearing. |
 | `Spark\Facades\Route` | `Spark\Http\Routing\Router` | Defining routes, route groups, resource routes, model binding, middleware. |
@@ -100,10 +100,9 @@ Spark includes a rich suite of built-in global helper functions defined in `Spar
 - `today()`: Returns a `Spark\Carbon` instance set to today at 00:00:00.
 - `carbon(mixed $date = null)`: Parses a value into a `Spark\Carbon` instance.
 
-> [!CAUTION]
-> **Strict Rule**: Procedural date functions (`gmdate`, `date`, `time`, `strtotime`, `microtime`) are **prohibited**. Always use `now()`, `carbon()`, and `Spark\Carbon`.
+Use Carbon for application dates; preserve explicit timezone/output contracts. Performance measurement is separate: `hrtime(true)` is appropriate for elapsed durations. See [date boundaries](localization-dates.md).
 
-### 8. Flow Control, Diagnostics & Diagnostics
+### 8. Flow Control and Diagnostics
 - `tap(mixed $value, ?callable $callback = null)`: Taps into a value, executes the callback, and returns the original value.
 - `abort(int $code, string $message = '', array $headers = [])`: Throws an HTTP exception with status code.
 - `abort_if(bool $boolean, int $code, string $message = '')`: Aborts if condition is true.

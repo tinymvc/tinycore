@@ -109,7 +109,7 @@ Resource routes currently use `{id}`. For controller arguments named `$post`, re
 
 ## Idiomatic API Controller Standard
 
-Always write clean, modern controllers combining **Route Model Binding**, **FormRequest**, and **JsonResource**:
+For entity APIs, combine **Route Model Binding**, **FormRequest**, and **JsonResource** where they fit the endpoint:
 
 ```php
 <?php
@@ -192,7 +192,7 @@ class PostController extends Controller
 ### Key Controller Rules
 
 1. **Use resources for entity payloads**: Return `PostResource::make($post)` or `PostResource::collection(...)`; reserve `json()` for intentional message/scalar/webhook contracts.
-2. **Never put validation logic inline in create/update actions**: Use dedicated `FormRequest` classes.
-3. **Use Route Model Binding**: Type-hint `Post $post` instead of manually finding models by ID in every action.
+2. **Use FormRequest for substantial writes**: Keep validation and authorization together; small endpoints may use inline validation.
+3. **Use Route Model Binding when it fits**: Type-hint `Post $post`; keep explicit scoped lookups when ownership/tenant rules require them.
 4. **Use `$model->remove()` to delete**: Do not call `$model->delete()` on model instances.
-5. **Return `response()->noContent()`** for successful deletions.
+5. **Match deletion responses to the consumer**: `response()->noContent()` suits an API contract with no body. Browser forms need redirects; FireLine/Inertia actions need their adapter contracts.

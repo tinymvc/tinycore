@@ -8,26 +8,17 @@ Driver names come from `Spark\Database\Contracts\DatabaseDriver`: `DRIVER_MYSQL`
 
 ## Model-First Query Architecture
 
-> [!IMPORTANT]
-> **Always Use Model Queries for Domain Entities**:
-> When interacting with database tables that have corresponding application models (`User`, `Post`, `Order`, etc.), **always query through the Model**.
->
-> **Never use `DB::table('users')` or `query('users')` for domain models**. Bypassing the model causes severe defects:
-> - **Lost Attribute Casting**: Booleans remain integers `0`/`1`, JSON fields remain raw strings, and datetimes are not converted to `Spark\Carbon` instances.
-> - **Lost Timestamps**: Bypasses automatic `created_at` and `updated_at` management.
-> - **Lost Soft Deletes**: Bypasses `InteractsWithSoftDeletes`, accidentally exposing or overwriting trashed rows.
-> - **Lost Relations & Scopes**: Disables `with()`, `whereHas()`, `withCount()`, and domain scopes like `scopePublished()`.
-> - **No Hydration**: Returns unhydrated stdClass objects or arrays instead of active Model entities.
+Prefer model queries for domain entities so scopes, relations, casts, and soft-delete filtering stay visible. Use `DB::table()` or `query()` deliberately for table-level work: these return raw rows and bypass model hydration, casts, timestamps, and lifecycle behavior. Preserve ownership/tenant conditions and account for soft-deleted rows explicitly when bypassing models. Model query bulk writes also differ from saving individual instances; see [mass writes](#upserts-and-mass-writes).
 
 ```php
-// GOOD: Eloquent-style Model querying
+// Native model queries
 $users = User::where('active', true)->latest()->take(20)->get();
 $post = Post::findOrFail($id);
 $posts = Post::with('author')->paginate(15);
 ```
 
 ### When are `DB::table()` or `query()` Appropriate?
-Use raw query builders **only** for:
+Typical uses for raw query builders include:
 - Low-level table operations without an associated Model (e.g. migration verification, raw pivot table operations).
 - Performance-critical bulk reads that deliberately bypass model hydration.
 - Direct database schema maintenance utilities.
