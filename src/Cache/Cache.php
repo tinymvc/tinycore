@@ -11,6 +11,7 @@ use Spark\Cache\Contracts\CacheStorageContract;
 use Spark\Cache\Storage\FileStorage;
 use Spark\Cache\Storage\RedisStorage;
 use Spark\Cache\Storage\DatabaseStorage;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
@@ -39,7 +40,7 @@ class Cache implements CacheContract, \ArrayAccess
      * The name is used by storage drivers to isolate cache data, such as by
      * database group, file directory or Redis key namespace.
      */
-    public function __construct(string $name = 'default')
+    public function __construct(private string $name = 'default')
     {
         $connection = $this->resolveDriverConfig($name);
         $driver = strtolower((string) ($connection['driver'] ?? 'database'));
@@ -62,7 +63,19 @@ class Cache implements CacheContract, \ArrayAccess
      */
     public static function make(string $name = 'default'): Cache
     {
-        return new self($name);
+        $app = Application::$app;
+
+        if ($app === null) {
+            return new Cache($name);
+        }
+
+        $binding = Cache::class . ($name === 'default' ? '' : ":$name");
+
+        if (!$app->has($binding)) {
+            $app->instance($binding, new Cache($name));
+        }
+
+        return $app->get($binding);
     }
 
     /**
@@ -430,6 +443,12 @@ class Cache implements CacheContract, \ArrayAccess
     public function offsetUnset(mixed $offset): void
     {
         $this->erase((string) $offset);
+    }
+
+    /** Unload this cache instance from the application container. */
+    public function unload(): void
+    {
+        Application::$app !== null && Application::$app->forget(self::class . ':' . $this->name);
     }
 
     /**

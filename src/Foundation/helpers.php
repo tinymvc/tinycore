@@ -344,11 +344,11 @@ if (!function_exists('database')) {
      */
     function database(null|string|array $connection = null): DB
     {
-        if ($connection !== null) {
-            return DB::connection($connection);
+        if (empty($connection)) {
+            return get(DB::class);
         }
 
-        return get(DB::class);
+        return DB::connection($connection);
     }
 }
 
@@ -1436,29 +1436,7 @@ if (!function_exists('cache')) {
      */
     function cache(string $name = 'default'): Cache
     {
-        $app = Application::$app;
-        $binding = Cache::class . ":$name";
-
-        if (!$app->has($binding)) {
-            $app->instance($binding, new Cache($name));
-        }
-
-        return $app->get($binding);
-    }
-}
-
-if (!function_exists('unload_cache')) {
-    /**
-     * Unloads a cache instance.
-     *
-     * This function unloads a cache instance by name. Once unloaded, the cache
-     * will be recreated on its next access in the current application.
-     *
-     * @param string $name The name of the cache instance to unload. Default is 'default'.
-     */
-    function unload_cache(string $name = 'default'): void
-    {
-        app()->forget(Cache::class . ":$name");
+        return Cache::make($name);
     }
 }
 
@@ -1470,7 +1448,7 @@ if (!function_exists('lock')) {
      * is successfully acquired within the specified wait timeout, it will be held
      * for the specified timeout duration.
      *
-     * @param string $key The key to lock.
+     * @param ?string $key The key to lock.
      * @param int $timeout The duration (in seconds) to hold the lock. Default is 10 seconds.
      * @param int $waitTimeout The maximum time (in seconds) to wait for the lock. Default is 5 seconds.
      * @param string $name The name of the lock instance to use. Default is 'default'.
@@ -1479,16 +1457,13 @@ if (!function_exists('lock')) {
      */
     function lock(null|string $key = null, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5, string $name = 'default'): bool|Lock
     {
-        $app = Application::$app;
-        $binding = Lock::class . ($name === 'default' ? '' : ":$name");
+        $manager = Lock::make($name);
 
-        if (!$app->has($binding)) {
-            $app->instance($binding, Lock::make($name));
+        if ($key === null) {
+            return $manager;
         }
 
-        $manager = $app->get($binding);
-
-        return $key === null ? $manager : $manager->lock($key, $timeout, $waitTimeout);
+        return $manager->lock($key, $timeout, $waitTimeout);
     }
 }
 
@@ -1770,9 +1745,11 @@ if (!function_exists('abort')) {
         if (!Application::$app->isTesting() && ob_get_length() > 0) {
             ob_end_clean();
         }
+
         Response::error($error, $message, $code)->send();
         Application::$app->terminate();
-        exit;
+
+        exit; // Ensure the script stops executing after aborting
     }
 }
 
@@ -1968,7 +1945,8 @@ if (!function_exists('http')) {
      * @param array $headers Optional. The headers for the request.
      * @param array $options Optional. Additional options for the HTTP request.
      * @param int $retry Optional. The number of times to retry the request in case of failure. Default is 0 (no retries).
-     * @return ($url is null ? \Spark\Http\Client\Contracts\HttpContract : \Spark\Http\Client\Contracts\HttpResponseContract) The HTTP instance or the response from the request.
+     * @return ($url is null ? \Spark\Http\Client\Contracts\HttpContract : \Spark\Http\Client\Contracts\HttpResponseContract) 
+     *      The HTTP instance or the response from the request.
      */
     function http(
         string $method = Request::METHOD_GET,

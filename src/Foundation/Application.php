@@ -138,6 +138,9 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(\Spark\Cache\Lock::class);
         $this->alias('lock', \Spark\Cache\Lock::class);
 
+        $this->singleton(\Spark\Cache\Cache::class);
+        $this->alias('cache', \Spark\Cache\Cache::class);
+
         $this->bind(
             CacheInterface::class,
             fn() => new SimpleCache($this->get(\Spark\Cache\Cache::class))
@@ -228,7 +231,6 @@ class Application extends \Spark\Container implements ApplicationContract
 
         $this->alias('storage', \Spark\Storage\Storage::class);
         $this->alias('uploader', \Spark\Storage\Uploader::class);
-        $this->alias('cache', \Spark\Cache\Cache::class);
         $this->alias('query', \Spark\Database\QueryBuilder::class);
         $this->alias('validator', \Spark\Http\Validator::class);
         $this->alias('schema', \Spark\Database\Schema\Schema::class);
@@ -405,12 +407,14 @@ class Application extends \Spark\Container implements ApplicationContract
             $rootPath = rtrim($this->path, '/\\');
             $config = ltrim($config, '/\\');
 
-            $this->mergeConfig(DotEnv::discoverConfig(
-                folder: dir_path("$rootPath/$config"),
-                cache: dir_path("$rootPath/bootstrap/cache/" . preg_replace('/[^a-zA-Z0-9]/', '_', $config) . '.php'),
-                env: dir_path("$rootPath/.env"),
-                useCache: !$this->testing
-            ));
+            $this->mergeConfig(
+                DotEnv::discoverConfig(
+                    folder: dir_path("$rootPath/$config"),
+                    cache: dir_path("$rootPath/bootstrap/cache/" . preg_replace('/[^a-zA-Z0-9]/', '_', $config) . '.php'),
+                    env: dir_path("$rootPath/.env"),
+                    useCache: !$this->testing
+                )
+            );
         }
 
         if (is_array($middlewares)) {
@@ -696,7 +700,9 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function handle(Request|ServerRequestInterface $request): Response
     {
-        $request = $request instanceof Request ? $request : Request::fromPsrRequest($request);
+        if (!$request instanceof Request) {
+            $request = Request::fromPsrRequest($request);
+        }
 
         // Bind the request instance to the container for dependency injection.
         $this->instance(Request::class, $request);

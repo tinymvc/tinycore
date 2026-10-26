@@ -12,6 +12,7 @@ use Spark\Cache\Exceptions\LockException;
 use Spark\Cache\Storage\FileStorage;
 use Spark\Cache\Storage\RedisStorage;
 use Spark\Cache\Storage\DatabaseStorage;
+use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Utils\RedisConnector;
@@ -71,7 +72,18 @@ class Lock implements LockContract, \ArrayAccess
      */
     public static function make(string $name = 'default'): static
     {
-        return new static($name);
+        $app = Application::$app;
+        if ($app === null) {
+            return new Lock($name);
+        }
+
+        $binding = Lock::class . ($name === 'default' ? '' : ":$name");
+
+        if (!$app->has($binding)) {
+            $app->instance($binding, Lock::make($name));
+        }
+
+        return $app->get($binding);
     }
 
     /**

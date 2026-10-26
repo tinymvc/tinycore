@@ -51,7 +51,7 @@ $feedCache->put('user:1:feed', $feed, '+15 minutes');
 
 Cache expiration parameters accept `int|string|DateTimeInterface|Spark\Carbon|DateInterval|null`. Integers are TTL seconds, strings use `Carbon::parse()` date semantics, date objects are absolute deadlines, and null means no expiration. This applies to `store`, `set`, `put`, `add`, `load`, `remember`, and both bulk-write methods. Zero/negative TTLs and past deadlines are immediately expired; invalid date strings throw. Date objects are copied, never mutated.
 
-An expired `add()` does not reserve a key against a subsequent fresh value. `cache($name)` retains its instance within the current application; `unload_cache($name)` drops that instance without deleting stored values. Names passed to `Cache::make()` and `Lock::make()` select namespaces, while `cache.default` selects the configured connection.
+An expired `add()` does not reserve a key against a subsequent fresh value. `cache($name)` retains its instance within the current application; `cache($name)->unload()` drops that instance without deleting stored values. Names passed to `Cache::make()` and `Lock::make()` select namespaces, while `cache.default` selects the configured connection.
 
 ## PSR-16 interoperability
 

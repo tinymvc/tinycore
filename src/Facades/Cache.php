@@ -37,6 +37,7 @@ use Spark\Cache\Cache as BaseCache;
  * @method static mixed lock(?string $key = null, ?callable $callback = null, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval $timeout = 10, int $waitTimeout = 5)
  * @method static mixed pull(string $key, mixed $default = null)
  * @method static array stats()
+ * @method static void unload()
  * @method static null|int ttl(string $key)
  * @method static BaseCache optimize()
  * @method static BaseCache make(string $name = 'default')

@@ -32,7 +32,11 @@ abstract class Facade
      */
     public static function getFacadeRoot(): mixed
     {
-        return Application::$app !== null ? Application::$app->make(static::getFacadeAccessor()) : null;
+        if (Application::$app !== null) {
+            return Application::$app->make(static::getFacadeAccessor());
+        }
+
+        return null;
     }
 
     /**

@@ -40,7 +40,7 @@ final class StateOwnershipTest extends FrameworkTestCase
             $this->assertFalse($firstLock === lock(name: 'ownership'));
             $this->assertNull(cache('ownership')->get('value'));
             cache('ownership')->put('value', 'second');
-            unload_cache('ownership');
+            cache('ownership')->unload();
             $this->assertSame('second', cache('ownership')->get('value'));
         } finally {
             Application::$app = $this->app;
@@ -68,7 +68,7 @@ final class StateOwnershipTest extends FrameworkTestCase
 
     public function test_failed_explicit_dispatch_is_not_retried_by_destructor(): void
     {
-        $job = new class('strlen') extends Job {
+        $job = new class ('strlen') extends Job {
             public int $dispatches = 0;
 
             public function dispatch(string $queue = 'default'): void
@@ -78,7 +78,7 @@ final class StateOwnershipTest extends FrameworkTestCase
             }
         };
         $pending = new PendingDispatch($job);
-        $this->assertThrows(RuntimeException::class, fn () => $pending->send());
+        $this->assertThrows(RuntimeException::class, fn() => $pending->send());
         try {
             unset($pending);
         } catch (RuntimeException) {

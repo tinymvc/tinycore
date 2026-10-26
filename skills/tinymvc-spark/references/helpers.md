@@ -17,7 +17,7 @@ TinyCore provides first-class static facades under `Spark\Facades\*`. They provi
 | `Spark\Facades\DB` | `Spark\Database\DB` | Database transactions, connection switching, raw queries, table queries (`DB::transaction()`, `DB::table()`, `DB::raw()`, row locking `lockForUpdate()`). |
 | `Spark\Facades\Event` | `Spark\Events` | Event dispatching and listener registration (`Event::listen()`, `Event::dispatch()`, `Event::dispatchIf()`, `Event::until()`, `Event::once()`). |
 | `Spark\Facades\Gate` | `Spark\Http\Gate` | User authorization policies and ability checks (`Gate::define()`, `Gate::allows()`, `Gate::denies()`, `Gate::check()`, `Gate::authorize()`). |
-| `Spark\Facades\Hash` | `Spark\Hash` | Password hashing (`hashPassword()`, `bcrypt()`, `argon2id()`) and verification (`verify()`), encryption (`encrypt()`, `decrypt()`), and UUIDs (`uuid()`). `make()` / `check()` are keyed HMAC helpers, not password hashing. |
+| `Spark\Facades\Hash` | `Spark\Hash` | Password hashing (`password()`, `bcrypt()`, `argon2id()`) and verification (`verify()`), encryption (`encrypt()`, `decrypt()`), and UUIDs (`uuid()`). `make()` / `check()` are keyed HMAC helpers, not password hashing. |
 | `Spark\Facades\Http` | `Spark\Http\Client\Http` | Fluent outbound HTTP client with JSON handling and authentication (`Http::withToken()`, `Http::timeout()`, `Http::post()`, `Http::get()`, `Http::pool()`). |
 | `Spark\Facades\Lock` | `Spark\Cache\Lock` | Atomic distributed locking (`Lock::withLock()`, `Lock::lock()`, `Lock::unlock()`, `Lock::isLocked()`, `Lock::make('store')`). |
 | `Spark\Facades\Log` | `Psr\Log\LoggerInterface` (native `Spark\Logger`) | Application logging (`Log::info()`, `Log::error()`, `Log::warning()`, `Log::debug()`). |

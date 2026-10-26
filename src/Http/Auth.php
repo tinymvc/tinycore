@@ -189,13 +189,13 @@ class Auth implements AuthContract, ArrayAccess
         if (!isset($this->user) && $this->hasId()) {
             // Attempt to load user from cache if caching is enabled
             if ($this->config['cache_enabled']) {
-                $user = cache($this->config['cache_name'])
-                    ->load(
-                        key: $this->getId(),
-                        callback: fn() => $this->model::find($this->getId()) ?: null,
-                        expire: $this->config['cache_expire']
-                    );
-                unload_cache($this->config['cache_name']); // Unload cache after use
+                $cache = cache($this->config['cache_name']);
+                $user = $cache->load(
+                    key: $this->getId(),
+                    callback: fn() => $this->model::find($this->getId()) ?: null,
+                    expire: $this->config['cache_expire']
+                );
+                $cache->unload(); // Unload cache after use
             } else {
                 // Fetch user directly from the database if caching is not enabled
                 $user = $this->model::find($this->getId()) ?: null;
