@@ -79,6 +79,9 @@ class Mail extends PHPMailer implements MailContract
         } else {
             throw new \InvalidArgumentException("Unsupported transport method: {$this->transport}");
         }
+
+        parent::__construct(true); // Call the parent constructor with exceptions enabled
+        parent::setLanguage(config('app.locale', 'en'));
     }
 
     /**
