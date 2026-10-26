@@ -34,6 +34,9 @@ interface QueueContract
      */
     public function pushOnce(JobContract $job, string $queue = 'default'): void;
 
+    /** Signal running workers to exit after their current job finishes. */
+    public function restart(): void;
+
     /**
      * Runs the jobs in the queue.
      *

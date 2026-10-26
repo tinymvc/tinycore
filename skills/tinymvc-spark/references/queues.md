@@ -8,7 +8,7 @@ Read this reference for queue and jobs. Source paths and command working directo
 
 ## Queue and Jobs
 
-`php spark queue:work --queue=emails --once --sleep=0` processes at most one due job and exits. Without `--once`, the worker polls until its lifetime expires. `--timeout` is the worker lifetime checked between jobs, not a hard execution deadline for a job; `--timeout=0` disables that lifetime limit. Timeout, sleep, and retry delay must be non-negative; tries must be at least one. The first poll is immediate. Use a process supervisor to restart exited workers and restart workers after deployments.
+`php spark queue:work --queue=emails --once --sleep=0` processes at most one due job and exits. Without `--once`, the worker polls until its lifetime expires. `--timeout` is the worker lifetime checked between jobs, not a hard execution deadline for a job; `--timeout=0` disables that lifetime limit. Timeout, sleep, and retry delay must be non-negative; tries must be at least one. The first poll is immediate. Use a process supervisor to restart exited workers. After deployments, `php spark queue:restart` signals workers to finish their current job and exit; idle workers stop on their next poll. The command and workers must share the configured cache store and namespace (shared storage for file cache). New workers ignore earlier restart signals.
 
 Job-construction and retry-policy failures follow the same retry/failure path as handler errors, using worker defaults when job settings cannot be resolved. Stale reservations are recovered at worker startup after 3600 seconds; an indefinitely running worker needs restarting to repeat recovery. Keep job execution below that reservation window. The worker does not forcibly interrupt a running job.
 

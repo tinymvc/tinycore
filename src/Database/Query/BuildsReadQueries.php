@@ -6,6 +6,7 @@ use Closure;
 use PDO;
 use Spark\Database\Exceptions\QueryBuilderException;
 use Spark\Database\Model;
+use Spark\Database\Expression;
 use Spark\Database\QueryBuilder;
 use Spark\Facades\DB;
 use Spark\Support\Collection;
@@ -35,20 +36,15 @@ trait BuildsReadQueries
      * @param array|string $fields A string or an array of column names to select.
      * @return self The current instance for method chaining.
      */
-    public function select(array|string $fields = '*'): QueryBuilder
+    public function select(array|string|Expression $fields = '*'): QueryBuilder
     {
         // Handle multiple arguments as an array
         if (func_num_args() > 1) {
             $fields = func_get_args();
         }
-        // Convert array of fields to a comma-separated string if necessary
-        if (is_array($fields)) {
-            $fields = array_filter(array_map('trim', $fields)); // Trim whitespace and remove empty values
-            $fields = implode(',', array_unique($fields)); // Remove duplicates and join with commas
+        if (is_string($fields)) {
+            $fields = preg_replace('/^\s*select\s+/i', '', $fields);
         }
-
-        // Remove any leading "SELECT " from the fields string
-        $fields = preg_replace('/^\s*select\s+/i', '', $fields);
 
         // Build the initial SELECT SQL query
         $distinct = preg_match('/^DISTINCT\s/i', $this->query['select'] ?? '');
@@ -72,7 +68,8 @@ trait BuildsReadQueries
     public function selectSub(string|QueryBuilder|Closure $subquery, string $alias): QueryBuilder
     {
         if ($subquery instanceof Closure) {
-            $newQuery = new QueryBuilder($this->database);
+            $newQuery = (new QueryBuilder($this->database))->prefix($this->prefix);
+            $newQuery->wrapper = $this->wrapper->forSubquery();
             $newQuery->table($this->table);
 
             $subquery($newQuery);
@@ -189,8 +186,17 @@ trait BuildsReadQueries
      */
     public function from(string $table, string|null $alias = null): QueryBuilder
     {
+        if (stripos($table, ' as ') !== false && empty($alias)) {
+            [$table, $alias] = preg_split('/\s+as\s+/i', $table, 2);
+        }
+        $table = trim($table);
         $this->table ??= $table;
         $this->query['from'] = $table;
+        if ($this->hasAlias()) {
+            $this->wrapper->unregisterAlias($this->getAlias());
+        }
+        $this->wrapper->unregisterAlias($table);
+        $this->query['alias'] = '';
 
         // Set alias if provided
         !empty($alias) && $this->as($alias);
@@ -266,6 +272,11 @@ trait BuildsReadQueries
     public function as(string $alias): QueryBuilder
     {
         $alias = trim(preg_replace('/^\s*AS\s+/i', '', $alias), " \t\n\r\0\x0B\"`");
+        if ($this->hasAlias() && $this->getAlias() !== $alias) {
+            $this->assertNoCompiledClauses();
+            $this->wrapper->unregisterAlias($this->getAlias());
+        }
+        $this->wrapper->registerAlias($alias);
         $this->query['alias'] = ' AS ' . $this->wrapper->wrapColumn($alias) . ' ';
         return $this;
     }
@@ -284,7 +295,7 @@ trait BuildsReadQueries
     public function join(string $table, string|null $field1 = null, string|null $operator = null, string|null $field2 = null, string $type = ''): QueryBuilder
     {
         $on = $field1;
-        $table = $this->prefix . $table;
+        $table = $this->wrapper->wrapTable($table);
 
         if ($operator !== null) {
             if (empty($field2)) {
@@ -297,7 +308,7 @@ trait BuildsReadQueries
             $on = $this->wrapJoinOn($on);
         }
 
-        $this->query['joins'] .= " {$type}JOIN " . $this->wrapAndEscapeColumns($table) . ($on ? " ON $on" : "");
+        $this->query['joins'] .= " {$type}JOIN " . $table . ($on ? " ON $on" : "");
 
         return $this;
     }
@@ -492,7 +503,7 @@ trait BuildsReadQueries
      * @param string $sort The sorting direction, defaults to 'ASC'.
      * @return self
      */
-    public function orderBy(string $field, string $sort = 'ASC'): QueryBuilder
+    public function orderBy(string|Expression $field, string $sort = 'ASC'): QueryBuilder
     {
         $order = $this->wrapper->wrapColumn($field) . ' ' . strtoupper($sort);
         $this->query['order'] = empty($this->query['order']) ? $order : $this->query['order'] . ', ' . $order;
@@ -523,7 +534,7 @@ trait BuildsReadQueries
      */
     public function orderAsc(null|string $field = null): QueryBuilder
     {
-        $field ??= $this->withAlias('id');
+        $field = $field === null ? $this->quoteNumericOrder($this->withAlias('id')) : $this->prefixOrderColumn($field);
 
         $this->query['order'] = "$field ASC";
         return $this;
@@ -537,7 +548,7 @@ trait BuildsReadQueries
      */
     public function orderDesc(null|string $field = null): QueryBuilder
     {
-        $field ??= $this->withAlias('id');
+        $field = $field === null ? $this->quoteNumericOrder($this->withAlias('id')) : $this->prefixOrderColumn($field);
 
         $this->query['order'] = "$field DESC";
         return $this;
@@ -549,7 +560,7 @@ trait BuildsReadQueries
      * @param string|array $field Group by clause as a string or array.
      * @return self
      */
-    public function groupBy(string|array $field): QueryBuilder
+    public function groupBy(string|array|Expression $field): QueryBuilder
     {
         $field = is_array($field) ? $field : func_get_args();
 
@@ -742,7 +753,7 @@ trait BuildsReadQueries
         $unionType = $all ? 'UNION ALL' : 'UNION';
 
         if ($query instanceof Closure) {
-            $newQuery = new static($this->database);
+            $newQuery = (new static($this->database))->prefix($this->prefix);
             $newQuery->table($this->table);
             $query($newQuery);
             $query = $newQuery;
@@ -835,7 +846,7 @@ trait BuildsReadQueries
     public function latest(string $field = 'created_at', array|string|null $fields = null): QueryBuilder
     {
         $fields && $this->select($fields);
-        return $this->orderDesc($this->withAlias($field));
+        return $this->order($this->qualifiedOrderColumn($field) . ' DESC');
     }
 
     /**
@@ -849,7 +860,7 @@ trait BuildsReadQueries
     {
         $fields && $this->select($fields);
 
-        return $this->orderAsc($this->withAlias($field));
+        return $this->order($this->qualifiedOrderColumn($field) . ' ASC');
     }
 
     /**
@@ -1007,7 +1018,7 @@ trait BuildsReadQueries
         }
 
         $query->query['order'] = implode(', ', array_map(
-            fn($order) => $query->wrapper->wrapColumn($order[0]) . ' '
+            fn($order) => $query->wrapCursorColumn($order[0]) . ' '
                 . (($order[1] === 'ASC') !== $backwards ? 'ASC' : 'DESC'),
             $orders,
         ));
@@ -1067,7 +1078,7 @@ trait BuildsReadQueries
             throw new QueryBuilderException('Cursor pagination requires an orderBy clause with a unique column or combination.');
         }
 
-        $identifier = '(?:[a-zA-Z_][a-zA-Z0-9_]*|`[a-zA-Z_][a-zA-Z0-9_]*`|"[a-zA-Z_][a-zA-Z0-9_]*")';
+        $identifier = '(?:[a-zA-Z_][a-zA-Z0-9_]*|`[a-zA-Z0-9_]+`|"[a-zA-Z0-9_]+")';
         $orders = [];
         foreach (explode(',', $order) as $part) {
             if (!preg_match('/^\s*(' . $identifier . '(?:\.' . $identifier . ')*)(?:\s+(ASC|DESC))?\s*$/iD', $part, $match)) {
@@ -1089,11 +1100,19 @@ trait BuildsReadQueries
     /** Preserve the binding style of existing raw conditions. */
     private function cursorWhere(string $column, string $operator, mixed $value): void
     {
+        $wrapped = $this->wrapCursorColumn($column);
         if ($this->parameters !== []) {
-            $this->whereRaw($this->wrapper->wrapColumn($column) . " $operator ?", [$value]);
+            $this->whereRaw($wrapped . " $operator ?", [$value]);
         } else {
-            $this->where($column, $operator, $value);
+            $placeholder = $this->getWhereSqlColumn($column);
+            $this->whereRaw($wrapped . " $operator :$placeholder", [$placeholder => $value]);
         }
+    }
+
+    /** Cursor columns are parsed from compiled ORDER BY identifiers and are already physical. */
+    private function wrapCursorColumn(string $column): string
+    {
+        return implode('.', array_map([$this->wrapper, 'wrap'], explode('.', $column)));
     }
 
     /**
@@ -1110,7 +1129,8 @@ trait BuildsReadQueries
         unset($query->query['offset'], $query->query['limit']);
         // Count result groups/distinct rows, while retaining SELECT/HAVING bindings.
         if (empty($query->query['select']) || $query->query['select'] === '*') {
-            $query->query['select'] = $query->getTableReference() . '.*';
+            $table = $query->getAlias() ?? ($query->query['from'] ?: $query->table);
+            $query->query['select'] = $query->wrapper->wrapColumn($table . '.*');
         }
 
         $sql = 'SELECT COUNT(*) FROM (' . $query->toSql() . ') AS spark_count';
@@ -1163,20 +1183,28 @@ trait BuildsReadQueries
      * @param array|string $columns The column names to wrap and escape.
      * @return string The wrapped and escaped column names.
      */
-    private function wrapAndEscapeColumns(array|string $columns): string
+    private function wrapAndEscapeColumns(array|string|Expression $columns): string
     {
+        if ($columns instanceof Expression) {
+            return $columns->getValue();
+        }
         if (is_string($columns) && $columns === '*') {
             return '*';
         }
 
-        if (is_string($columns)) {
-            $columns = array_map('trim', explode(',', $columns));
-        }
+        $columns = array_merge(...array_map(
+            fn($column) => $column instanceof Expression ? [$column] : array_map('trim', explode(',', $column)),
+            (array) $columns
+        ));
 
         $columns = array_map(function ($column) {
-            $columns = explode(' as ', str_ireplace(' As ', ' as ', $column));
-            return implode(' as ', array_map([$this, 'wrapOrValue'], $columns));
-        }, $columns);
+            if ($column instanceof Expression) {
+                return $column->getValue();
+            }
+            $columns = preg_split('/\s+as\s+/i', trim($column), 2);
+            return $this->wrapOrValue($columns[0])
+                . (isset($columns[1]) ? ' as ' . $this->wrapper->wrap($columns[1]) : '');
+        }, array_unique(array_filter($columns, fn($column) => $column instanceof Expression || trim($column) !== '')));
 
         return implode(', ', $columns);
     }
@@ -1198,6 +1226,25 @@ trait BuildsReadQueries
         }
 
         return $this->wrapper->wrapColumn($value);
+    }
+
+    /** Legacy order helpers accept raw expressions; prefix only plain identifiers. */
+    private function prefixOrderColumn(string $column): string
+    {
+        return preg_match('/^\w+(?:\.\w+)+$/D', $column)
+            ? $this->quoteNumericOrder($this->wrapper->qualifyColumn($column)) : $column;
+    }
+
+    private function qualifiedOrderColumn(string $column): string
+    {
+        $qualified = $this->withAlias($column);
+        return $qualified !== $column ? $this->quoteNumericOrder($qualified) : $this->prefixOrderColumn($column);
+    }
+
+    private function quoteNumericOrder(string $column): string
+    {
+        return preg_match('/^\w+(?:\.\w+)+$/D', $column) && preg_match('/(?:^|\.)[0-9]/', $column)
+            ? $this->wrapCursorColumn($column) : $column;
     }
 
     /**

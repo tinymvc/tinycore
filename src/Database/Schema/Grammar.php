@@ -37,9 +37,10 @@ class Grammar implements GrammarContract, DatabaseDriver
      * Constructor.
      *
      * @param string $driver The database driver in use.
+     * @param string $tablePrefix Optional table prefix to apply to all table names.
      * @throws UnsupportedDatabaseDriverException If the driver is not supported.
      */
-    public function __construct(private string $driver)
+    public function __construct(private string $driver, string $tablePrefix = '')
     {
         $this->driver = strtolower($driver);
 
@@ -49,7 +50,7 @@ class Grammar implements GrammarContract, DatabaseDriver
             );
         }
 
-        $this->wrapper = new Wrapper($this->driver);
+        $this->wrapper = new Wrapper($this->driver, $tablePrefix);
     }
 
     /**
@@ -275,7 +276,15 @@ class Grammar implements GrammarContract, DatabaseDriver
         $sql .= 'CONSTRAINT ' . $this->wrapper->wrap($constraintName) . ' ';
 
         $sql .= 'FOREIGN KEY (' . $this->wrapper->columnize($fk->columns) . ') ';
-        $sql .= 'REFERENCES ' . $this->wrapper->wrapTable($fk->onTable);
+        $reference = $fk->onTable;
+        if ($this->isSQLite()) {
+            [$schema, $reference] = $this->splitTable($reference);
+            [$ownerSchema] = $this->splitTable($table ?? $fk->onTable);
+            if ($schema !== null && $schema !== ($ownerSchema ?? 'main')) {
+                throw new InvalidForeignKeyException('SQLite foreign keys must reference a table in the same database.');
+            }
+        }
+        $sql .= 'REFERENCES ' . $this->wrapper->wrapTable($reference);
         $sql .= ' (' . $this->wrapper->columnize($fk->references) . ')';
 
         // SQLite only supports RESTRICT, NO ACTION, SET NULL, CASCADE
@@ -310,21 +319,22 @@ class Grammar implements GrammarContract, DatabaseDriver
         $type = strtolower($index['type']);
         $columns = $this->wrapper->columnize($index['columns']);
         $indexName = $this->resolveIndexName($table, $index);
+        [$schema, $name] = $this->splitTable($table);
+        $wrappedIndex = $this->wrapper->wrap($indexName);
+        $wrappedTable = $this->wrapper->wrapTable($table);
+        if ($this->isSQLite() && $schema !== null) {
+            $wrappedIndex = $this->wrapper->wrap($schema) . '.' . $wrappedIndex;
+            $wrappedTable = $this->wrapper->wrapTable($name);
+        }
 
         // Database-specific syntax adjustments
         return match (true) {
-            $type === 'unique' => "CREATE UNIQUE INDEX {$this->wrapper->wrap($indexName)} ON "
-                . $this->wrapper->wrapTable($table) . " ({$columns});",
-            $type === 'fulltext' && $this->isMySQL() => "CREATE FULLTEXT INDEX {$this->wrapper->wrap($indexName)} ON "
-                . $this->wrapper->wrapTable($table) . " ({$columns});",
-            $type === 'spatial' && $this->isMySQL() => "CREATE SPATIAL INDEX {$this->wrapper->wrap($indexName)} ON "
-                . $this->wrapper->wrapTable($table) . " ({$columns});",
-            $type === 'spatial' && $this->isPostgreSQL() => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
-                . $this->wrapper->wrapTable($table) . " USING gist ({$columns});",
-            $this->isPostgreSQL() => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
-                . $this->wrapper->wrapTable($table) . " USING btree ({$columns});",
-            default => "CREATE INDEX {$this->wrapper->wrap($indexName)} ON "
-                . $this->wrapper->wrapTable($table) . " ({$columns});",
+            $type === 'unique' => "CREATE UNIQUE INDEX $wrappedIndex ON $wrappedTable ({$columns});",
+            $type === 'fulltext' && $this->isMySQL() => "CREATE FULLTEXT INDEX $wrappedIndex ON $wrappedTable ({$columns});",
+            $type === 'spatial' && $this->isMySQL() => "CREATE SPATIAL INDEX $wrappedIndex ON $wrappedTable ({$columns});",
+            $type === 'spatial' && $this->isPostgreSQL() => "CREATE INDEX $wrappedIndex ON $wrappedTable USING gist ({$columns});",
+            $this->isPostgreSQL() => "CREATE INDEX $wrappedIndex ON $wrappedTable USING btree ({$columns});",
+            default => "CREATE INDEX $wrappedIndex ON $wrappedTable ({$columns});",
         };
     }
 
@@ -458,10 +468,12 @@ class Grammar implements GrammarContract, DatabaseDriver
     public function compileDropIndex(string $table, array $index): string
     {
         $indexName = $this->resolveIndexName($table, $index);
+        [$schema] = $this->splitTable($table);
+        $wrappedIndex = ($schema !== null ? $this->wrapper->wrap($schema) . '.' : '') . $this->wrapper->wrap($indexName);
 
         return match ($this->driver) {
             self::DRIVER_MYSQL => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP INDEX {$this->wrapper->wrap($indexName)}",
-            default => "DROP INDEX {$this->wrapper->wrap($indexName)}",
+            default => "DROP INDEX $wrappedIndex",
         };
     }
 
@@ -478,10 +490,13 @@ class Grammar implements GrammarContract, DatabaseDriver
             throw new SqliteAlterFailedException('SQLite does not support dropping primary keys');
         }
 
+        [, $name] = $this->splitTable($this->wrapper->tableName($table));
+        $name = substr($name, 0, 58) . '_pkey';
+
         return match ($this->driver) {
             self::DRIVER_MYSQL => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP PRIMARY KEY",
             default => "ALTER TABLE {$this->wrapper->wrapTable($table)} DROP CONSTRAINT "
-                . $this->wrapper->wrap($primary['name'] ?? "{$table}_pkey"),
+                . $this->wrapper->wrap($primary['name'] ?? $name),
         };
     }
 
@@ -570,6 +585,9 @@ class Grammar implements GrammarContract, DatabaseDriver
      */
     private function quoteLiteral(mixed $value): string
     {
+        if ($value instanceof \Spark\Database\Expression) {
+            return $value->getValue();
+        }
         if (is_int($value) || is_float($value)) {
             return (string) $value;
         }
@@ -593,6 +611,7 @@ class Grammar implements GrammarContract, DatabaseDriver
      */
     private function makeForeignKeyName(string $table, array $columns): string
     {
+        [, $table] = $this->splitTable($this->wrapper->tableName($table));
         return $this->limitIdentifier($this->sanitizeIdentifierPart(
             "{$table}_" . implode('_', $columns) . '_foreign'
         ));
@@ -626,6 +645,7 @@ class Grammar implements GrammarContract, DatabaseDriver
      */
     private function generateIndexName(string $table, array $index): string
     {
+        [, $table] = $this->splitTable($this->wrapper->tableName($table));
         $prefix = match ($this->driver) {
             self::DRIVER_PGSQL, self::DRIVER_MYSQL => "{$table}_{$index['type']}_",
             self::DRIVER_SQLITE => "idx_{$table}_"
@@ -648,6 +668,16 @@ class Grammar implements GrammarContract, DatabaseDriver
     {
         $value = preg_replace('/[^\w]+/', '_', $value);
         return trim($value, '_');
+    }
+
+    /** Split a logical or physical table without applying a prefix. */
+    private function splitTable(string $table): array
+    {
+        $parts = explode('.', $table);
+        if (count($parts) > 2) {
+            throw new \InvalidArgumentException('Expected a table name or schema.table.');
+        }
+        return count($parts) === 2 ? $parts : [null, $parts[0]];
     }
 
     /**

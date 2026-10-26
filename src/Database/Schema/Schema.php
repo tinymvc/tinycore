@@ -7,7 +7,9 @@ use PDO;
 use Spark\Database\DB;
 use Spark\Database\Schema\Contracts\SchemaContract;
 use Spark\Support\Traits\Macroable;
+use function count;
 use function in_array;
+use function sprintf;
 
 /**
  * Class Schema
@@ -105,7 +107,17 @@ class Schema implements SchemaContract
      */
     public static function rename(string $from, string $to): void
     {
-        $wrapper = self::getGrammar()->getWrapper();
+        $grammar = self::getGrammar();
+        $wrapper = $grammar->getWrapper();
+        if (!$grammar->isMySQL() && str_contains($to, '.')) {
+            [$toSchema] = self::tableMetadata($to);
+            [$fromSchema] = self::tableMetadata($from);
+            $fromSchema ??= $grammar->isSQLite() ? 'main' : self::getConnection()->query('SELECT current_schema()')->fetchColumn();
+            if ($toSchema !== $fromSchema) {
+                throw new \InvalidArgumentException('Renaming a table cannot move it to another schema.');
+            }
+            $to = substr($to, strrpos($to, '.') + 1);
+        }
 
         self::execute(sprintf(
             'ALTER TABLE %s RENAME TO %s',
@@ -124,15 +136,16 @@ class Schema implements SchemaContract
     {
         $grammar = self::getGrammar();
         $pdo = self::getConnection();
+        [$schema, $table] = self::tableMetadata($table);
 
         $sql = match ($grammar->getDriver()) {
-            DB::DRIVER_SQLITE => "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-            DB::DRIVER_PGSQL => "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
-            default => "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
+            DB::DRIVER_SQLITE => 'SELECT 1 FROM ' . $grammar->getWrapper()->wrap($schema ?? 'main') . ".sqlite_master WHERE type = 'table' AND name = ?",
+            DB::DRIVER_PGSQL => 'SELECT 1 FROM information_schema.tables WHERE table_schema = ' . ($schema === null ? 'current_schema()' : '?') . ' AND table_name = ?',
+            default => 'SELECT 1 FROM information_schema.tables WHERE table_schema = ' . ($schema === null ? 'DATABASE()' : '?') . ' AND table_name = ?',
         };
 
         $statement = $pdo->prepare($sql);
-        $statement->execute([$table]);
+        $statement->execute($schema !== null && !$grammar->isSQLite() ? [$schema, $table] : [$table]);
 
         return (bool) $statement->fetchColumn();
     }
@@ -179,21 +192,37 @@ class Schema implements SchemaContract
     {
         $grammar = self::getGrammar();
         $pdo = self::getConnection();
+        [$schema, $table] = self::tableMetadata($table);
 
         if ($grammar->isSQLite()) {
-            $statement = $pdo->query('PRAGMA table_info(' . $grammar->getWrapper()->wrapTable($table) . ')');
+            $wrapper = $grammar->getWrapper();
+            $statement = $pdo->query('PRAGMA ' . $wrapper->wrap($schema ?? 'main') . '.table_info(' . $wrapper->wrap($table) . ')');
             return array_column($statement->fetchAll(PDO::FETCH_ASSOC), 'name');
         }
 
         $sql = match ($grammar->getDriver()) {
-            DB::DRIVER_PGSQL => "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? ORDER BY ordinal_position",
-            default => "SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? ORDER BY ordinal_position",
+            DB::DRIVER_PGSQL => 'SELECT column_name FROM information_schema.columns WHERE table_schema = ' . ($schema === null ? 'current_schema()' : '?') . ' AND table_name = ? ORDER BY ordinal_position',
+            default => 'SELECT column_name FROM information_schema.columns WHERE table_schema = ' . ($schema === null ? 'DATABASE()' : '?') . ' AND table_name = ? ORDER BY ordinal_position',
         };
 
         $statement = $pdo->prepare($sql);
-        $statement->execute([$table]);
+        $statement->execute($schema === null ? [$table] : [$schema, $table]);
 
         return $statement->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    /** Resolve the optional namespace and physical name used by metadata queries. */
+    private static function tableMetadata(string $table): array
+    {
+        $wrapper = self::getGrammar()->getWrapper();
+        $parts = explode('.', $wrapper->tableName($table));
+        foreach ($parts as $part) {
+            $wrapper->wrap($part);
+        }
+        if (count($parts) > 2) {
+            throw new \InvalidArgumentException('Expected a table name or schema.table.');
+        }
+        return count($parts) === 2 ? $parts : [null, $parts[0]];
     }
 
     /**
@@ -294,7 +323,8 @@ class Schema implements SchemaContract
     {
         self::getConnection();
         return self::$grammar ??= new Grammar(
-            self::getConnection()->getAttribute(PDO::ATTR_DRIVER_NAME)
+            self::getConnection()->getAttribute(PDO::ATTR_DRIVER_NAME),
+            get(DB::class)->getTablePrefix()
         );
     }
 

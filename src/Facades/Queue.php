@@ -12,6 +12,7 @@ use Spark\Queue\Queue as BaseQueue;
  * @method static \PDO|\Redis getConnection()
  * @method static void push(JobContract $job, string $queue = 'default')
  * @method static void pushOnce(JobContract $job, string $queue = 'default')
+ * @method static void restart()
  * @method static void work(bool $once = false, int $timeout = 3600, int $sleep = 3, int $delay = 5, int $tries = 3, array|string $queue = 'default')
  * @method static void clearAllJobs()
  * @method static void clearRepeatedJobs()

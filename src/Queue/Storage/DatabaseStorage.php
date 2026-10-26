@@ -103,8 +103,8 @@ class DatabaseStorage implements QueueStorageContract
         $quote = static fn(string $identifier): string => $q . str_replace($q, $q . $q, $identifier) . $q;
 
         $this->map = [
-            '{jobs}' => $this->quoteTable((string) ($config['table'] ?? 'jobs'), $quote),
-            '{failed}' => $this->quoteTable((string) ($config['failed_table'] ?? 'failed_jobs'), $quote),
+            '{jobs}' => $this->quoteTable((string) ($config['table'] ?? 'jobs')),
+            '{failed}' => $this->quoteTable((string) ($config['failed_table'] ?? 'failed_jobs')),
         ];
 
         foreach ([
@@ -580,12 +580,12 @@ class DatabaseStorage implements QueueStorageContract
         return array_values(array_filter(array_map(static fn($v) => trim((string) $v), $values), static fn($v) => $v !== ''));
     }
 
-    private function quoteTable(string $table, callable $quote): string
+    private function quoteTable(string $table): string
     {
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $table) !== 1) {
             throw new RuntimeException("Invalid queue table name [{$table}].");
         }
 
-        return implode('.', array_map($quote, explode('.', $table)));
+        return $this->db->wrapTable($table);
     }
 }

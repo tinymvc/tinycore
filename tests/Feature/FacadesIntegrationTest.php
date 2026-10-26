@@ -67,7 +67,7 @@ final class FacadesIntegrationTest extends FrameworkTestCase
         $db = DB::connection();
         $this->assertInstanceOf(\Spark\Database\DB::class, $db);
 
-        $result = DB::raw('SELECT 42 as answer');
+        $result = DB::run('SELECT 42 as answer');
         $this->assertSame(42, (int) $result[0]['answer']);
 
         $table = DB::table('users');

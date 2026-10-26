@@ -13,6 +13,21 @@ use PDOStatement;
 interface DBContract
 {
     /**
+     * Get the table prefix.
+     *
+     * @return string The current table prefix.
+     */
+    public function getTablePrefix(): string;
+
+    /**
+     * Get the table name with the prefix applied.
+     *
+     * @param string $table The name of the table.
+     * @return string The full table name with prefix.
+     */
+    public function wrapTable(string $table): string;
+
+    /**
      * Retrieves or initializes the PDO instance.
      * 
      * @return PDO The PDO connection instance.

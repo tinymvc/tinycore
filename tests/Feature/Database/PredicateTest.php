@@ -256,7 +256,7 @@ final class PredicateTest extends DatabaseScenarioTestCase
 
     public function test_raw_subquery(): void
     {
-        $this->assertSame([1, 3], $this->ids(ScenarioPost::whereIn('id', 'SELECT post_id FROM scenario_comments')));
+        $this->assertSame([1, 3], $this->ids(ScenarioPost::whereIn('id', 'SELECT post_id FROM ' . app(\Spark\Database\DB::class)->wrapTable('scenario_comments'))));
     }
 
     public function test_exists(): void

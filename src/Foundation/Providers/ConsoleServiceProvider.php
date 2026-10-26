@@ -70,6 +70,10 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('queue:work', [PrimaryCommandsHandler::class, 'runQueueJobs'])
             ->description('Run the queue jobs workers');
 
+        $commands->addCommand('queue:restart', [PrimaryCommandsHandler::class, 'restartQueueWorkers'])
+            ->description('Gracefully stop queue workers so a supervisor can restart them')
+            ->help('Workers finish their current job before exiting. The command and workers must share the configured cache store.');
+
         // Add the queue:clear command
         $commands->addCommand('queue:clear', [PrimaryCommandsHandler::class, 'clearQueueJobs'])
             ->description('Clear all queue jobs');

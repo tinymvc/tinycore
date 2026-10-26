@@ -66,6 +66,8 @@ Adapt scopes, fields, and FormRequest authorization to the viewer. The explicit 
 
 `Inertia::render()` returns **`Spark\Http\Response`**, not `Inertia\Response`. `inertia($component, $props)` is the helper equivalent. Do not construct custom Inertia JSON envelopes.
 
+Call `withEncryptedHistory()`, `withClearedHistory()`, and `preserveFragment()` on the adapter before rendering or redirecting, not on its returned response. Resolve user-specific shared props lazily from the current request.
+
 ## Redirects, validation, and flash
 
 - Use `Inertia::redirect($url)` or `Inertia::back()` after writes. The adapter converts default redirects after PUT/PATCH/DELETE to 303 and handles protocol-specific navigation. A generic redirect is not guaranteed to preserve those behaviors.
@@ -91,6 +93,8 @@ All resolved props are browser-visible. Select fields, authorize queries, and ke
 | Infinite-scroll paginator metadata | `scroll($paginator)`; verify wrapper and client expectations |
 
 Start with plain values/closures. Use advanced wrappers only when the installed adapter and client support them and the UI benefits. `optional()` replaces the old `lazy()` API in v3. Partial-prop selection is not an authorization check; do not precompute expensive queries outside callbacks intended to defer them.
+
+Prop wrappers preserve lazy behavior in nested arrays, collections, and closures. Partial selection requires a matching Inertia component; custom scroll pagination requires a metadata provider.
 
 ## Assets and verification
 

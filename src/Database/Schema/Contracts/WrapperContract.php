@@ -13,6 +13,45 @@ namespace Spark\Database\Schema\Contracts;
 interface WrapperContract
 {
     /**
+     * Get the table name with the prefix applied.
+     *
+     * This method is used to retrieve the full table name, including any prefix that has been set.
+     *
+     * @param string $table The name of the table.
+     * @return string The full table name with prefix.
+     */
+    public function tableName(string $table): string;
+
+    /**
+     * Set the table prefix.
+     *
+     * This method is used to set a prefix that will be applied to all table names.
+     *
+     * @param string $prefix The prefix to be applied to table names.
+     */
+    public function setTablePrefix(string $prefix): void;
+
+    /** Preserve an explicitly declared table alias in qualified columns. */
+    public function registerAlias(string $alias): void;
+
+    /** Remove an alias when its query scope is replaced. */
+    public function unregisterAlias(string $alias): void;
+
+    /** Inherit aliases while starting a new query scope. */
+    public function forSubquery(): self;
+
+    /**
+     * Qualify a column name with the table name.
+     *
+     * This method is used to qualify a column name with the table name, so that it can be
+     * used in an SQL query without ambiguity.
+     *
+     * @param string $column The name of the column.
+     * @return string The qualified column name.
+     */
+    public function qualifyColumn(string $column): string;
+
+    /**
      * Wrap a value with database-specific characters.
      *
      * This method is used to wrap a value so that it can be used as a literal in an SQL query.
@@ -40,7 +79,7 @@ interface WrapperContract
      * @param string $column The name of the column.
      * @return string The wrapped column name.
      */
-    public function wrapColumn(string $column): string;
+    public function wrapColumn(string|\Spark\Database\Expression $column): string;
 
 
     /**

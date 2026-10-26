@@ -37,12 +37,12 @@ use function sprintf;
  * @method array errorInfo()
  * @method ?string errorCode()
  * 
- * @method static array raw(string $sql, array $bindings = [])
+ * @method static array run(string $sql, array $bindings = [])
  * @method static QueryBuilder where(null|string|array|Closure $column = null, mixed $operator = null, mixed $value = null, ?string $boolean = null, bool $not = false)
  * @method static QueryBuilder whereRaw(string $sql, string|array $bindings = [], string $boolean = 'AND')
  * @method static QueryBuilder whereIn(string $column, array $values)
  * @method static QueryBuilder table(string $table, ?string $alias = null)
- * @method static QueryBuilder select(array|string $fields = '*', ...$args)
+ * @method static QueryBuilder select(array|string|Expression $fields = '*', ...$args)
  * @method static QueryBuilder selectRaw(string $sql, array $bindings = [])
  * @method static QueryBuilder from(string $table, ?string $alias = null)
  * @method static QueryBuilder max($field, $name = null)
@@ -144,6 +144,7 @@ class DB implements DBContract, DatabaseDriver
                     ? strtolower($name)
                     : (new self($databaseConfig))->getDriver();
             }
+            $config['prefix'] ??= $databaseConfig['prefix'] ?? '';
         }
 
         return new self($config);
@@ -159,6 +160,24 @@ class DB implements DBContract, DatabaseDriver
     public function getConfig(string $key, $default = null): mixed
     {
         return $this->config[$key] ?? $default;
+    }
+
+    /** Table prefix shared by queries, schema, and framework storage. */
+    public function getTablePrefix(): string
+    {
+        return (string) $this->getConfig('prefix', '');
+    }
+
+    /** Quote a logical table name for use in trusted raw SQL. */
+    public function wrapTable(string $table): string
+    {
+        return (new Schema\Wrapper($this->getDriver(), $this->getTablePrefix()))->wrapTable($table);
+    }
+
+    /** Create a trusted SQL expression without executing it. */
+    public static function raw(string $sql): Expression
+    {
+        return new Expression($sql);
     }
 
     /**
@@ -231,8 +250,9 @@ class DB implements DBContract, DatabaseDriver
             $config = config('database');
         }
 
+        $resolved = $this->resolveConnectionConfig($config);
         unset($this->pdo);
-        $this->config = $this->resolveConnectionConfig($config);
+        $this->config = $resolved;
         return $this;
     }
 
@@ -262,6 +282,7 @@ class DB implements DBContract, DatabaseDriver
 
             $config = [...$base, ...$connection];
             $config['driver'] = $connection['driver'] ?? self::guessDriver($name, (string) ($base['driver'] ?? ''));
+            $config['prefix'] = $connection['prefix'] ?? $base['prefix'] ?? '';
         }
 
         $config['driver'] ??= self::DEFAULT_DRIVER; // Set default driver if not provided.
@@ -282,6 +303,9 @@ class DB implements DBContract, DatabaseDriver
         if (isset($config['path']) && !isset($config['database']) && ($config['driver'] ?? null) === self::DRIVER_SQLITE) {
             $config['database'] = $config['path'];
         }
+
+        $config['prefix'] ??= '';
+        Schema\Wrapper::validateTablePrefix($config['prefix']);
 
         return $config;
     }

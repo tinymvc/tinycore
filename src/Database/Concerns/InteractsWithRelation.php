@@ -838,7 +838,7 @@ trait InteractsWithRelation
     private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null, string $function = 'count', string $column = '*'): array
     {
         $relatedModel = new $relationConfig['related'];
-        $query = $relatedModel->query();
+        $query = $relatedModel->query()->setDB($this->database)->prefix($this->prefix);
 
         if ($query->getTableName() === $this->getTableName()) {
             static $selfRelation = 0;
@@ -864,7 +864,7 @@ trait InteractsWithRelation
 
         // Build the aggregate expression for the subquery
         $query->selectRaw(
-            $this->buildAggregateExpression($function, $column, $relatedTable)
+            $query->buildAggregateExpression($function, $column, $relatedTable)
         );
 
         switch ($relationConfig['type']) {
@@ -872,7 +872,7 @@ trait InteractsWithRelation
             case 'hasMany':
                 $query
                     ->whereRaw(
-                        $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey']) . " = " .
+                        $query->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey']) . " = " .
                         $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['localKey'])
                     );
                 break;
@@ -880,7 +880,7 @@ trait InteractsWithRelation
             case 'belongsTo':
                 $query
                     ->whereRaw(
-                        $this->wrapper->wrapTable($relatedTable) . "." . $this->wrapper->wrapColumn($relationConfig['ownerKey']) . " = " .
+                        $query->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['ownerKey']) . " = " .
                         $this->getTableReference() . "." . $this->wrapper->wrapColumn($relationConfig['foreignKey'])
                     );
                 break;

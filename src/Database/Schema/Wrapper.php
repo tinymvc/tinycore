@@ -3,11 +3,18 @@
 namespace Spark\Database\Schema;
 
 use Spark\Database\Contracts\DatabaseDriver;
+use Spark\Database\Expression;
 use Spark\Database\Schema\Contracts\WrapperContract;
+use function array_slice;
+use function is_string;
 use function strlen;
 
 class Wrapper implements WrapperContract, DatabaseDriver
 {
+    private array $aliases = [];
+
+    private array $qualifiedTables = [];
+
     /**
      * @var array $wrapper Character wrappers for SQL identifiers.
      */
@@ -16,8 +23,9 @@ class Wrapper implements WrapperContract, DatabaseDriver
     /**
      * @var string $driver The database driver.
      */
-    public function __construct(private string $driver)
+    public function __construct(private string $driver, private string $tablePrefix = '')
     {
+        self::validateTablePrefix($tablePrefix);
         $this->wrapper = [self::DRIVER_MYSQL => ['`', '`'], self::DRIVER_SQLITE => ['"', '"'], self::DRIVER_PGSQL => ['"', '"']][$driver];
     }
 
@@ -41,7 +49,85 @@ class Wrapper implements WrapperContract, DatabaseDriver
      */
     public function wrapTable(string $table): string
     {
-        return $this->wrapColumn($table); // Reuse wrapColumn for table names as well
+        $parts = preg_split('/\s+as\s+/i', trim($table), 2);
+        $sql = implode('.', array_map([$this, 'wrap'], explode('.', $this->tableName($parts[0]))));
+
+        if (isset($parts[1])) {
+            $this->registerAlias($parts[1]);
+            $sql .= ' AS ' . $this->wrap($parts[1]);
+        }
+
+        return $sql;
+    }
+
+    /** Resolve a logical table name, prefixing only its final segment. */
+    public function tableName(string $table): string
+    {
+        $parts = array_map('trim', explode('.', $table));
+        foreach ($parts as $part) {
+            if ($part === '' || $part === '*') {
+                throw new \InvalidArgumentException('A table name must contain non-empty identifiers.');
+            }
+            $this->wrap($part);
+        }
+        $parts[array_key_last($parts)] = $this->tablePrefix . end($parts);
+        $this->wrap(end($parts));
+        return implode('.', $parts);
+    }
+
+    public static function validateTablePrefix(mixed $prefix): void
+    {
+        if (!is_string($prefix) || preg_match('/[^A-Za-z0-9_]/', $prefix)) {
+            throw new \InvalidArgumentException('A table prefix must be a string containing only letters, digits, and underscores.');
+        }
+    }
+
+    public function setTablePrefix(string $prefix): void
+    {
+        self::validateTablePrefix($prefix);
+        $this->tablePrefix = $prefix;
+    }
+
+    public function registerAlias(string $alias): void
+    {
+        $alias = trim($alias);
+        $this->wrap($alias);
+        if ($this->tablePrefix !== '' && isset($this->qualifiedTables[$alias]) && !isset($this->aliases[$alias])) {
+            throw new \LogicException('Declare table aliases before referencing them in query clauses.');
+        }
+        $this->aliases[$alias] = true;
+    }
+
+    /** Remove an alias when its FROM scope is replaced or shadowed by an inner table. */
+    public function unregisterAlias(string $alias): void
+    {
+        unset($this->aliases[$alias]);
+    }
+
+    /** Inherit outer aliases for correlation without inheriting clause-order checks. */
+    public function forSubquery(): self
+    {
+        $wrapper = clone $this;
+        $wrapper->qualifiedTables = [];
+        return $wrapper;
+    }
+
+    /** Prefix a qualified column while keeping aliases and bare columns intact. */
+    public function qualifyColumn(string $column): string
+    {
+        if (!str_contains($column, '.')) {
+            return $column;
+        }
+
+        $parts = array_map('trim', explode('.', $column));
+        $name = array_pop($parts);
+        $table = implode('.', $parts);
+        $this->qualifiedTables[$table] = true;
+        if (!isset($this->aliases[$table])) {
+            $table = $this->tableName($table);
+        }
+
+        return "$table.$name";
     }
 
     /**
@@ -50,10 +136,17 @@ class Wrapper implements WrapperContract, DatabaseDriver
      * @param string $column The column name.
      * @return string The wrapped column name.
      */
-    public function wrapColumn(string $column): string
+    public function wrapColumn(string|Expression $column): string
     {
+        if ($column instanceof Expression) {
+            return $column->getValue();
+        }
         if (str_contains($column, '.')) {
-            return implode('.', array_map([$this, 'wrap'], explode('.', $column)));
+            $parts = explode('.', $this->qualifyColumn($column));
+            if ($this->driver === self::DRIVER_SQLITE && end($parts) === '*' && count($parts) > 2) {
+                $parts = array_slice($parts, -2);
+            }
+            return implode('.', array_map([$this, 'wrap'], $parts));
         }
 
         return $this->wrap($column);

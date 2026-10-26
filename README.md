@@ -4,7 +4,7 @@
 
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1208%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1250%20passed-brightgreen.svg)](tests/)
 
 Applications built with TinyMVC / Spark start from [Skeleton](https://github.com/tinymvc/skeleton) (`tinymvc/skeleton`), which provides the application structure and installs TinyCore as a Composer dependency under `vendor/tinymvc/tinycore`. This repository contains the core engine's source and regression suite.
 
@@ -54,25 +54,25 @@ The suite uses Spark's native test runner. Fixtures live in this repository; nei
 
 ## Verified test results
 
-Verified on **2026-10-25**, using PHP **8.4.25** on macOS:
+Verified on **2026-10-26**, using PHP **8.4.27** on macOS:
 
 | Command | Result | Assertions | Skipped / failed |
 | --- | --- | --- | --- |
-| `php tests/run.php` | 1,208 passed | 6,099 | 0 / 0 |
+| `php tests/run.php` | 1,250 passed | 6,413 | 0 / 0 |
 | `php tests/database.php` — SQLite | 438 passed | 1,082 | 0 / 0 |
 | `php tests/database.php` — MySQL | 438 passed | 1,082 | 0 / 0 |
 | `php tests/database.php` — PostgreSQL | 438 passed | 1,082 | 0 / 0 |
 
-The database matrix reuses the same 438 scenarios; these are not 1,314 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
+The prefix audit also ran all 438 scenarios on each driver with empty, `audit_`, and `0_` prefixes (3,942 scenario executions). Repeat a prefixed matrix with `SPARK_TEST_TABLE_PREFIX=audit_ php tests/database.php`. The database matrix reuses the same 438 scenarios; these are not 1,314 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
 
 | Test location | Classes | Independently reported tests |
 | --- | --- | --- |
-| `tests/Unit/` | 10 | 77 |
+| `tests/Unit/` | 10 | 80 |
 | `tests/Feature/Database/` | 22 | 438 |
-| Other `tests/Feature/` classes | 61 | 693 |
-| **Total** | **93** | **1,208** |
+| Other `tests/Feature/` classes | 65 | 732 |
+| **Total** | **97** | **1,250** |
 
-Every test has a descriptive name and fresh test state. The storage driver contract defines 38 shared behaviors and runs each on file, database and Redis storage (114 backend-specific tests), with 10 additional database storage cases. These are included in the 1,208 total. The suite also covers PSR integration and the application lifecycle over real HTTP connections.
+Every test has a descriptive name and fresh test state. The storage driver contract defines 38 shared behaviors and runs each on file, database and Redis storage (114 backend-specific tests), with 10 additional database storage cases. These are included in the 1,250 total. The suite also covers PSR integration and the application lifecycle over real HTTP connections.
 
 | Selected class / contract | Tests | Focus |
 | --- | --- | --- |
@@ -85,12 +85,14 @@ Every test has a descriptive name and fresh test state. The storage driver contr
 | `Database/ArithmeticWriteTest` | 31 | Increment/decrement scope preservation, positional/named write parameters, multiple SET values, mixed-binding rejection and unchanged neighboring rows |
 | `RequestBoundaryTest` | 34 | Bearer/Basic header parsing, method flags, IPv4/IPv6 proxy ranges, malformed forwarded addresses, ports and trust boundaries |
 | `BladeDirectiveTest` | 27 | Conditional attributes, nested expressions, conditionals, loops, comments, verbatim/PHP blocks and escaped/raw output; first/cached render consistency and output-buffer balance |
+| `DatabasePrefixTest` / `DatabasePrefixEdgeTest` / `DatabaseExpressionTest` | 6 / 12 / 2 | Connection/schema/service prefixes, alias and subquery isolation, namespace changes, numeric prefixes/cursors, qualified DDL, raw expressions and prepared execution |
+| `QueueWorkerTest` | 6 | Constructor failure recovery, worker options, registered restart command, graceful success/failure acknowledgment, fresh-worker signals and cross-process idle restart |
 | `StateOwnershipTest` | 5 | Facade lock lifetime, application-scoped cache/lock helpers, zero lock keys, current URL roots and failed pending-dispatch destruction |
 | `UtilityBoundaryTest` | 7 | Atomic environment/config publication, partial file-write cleanup, empty/quoted environment values, error bags and zero-valued input |
 | `RedisLockOwnershipTest` | 1 | Forced owner takeover during bulk lock cleanup using real Redis |
 | `ProcessTest` / `ConcurrencySchedulerTest` | 3 / 1 | Large bidirectional process I/O, input timeouts, inherited environment/exit status, and pending tasks after scheduling failures |
 | `ContainerTest` | 6 | Dependency identity, callable factories, static/invokable callbacks, variadic parameters, singleton/alias behavior and circular resolution |
-| `HttpTransportLifecycleTest` | 15 | Real HTTP transport, uploads, trusted-proxy cookies, session persistence/invalidation, response preparation and termination |
+| `HttpTransportLifecycleTest` | 16 | Real HTTP transport, uploads, trusted-proxy cookies, session persistence/invalidation, response preparation and termination |
 
 This is **behavioral regression coverage**, not a measured line or branch percentage. No Xdebug/PCOV coverage instrumentation was enabled. `src/Support/` is excluded from dedicated testing and was not modified.
 
@@ -98,13 +100,13 @@ This is **behavioral regression coverage**, not a measured line or branch percen
 
 | Area | Checks |
 | --- | --- |
-| Database | SQLite/MySQL/PostgreSQL runtime scenarios, foreign-key restrict/cascade/set-null behavior, composite uniqueness, nested savepoint recovery, connection reset/configuration, SQLite schema creation/alteration, column nullability, indexes, migration ledger/seeds/rollback failures, query bindings, subqueries, qualified columns, pagination, aggregates and transaction behavior |
+| Database | Connection-wide prefixes, named storage connections, schema-qualified DDL, logical/physical name collisions, numeric-prefix cursors, raw SQL expressions; SQLite/MySQL/PostgreSQL runtime scenarios, foreign-key restrict/cascade/set-null behavior, composite uniqueness, nested savepoint recovery, connection reset/configuration, SQLite schema creation/alteration, column nullability, indexes, migration ledger/seeds/rollback failures, query bindings, subqueries, qualified columns, pagination, aggregates and transaction behavior |
 | Models and ORM | Arrayable writes, model CRUD/casts, soft deletes, belongs-to/has-many/has-one/many-to-many/through relations, eager loading, relationship scopes, counts and exists projections |
 | Authentication | Named guards, Basic auth, JWT user binding, persisted/stateless tokens, expiration, revocation, guest/deleted users; HMAC/RSA signatures and algorithm restrictions |
 | HTTP | Named/optional/resource/group routes, route redirects through response preparation and termination; existing lifecycle and real HTTP transport suite; routing, request negotiation, trusted proxies, response preparation, JSON normalization, resources, CORS preflight and early errors |
 | CSRF | Token creation, form/plain/encrypted header tokens, wrong/missing/non-string tokens, excluded paths |
 | Cache and locks | File/database/Redis values and expiration, nulls, database key collation, namespace isolation, exact lock ownership, contention, stale owners, safe cache clearing, callback failures, cached nulls, ArrayAccess, lock callback cleanup after errors |
-| Queue and session | File/database/Redis job claims, retries, failures, stale reservations, scheduling, transactional dispatch and worker output; session write/read/expiry and named connections; flash consumption, invalidation, job retry/backoff defaults and failure hooks |
+| Queue and session | File/database/Redis job claims, retries, failures, stale reservations, scheduling, transactional dispatch, worker output and cache-signaled graceful restarts; session write/read/expiry and named connections; flash consumption, invalidation, job retry/backoff defaults and failure hooks |
 | Storage | Local upload/write/list/delete/metadata, traversal and symlink rejection; S3 signing, altered upload constraints, failed/partial downloads, paginated deletion, copy-before-delete using a local fixture |
 | Blade and core services | Layouts/includes, cache recompilation, output-buffer and section recovery after template errors, reserved render context, escaping, components, attributes, guards, pipeline, dates, events, throttling, container injection/singletons/circular dependencies, resource generation and test isolation; config cache invalidation, translations, URL query immutability and ports |
 

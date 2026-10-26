@@ -4,6 +4,7 @@ namespace Spark\Database\Query;
 
 use Closure;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Database\Expression;
 use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Relation\Relation;
@@ -39,7 +40,7 @@ trait BuildsConditionalClauses
      *
      * @return self
      */
-    public function where(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null, null|string $boolean = null, bool $not = false): QueryBuilder
+    public function where(null|string|array|Arrayable|Closure|Expression $column = null, mixed $operator = null, $value = null, null|string $boolean = null, bool $not = false): QueryBuilder
     {
         if ($column instanceof Arrayable) {
             $column = $column->toArray();
@@ -59,7 +60,7 @@ trait BuildsConditionalClauses
         // Holds a conditional clause for database.
         $command = '';
 
-        if (is_string($column) && ($operator !== null || $value !== null || ($argumentCount === 2 && !$hasExplicitBoolean))) {
+        if ((is_string($column) || $column instanceof Expression) && ($operator !== null || $value !== null || ($argumentCount === 2 && !$hasExplicitBoolean))) {
             // Create a where clause from column, operator, and value.
             // for example: "title like :title"
             if ($argumentCount === 2) {
@@ -81,12 +82,12 @@ trait BuildsConditionalClauses
                 return $this->whereInValues($column, $value, $boolean, $operator === 'NOT IN' || $not);
             }
 
-            $columnPlaceholder = $this->getWhereSqlColumn($column);
+            $columnPlaceholder = $this->getWhereSqlColumn((string) $column);
             $comparison = sprintf(
-                "%s %s :%s",
+                "%s %s %s",
                 $this->wrapper->wrapColumn($column),
                 $operator,
-                $columnPlaceholder
+                $value instanceof Expression ? $value->getValue() : ":$columnPlaceholder"
             );
 
             $command = sprintf(
@@ -95,7 +96,9 @@ trait BuildsConditionalClauses
                 $not ? "NOT ($comparison)" : $comparison
             );
 
-            $this->bindings[$columnPlaceholder] = $value;
+            if (!$value instanceof Expression) {
+                $this->bindings[$columnPlaceholder] = $value;
+            }
         }
         // Associative Array where clause.
         elseif (is_array($column) && !array_is_list($column) && $operator === null && $value === null) {
@@ -115,6 +118,10 @@ trait BuildsConditionalClauses
                                 $columnPlaceholder = $this->getWhereSqlColumn($attr); // Get the column placeholder for binding.
                                 if ($value === null) {
                                     return $this->wrapper->wrapColumn($attr) . ' IS ' . ($not ? 'NOT ' : '') . 'NULL';
+                                }
+
+                                if ($value instanceof Expression) {
+                                    return $this->wrapper->wrapColumn($attr) . ($not ? ' != ' : ' = ') . $value->getValue();
                                 }
 
                                 if (!is_array($value)) {
@@ -165,7 +172,7 @@ trait BuildsConditionalClauses
             }
         }
         // Single String where clause.
-        elseif (is_string($column) && $operator === null && $value === null) {
+        elseif ((is_string($column) || $column instanceof Expression) && $operator === null && $value === null) {
             // Simply add a where clause from string.
             $command = "{$boolean} {$column}";
         } else {
@@ -262,7 +269,7 @@ trait BuildsConditionalClauses
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function orWhere(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null): QueryBuilder
+    public function orWhere(null|string|array|Arrayable|Closure|Expression $column = null, mixed $operator = null, $value = null): QueryBuilder
     {
         if (func_num_args() === 2) {
             return $this->where($column, '=', $operator, 'OR');
@@ -327,7 +334,7 @@ trait BuildsConditionalClauses
      * @return self
      *   Returns the current instance for method chaining.
      */
-    public function whereNull(string $field, bool $not = false, string $boolean = 'AND'): QueryBuilder
+    public function whereNull(string|Expression $field, bool $not = false, string $boolean = 'AND'): QueryBuilder
     {
         $field = $this->wrapper->wrapColumn($field) . ' IS ' . ($not ? 'NOT' : '') . ' NULL';
 
@@ -458,7 +465,8 @@ trait BuildsConditionalClauses
         }
 
         if ($subquery instanceof Closure) {
-            $newQuery = new QueryBuilder($this->database);
+            $newQuery = (new QueryBuilder($this->database))->prefix($this->prefix);
+            $newQuery->wrapper = $this->wrapper->forSubquery();
             $newQuery->table($this->table);
 
             $subquery($newQuery);

@@ -2,6 +2,8 @@
 
 Read this reference for database migrations, schema definitions, and table alterations. Source paths and command working directories refer to the application root unless explicitly stated otherwise. Check the installed package when versions differ.
 
+Schema and the migration ledger use the default connection's prefix. Pass logical table names, including foreign-key targets. Generated index/constraint names include the prefix; explicit names stay unchanged. See [prefixes and raw SQL](queries.md#prefixes-and-raw-sql).
+
 ---
 
 ## Defining Migrations

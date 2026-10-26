@@ -4,6 +4,7 @@ namespace Spark\Database\Contracts;
 use Closure;
 use Spark\Contracts\Support\Arrayable;
 use Spark\Database\Model;
+use Spark\Database\Expression;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Relation\Relation;
 use Spark\Paginator\Paginator;
@@ -19,6 +20,23 @@ use Spark\Paginator\CursorPaginator;
  */
 interface QueryBuilderContract
 {
+    /**
+     * Create a raw SQL expression.
+     *
+     * @param string $sql The raw SQL string.
+     * @return Expression Returns an Expression instance.
+     */
+    public function raw(string $sql): Expression;
+
+    /**
+     * Execute a raw SQL query and return the result.
+     *
+     * @param string $sql The raw SQL string to execute.
+     * @param array $bindings Optional bindings for the query.
+     * @return array Returns the result of the query as an array.
+     */
+    public function run(string $sql, array $bindings = []): array;
+
     /**
      * Set the table name to be used for the query.
      *
@@ -48,7 +66,7 @@ interface QueryBuilderContract
      * @param null|string $type The type of the value given.
      * @return QueryBuilderContract Returns the query builder instance.
      */
-    public function where(null|string|array|Arrayable|Closure $column = null, mixed $operator = null, $value = null, null|string $type = null): self;
+    public function where(null|string|array|Arrayable|Closure|Expression $column = null, mixed $operator = null, $value = null, null|string $type = null): self;
 
     /**
      * Update data in the database.
@@ -73,7 +91,7 @@ interface QueryBuilderContract
      * @param array|string $fields The fields to select.
      * @return QueryBuilderContract Returns the query builder instance.
      */
-    public function select(array|string $fields = '*'): self;
+    public function select(array|string|Expression $fields = '*'): self;
 
     /**
      * Adds a JOIN clause to the query.
@@ -179,7 +197,7 @@ interface QueryBuilderContract
      * @param string $sort
      * @return self
      */
-    public function orderBy(string $field, string $sort = 'ASC'): self;
+    public function orderBy(string|Expression $field, string $sort = 'ASC'): self;
 
     /**
      * Add a "group by" clause to the query.
@@ -187,7 +205,7 @@ interface QueryBuilderContract
      * @param array|string $field
      * @return self
      */
-    public function groupBy(array|string $field): self;
+    public function groupBy(array|string|Expression $field): self;
 
     /**
      * Add a "having" clause to the query.

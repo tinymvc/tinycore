@@ -54,8 +54,7 @@ class Migration implements MigrationContract
             throw new \RuntimeException('Unsupported migration database driver.');
         }
 
-        $quote = $driver === DB::DRIVER_MYSQL ? '`' : '"';
-        $this->table = $quote . $this->table . $quote;
+        $this->table = DB::wrapTable($this->table);
     }
 
     /**

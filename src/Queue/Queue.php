@@ -26,6 +26,8 @@ class Queue implements QueueContract
 {
     use Macroable;
 
+    private const RESTART_KEY = 'restart';
+
     /** The queue storage implementation used for job persistence and retrieval. */
     private \Spark\Queue\Contracts\QueueStorageContract $storage;
 
@@ -114,6 +116,12 @@ class Queue implements QueueContract
         return $this->storage->removeQueue($name);
     }
 
+    /** Signal running workers to exit after their current job finishes. */
+    public function restart(): void
+    {
+        cache('queue:workers')->store(self::RESTART_KEY, bin2hex(random_bytes(16)));
+    }
+
     /**
      * Start the queue worker to process jobs.
      *
@@ -139,6 +147,8 @@ class Queue implements QueueContract
         $ranJobs = 0;
         $failedJobs = 0;
         $startedAt = microtime(true);
+        $restartCache = cache('queue:workers');
+        $restartToken = $restartCache->retrieve(self::RESTART_KEY);
 
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
         $this->message("Processing jobs from [$queueNames].");
@@ -149,6 +159,11 @@ class Queue implements QueueContract
         echo PHP_EOL;
 
         do {
+            if ($restartCache->retrieve(self::RESTART_KEY) !== $restartToken) {
+                $this->message('Worker restart requested. Shutting down.');
+                break;
+            }
+
             if ($timeout > 0 && (microtime(true) - $startedAt) >= $timeout) {
                 $this->message('Worker timeout reached. Shutting down.');
                 break;

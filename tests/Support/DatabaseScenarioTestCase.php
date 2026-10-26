@@ -14,6 +14,8 @@ abstract class DatabaseScenarioTestCase extends FrameworkTestCase
     {
         $app = parent::createApplication();
         $driver = getenv('SPARK_TEST_DATABASE_DRIVER') ?: 'sqlite';
+        $tablePrefix = getenv('SPARK_TEST_TABLE_PREFIX') ?: '';
+        $app->setConfig('database', [...$app->getConfig('database'), 'prefix' => $tablePrefix]);
 
         if ($driver !== 'sqlite') {
             $prefix = 'SPARK_TEST_' . strtoupper($driver);
@@ -29,6 +31,7 @@ abstract class DatabaseScenarioTestCase extends FrameworkTestCase
                 'dsn' => $dsn,
                 'user' => getenv($prefix . '_USER') ?: '',
                 'password' => getenv($prefix . '_PASSWORD') ?: '',
+                'prefix' => $tablePrefix,
             ]));
         }
 

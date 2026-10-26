@@ -106,8 +106,14 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function __construct(private DB $database)
     {
-        $this->wrapper = new Wrapper($database->getDriver());
-        $this->prefix ??= ''; // Set default prefix if not already set
+        $this->prefix = $database->getTablePrefix();
+        $this->wrapper = new Wrapper($database->getDriver(), $this->prefix);
+    }
+
+    /** Clones the query object. */
+    public function __clone()
+    {
+        $this->wrapper = clone $this->wrapper;
     }
 
     /**
@@ -171,7 +177,12 @@ class QueryBuilder implements QueryBuilderContract
             [$table, $alias] = preg_split('/\s+as\s+/i', $table, 2);
         }
 
-        $this->table = $table;
+        $this->table = $table = trim($table);
+        if ($this->hasAlias()) {
+            $this->wrapper->unregisterAlias($this->getAlias());
+        }
+        $this->wrapper->unregisterAlias($table);
+        $this->query['from'] = null;
         $this->query['alias'] = '';
         if ($alias !== null && trim($alias) !== '') {
             $this->as($alias);
@@ -235,7 +246,7 @@ class QueryBuilder implements QueryBuilderContract
             return "{$this->getAlias()}.$column";
         }
 
-        $table = $this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']);
+        $table = $this->wrapper->tableName(empty($this->query['from']) ? $this->table : $this->query['from']);
 
         return "$table.$column";
     }
@@ -262,8 +273,19 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function setDB(DB $database): self
     {
+        $changedGrammar = $database->getDriver() !== $this->database->getDriver()
+            || $database->getTablePrefix() !== $this->prefix;
+        if ($changedGrammar) {
+            $this->assertNoCompiledClauses();
+        }
         $this->database = $database;
-        $this->wrapper = new Wrapper($database->getDriver());
+        $this->prefix = $database->getTablePrefix();
+        if ($changedGrammar) {
+            $this->wrapper = new Wrapper($database->getDriver(), $this->prefix);
+        }
+        if ($this->hasAlias()) {
+            $this->wrapper->registerAlias($this->getAlias());
+        }
         return $this;
     }
 
@@ -285,8 +307,25 @@ class QueryBuilder implements QueryBuilderContract
      */
     public function prefix(string $prefix): self
     {
+        if ($prefix !== $this->prefix) {
+            $this->assertNoCompiledClauses();
+        }
+        $this->wrapper->setTablePrefix($prefix);
         $this->prefix = $prefix;
         return $this;
+    }
+
+    /** Clauses contain compiled identifiers and cannot be moved to another grammar. */
+    private function assertNoCompiledClauses(): void
+    {
+        foreach (['sql', 'select', 'joins', 'group', 'having', 'unions', 'order'] as $part) {
+            if (!empty($this->query[$part])) {
+                throw new \LogicException('Set the connection and table prefix before adding query clauses.');
+            }
+        }
+        if ($this->hasWhere()) {
+            throw new \LogicException('Set the connection and table prefix before adding query clauses.');
+        }
     }
 
     /**
@@ -447,13 +486,13 @@ class QueryBuilder implements QueryBuilderContract
     private function getTableName(): string
     {
         // Returns the table name with prefix if exists.
-        return $this->wrapper->wrapTable($this->prefix . (empty($this->query['from']) ? $this->table : $this->query['from']));
+        return $this->wrapper->wrapTable(empty($this->query['from']) ? $this->table : $this->query['from']);
     }
 
     /** Quoted reference used by read predicates and correlated subqueries. */
     private function getTableReference(): string
     {
-        return $this->hasAlias() ? $this->wrapper->wrapTable($this->getAlias()) : $this->getTableName();
+        return $this->hasAlias() ? $this->wrapper->wrap($this->getAlias()) : $this->getTableName();
     }
 
     /** @internal Bind the intermediate model of a has-many-through read. */
@@ -585,6 +624,7 @@ class QueryBuilder implements QueryBuilderContract
     {
         // Reset Select query parameters.
         $this->query = ['sql' => '', 'select' => '', 'from' => null, 'alias' => '', 'joins' => ''];
+        $this->wrapper = new Wrapper($this->database->getDriver(), $this->prefix);
 
         // Reset where query parameters.
         $this->resetWhere();

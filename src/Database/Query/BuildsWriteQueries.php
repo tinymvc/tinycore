@@ -6,6 +6,7 @@ use Closure;
 use PDO;
 use PDOStatement;
 use Spark\Contracts\Support\Arrayable;
+use Spark\Database\Expression;
 use Spark\Database\Exceptions\QueryBuilderException;
 use function in_array;
 use function is_array;
@@ -435,9 +436,12 @@ trait BuildsWriteQueries
 
         if ($this->database->isSQLite()) {
             try {
+                $parts = explode('.', $this->wrapper->tableName($this->query['from'] ?: $this->table));
+                $name = array_pop($parts);
+                $sequence = ($parts ? $this->wrapper->wrap(implode('.', $parts)) . '.' : '') . 'sqlite_sequence';
                 $this->database->statement(
-                    'DELETE FROM sqlite_sequence WHERE name = :table',
-                    ['table' => $this->prefix . $this->table]
+                    "DELETE FROM $sequence WHERE name = :table",
+                    ['table' => $name]
                 );
             } catch (\Throwable) {
                 // sqlite_sequence exists only after an AUTOINCREMENT table has been created.
@@ -454,7 +458,7 @@ trait BuildsWriteQueries
      * @param array $bindings Optional bindings for the SQL query.
      * @return array
      */
-    public function raw(string $sql, array $bindings = []): array
+    public function run(string $sql, array $bindings = []): array
     {
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
@@ -489,6 +493,12 @@ trait BuildsWriteQueries
         $this->log($started, $startedMemory, $sql, $bindings);
 
         return $statement->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** Create a trusted SQL expression without executing it. */
+    public function raw(string $sql): Expression
+    {
+        return new Expression($sql);
     }
 
     /**
@@ -669,6 +679,10 @@ trait BuildsWriteQueries
         $sets = [];
 
         foreach ($data as $column => $value) {
+            if ($value instanceof Expression) {
+                $sets[] = $this->wrapper->wrapColumn($column) . ' = ' . $value->getValue();
+                continue;
+            }
             if ($this->parameters !== []) {
                 $sets[] = $this->wrapper->wrapColumn($column) . ' = ?';
                 $bindings[] = $value;
@@ -811,7 +825,11 @@ trait BuildsWriteQueries
     {
         $placeholders = [];
         foreach ($data as $serial => $row) {
-            $placeholders[] = '(' . implode(',', array_map(fn($column) => ':' . $column . '_' . $serial, $fields)) . ')';
+            $placeholders[] = '(' . implode(',', array_map(
+                fn($column) => ($row[$column] ?? null) instanceof Expression
+                    ? $row[$column]->getValue() : ":{$column}_$serial",
+                $fields
+            )) . ')';
         }
         return implode(',', $placeholders);
     }
@@ -862,6 +880,10 @@ trait BuildsWriteQueries
         $updates = [];
 
         foreach ($config['update'] as $key => $value) {
+            if ($value instanceof Expression && !is_int($key)) {
+                $updates[] = $this->wrapper->wrapColumn($key) . ' = ' . $value->getValue();
+                continue;
+            }
             if (is_int($key)) {
                 $key = $value; // If key is an integer, use the value as the key
             }
@@ -893,6 +915,10 @@ trait BuildsWriteQueries
         foreach ($data as $serial => $row) {
             foreach ($fields as $column) {
                 $value = $row[$column] ?? null;
+
+                if ($value instanceof Expression) {
+                    continue;
+                }
 
                 $statement->bindValue(
                     param: sprintf(':%s_%s', $column, $serial),

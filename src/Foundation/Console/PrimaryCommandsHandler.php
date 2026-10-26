@@ -193,6 +193,12 @@ class PrimaryCommandsHandler
         ); // Run all pending queue jobs
     }
 
+    public function restartQueueWorkers(Queue $queue): void
+    {
+        $queue->restart();
+        Prompt::success('Queue restart requested. Workers will exit after their current job; a process supervisor must restart them.');
+    }
+
     /**
      * Lists all scheduled queue jobs.
      *

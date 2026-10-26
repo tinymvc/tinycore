@@ -47,9 +47,8 @@ class DatabaseHandler implements SessionHandlerInterface, SessionUpdateTimestamp
         $connection = $this->config['connection'] ?? null;
 
         try {
-            $this->pdo = is_string($connection) && $connection !== ''
-                ? DB::connection($connection)->getPdo()
-                : DB::getPdo();
+            $db = DB::connection(is_string($connection) && $connection !== '' ? $connection : null);
+            $this->pdo = $db->getPdo();
         } catch (\Exception $e) {
             throw new \RuntimeException('Failed to connect to the database: ' . $e->getMessage());
         }
@@ -60,11 +59,7 @@ class DatabaseHandler implements SessionHandlerInterface, SessionUpdateTimestamp
             throw new \RuntimeException('Unsupported session database driver.');
         }
 
-        $quote = $this->driver === DB::DRIVER_MYSQL ? '`' : '"';
-        $this->table = implode('.', array_map(
-            static fn(string $part): string => $quote . $part . $quote,
-            explode('.', (string) ($this->config['table'] ?? 'sessions')),
-        ));
+        $this->table = $db->wrapTable((string) ($this->config['table'] ?? 'sessions'));
 
         return true;
     }

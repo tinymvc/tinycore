@@ -15,7 +15,6 @@ use function array_map;
 use function base64_decode;
 use function base64_encode;
 use function count;
-use function explode;
 use function implode;
 use function in_array;
 use function is_array;
@@ -848,7 +847,7 @@ class DatabaseStorage implements CacheStorageContract
         return [
             'db' => $db,
             'driver' => $driver,
-            'table' => implode('.', array_map($quote, explode('.', $table))),
+            'table' => $db->wrapTable($table),
             'key' => $quote('key'),
             'group' => $quote('group'),
             'data' => $quote('data'),

@@ -4,6 +4,14 @@ Read this reference for database queries, model queries, transactions, and locks
 
 Driver names come from `Spark\Database\Contracts\DatabaseDriver`: `DRIVER_MYSQL`, `DRIVER_PGSQL`, and `DRIVER_SQLITE` are the engines in `SUPPORTED_DRIVERS`. Both `Spark\Database\DB` and `Spark\Facades\DB` expose these constants. Other PDO name constants identify drivers but do not add SQL grammar support. Use `DB::DRIVER_*` in driver comparisons; connection names are application-defined strings. `DB::connection()`, `DB::connection(null)`, and `DB::connection([])` return the shared default connection. `DB::pdo()` aliases `DB::getPdo()`.
 
+## Prefixes and raw SQL
+
+Set database `prefix` at the top level or per connection; an explicit `''` disables it. Use logical table names in queries, models, schema, and database-backed storage. Qualified columns receive the table prefix; aliases do not. Raw SQL stays verbatim: use the executing connection's `wrapTable('users')` for a quoted, prefixed identifier. Configuration does not rename existing tables.
+
+Set builder `prefix()` / `setDB()` and declare aliases before adding clauses. These methods cannot rewrite already compiled SQL; use connection configuration for application-wide prefixes.
+
+`DB::raw('visits + 1')` creates a trusted SQL expression without executing it. Use `DB::run($sql, $bindings)` to execute and fetch associative rows, or `statement()` for success/failure. Bind user input through query conditions or raw-clause bindings.
+
 ---
 
 ## Model-First Query Architecture
