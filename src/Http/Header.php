@@ -1268,6 +1268,7 @@ final class Header
     /** @var string tinycore/spark specific headers. */
 
     public const X_XSRF_TOKEN = 'X-XSRF-TOKEN';
+    public const PURPOSE = 'Purpose';
 
     // Inertia.js specific headers.
     public const X_INERTIA = 'X-Inertia';
