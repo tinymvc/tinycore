@@ -41,13 +41,15 @@ class Grammar implements GrammarContract, DatabaseDriver
      */
     public function __construct(private string $driver)
     {
-        if (!in_array(strtolower($driver), [self::DRIVER_MYSQL, self::DRIVER_SQLITE, self::DRIVER_PGSQL], true)) {
+        $this->driver = strtolower($driver);
+
+        if (!in_array($this->driver, self::SUPPORTED_DRIVERS, true)) {
             throw new UnsupportedDatabaseDriverException(
-                'Unsupported database driver. Supported drivers: mysql, sqlite, pgsql.'
+                'Unsupported database driver. Supported drivers: ' . implode(', ', self::SUPPORTED_DRIVERS) . '.'
             );
         }
 
-        $this->wrapper = new Wrapper($driver);
+        $this->wrapper = new Wrapper($this->driver);
     }
 
     /**

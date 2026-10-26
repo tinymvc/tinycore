@@ -213,6 +213,7 @@ abstract class StorageDriverContract extends DriverTestCase
         $c = $this->cacheStore();
         $this->assertTrue($c->lock('key', 'a', 60, 0));
         $this->assertTrue($c->forceUnlock('key'));
+        $this->assertFalse($c->forceUnlock('key'));
         $this->assertTrue($c->lock('key', 'b', 60, 0));
         $this->assertTrue($c->ownsLock('key', 'b'));
     }
@@ -251,6 +252,7 @@ abstract class StorageDriverContract extends DriverTestCase
         $c = $this->cacheStore();
         $this->assertFalse($c->unlock('missing', 'owner'));
         $this->assertNull($c->getLockInfo('missing'));
+        $this->assertFalse($c->forceUnlock('missing'));
     }
 
     public function test_lock_distinct_keys_can_be_locked(): void

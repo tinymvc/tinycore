@@ -8,6 +8,20 @@ Inspect Composer's installed version, PHP version/extensions, configured driver 
 
 For routing/authentication problems behind a proxy, inspect trusted-proxy settings, effective scheme/host, secure-cookie settings and CORS/CSRF behavior. Do not broadly trust forwarded headers to fix a URL symptom. For missing assets, inspect the Vite build/manifest and configured base URL.
 
+## CLI colors
+
+`--ansi` forces ANSI colors, including redirected output and environments with `NO_COLOR` or `TERM=dumb`. `--no-ansi` disables colors and wins if both flags are supplied. Without either flag, output uses terminal detection and honors `NO_COLOR` and `TERM=dumb`.
+
+These global flags work before or after a Spark command and do not consume positional arguments. They also work with the native test runner. Flags after the `--` argument separator are positional data, not color settings.
+
+```bash
+php spark queue:work --ansi
+php spark --no-ansi migrate
+php test --no-ansi
+```
+
+Prompts, queue logs, Tinker, and test reports share `Spark\Console\Prompt::supportsColors(?array $arguments = null)`. The optional argument supplies raw options; null reads the current process arguments. Custom commands can use it when emitting their own ANSI styling.
+
 ## Prepare an application release
 
 1. Run relevant application tests and build changed frontend assets using the project's scripts. SQL changes need the intended database engine, not only SQLite compilation.

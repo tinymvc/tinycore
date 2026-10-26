@@ -1287,4 +1287,12 @@ final class Header
     public const X_FIRELINE_PRELOAD = 'X-FireLine-Preload';
     public const X_FIRELINE_PARTIAL = 'X-FireLine-Partial';
     public const X_FIRELINE_ASSET_VERSION = 'X-FireLine-Asset-Version';
+
+    // S3-compatible storage headers. Query parameters use their own protocol names.
+    public const X_AMZ_ACL = 'X-Amz-Acl';
+    public const X_AMZ_CONTENT_SHA256 = 'X-Amz-Content-Sha256';
+    public const X_AMZ_COPY_SOURCE = 'X-Amz-Copy-Source';
+    public const X_AMZ_DATE = 'X-Amz-Date';
+    public const X_AMZ_METADATA_DIRECTIVE = 'X-Amz-Metadata-Directive';
+    public const X_AMZ_SECURITY_TOKEN = 'X-Amz-Security-Token';
 }

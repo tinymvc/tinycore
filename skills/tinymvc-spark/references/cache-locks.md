@@ -111,6 +111,8 @@ if (Lock::lock($key, timeout: 30, waitTimeout: 5)) {
 
 ### Lock State Inspection
 
+`forceUnlock($key)` returns false when no lock record exists. File-storage cleanup counts only records it actually removes.
+
 ```php
 use Spark\Facades\Lock;
 

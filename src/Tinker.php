@@ -840,6 +840,10 @@ class Tinker
      */
     private function color(string $text, string $color): string
     {
+        if (!Prompt::supportsColors()) {
+            return $text;
+        }
+
         $colors = [
             'red' => '31',
             'green' => '32',

@@ -7,6 +7,7 @@ use Spark\Console\Exceptions\NotAllowedException;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
 use function array_slice;
+use function in_array;
 
 class Console implements ConsoleContract
 {
@@ -41,14 +42,16 @@ class Console implements ConsoleContract
 
         global $argv;
 
-        // Retrieve the command name from the command line arguments
-        $commandName = $argv[1] ?? '';
-
-        // Get the command line arguments
-        $rawArgs = array_slice($argv, 2);
+        // Global color flags may precede the command and never consume its arguments.
+        $rawArgs = array_slice($argv ?? [], 1);
+        while (in_array($rawArgs[0] ?? null, ['--ansi', '--no-ansi'], true)) {
+            array_shift($rawArgs);
+        }
+        $commandName = array_shift($rawArgs) ?? '';
 
         // Parse the arguments
         $parsedArgs = Prompt::parseArguments($rawArgs);
+        unset($parsedArgs['ansi'], $parsedArgs['no-ansi']);
 
         Prompt::newline(); // Add a newline
 

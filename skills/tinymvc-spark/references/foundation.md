@@ -261,6 +261,8 @@ Expected shape:
 ```php
 <?php
 
+use Spark\Database\Contracts\DatabaseDriver;
+
 return [
     // Default database connection name
     'default' => env('DB_CONNECTION', 'sqlite'),
@@ -268,11 +270,11 @@ return [
     // Database connections for different drivers
     'connections' => [
         'sqlite' => [
-            'driver' => 'sqlite',
+            'driver' => DatabaseDriver::DRIVER_SQLITE,
             'file' => dirname(__DIR__) . '/database/sqlite.db',
         ],
         'default' => [
-            // 'driver' => 'mysql', // auto detected from env('DB_CONNECTION')
+            // 'driver' => DatabaseDriver::DRIVER_MYSQL, // auto detected from env('DB_CONNECTION')
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'name' => env('DB_DATABASE', 'spark'),

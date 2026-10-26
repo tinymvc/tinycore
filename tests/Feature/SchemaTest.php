@@ -8,6 +8,26 @@ use Spark\Facades\DB;
 
 final class SchemaTest extends DatabaseTestCase
 {
+    public function test_grammar_normalizes_supported_driver_names(): void
+    {
+        foreach (DB::SUPPORTED_DRIVERS as $driver) {
+            $grammar = new \Spark\Database\Schema\Grammar(strtoupper($driver));
+            $this->assertSame($driver, $grammar->getDriver());
+            $this->assertSame(
+                $driver === DB::DRIVER_MYSQL ? '`example`' : '"example"',
+                $grammar->getWrapper()->wrapTable('example'),
+            );
+            $this->assertSame($driver === DB::DRIVER_MYSQL, $grammar->isMySQL());
+            $this->assertSame($driver === DB::DRIVER_SQLITE, $grammar->isSQLite());
+            $this->assertSame($driver === DB::DRIVER_PGSQL, $grammar->isPostgreSQL());
+        }
+
+        $this->assertThrows(
+            \Spark\Database\Schema\Exceptions\UnsupportedDatabaseDriverException::class,
+            fn() => new \Spark\Database\Schema\Grammar(DB::DRIVER_SQLSRV),
+        );
+    }
+
     public function test_binary_column_types_and_modifiers(): void
     {
         $grammar = Schema::getGrammar();

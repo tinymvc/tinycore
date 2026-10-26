@@ -4,6 +4,7 @@ namespace Spark\Testing;
 
 use ReflectionClass;
 use ReflectionMethod;
+use Spark\Console\Prompt;
 use Throwable;
 use function count;
 use function get_class;
@@ -32,9 +33,7 @@ final class Runner
         }
 
         $start = hrtime(true);
-        $this->colors = function_exists('stream_isatty') && stream_isatty(STDOUT)
-            && getenv('TERM') !== 'dumb'
-            && (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '');
+        $this->colors = Prompt::supportsColors($arguments);
 
         set_error_handler(static function (int $level, string $message, string $file, int $line): bool {
             if (!(error_reporting() & $level)) {
@@ -46,7 +45,7 @@ final class Runner
         try {
             [$suite, $filter, $list, $help] = $this->options($arguments);
             if ($help) {
-                echo "Usage: php test [--testsuite Unit|Feature] [--filter text] [--list-tests]\n";
+                echo "Usage: php test [--testsuite Unit|Feature] [--filter text] [--list-tests] [--ansi|--no-ansi]\n";
                 return 0;
             }
 
@@ -226,11 +225,13 @@ final class Runner
         for ($i = 0; $i < count($arguments); $i++) {
             [$option, $value] = array_pad(explode('=', $arguments[$i], 2), 2, null);
 
-            if ($value !== null && in_array($option, ['--help', '-h', '--list-tests'], true)) {
+            if ($value !== null && in_array($option, ['--help', '-h', '--list-tests', '--ansi', '--no-ansi'], true)) {
                 throw new \InvalidArgumentException("$option does not accept a value.");
             }
 
-            if ($option === '--help' || $option === '-h') {
+            if ($option === '--ansi' || $option === '--no-ansi') {
+                continue;
+            } elseif ($option === '--help' || $option === '-h') {
                 $help = true;
             } elseif ($option === '--list-tests') {
                 $list = true;

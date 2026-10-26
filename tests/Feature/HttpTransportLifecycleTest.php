@@ -5,6 +5,7 @@ namespace Tests\Feature;
 require_once dirname(__DIR__) . '/Support/LifecycleTestCase.php';
 
 use Tests\Support\LifecycleTestCase;
+use Spark\Http\{Header, Request, Response};
 
 /** Exercise the real SAPI, php://input, run(), send(), and shutdown termination. */
 final class HttpTransportLifecycleTest extends LifecycleTestCase
@@ -265,6 +266,22 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
             $this->assertSame(200, $response['status'], 'Body: ' . $body);
             $this->assertSame([], json_decode($response['body'], true, 512, JSON_THROW_ON_ERROR)['body']);
         }
+    }
+
+    public function testJsonParsingPreservesLargeIntegersAndRawBodyBytes(): void
+    {
+        $body = '{"id":9223372036854775808,"negative":-9223372036854775809,"zero":0,"enabled":false,"items":[1,2]}';
+        $response = $this->exchange(Request::METHOD_POST, '/psr-request', $body, [Header::CONTENT_TYPE => 'Application/Vnd.Example+Json; charset=UTF-8']);
+        $this->assertSame(Response::STATUS_OK, $response['status']);
+        $data = json_decode($response['body'], true, flags: JSON_THROW_ON_ERROR);
+        $this->assertSame($body, $data['raw']);
+        $this->assertSame([
+            'id' => '9223372036854775808',
+            'negative' => '-9223372036854775809',
+            'zero' => 0,
+            'enabled' => false,
+            'items' => [1, 2],
+        ], $data['parsed']);
     }
 
     public function testContentTypesAndHeadAreCorrectOnTheWire(): void

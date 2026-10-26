@@ -76,8 +76,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     /** @var Collection Server parameters, including headers.*/
     public Collection $server;
 
-    /** @var Input Validated input data. */
-    private Input $cleanData;
+    /** @var ?Input Validated input data. */
+    private ?Input $cleanData = null;
 
     /** @var StreamInterface The request body. */
     private StreamInterface $body;
@@ -150,7 +150,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $this->headers = collect($this->parseAllHeaders());
             $this->rootUrl = $this->parseRootUrl();
 
-            $factory = Application::$app?->get(UriFactoryInterface::class) ?? new Psr17Factory();
+            $factory = service(UriFactoryInterface::class, fn() => new Psr17Factory());
             $uri = $factory->createUri($this->rootUrl . '/' . ltrim($_SERVER['REQUEST_URI'] ?? '/', '/'));
 
             $this->path = $uri->getPath() ?: '/';
@@ -158,7 +158,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $this->requestTarget = $_SERVER['REQUEST_URI'] ?? '/';
             $this->protocolVersion = str_replace('HTTP/', '', $_SERVER['SERVER_PROTOCOL'] ?? 'HTTP/1.1');
 
-            $factory = Application::$app?->get(StreamFactoryInterface::class) ?? new Psr17Factory();
+            $factory = service(StreamFactoryInterface::class, fn() => new Psr17Factory());
             $this->body = $factory->createStreamFromFile('php://input');
 
             $this->query = collect($_GET);
@@ -230,12 +230,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     private function configureAppTrustedProxies(): void
     {
         $this->trustedProxies = array_values(array_filter(
-            (array) Application::$app->getConfig('app.trusted_proxies', []),
+            (array) config('app.trusted_proxies', []),
             'is_string'
         ));
 
         if (
-            is_string($header = Application::$app->getConfig('app.trusted_proxy_header', Header::X_FORWARDED_FOR))
+            is_string($header = config('app.trusted_proxy_header', Header::X_FORWARDED_FOR))
             && strtolower(trim($header)) === strtolower(Header::CF_CONNECTING_IP)
         ) {
             $this->trustedProxyHeader = Header::CF_CONNECTING_IP;
@@ -284,7 +284,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             if (!str_starts_with($key, 'HTTP_')) {
                 continue; // Skip non-header entries
             }
-            $headers[$this->parseHeaderKey($key)] = $value;
+            $headers[$this->parseServerKey(substr($key, 5))] = $value;
         }
 
         // CGI/FastCGI supplies these two headers without the HTTP_ prefix.
@@ -305,13 +305,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     private function parseHeaderKey(string $key): string
     {
-        // Remove the 'HTTP_' prefix
-        $header = str_ireplace(['HTTP_', 'http-'], '', $key);
+        // Strip only a leading CGI prefix; HTTP can be part of the header name.
+        if (strncasecmp($key, 'HTTP_', 5) === 0) {
+            $key = substr($key, 5);
+        }
 
-        // Convert to standard header format (e.g., 'USER_AGENT' to 'user-agent')
-        $header = $this->parseServerKey($header);
-
-        return $header;
+        return $this->parseServerKey($key);
     }
 
     /**
@@ -340,9 +339,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
     }
 
     /**
-     * Parses raw POST input data in JSON format.
+     * Parses JSON or URL-encoded bodies for write methods, preserving raw bytes.
      * 
-     * @return array Parsed JSON data as an associative array.
+     * @return array Parsed input; invalid or scalar JSON yields an empty array.
      */
     private function parsePhpInput(): array
     {
@@ -356,7 +355,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             return $params;
         }
         if ($type === 'application/json' || str_ends_with($type, '+json')) {
-            $params = json_decode($this->getRawBody(), true);
+            $params = json_decode($this->getRawBody(), true, 512, JSON_BIGINT_AS_STRING);
             return is_array($params) ? $params : [];
         }
 
@@ -391,7 +390,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             throw new InvalidArgumentException('Invalid IPv6 host header detected');
         }
 
-        $factory = Application::$app?->get(UriFactoryInterface::class) ?? new Psr17Factory();
+        $factory = service(UriFactoryInterface::class) ?? new Psr17Factory();
         return (string) $factory->createUri(($isHttps ? 'https://' : 'http://') . $host);
     }
 
@@ -557,12 +556,15 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function is(string $path): bool
     {
+        $path = trim($path, '/');
+        $currentPath = trim($this->path, '/');
+
         if (strpos($path, '*') !== false) {
             $pattern = '#^' . str_replace('\*', '.*', preg_quote($path, '#')) . '$#';
-            return (bool) preg_match($pattern, $this->path);
+            return (bool) preg_match($pattern, $currentPath);
         }
 
-        return trim($this->path, '/') === trim($path, '/');
+        return $currentPath === $path;
     }
 
     /**
@@ -1067,7 +1069,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function setServerParam(string $key, string $value): void
     {
-        $this->server->put($key, $value);
+        $this->server->put($this->parseServerKey($key), $value);
     }
 
     /**
@@ -1134,7 +1136,9 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function mergeServerParams(array $params): void
     {
-        $this->server = $this->server->merge($params);
+        foreach ($params as $key => $value) {
+            $this->server->put($this->parseServerKey($key), $value);
+        }
     }
 
     /**
@@ -1223,7 +1227,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
             $server[$keys[$name] ?? strtoupper(str_replace('-', '_', $name))] = $value;
         }
 
-        $factory = Application::$app?->get(ServerRequestFactoryInterface::class) ?? new Psr17Factory();
+        $factory = service(ServerRequestFactoryInterface::class) ?? new Psr17Factory();
         $request = $factory->createServerRequest($this->method, $this->url, $server)
             ->withProtocolVersion($this->protocolVersion)
             ->withBody($this->body)
@@ -1633,7 +1637,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * 
      * This method checks if the specified key exists in the request data
      * (query parameters, post parameters, file uploads, or route parameters)
-     * and that its value is not empty.
+     * and that its value is not null, a blank string, or an empty array.
+     * Zero and false are filled values.
      *
      * @param string|array $key The key or array of keys to check for existence and non-emptiness.
      * @return bool True if all keys exist and are not empty, false otherwise.
@@ -1643,7 +1648,8 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         $key = is_array($key) ? $key : func_get_args();
 
         foreach ($key as $k) {
-            if (empty($this->offsetGet($k))) {
+            $value = $this->offsetGet($k);
+            if ($value === null || $value === [] || (is_string($value) && trim($value) === '')) {
                 return false;
             }
         }
@@ -1728,6 +1734,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function validate(array $rules, null|array $attributes = null, null|array $messages = null): Input
     {
+        $this->cleanData = null;
         $validator = new Validator(); // Get the validator instance
 
         $attributes ??= $this->all(); // Get all input attributes if not provided
@@ -1739,7 +1746,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         if ($this->isPrecognitive() && $this->headers->has(strtolower(Header::PRECOGNITION_VALIDATE_ONLY))) {
             $rules = collect($rules)
                 ->only(
-                    explode(',', $this->headers->get(strtolower(Header::PRECOGNITION_VALIDATE_ONLY)) ?: '')
+                    array_map('trim', explode(',', $this->header(Header::PRECOGNITION_VALIDATE_ONLY, '')))
                 )
                 ->all();
         }

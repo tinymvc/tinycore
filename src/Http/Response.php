@@ -55,7 +55,7 @@ class Response implements ResponseContract
      */
     public function __construct(private mixed $content = '', int $statusCode = self::STATUS_OK, array $headers = [])
     {
-        $factory = Application::$app?->get(ResponseFactoryInterface::class) ?? new Psr17Factory();
+        $factory = service(ResponseFactoryInterface::class, fn() => new Psr17Factory());
         $this->message = $factory->createResponse($statusCode);
         $this->withHeaders($headers);
     }
@@ -94,13 +94,13 @@ class Response implements ResponseContract
      */
     public function write(string $content): self
     {
-        if ($this->content instanceof StreamInterface) {
-            $this->content = $this->getContent();
-        } elseif (!is_string($this->content)) {
-            $this->content = '';
+        if ($content === '') {
+            return $this;
         }
 
-        $this->content .= $content;
+        $this->prepare();
+        $this->content = $this->contentAsString() . $content;
+        $this->removeHeader(Header::CONTENT_LENGTH);
         return $this;
     }
 
@@ -169,12 +169,12 @@ class Response implements ResponseContract
             return;
         }
 
-        $factory = Application::$app?->get(StreamFactoryInterface::class) ?? new Psr17Factory();
+        $factory = service(StreamFactoryInterface::class, fn() => new Psr17Factory());
 
         $this->setContent($factory->createStreamFromFile($filePath));
         $this->sendAttachment(basename($filePath), [
-            'Content-Type' => @mime_content_type($filePath) ?: 'application/octet-stream',
-            'Content-Length' => (string) filesize($filePath),
+            Header::CONTENT_TYPE => @mime_content_type($filePath) ?: 'application/octet-stream',
+            Header::CONTENT_LENGTH => (string) filesize($filePath),
             ...$headers,
         ]);
     }
@@ -265,10 +265,10 @@ class Response implements ResponseContract
      */
     public function setHeader(string $key, string|array $value): self
     {
-        if (strcasecmp($key, 'Content-Type') === 0) {
+        $this->message = $this->message->withHeader($key, $value);
+        if (strcasecmp($key, Header::CONTENT_TYPE) === 0) {
             $this->defaultContentType = false;
         }
-        $this->message = $this->message->withHeader($key, $value);
         return $this;
     }
 
@@ -393,7 +393,7 @@ class Response implements ResponseContract
     public function clear(): void
     {
         // Clear the response content and headers
-        $factory = Application::$app?->get(ResponseFactoryInterface::class) ?? new Psr17Factory();
+        $factory = service(ResponseFactoryInterface::class, fn() => new Psr17Factory());
 
         $this->content = '';
         $this->message = $factory->createResponse();
@@ -478,9 +478,12 @@ class Response implements ResponseContract
     public function getContent(): string
     {
         $this->prepare();
-        if ($this->head) {
-            return '';
-        }
+        return $this->head ? '' : $this->contentAsString();
+    }
+
+    /** Read the prepared representation independently of HEAD emission rules. */
+    private function contentAsString(): string
+    {
         if (!$this->content instanceof StreamInterface) {
             return $this->content;
         }
@@ -514,7 +517,7 @@ class Response implements ResponseContract
 
         $body = $this->head ? '' : $this->content;
         if (!$body instanceof StreamInterface) {
-            $factory = Application::$app?->get(StreamFactoryInterface::class) ?? new Psr17Factory();
+            $factory = service(StreamFactoryInterface::class, fn() => new Psr17Factory());
             $body = $factory->createStream($body);
         }
 
@@ -533,7 +536,7 @@ class Response implements ResponseContract
     {
         $code ??= is_int($error) ? $error : self::STATUS_INTERNAL_SERVER_ERROR;
 
-        if (Application::$app?->resolved(Request::class) && request()->expectsJson()) {
+        if (isset(Application::$app) && Application::$app->resolved(Request::class) && request()->expectsJson()) {
             return new static(['message' => $message ?? _e('Internal Server Error'), 'code' => $code], $code);
         }
 

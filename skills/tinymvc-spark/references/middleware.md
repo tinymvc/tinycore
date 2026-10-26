@@ -98,6 +98,7 @@ Extend `Spark\Foundation\Http\Middlewares\CorsAccessControl`.
 namespace App\Http\Middlewares;
 
 use Spark\Foundation\Http\Middlewares\CorsAccessControl;
+use Spark\Http\Header;
 
 class Cors extends CorsAccessControl
 {
@@ -116,7 +117,7 @@ class Cors extends CorsAccessControl
                 \Spark\Http\Request::METHOD_DELETE,
                 \Spark\Http\Request::METHOD_OPTIONS,
             ],
-            'headers' => ['Content-Type', 'Authorization', 'X-XSRF-TOKEN'],
+            'headers' => [Header::CONTENT_TYPE, Header::AUTHORIZATION, Header::X_XSRF_TOKEN],
         ]);
     }
 }

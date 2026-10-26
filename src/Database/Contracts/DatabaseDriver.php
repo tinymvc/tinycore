@@ -3,9 +3,8 @@
 namespace Spark\Database\Contracts;
 
 /**
- * Interface Pdo Common + Supported Database Drivers
- *
- * This interface defines constants for supported database drivers.
+ * PDO driver names shared by the database, schema, and facade APIs.
+ * SUPPORTED_DRIVERS lists the engines supported by Spark's SQL grammar and storage backends.
  */
 interface DatabaseDriver
 {

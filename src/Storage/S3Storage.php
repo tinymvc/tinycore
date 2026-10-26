@@ -152,7 +152,7 @@ class S3Storage
             throw new InvalidArgumentException('For multiple uploads, pass [object key => local path] without a separate key.');
         }
 
-        $headers = $acl === null ? [] : ['x-amz-acl' => $acl];
+        $headers = $acl === null ? [] : [strtolower(Header::X_AMZ_ACL) => $acl];
         $metadataSize = 0;
 
         foreach ($metadata as $name => $value) {
@@ -469,11 +469,11 @@ class S3Storage
             throw new RuntimeException('Single S3 copies are limited to 5 GiB; multipart copy is not implemented.');
         }
         $headers = [
-            'x-amz-copy-source' => '/' . $this->bucket . '/' . StoragePath::encode($from),
-            'x-amz-metadata-directive' => 'COPY'
+            strtolower(Header::X_AMZ_COPY_SOURCE) => '/' . $this->bucket . '/' . StoragePath::encode($from),
+            strtolower(Header::X_AMZ_METADATA_DIRECTIVE) => 'COPY'
         ];
         if ($acl !== null)
-            $headers['x-amz-acl'] = $acl;
+            $headers[strtolower(Header::X_AMZ_ACL)] = $acl;
         $response = $this->request(Request::METHOD_PUT, $to, $headers)->withOptions([CURLOPT_POSTFIELDS => ''])->execute();
         $this->checkResponse($response, Response::STATUS_OK, 'Copy file');
         // S3 may send HTTP 200 with an Error XML body after starting a copy.
@@ -499,7 +499,7 @@ class S3Storage
             'X-Amz-Credential' => "{$this->accessKey}/{$scope}",
             'X-Amz-Date' => $dateTime,
             'X-Amz-Expires' => (string) $expires,
-            'X-Amz-SignedHeaders' => 'host',
+            'X-Amz-SignedHeaders' => strtolower(Header::HOST),
             'response-content-disposition' => 'attachment; filename="' . basename($key) . '"',
         ];
 
@@ -514,8 +514,8 @@ class S3Storage
             Request::METHOD_GET,
             parse_url($url, PHP_URL_PATH),
             $queryString,
-            'host:' . $this->host($url) . "\n",
-            'host',
+            strtolower(Header::HOST) . ':' . $this->host($url) . "\n",
+            strtolower(Header::HOST),
             'UNSIGNED-PAYLOAD',
         ]);
 
@@ -554,14 +554,14 @@ class S3Storage
         }
 
         $url = $this->objectUrl($key);
-        $headers = ['host' => $this->host($url)];
+        $headers = [strtolower(Header::HOST) => $this->host($url)];
 
         if ($contentType !== null) {
-            $headers['content-type'] = preg_replace('/ +/', ' ', trim($contentType));
+            $headers[strtolower(Header::CONTENT_TYPE)] = preg_replace('/ +/', ' ', trim($contentType));
         }
 
         if ($acl !== null) {
-            $headers['x-amz-acl'] = $acl;
+            $headers[strtolower(Header::X_AMZ_ACL)] = $acl;
         }
 
         ksort($headers);
@@ -639,9 +639,9 @@ class S3Storage
                         }
 
                         $payloadHash = hash_final($hash);
-                        $fileHeaders['content-type'] = function_exists('mime_content_type')
+                        $fileHeaders[strtolower(Header::CONTENT_TYPE)] = function_exists('mime_content_type')
                             ? (mime_content_type($path) ?: 'application/octet-stream') : 'application/octet-stream';
-                        $fileHeaders['content-length'] = (string) $stat['size'];
+                        $fileHeaders[strtolower(Header::CONTENT_LENGTH)] = (string) $stat['size'];
 
                         // Spark exposes streaming through transport options; do not buffer the body.
                         $options = [
@@ -686,13 +686,14 @@ class S3Storage
         ksort($query);
         $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
 
-        $headers['host'] = $this->host($url);
+        $headers[strtolower(Header::HOST)] = $this->host($url);
         if ($this->sessionToken !== null) {
-            $headers['x-amz-security-token'] = $this->sessionToken;
+            $headers[strtolower(Header::X_AMZ_SECURITY_TOKEN)] = $this->sessionToken;
         }
 
-        $headers['x-amz-content-sha256'] = $payloadHash ?? hash('sha256', '');
-        $headers['x-amz-date'] = gmdate('Ymd\THis\Z');
+        $headers[strtolower(Header::X_AMZ_CONTENT_SHA256)] = $payloadHash ?? hash('sha256', '');
+        $dateTime = gmdate('Ymd\THis\Z');
+        $headers[strtolower(Header::X_AMZ_DATE)] = $dateTime;
 
         ksort($headers);
         $canonicalHeaders = '';
@@ -707,10 +708,10 @@ class S3Storage
             $queryString,
             $canonicalHeaders,
             $signedHeaders,
-            $headers['x-amz-content-sha256'],
+            $headers[strtolower(Header::X_AMZ_CONTENT_SHA256)],
         ]);
 
-        $date = substr($headers['x-amz-date'], 0, 8);
+        $date = substr($dateTime, 0, 8);
         $scope = "{$date}/{$this->region}/s3/aws4_request";
         $signingKey = 'AWS4' . $this->secretKey;
 
@@ -718,8 +719,8 @@ class S3Storage
             $signingKey = hash_hmac('sha256', $part, $signingKey, true);
         }
 
-        $signature = hash_hmac('sha256', "AWS4-HMAC-SHA256\n{$headers['x-amz-date']}\n{$scope}\n" . hash('sha256', $canonical), $signingKey);
-        $headers['authorization'] = "AWS4-HMAC-SHA256 Credential={$this->accessKey}/{$scope}, SignedHeaders={$signedHeaders}, Signature={$signature}";
+        $signature = hash_hmac('sha256', "AWS4-HMAC-SHA256\n{$dateTime}\n{$scope}\n" . hash('sha256', $canonical), $signingKey);
+        $headers[strtolower(Header::AUTHORIZATION)] = "AWS4-HMAC-SHA256 Credential={$this->accessKey}/{$scope}, SignedHeaders={$signedHeaders}, Signature={$signature}";
 
         return HttpRequest::make($method, $url . ($queryString === '' ? '' : "?$queryString"), key: $key)
             ->withHeaders($headers)

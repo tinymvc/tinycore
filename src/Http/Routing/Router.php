@@ -774,7 +774,10 @@ class Router implements RouterContract
                 $compiled .= ($m[2] ?? '') === '?' ? '(?:\/([^\/]+))?' : '\/([^\/]+)';
             } else {
                 // Static segment; a "*" inside it matches within one segment ("/files/*.pdf")
-                $factory = Application::$app?->get(\Psr\Http\Message\UriFactoryInterface::class) ?? new \Nyholm\Psr7\Factory\Psr17Factory();
+                $factory = service(
+                    \Psr\Http\Message\UriFactoryInterface::class,
+                    fn() => new \Nyholm\Psr7\Factory\Psr17Factory()
+                );
                 $segment = $factory->createUri()->withPath($segment)->getPath();
                 $compiled .= '\/' . str_replace('\*', '[^\/]*', preg_quote($segment, '#'));
             }

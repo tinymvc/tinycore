@@ -205,7 +205,7 @@ class FileStorage implements CacheStorageContract
             [$dir, $path] = $this->target($this->cacheRoot, (string) $key, self::ENTRY_EXT);
 
             $this->withGuard($dir, function () use ($path) {
-                File::delete($path);
+                @File::delete($path);
             });
         }
     }
@@ -230,7 +230,7 @@ class FileStorage implements CacheStorageContract
                     return 0;
                 }
 
-                return File::delete($path) ? 1 : 0;
+                return (int) $this->deleteExistingFile($path);
             });
         }
 
@@ -258,7 +258,7 @@ class FileStorage implements CacheStorageContract
             $this->withGuard($dir, function () use ($dir) {
                 foreach ($this->listDir($dir) as $file) {
                     if (str_ends_with($file, self::ENTRY_EXT)) {
-                        File::delete($dir . DIRECTORY_SEPARATOR . $file);
+                        @File::delete($dir . DIRECTORY_SEPARATOR . $file);
                     }
                 }
             });
@@ -367,7 +367,7 @@ class FileStorage implements CacheStorageContract
                     return $default;
                 }
 
-                File::delete($path);
+                @File::delete($path);
 
                 return $this->entryValue($entry);
             });
@@ -471,7 +471,7 @@ class FileStorage implements CacheStorageContract
                     return false;
                 }
 
-                return File::delete($path) || !File::exists($path);
+                return @File::delete($path) || !File::exists($path);
             });
         } catch (CacheException) {
             return false;
@@ -526,7 +526,7 @@ class FileStorage implements CacheStorageContract
                         return 0;
                     }
 
-                    return File::delete($path) ? 1 : 0;
+                    return (int) $this->deleteExistingFile($path);
                 });
             }
         } catch (CacheException) {
@@ -581,7 +581,7 @@ class FileStorage implements CacheStorageContract
         [$dir, $path] = $this->target($this->lockRoot, $key, self::LOCK_EXT);
 
         try {
-            return (bool) $this->withGuard($dir, fn() => File::delete($path));
+            return (bool) $this->withGuard($dir, fn() => $this->deleteExistingFile($path));
         } catch (CacheException) {
             return false;
         }
@@ -699,17 +699,17 @@ class FileStorage implements CacheStorageContract
             }
         } catch (\Throwable $e) {
             fclose($handle);
-            File::delete($tmp);
+            @File::delete($tmp);
             throw $e;
         }
 
         fclose($handle);
-        File::chmod($tmp, $this->fileMode);
+        @File::chmod($tmp, $this->fileMode);
 
         // rename() is atomic on POSIX. On Windows it can fail briefly while a reader holds the target
         // open, so retry a few times before giving up.
         for ($attempt = 1; $attempt <= 5; $attempt++) {
-            if (File::move($tmp, $path)) {
+            if (@File::move($tmp, $path)) {
                 return;
             }
 
@@ -717,7 +717,7 @@ class FileStorage implements CacheStorageContract
             clearstatcache(true, $path);
         }
 
-        File::delete($tmp);
+        @File::delete($tmp);
 
         throw new CacheException("Unable to move cache file into place [{$path}].");
     }
@@ -745,7 +745,7 @@ class FileStorage implements CacheStorageContract
      */
     private function readEntry(string $path, ?string $key = null): ?array
     {
-        $raw = File::get($path);
+        $raw = @File::get($path);
 
         if (!is_string($raw) || $raw === '') {
             return null;
@@ -795,7 +795,7 @@ class FileStorage implements CacheStorageContract
                 $entry = $this->readEntry($path, $key);
 
                 if ($entry !== null && $this->isExpired($entry)) {
-                    File::delete($path);
+                    @File::delete($path);
                 }
             });
         } catch (CacheException) {
@@ -817,7 +817,7 @@ class FileStorage implements CacheStorageContract
      */
     private function readLock(string $path, ?string $key = null): ?array
     {
-        $raw = File::get($path);
+        $raw = @File::get($path);
 
         if (!is_string($raw) || $raw === '') {
             return null;
@@ -849,6 +849,12 @@ class FileStorage implements CacheStorageContract
     /* ---------------------------------------------------------------------
      | Internals: filesystem helpers
      | ------------------------------------------------------------------ */
+
+    /** Call under the shard guard: File::delete() also returns true for missing files. */
+    private function deleteExistingFile(string $path): bool
+    {
+        return File::exists($path) && @File::delete($path);
+    }
 
     /**
      * @return array{0: string, 1: string} Shard directory and full file path for a key.
@@ -916,10 +922,10 @@ class FileStorage implements CacheStorageContract
                 }
 
                 $path = $dir . DIRECTORY_SEPARATOR . $file;
-                $mtime = File::lastModified($path);
+                $mtime = @File::lastModified($path);
 
                 if ($mtime !== false && $mtime < $limit) {
-                    File::delete($path);
+                    @File::delete($path);
                 }
             }
         }
@@ -940,7 +946,7 @@ class FileStorage implements CacheStorageContract
 
         $marker = $this->cacheRoot . DIRECTORY_SEPARATOR . '.gc';
         clearstatcache(true, $marker);
-        $mtime = File::lastModified($marker);
+        $mtime = @File::lastModified($marker);
 
         if ($mtime !== false && time() - $mtime < $this->gcInterval) {
             return;
@@ -959,7 +965,7 @@ class FileStorage implements CacheStorageContract
         }
 
         // Another process may create it between the check and mkdir(), so re-check on failure.
-        if (!File::ensureDirectoryExists($directory, $this->dirMode)) {
+        if (!@File::ensureDirectoryExists($directory, $this->dirMode) && !File::isDirectory($directory)) {
             throw new CacheException("Unable to create cache directory [$directory].");
         }
     }

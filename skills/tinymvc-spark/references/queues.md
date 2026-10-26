@@ -12,7 +12,7 @@ Read this reference for queue and jobs. Source paths and command working directo
 
 Job-construction and retry-policy failures follow the same retry/failure path as handler errors, using worker defaults when job settings cannot be resolved. Stale reservations are recovered at worker startup after 3600 seconds; an indefinitely running worker needs restarting to repeat recovery. Keep job execution below that reservation window. The worker does not forcibly interrupt a running job.
 
-Worker logs retain timestamps and job identity. Job lines use dotted leaders before `RUNNING`, `DONE`, or `FAIL`, with elapsed time on completion. Other lines put their status first: `INFO`, `ERROR`, `RETRY`, or `SCHEDULED`. Error details and recurring-job schedules appear on separate lines. Redirected logs remain plain text; terminal colors respect `NO_COLOR`.
+Worker logs use unbracketed timestamps and compact job labels (`App\Jobs\Example  #2 · 1/3`). Job lines use dotted leaders before `RUNNING`, `DONE`, or `FAIL`, with elapsed time on completion. Workers listening to multiple queues also show the job's queue name. Informational and error lines put their status first. Recurring schedules and retries appear underneath as indented `↳ Next run: ...` and `↳ Retry at: ...` notes; blank lines separate job groups. The final summary counts completed jobs and failed attempts. Colors auto-detect the terminal and respect `NO_COLOR` by default; `--ansi` forces colors and `--no-ansi` disables them, taking precedence if both flags are present.
 
 A pending dispatch attempts to enqueue only once, including when explicit `send()` throws. Its destructor does not retry an ambiguous transport failure. Any deliberate producer retry needs application-level deduplication or idempotency.
 

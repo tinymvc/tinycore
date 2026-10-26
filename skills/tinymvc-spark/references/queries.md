@@ -2,6 +2,8 @@
 
 Read this reference for database queries, model queries, transactions, and locks. All source paths and commands are relative to the application root.
 
+Driver names come from `Spark\Database\Contracts\DatabaseDriver`: `DRIVER_MYSQL`, `DRIVER_PGSQL`, and `DRIVER_SQLITE` are the engines in `SUPPORTED_DRIVERS`. Both `Spark\Database\DB` and `Spark\Facades\DB` expose these constants. Other PDO name constants identify drivers but do not add SQL grammar support. Use `DB::DRIVER_*` in driver comparisons; connection names are application-defined strings. `DB::connection()`, `DB::connection(null)`, and `DB::connection([])` return the shared default connection. `DB::pdo()` aliases `DB::getPdo()`.
+
 ---
 
 ## Model-First Query Architecture

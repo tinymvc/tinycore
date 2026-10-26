@@ -116,10 +116,10 @@ class DB implements DBContract, DatabaseDriver
     /**
      * Creates a new database connection instance.
      *
-     * @param string|array $config A connection name from `database.connections` or a complete configuration array.
+     * @param string|array|null $config A named connection, a configuration array, or null for the default connection.
      * @return self A new instance of the DB class.
      */
-    public static function connection(string|array $config = []): self
+    public static function connection(string|array|null $config = null): self
     {
         if (empty($config)) {
             return app(DB::class); // Return the default connection instance if no config is provided.
@@ -459,26 +459,18 @@ class DB implements DBContract, DatabaseDriver
             return $this->macroCall($name, $args);
         }
 
-        $proxy = [
-            'beginTransaction',
-            'commit',
-            'rollBack',
-            'inTransaction',
-            'getAttribute',
-            'setAttribute',
-            'quote',
-            'lastInsertId',
-            'errorCode',
-            'errorInfo',
-            'getAvailableDrivers',
-        ];
-
-        if (in_array($name, $proxy)) {
+        // PDO method names are case-insensitive and do not require a query grammar.
+        if (method_exists(PDO::class, $name)) {
             return $this->getPdo()->$name(...$args);
         }
 
         $query = new QueryBuilder($this);
-        return $query->$name(...$args);
+
+        if (method_exists($query, $name) || $query->hasMacro($name)) {
+            return $query->$name(...$args);
+        }
+
+        return $this->getPdo()->$name(...$args);
     }
 
     /**
@@ -570,7 +562,7 @@ class DB implements DBContract, DatabaseDriver
     {
         return match ($driver = $this->getDriver()) {
                 // create a sqlite data source name, sqlite.db filepath.
-            self::DRIVER_SQLITE => sprintf('sqlite:%s', $this->config['database'] ?? $this->config['path'] ?? $this->config['file'] ?? ':memory:'),
+            self::DRIVER_SQLITE => sprintf('%s:%s', $driver, $this->config['database'] ?? $this->config['path'] ?? $this->config['file'] ?? ':memory:'),
 
             /** create a server side data source name.
              * 

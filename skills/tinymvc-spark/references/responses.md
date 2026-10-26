@@ -6,6 +6,8 @@ Read this reference for HTTP responses, JSON resources, redirects, and API contr
 
 ## REST API Responses and JSON Resources
 
+Use `Spark\Http\Header` constants for known header names, for example `response()->setHeader(Header::CACHE_CONTROL, 'no-store')`. Request/response header lookups remain case-insensitive; custom application headers can still be strings.
+
 For REST APIs, use **`Spark\Http\Resources\JsonResource`** for all entity and collection presentations. Do **not** manually construct an entity envelope such as `json(['data' => $post])` or `return ['data' => $post]` in a resource controller. Use `json()` for a message, scalar, webhook, or other intentionally non-resource contract.
 
 ### Standard Controller Response Patterns
@@ -238,7 +240,7 @@ return response()->noContent();
 
 // Download a generated file
 response()->download($fileContents, 'report.pdf', [
-    'Content-Type' => 'application/pdf',
+    \Spark\Http\Header::CONTENT_TYPE => 'application/pdf',
 ]);
 ```
 
@@ -253,12 +255,14 @@ The six `Psr\Http\Message\*FactoryInterface` bindings default to the shared `Nyh
 ```php
 $factory = app(Psr\Http\Message\ResponseFactoryInterface::class);
 $streams = app(Psr\Http\Message\StreamFactoryInterface::class);
-return $factory->createResponse(200)
-    ->withHeader('Content-Type', 'application/pdf')
+return $factory->createResponse(\Spark\Http\Response::STATUS_OK)
+    ->withHeader(\Spark\Http\Header::CONTENT_TYPE, 'application/pdf')
     ->withBody($streams->createStreamFromFile(storage_dir('report.pdf')));
 ```
 
 Emission reads streams in chunks. `getContent()` explicitly reads a string: it preserves the cursor for seekable streams and consumes the remaining bytes of non-seekable streams. HEAD responses retain representation headers but emit no body; bodyless status codes are handled in the same response path.
+
+`write($text)` appends to the prepared representation, including arrays/resources encoded as JSON and stringable or stream bodies. It removes an existing `Content-Length` when appending bytes, so a stale length cannot truncate output. Appending does not make arbitrary text valid JSON; use `json()` to replace structured JSON content. Writing an empty string leaves the response unchanged.
 
 `file()` and `download()` retain their early-response behavior and now use normal preparation, emission, and termination. During application handling, `send()` returns control to the application using an internal response exception, so it does not emit twice or exit a PSR host. Prefer returning a response from new controller and middleware code.
 

@@ -50,7 +50,7 @@ class Migration implements MigrationContract
 
         $this->pdo = DB::getPdo();
 
-        if (!in_array($driver = DB::getDriver(), [DB::DRIVER_SQLITE, DB::DRIVER_MYSQL, DB::DRIVER_PGSQL], true)) {
+        if (!in_array($driver = DB::getDriver(), DB::SUPPORTED_DRIVERS, true)) {
             throw new \RuntimeException('Unsupported migration database driver.');
         }
 

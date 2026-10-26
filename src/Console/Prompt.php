@@ -7,6 +7,7 @@ use Spark\Support\Traits\Macroable;
 use function array_key_exists;
 use function array_key_first;
 use function array_pad;
+use function array_slice;
 use function count;
 use function implode;
 use function is_array;
@@ -448,6 +449,16 @@ class Prompt implements PromptContract
         for ($i = 0; $i < $count; $i++) {
             $arg = $args[$i];
 
+            if ($arg === '--') {
+                $parsed['_args'] = [...$parsed['_args'], ...array_slice($args, $i + 1)];
+                break;
+            }
+
+            if ($arg === '--ansi' || $arg === '--no-ansi') {
+                $parsed[substr($arg, 2)] = true;
+                continue;
+            }
+
             if (!str_starts_with($arg, '-')) {
                 $parsed['_args'][] = $arg;
                 continue;
@@ -512,8 +523,25 @@ class Prompt implements PromptContract
         return \defined('STDOUT') && function_exists('stream_isatty') && stream_isatty(STDOUT);
     }
 
-    private static function supportsColors(): bool
+    /** Explicit CLI flags override auto-detection; --no-ansi wins if both are present. */
+    public static function supportsColors(?array $arguments = null): bool
     {
+        $ansi = false;
+
+        foreach ($arguments ?? array_slice($GLOBALS['argv'] ?? [], 1) as $argument) {
+            if ($argument === '--') {
+                break;
+            }
+            if ($argument === '--no-ansi') {
+                return false;
+            }
+            $ansi = $ansi || $argument === '--ansi';
+        }
+
+        if ($ansi) {
+            return true;
+        }
+
         return self::isTerminal() && getenv('TERM') !== 'dumb'
             && (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '');
     }

@@ -11,11 +11,41 @@ final class DatabaseConnectionTest extends FrameworkTestCase
     {
         $this->assertSame(app(DB::class), DB::connection());
         $this->assertSame(app(DB::class), DB::connection('sqlite'));
+        $this->assertSame(app(DB::class), \Spark\Facades\DB::connection(null));
+        $this->assertSame(app(DB::class), \Spark\Facades\DB::connection([]));
+        $this->assertSame(app(DB::class)->getPdo(), \Spark\Facades\DB::pdo());
+    }
+
+    public function test_pdo_forwarding_preserves_case_insensitive_method_calls(): void
+    {
+        \Spark\Facades\DB::beginTransaction();
+        $this->assertTrue(\Spark\Facades\DB::inTransaction());
+        $this->assertTrue(\Spark\Facades\DB::rollback());
+        $this->assertFalse(\Spark\Facades\DB::inTransaction());
+
+        $this->assertSame(DB::DRIVER_SQLITE, app(DB::class)->getAttribute(PDO::ATTR_DRIVER_NAME));
+    }
+
+    public function test_query_macros_keep_the_selected_connection(): void
+    {
+        $db = new DB(['driver' => DB::DRIVER_SQLITE, 'database' => ':memory:']);
+        $db->exec('CREATE TABLE macro_values (value INTEGER)');
+        $db->exec('INSERT INTO macro_values VALUES (42)');
+
+        \Spark\Database\QueryBuilder::macro('constantAuditValue', function () {
+            return $this->table('macro_values')->value('value');
+        });
+
+        try {
+            $this->assertSame(42, (int) $db->constantAuditValue());
+        } finally {
+            \Spark\Database\QueryBuilder::flushMacros();
+        }
     }
 
     public function test_undefined_named_connection_fails_clearly(): void
     {
-        $this->assertThrows(InvalidDatabaseConfigException::class, fn () => DB::connection('missing'));
+        $this->assertThrows(InvalidDatabaseConfigException::class, fn() => DB::connection('missing'));
     }
 
     public function test_named_config_overrides_base_and_normalizes_aliases(): void

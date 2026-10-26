@@ -24,6 +24,10 @@ php test --filter test_can_create_post
 
 # List all discovered tests
 php test --list-tests
+
+# Force or disable ANSI colors (also supported by php tests/run.php in core)
+php test --ansi
+php test --no-ansi
 ```
 
 ---

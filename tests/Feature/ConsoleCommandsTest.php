@@ -4,6 +4,21 @@ require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
 final class ConsoleCommandsTest extends FrameworkTestCase
 {
+    private array $arguments;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->arguments = $GLOBALS['argv'];
+        $GLOBALS['argv'] = ['spark', '--no-ansi'];
+    }
+
+    protected function tearDown(): void
+    {
+        $GLOBALS['argv'] = $this->arguments;
+        parent::tearDown();
+    }
+
     public function test_named_connection_resolution_and_resource_generator(): void
     {
         config([

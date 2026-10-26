@@ -17,7 +17,7 @@ use PDOStatement;
  * @method static Database resetConfig(array $config)
  * @method static Database resetPdo()
  * @method static Database reset()
- * @method static Database connection(string|array $config = [])
+ * @method static Database connection(string|array|null $config = null)
  * @method static false|PDOStatement query(string $query, ...$args)
  * @method static false|PDOStatement prepare(string $statement, array $options = [])
  * @method static PDO getPdo()

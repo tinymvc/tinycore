@@ -153,6 +153,9 @@ interface PromptContract
      */
     public static function parseArguments(array $args): array;
 
+    /** Resolve ANSI color support from CLI flags, environment, and terminal detection. */
+    public static function supportsColors(?array $arguments = null): bool;
+
     /**
      * Print a specified number of newlines to the console.
      *

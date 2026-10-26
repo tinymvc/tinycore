@@ -3,6 +3,7 @@
 namespace Spark\Queue;
 
 use PDO;
+use Spark\Console\Prompt;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueContract;
 use Spark\Queue\Storage\{RedisStorage, DatabaseStorage, FileStorage};
@@ -145,10 +146,11 @@ class Queue implements QueueContract
         usleep(1000 * rand(100, 500)); // Random micro-delay to reduce race conditions on startup.
 
         $this->recoverStaleJobs();
+        echo PHP_EOL;
 
         do {
             if ($timeout > 0 && (microtime(true) - $startedAt) >= $timeout) {
-                $this->message('Queue worker timeout reached. Shutting down...');
+                $this->message('Worker timeout reached. Shutting down.');
                 break;
             }
 
@@ -176,13 +178,15 @@ class Queue implements QueueContract
                 $maxTries = $job->getTries($tries);
                 $retryDelay = $job->getBackoff($delay, $attempts + 1);
                 $label = sprintf(
-                    '%s [queue=%s, id=%d, attempt=%d/%d]',
+                    '%s  #%d · %d/%d',
                     $label,
-                    $job->getMetadata('queue', 'default'),
                     $jobId,
                     $attempts + 1,
                     $maxTries,
                 );
+                if (is_array($queue) && count($queue) > 1) {
+                    $label .= ' · ' . $job->getMetadata('queue', 'default');
+                }
                 $this->message($label, 'RUNNING');
                 $this->storage->updateJobStatus($jobId, 'processing', $attempts + 1);
 
@@ -193,7 +197,7 @@ class Queue implements QueueContract
                     $this->storage->rescheduleJob($jobId, $nextRun);
 
                     $this->message($label, 'DONE', microtime(true) - $jobStartedAt);
-                    $this->message(sprintf('Job #%d scheduled for %s', $jobId, $nextRun), 'SCHEDULED');
+                    $this->message(sprintf('Next run: %s', $nextRun), 'SCHEDULED');
                 } else {
                     $this->removeJobById($jobId);
                     $this->message($label, 'DONE', microtime(true) - $jobStartedAt);
@@ -215,18 +219,25 @@ class Queue implements QueueContract
                     $retryTime = now()->addSeconds($retryDelay);
                     $this->storage->retryJob($jobId, $retryTime, $newAttempts);
 
-                    $this->message(sprintf('Job #%d scheduled for %s', $jobId, $retryTime), 'RETRY');
+                    $this->message(sprintf('Retry at: %s', $retryTime), 'RETRY');
                 }
 
                 $failedJobs++;
             }
+
+            echo PHP_EOL;
 
             if ($once) {
                 break;
             }
         } while (true);
 
-        $this->message(sprintf('Worker stopped: %d completed, %d failed attempts.', $ranJobs, $failedJobs));
+        $this->message(sprintf(
+            'Stopped · %d completed · %d failed %s',
+            $ranJobs,
+            $failedJobs,
+            $failedJobs === 1 ? 'attempt' : 'attempts',
+        ));
     }
 
     /**
@@ -300,21 +311,20 @@ class Queue implements QueueContract
     /** Emit complete lines: no cursor movement or terminal markup in captured logs. */
     private function message(string $message, string $status = 'INFO', ?float $duration = null): void
     {
-        $terminal = \defined('STDOUT') && function_exists('stream_isatty') && stream_isatty(STDOUT);
-        $colors = $terminal && getenv('TERM') !== 'dumb'
-            && (getenv('NO_COLOR') === false || getenv('NO_COLOR') === '');
+        $colors = Prompt::supportsColors();
 
         // Strip terminal escape sequences, then flatten control characters in job/error text.
         $message = preg_replace('/\x1B(?:\][^\x07\x1B]*(?:\x07|\x1B\\\\)|\[[0-?]*[ -\/]*[@-~]|[@-_])/', '', $message) ?? $message;
-        $message = trim(preg_replace('/[\x00-\x20\x7F]+/', ' ', $message) ?? $message);
-        $timestamp = '[' . date('Y-m-d H:i:s') . ']';
-        $line = "$timestamp $message";
+        $message = trim(preg_replace('/[\x00-\x1F\x7F]+/', ' ', $message) ?? $message);
+        $timestamp = date('Y-m-d H:i:s');
+        $line = "$timestamp  $message";
         $elapsed = $duration === null ? '' : ($duration >= 1
             ? sprintf('%.2fs ', $duration)
             : sprintf('%.2fms ', max(0, $duration) * 1000));
 
         $width = max(40, min(200, (int) (getenv('COLUMNS') ?: 80)));
-        $separator = ' ' . str_repeat('.', max(2, $width - strlen($line) - strlen($elapsed) - strlen($status) - 2)) . ' ';
+        $lineWidth = function_exists('mb_strwidth') ? mb_strwidth($line, 'UTF-8') : (preg_match_all('/./us', $line) ?: strlen($line));
+        $separator = ' ' . str_repeat('.', max(2, $width - $lineWidth - strlen($elapsed) - strlen($status) - 2)) . ' ';
 
         $color = match ($status) {
             'DONE' => '32',
@@ -324,9 +334,15 @@ class Queue implements QueueContract
         };
         $badge = $colors ? "\033[{$color}m$status\033[0m" : $status;
 
+        if (in_array($status, ['RETRY', 'SCHEDULED'], true)) {
+            $arrow = $colors ? "\033[{$color}m↳\033[0m" : '↳';
+            echo str_repeat(' ', strlen($timestamp) + 2) . "$arrow $message" . PHP_EOL;
+            return;
+        }
+
         echo in_array($status, ['RUNNING', 'DONE', 'FAIL'], true)
             ? "$line$separator$elapsed$badge" . PHP_EOL
-            : "$timestamp $badge  $message" . PHP_EOL;
+            : "$timestamp  $badge  $message" . PHP_EOL;
     }
 
     /**

@@ -2247,3 +2247,28 @@ if (!function_exists('concurrency')) {
         return new Concurrency();
     }
 }
+
+if (!function_exists('service')) {
+    /**
+     * Resolve a service from the application container.
+     *
+     * Returns the default value when the application instance has not been
+     * created yet, or when the container returns null for the given abstract.
+     * If the default is a Closure, it is invoked and its result is returned.
+     *
+     * @template TClass of object
+     * @template TDefault
+     *
+     * @param  string|class-string<TClass>  $abstract  Service ID or class name to resolve.
+     * @param  TDefault|(\Closure(): TDefault)  $default  Fallback value, or a closure that produces it.
+     * @return ($abstract is class-string<TClass> ? TClass|TDefault : mixed)
+     */
+    function service(string $abstract, mixed $default = null): mixed
+    {
+        if (!isset(Application::$app)) {
+            return value($default);
+        }
+
+        return Application::$app->get($abstract) ?? value($default);
+    }
+}

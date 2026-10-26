@@ -3,6 +3,8 @@
 namespace Tests\Unit;
 
 use Spark\Contracts\Support\Arrayable;
+use Spark\Http\Header;
+use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Http\Resources\JsonResource;
 use Spark\Testing\{TestCase, TestResponse};
@@ -142,6 +144,48 @@ final class ResponseTest extends TestCase
         $response->write("\n");
         (new TestResponse($response))->assertHeader('Content-Type', 'application/json; charset=utf-8')
             ->assertExactJson(['ok' => true]);
+    }
+
+    public function testAppendingPreservesUnpreparedContentAndRemovesStaleLength(): void
+    {
+        foreach ([
+            ['ok' => true],
+            new JsonResource(['ok' => true]),
+            new class implements \Stringable {
+                public function __toString(): string
+            {
+                return 'before';
+            }
+            }
+        ] as $content) {
+            $expected = (new Response($content))->getContent();
+            $response = new Response($content, headers: [Header::CONTENT_LENGTH => (string) strlen($expected)]);
+            $response->write("\n");
+            $this->assertSame($expected . "\n", $response->getContent());
+            $this->assertFalse($response->hasHeader(Header::CONTENT_LENGTH));
+        }
+    }
+
+    public function testAppendingToAHeadStreamPreservesItsRepresentation(): void
+    {
+        $stream = \Nyholm\Psr7\Stream::create('before');
+        $stream->seek(2);
+        $response = new Response($stream);
+        $head = Request::fromPsrRequest(new \Nyholm\Psr7\ServerRequest(Request::METHOD_HEAD, '/'));
+        $response->prepareForRequest($head)->write(' after');
+        $this->assertSame('', $response->getContent());
+        $this->assertSame(2, $stream->tell());
+        $get = Request::fromPsrRequest(new \Nyholm\Psr7\ServerRequest(Request::METHOD_GET, '/'));
+        $this->assertSame('before after', $response->prepareForRequest($get)->getContent());
+    }
+
+    public function testRejectedHeaderDoesNotChangeInferredContentTypeState(): void
+    {
+        $response = new Response('before');
+        $response->getHeaders();
+        $this->assertThrows(\InvalidArgumentException::class, fn() => $response->setHeader(Header::CONTENT_TYPE, "bad\r\nvalue"));
+        $response->setContent(['ok' => true]);
+        (new TestResponse($response))->assertHeader(Header::CONTENT_TYPE, 'application/json; charset=utf-8');
     }
 
     public function testInvalidExplicitJsonFailsExplicitly(): void
