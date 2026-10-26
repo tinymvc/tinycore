@@ -80,7 +80,7 @@ class Lock implements LockContract, \ArrayAccess
         $binding = Lock::class . ($name === 'default' ? '' : ":$name");
 
         if (!$app->has($binding)) {
-            $app->instance($binding, Lock::make($name));
+            $app->instance($binding, new Lock($name));
         }
 
         return $app->get($binding);
