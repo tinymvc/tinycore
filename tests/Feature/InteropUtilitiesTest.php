@@ -5,7 +5,6 @@ require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 use Nyholm\Psr7\Stream;
 use Nyholm\Psr7\UploadedFile;
 use Spark\Cache\Cache;
-use Spark\Cache\Lock;
 use Spark\Carbon;
 use Spark\Exceptions\Utils\UploaderException;
 use Spark\Storage\Storage;
@@ -39,22 +38,17 @@ final class InteropUtilitiesTest extends FrameworkTestCase
         $this->assertThrows(Exception::class, fn() => $cache->put('invalid', 1, 'not a valid date'));
     }
 
-    public function test_lock_leases_accept_dates_and_reject_elapsed_deadlines(): void
+    public function test_restored_lock_handles_can_extend_and_release_the_same_owner(): void
     {
-        $lock = Lock::make('expiry-types');
-        foreach ([60, '+1 minute', Carbon::now()->addMinutes(1), new DateTime('+1 minute'), new DateInterval('PT1M')] as $expiry) {
-            $this->assertTrue($lock->lock('lease', $expiry, 0));
-            $remaining = $lock->getLockInfo('lease')['expire_at'] - time();
-            $this->assertTrue($remaining > 57 && $remaining <= 60);
-            $this->assertTrue($lock->unlock('lease'));
-        }
-        $this->assertFalse($lock->lock('elapsed', new DateTimeImmutable('-1 second'), 0));
-        $this->assertSame('done', $lock->withLock('callback', fn() => 'done', '+1 minute', 0));
-        $this->assertFalse($lock->isLocked('callback'));
-        $lock['array'] = ['timeout' => Carbon::now()->addMinutes(1), 'waitTimeout' => 0];
-        $this->assertTrue($lock->ownsLock('array'));
-        $lock->unlock('array');
-        $this->assertSame('helper', Cache::make()->lock('helper', 60)->get(fn() => 'helper'));
+        $cache = Cache::make('leases');
+        $lock = $cache->lock('lease', 60);
+        $this->assertTrue($lock->get());
+        $expiresAt = $lock->info()['expire_at'];
+        $restored = $cache->restoreLock('lease', $lock->owner());
+        $this->assertTrue($restored->extend(30));
+        $this->assertSame($expiresAt + 30, $lock->info()['expire_at']);
+        $this->assertTrue($restored->release());
+        $this->assertFalse($lock->isLocked());
     }
 
     public function test_carbon_locales_translate_relative_time_and_names_without_leaking(): void

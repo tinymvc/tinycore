@@ -60,9 +60,9 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         $cache = new \Spark\Cache\Cache('audit');
         $cache->store('key', 'value');
         $this->assertSame('value', $cache->retrieve('key'));
-        $lock = new \Spark\Cache\Lock('audit');
-        $this->assertTrue($lock->lock('key', 10, 0));
-        $this->assertTrue($lock->unlock('key'));
+        $lock = $cache->lock('key', 10);
+        $this->assertTrue($lock->get());
+        $this->assertTrue($lock->release());
         $queue = new \Spark\Queue\Queue;
         $queue->push(new \Spark\Queue\Job('strlen', ['audit']));
         $this->assertCount(1, $queue->getJobs());

@@ -1,6 +1,6 @@
 # Cache and locks
 
-Use `Spark\Facades\Cache` and `Spark\Facades\Lock`. Cache supports `database`, `file`, and `redis`; migrate the framework cache/lock tables before using the database driver. Keep configured table names logical/unprefixed; each selected database connection applies its prefix.
+Use `Spark\Facades\Cache` for caching and lock handles, or the `cache()` / `lock()` helpers. Cache supports `database`, `file`, and `redis`; migrate the framework cache/lock tables before using the database driver. Keep configured table names logical/unprefixed; each selected database connection applies its prefix.
 
 ## Stores and namespaces
 
@@ -8,7 +8,6 @@ Use `Spark\Facades\Cache` and `Spark\Facades\Lock`. Cache supports `database`, `
 
 ```php
 use Spark\Facades\Cache;
-use Spark\Facades\Lock;
 
 Cache::store('redis')->put('rate', $rate, 3600);
 $reports = Cache::store('redis')->withNamespace('reports');
@@ -17,7 +16,6 @@ $reports->put('daily', $report, '+1 hour');
 // These resolve the same namespace in the default store:
 $custom = cache('custom');
 $custom = Cache::make('custom');
-$custom = Lock::make('custom');
 $custom = lock(name: 'custom');
 ```
 
@@ -26,6 +24,7 @@ $custom = lock(name: 'custom');
 ## Values and lifecycle
 
 ```php
+cache(['var' => 'value'], '10 minutes'); // Write values in the default store/namespace.
 $value = Cache::get('settings', default: []);
 $posts = Cache::remember('featured', fn() => Post::where('featured', true)->get(), '+1 hour');
 Cache::forget('featured');
@@ -33,7 +32,7 @@ Cache::store('redis')->flush(); // Selected namespace's values; preserves locks.
 Cache::purge('redis');         // Forget resolved repositories; preserves stored data.
 ```
 
-Expiration accepts TTL seconds, date strings, `DateTimeInterface`, `Spark\Carbon`, `DateInterval`, or null (no expiry). Zero/negative TTLs and elapsed deadlines expire immediately; invalid dates throw. `remember()`/`load()` take the callback before expiration and do not serialize concurrent misses. `storeManyWithExpiry()` takes `['key' => ['value' => ..., 'expire' => ...]]`.
+Expiration accepts TTL seconds, date strings, `DateTimeInterface`, `Spark\Carbon`, `DateInterval`, or null (no expiry). The array form of `cache($values, $expire)` uses these same rules and returns the default repository; `cache('name')` still selects a namespace. Zero/negative TTLs and elapsed deadlines expire immediately; invalid dates throw. `remember()`/`load()` take the callback before expiration and do not serialize concurrent misses. `storeManyWithExpiry()` takes `['key' => ['value' => ..., 'expire' => ...]]`.
 
 Managers reuse repositories and resolved store configuration until `purge($store)` / `forgetDriver($stores)`. Existing references, including subsequent `withNamespace()` calls, retain their original store configuration. Managers are scoped to one application. `flush()`/`clear()` delete values only in the selected namespace.
 
@@ -57,10 +56,10 @@ if ($lock->get()) {
 }
 ```
 
-`Cache::lock()`, `Lock::lock()`, and `lock($key)` create fresh owner tokens; acquisition is explicit. `get()` returns false immediately on contention, including file shard-guard contention; backend I/O failures throw. `block($seconds)` throws `Spark\Cache\Exceptions\LockTimeoutException` on timeout. Both accept callbacks, return their result, and release in `finally`. Leases are positive integer seconds (default 10); waits are nonnegative seconds. The key `'0'` is valid.
+`Cache::lock()` and `lock($key)` create fresh owner tokens; acquisition is explicit. `get()` returns false immediately on contention, including file shard-guard contention; backend I/O failures throw. `block($seconds)` throws `Spark\Cache\Exceptions\LockTimeoutException` on timeout. Both accept callbacks, return their result, and release in `finally`. Leases are positive integer seconds (default 10); waits are nonnegative seconds. The key `'0'` is valid.
 
 `owner()` and the same repository's `restoreLock($key, $owner)` transfer ownership across processes. Handles do not release on destruction; use a callback or explicit `release()`. `isOwnedByCurrentProcess()` checks ownership; `forceRelease()` bypasses it for deliberate recovery. Purging/flushing must not release live locks. Processes must share the backend and namespace; expired leases can permit overlap, so retain database constraints and idempotency.
 
-Database locks resolve `lock_connection` → store `connection` → default database, using a dedicated PDO connection so ownership commits independently of application transactions.
+`extend($seconds)` adds positive integer seconds to an active lease owned by the handle; it returns false for missing, expired, or foreign-owned locks. `isLocked()` checks for any active owner. `info()` returns `['owner' => ..., 'expire_at' => ...]` (Unix timestamp), or null. Inspection does not acquire a lock.
 
-The old concrete `Spark\Cache\Lock` remains a manual-owner compatibility API (`withLock`, `unlock`, `unlockAll`, flexible deadlines); its `make()` creates an independent owner. New application code uses the facade/handle APIs above.
+Database locks resolve `lock_connection` → store `connection` → default database, using a dedicated PDO connection so ownership commits independently of application transactions.

@@ -5,7 +5,6 @@ require_once dirname(__DIR__) . '/Support/DriverTestCase.php';
 use Spark\Cache\Exceptions\LockTimeoutException;
 use Spark\Database\DB;
 use Spark\Facades\Cache;
-use Spark\Facades\Lock;
 use Spark\Foundation\Application;
 
 final class CacheLockHandleTest extends DriverTestCase
@@ -207,11 +206,47 @@ final class CacheLockHandleTest extends DriverTestCase
             $expired = $cache->lock('lease', 1);
             $this->assertTrue($expired->get());
             usleep(1100000);
+            $this->assertFalse($expired->isLocked());
+            $this->assertNull($expired->info());
+            $this->assertFalse($expired->extend(30));
             $replacement = $cache->lock('lease', 30);
             $this->assertTrue($replacement->get());
+            $replacementInfo = $replacement->info();
+            $this->assertFalse($expired->extend(30));
+            $this->assertSame($replacementInfo, $replacement->info());
             $this->assertFalse($expired->release());
             $this->assertTrue($replacement->isOwnedByCurrentProcess());
             $this->assertTrue($replacement->release());
+        }
+    }
+
+    public function test_lock_inspection_and_extension_preserve_ownership_on_any_store(): void
+    {
+        foreach ($this->stores() as $store) {
+            $cache = Cache::store($store);
+            $owner = $cache->lock('inspect', 30);
+            $other = $cache->lock('inspect', 30);
+            $this->assertFalse($owner->isLocked());
+            $this->assertNull($owner->info());
+            $this->assertFalse($owner->extend(10));
+            $this->assertTrue($owner->get());
+            try {
+                $before = $owner->info();
+                $this->assertSame($owner->owner(), $before['owner']);
+                $this->assertTrue($other->isLocked());
+                $this->assertSame($before, $other->info());
+                $this->assertFalse($other->extend(10));
+                $this->assertSame($before, $owner->info());
+                $this->assertThrows(InvalidArgumentException::class, fn() => $owner->extend(0));
+                $this->assertThrows(InvalidArgumentException::class, fn() => $owner->extend(-1));
+                $this->assertTrue($owner->extend(10));
+                $this->assertSame($before['expire_at'] + 10, $owner->info()['expire_at']);
+                $this->assertFalse($other->get());
+            } finally {
+                $owner->release();
+            }
+            $this->assertNull($other->info());
+            $this->assertFalse($other->isLocked());
         }
     }
 
@@ -219,7 +254,7 @@ final class CacheLockHandleTest extends DriverTestCase
     {
         $this->stores();
         $first = lock('0', 30, name: 'custom');
-        $second = Lock::make('custom')->lock('0', 30);
+        $second = Cache::make('custom')->lock('0', 30);
         $otherNamespace = Cache::lock('0', 30);
         $otherStore = lock('0', 30, name: 'custom', store: 'sql');
         $this->assertTrue($first->get());

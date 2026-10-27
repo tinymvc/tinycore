@@ -141,8 +141,6 @@ class Application extends \Spark\Container implements ApplicationContract
             fn() => $this->get(QueueManager::class)->connection()
         );
 
-        $this->bind(\Spark\Cache\Lock::class); // Legacy manual owners are independent.
-        $this->alias('lock', \Spark\Cache\CacheManager::class);
 
         $this->singleton(
             \Spark\Cache\CacheManager::class,

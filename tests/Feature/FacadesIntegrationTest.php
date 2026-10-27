@@ -12,7 +12,6 @@ use Spark\Facades\Facade;
 use Spark\Facades\Gate;
 use Spark\Facades\Hash;
 use Spark\Facades\Http;
-use Spark\Facades\Lock;
 use Spark\Facades\Log;
 use Spark\Facades\Mail;
 use Spark\Facades\Queue;
@@ -121,10 +120,10 @@ final class FacadesIntegrationTest extends FrameworkTestCase
         $this->assertTrue(in_array('X-Test: 123', $req->getHeaders(), true));
     }
 
-    public function test_lock_facade(): void
+    public function test_cache_facade_creates_lock_handles(): void
     {
-        $lock = Lock::make('default');
-        $this->assertInstanceOf(\Spark\Cache\Cache::class, $lock);
+        $lock = Cache::lock('resource');
+        $this->assertInstanceOf(\Spark\Cache\LockHandle::class, $lock);
     }
 
     public function test_log_facade(): void

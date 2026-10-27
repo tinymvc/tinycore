@@ -19,7 +19,6 @@ TinyCore provides first-class static facades under `Spark\Facades\*`. They provi
 | `Spark\Facades\Gate` | `Spark\Http\Gate` | User authorization policies and ability checks (`Gate::define()`, `Gate::allows()`, `Gate::denies()`, `Gate::check()`, `Gate::authorize()`). |
 | `Spark\Facades\Hash` | `Spark\Hash` | Password hashing (`password()`, `bcrypt()`, `argon2id()`) and verification (`verify()`), encryption (`encrypt()`, `decrypt()`), and UUIDs (`uuid()`). `make()` / `check()` are keyed HMAC helpers, not password hashing. |
 | `Spark\Facades\Http` | `Spark\Http\Client\Http` | Fluent outbound HTTP client with JSON handling and authentication (`Http::withToken()`, `Http::timeout()`, `Http::post()`, `Http::get()`, `Http::pool()`). |
-| `Spark\Facades\Lock` | `Spark\Cache\LockHandle` | `Lock::lock('key', 30)->block(5, $callback)`; `Lock::make('namespace')` shares a cache repository, while each lock handle has its own owner. |
 | `Spark\Facades\Log` | `Psr\Log\LoggerInterface` (native `Spark\Logger`) | Application logging (`Log::info()`, `Log::error()`, `Log::warning()`, `Log::debug()`). |
 | `Spark\Facades\Mail` | `Spark\Utils\Mail` | Fluent email sending with Blade view rendering (`Mail::to()`, `Mail::subject()`, `Mail::view()`, `Mail::send()`). |
 | `Spark\Facades\Queue` | `Spark\Queue\QueueManager`, `Spark\Queue\Queue` | Background queue operations, queue size inspection, clearing. |

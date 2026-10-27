@@ -8,16 +8,16 @@ final class CacheLockDriversTest extends DriverTestCase
     {
         $this->schema();
         $cache = new \Spark\Cache\Cache();
-        $lock = new \Spark\Cache\Lock();
+        $lock = $cache->lock('running', 60);
         $cache->store('value', 'cached');
-        $this->assertTrue($lock->lock('running', 60, 0));
+        $this->assertTrue($lock->get());
         $commands = new \Spark\Foundation\Console\PrimaryCommandsHandler();
         ob_start();
 
         try {
             $commands->clearCache();
             $this->assertFalse($cache->has('value'));
-            $this->assertTrue($lock->isLocked('running'));
+            $this->assertTrue($lock->isOwnedByCurrentProcess());
             $env = $this->storagePath . '/.env';
             file_put_contents($env, "APP_NAME=Test\nAPP_KEY=\n");
             $commands->generateAppKey();
@@ -27,6 +27,7 @@ final class CacheLockDriversTest extends DriverTestCase
             $this->assertTrue((bool) preg_match('/APP_KEY=[a-f0-9]{32}/', $first));
         } finally {
             ob_end_clean();
+            $lock->release();
         }
     }
 

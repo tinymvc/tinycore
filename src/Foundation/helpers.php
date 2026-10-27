@@ -1424,18 +1424,16 @@ if (!function_exists('dispatch')) {
 
 if (!function_exists('cache')) {
     /**
-     * Retrieve or create a cache instance by name.
-     *
-     * This function returns an existing cache instance by the given name,
-     * or creates a new one if it doesn't already exist. Cache instances
-     * belong to the current application and can be accessed using their names.
-     *
-     * @param string $name The name of the cache instance to retrieve or create. Default is 'default'.
-     * @return Cache The cache instance associated with the specified name.
+     * Resolve a cache namespace, or store an array of values in the default namespace.
+     * Both forms return the cache repository; expiration applies to array writes.
      */
-    function cache(string $name = 'default'): Cache
-    {
-        return Cache::make($name);
+    function cache(
+        string|array $name = 'default',
+        int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null,
+    ): Cache {
+        return is_array($name)
+            ? Cache::make()->storeMany($name, $expire)
+            : Cache::make($name);
     }
 }
 

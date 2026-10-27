@@ -5,7 +5,6 @@ require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 use Spark\Cache\Cache;
 use Spark\Cache\CacheManager;
 use Spark\Facades\Cache as CacheFacade;
-use Spark\Facades\Lock;
 
 final class CacheManagerTest extends FrameworkTestCase
 {
@@ -36,7 +35,6 @@ final class CacheManagerTest extends FrameworkTestCase
         $this->assertSame('secondary', $secondary->get('key'));
         $this->assertSame('namespace', Cache::make('custom')->get('key'));
         $this->assertSame(cache('custom'), $primary->withNamespace('custom'));
-        $this->assertSame(cache('custom'), Lock::make('custom'));
         $this->assertSame(cache('custom'), lock(name: 'custom'));
         $this->assertSame($secondary->withNamespace('custom'), lock(name: 'custom', store: 'secondary'));
         $secondary->flush();

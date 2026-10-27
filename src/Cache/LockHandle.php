@@ -80,4 +80,25 @@ class LockHandle
     {
         return $this->storage->ownsLock($this->name, $this->owner);
     }
+
+    /** Extend an active lease only when this handle owns it. */
+    public function extend(int $seconds): bool
+    {
+        if ($seconds < 1) {
+            throw new \InvalidArgumentException('Lock extensions must be at least one second.');
+        }
+        return $this->storage->extendLock($this->name, $this->owner, $seconds);
+    }
+
+    /** Whether any owner currently holds this lock. */
+    public function isLocked(): bool
+    {
+        return $this->storage->isLocked($this->name);
+    }
+
+    /** @return array{owner: string, expire_at: int}|null Active lock metadata, regardless of owner. */
+    public function info(): ?array
+    {
+        return $this->storage->getLockInfo($this->name);
+    }
 }

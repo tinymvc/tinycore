@@ -12,7 +12,7 @@ Check the installed source and back up data before upgrading. Paths below refer 
 ## Cache, locks, and queues
 
 - `Cache::store('name')` selects a configured store; replace facade writes with `put()`. Namespaces stay in `Cache::make()`/`cache()`. Use `Cache::purge('name')` to reload a store. `Queue::connection('name')`, job `onConnection()`, and CLI `--connection` select queue configurations; `Queue::purge()` preserves jobs.
-- `Lock::make('custom')` and `lock(name: 'custom')` now share a cache namespace, not an owner. `Cache::lock('key', 30)`, `Lock::lock()`, and `lock('key')` return handles: acquire with `get()`/`block()`, release on that handle. Replace `withLock(key, callback, timeout, waitTimeout)` with `lock(key, timeout)->block(waitTimeout, callback)`. Use `seconds:` for named lease arguments; leases require positive integer seconds. Transfer owners with `restoreLock()`. Concrete `Spark\Cache\Lock` retains the old manual API.
+- `Spark\Cache\Lock`, its `LockContract`, and `Spark\Facades\Lock` are removed. Use `Cache::make('custom')` for namespaces and `Cache::lock('key', 30)` / `lock('key')` for independent handles. Replace `withLock(key, callback, timeout, waitTimeout)` with `Cache::lock(key, timeout)->block(waitTimeout, callback)`; retain the handle for `release()`, `extend()`, and `info()`. Leases require positive integer seconds (`seconds:`); handles do not release on destruction. Transfer owners with `restoreLock()` and release each acquired handle explicitly or through a callback.
 
 ## Database and pagination
 

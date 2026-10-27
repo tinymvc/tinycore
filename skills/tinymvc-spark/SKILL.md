@@ -41,7 +41,7 @@ Use Spark's native APIs and the application's conventions. Laravel is a style re
 | Pagination | Classes live in `Spark\Paginator`. `paginate()` includes totals; `simplePaginate()` omits counts; `cursorPaginate()` requires explicit, unique, non-null ordering. |
 | Validation factory | `Validator::make($rules, $data)` takes rules first. See [validation](references/requests-validation.md) for parameter-array rules. |
 | Passwords | `Hash::password($password)` / `Hash::verify($password, $hash)`. `make()` / `check()` are keyed HMAC helpers. |
-| Cache | `Cache::remember($key, fn () => ..., '+1 hour')` takes the callback before expiration. |
+| Cache | `Cache::remember($key, fn () => ..., '+1 hour')` takes the callback before expiration. `cache('name')` selects a namespace; `cache(['key' => $value], '10 minutes')` writes values. |
 | Jobs | Implement `Spark\Queue\Contracts\JobInterface` and use `Spark\Queue\Dispatchable`; `SendEmail::dispatch($id)->onQueue('emails')`. Reserve `job()` for recurring registration or function/callable-array jobs; closures are unsupported. |
 | Dates | `now()`, `carbon()`, `Spark\Carbon` follow the configured app timezone. Resources normalize Carbon to UTC; pass model dates through unless the contract requires another format. |
 

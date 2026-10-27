@@ -2,8 +2,8 @@
 
 require_once dirname(__DIR__) . '/Support/DriverTestCase.php';
 
-use Spark\Cache\{Cache, Lock};
-use Spark\Cache\Exceptions\LockException;
+use Spark\Cache\Cache;
+use Spark\Cache\Exceptions\LockTimeoutException;
 
 final class CacheBoundaryTest extends DriverTestCase
 {
@@ -12,7 +12,7 @@ final class CacheBoundaryTest extends DriverTestCase
         $this->schema();
         foreach ($this->redisEnabled() ? ['file', 'database', 'redis'] : ['file', 'database'] as $driver) {
             config(['cache' => ['driver' => $driver, 'connections' => [$driver => $driver === 'redis' ? $this->redisConfig() : ['path' => $this->storagePath . '/cache']]]]);
-            $test(new Cache('boundary'), new Lock('boundary'));
+            $test(new Cache('boundary'));
         }
     }
 
@@ -34,9 +34,9 @@ final class CacheBoundaryTest extends DriverTestCase
     public function test_callback_failure_is_not_cached(): void
     {
         $this->eachDriver(function (Cache $cache) {
-            $this->assertThrows(RuntimeException::class, fn () => $cache->load('failed', fn () => throw new RuntimeException('failed')));
+            $this->assertThrows(RuntimeException::class, fn() => $cache->load('failed', fn() => throw new RuntimeException('failed')));
             $this->assertFalse($cache->has('failed'));
-            $this->assertSame('recovered', $cache->load('failed', fn () => 'recovered'));
+            $this->assertSame('recovered', $cache->load('failed', fn() => 'recovered'));
         });
     }
 
@@ -67,27 +67,28 @@ final class CacheBoundaryTest extends DriverTestCase
 
     public function test_lock_callback_releases_after_success_and_error(): void
     {
-        $this->eachDriver(function (Cache $cache, Lock $lock) {
-            $this->assertSame(42, $lock->withLock('critical', function ($owner) use ($lock) {
-                $this->assertSame($lock, $owner);
-                $this->assertTrue($lock->ownsLock('critical'));
+        $this->eachDriver(function (Cache $cache) {
+            $lock = $cache->lock('critical');
+            $this->assertSame(42, $lock->block(0, function () use ($lock) {
+                $this->assertTrue($lock->isOwnedByCurrentProcess());
                 return 42;
-            }, waitTimeout: 0));
-            $this->assertFalse($lock->isLocked('critical'));
-            $this->assertThrows(Error::class, fn () => $lock->withLock('critical', fn () => throw new Error('failed'), waitTimeout: 0));
-            $this->assertFalse($lock->isLocked('critical'));
+            }));
+            $this->assertFalse($lock->isLocked());
+            $this->assertThrows(Error::class, fn() => $lock->block(0, fn() => throw new Error('failed')));
+            $this->assertFalse($lock->isLocked());
         });
     }
 
     public function test_lock_contention_does_not_execute_callback_or_release_owner(): void
     {
-        $this->eachDriver(function (Cache $cache, Lock $lock) {
-            $other = new Lock('boundary');
-            $this->assertTrue($lock->lock('critical', 60, 0));
-            $this->assertThrows(LockException::class, fn () => $other->withLock('critical', fn () => $this->fail('Contended callback executed'), waitTimeout: 0));
-            $this->assertTrue($lock->ownsLock('critical'));
-            $this->assertFalse($other->unlock('critical'));
-            $this->assertTrue($lock->unlock('critical'));
+        $this->eachDriver(function (Cache $cache) {
+            $lock = $cache->lock('critical', 60);
+            $other = $cache->lock('critical', 60);
+            $this->assertTrue($lock->get());
+            $this->assertThrows(LockTimeoutException::class, fn() => $other->block(0, fn() => $this->fail('Contended callback executed')));
+            $this->assertTrue($lock->isOwnedByCurrentProcess());
+            $this->assertFalse($other->release());
+            $this->assertTrue($lock->release());
         });
     }
 }

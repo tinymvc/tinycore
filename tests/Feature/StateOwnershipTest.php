@@ -2,8 +2,7 @@
 
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
-use Spark\Cache\Lock;
-use Spark\Facades\Lock as LockFacade;
+use Spark\Facades\Cache;
 use Spark\Foundation\Application;
 use Spark\Queue\Job;
 use Spark\Queue\PendingDispatch;
@@ -12,17 +11,18 @@ final class StateOwnershipTest extends FrameworkTestCase
 {
     public function test_manual_facade_lock_survives_until_explicit_release(): void
     {
-        $competitor = new Lock();
-        $handle = LockFacade::lock('invoice', 30);
+        $competitor = lock('invoice', 30);
+        $handle = Cache::lock('invoice', 30);
         $this->assertTrue($handle->get());
         try {
-            $this->assertTrue($competitor->isLocked('invoice'));
-            $this->assertFalse($competitor->lock('invoice', 30, 0));
+            $this->assertTrue($competitor->isLocked());
+            $this->assertFalse($competitor->get());
             $this->assertTrue($handle->isOwnedByCurrentProcess());
         } finally {
             $handle->release();
         }
-        $this->assertTrue($competitor->lock('invoice', 30, 0));
+        $this->assertTrue($competitor->get());
+        $this->assertTrue($competitor->release());
     }
 
     public function test_named_helpers_do_not_share_instances_between_applications(): void

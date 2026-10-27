@@ -4,7 +4,7 @@
 
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1325%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1280%20passed-brightgreen.svg)](tests/)
 
 Applications built with TinyMVC / Spark start from [Skeleton](https://github.com/tinymvc/skeleton) (`tinymvc/skeleton`), which provides the application structure and installs TinyCore as a Composer dependency under `vendor/tinymvc/tinycore`. This repository contains the core engine's source and regression suite.
 
@@ -49,19 +49,19 @@ SPARK_TEST_TABLE_PREFIX=app_ php tests/database.php
 
 Verified on **2026-10-27**, with PHP **8.4.27** on macOS:
 
-| Suite | Passed | Assertions |
-| --- | ---: | ---: |
-| Full framework suite | 1,325 | 6,969 |
-| Database scenarios, per engine and prefix configuration | 472 | 1,323 |
+| Suite | Passed | Skipped | Assertions |
+| --- | ---: | ---: | ---: |
+| Full framework suite | 1,280 | 44 | 6,588 |
+| Database scenarios, per engine and prefix configuration (previous verification) | 472 | 0 | 1,323 |
 
-All checks passed with no skips. The database scenarios ran on SQLite, MySQL, and PostgreSQL with both empty and `app_` prefixes. They are shared scenarios, also included in the full suite on SQLite, not additional distinct tests. This is behavioral regression coverage; no line or branch coverage percentage was measured.
+The full suite contains 1,324 tests. Redis and PostgreSQL were unavailable for this run; their integration tests were skipped with `SPARK_TEST_REDIS_HOST='' SPARK_TEST_REDIS_SOCKET='' SPARK_TEST_PGSQL_ADMIN_DSN='' php tests/run.php`. All remaining tests passed. The database row records the earlier SQLite, MySQL, and PostgreSQL runs with both empty and `app_` prefixes; that matrix was not rerun for this change. These shared scenarios are also included in the full suite on SQLite, not additional distinct tests. No line or branch coverage percentage was measured.
 
 ### Coverage
 
 | Area | Main checks |
 | --- | --- |
 | Database and ORM | Prefixes, schema/constraints, transactions/savepoints, bindings, scoped writes, model identity and connection retention, casts, soft deletes, relations/pivots, aggregates, and pagination |
-| Cache and locks | File/database/Redis contracts, expiration and nulls, atomic counters, namespaces, manager lifecycle, independent owners, contention/timeouts, ownership transfer, and safe clearing |
+| Cache and locks | File/database/Redis contracts, helper array writes, expiration and nulls, atomic counters, namespaces, manager lifecycle, independent owners, contention/timeouts, ownership transfer, lease extension/inspection, and safe clearing |
 | Queues and sessions | Named connections, claims, deduplication, retries/failures, stale reservations, worker restarts, persistence/expiry, flash data, and invalidation |
 | HTTP and validation | Routing, request lifecycle, PSR integration, proxies, middleware, responses/resources, validation boundaries, uploads, and real HTTP client/session transport |
 | Authentication | Guards, gates, password/encryption helpers, JWT tokens, revocation, and CSRF |

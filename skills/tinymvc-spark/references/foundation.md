@@ -103,7 +103,7 @@ Database, ORM, and migrations:
 Cache, lock, queue, and redis:
 
 - Cache: `./vendor/tinymvc/tinycore/src/Cache/Cache.php`
-- Lock: `./vendor/tinymvc/tinycore/src/Cache/Lock.php`
+- Lock handles: `./vendor/tinymvc/tinycore/src/Cache/LockHandle.php`
 - Cache and lock contracts: `./vendor/tinymvc/tinycore/src/Cache/Contracts/`
 - Cache storage drivers: `./vendor/tinymvc/tinycore/src/Cache/Storage/`
 - Queue: `./vendor/tinymvc/tinycore/src/Queue/Queue.php`
