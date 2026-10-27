@@ -2,7 +2,7 @@
 
 namespace Spark\Facades;
 
-use Spark\Http\Session as BaseSession;
+use Spark\Http\Session\Session as BaseSession;
 
 /**
  * Facade Session
