@@ -3,11 +3,26 @@
 namespace Spark\Queue;
 
 use Spark\Foundation\Application;
+use Spark\Queue\Contracts\JobContract;
 use function array_key_exists;
 use function in_array;
 use function is_array;
 
-/** Resolves queue connections independently of queue names such as emails or reports. */
+/**
+ * Resolves queue connections independently of queue names such as emails or reports.
+ * 
+ * @method static void push(JobContract $job, string $queue = 'default')
+ * @method static void pushOnce(JobContract $job, string $queue = 'default')
+ * @method static void restart()
+ * @method static void work(
+        bool $once = false,
+        int $timeout = 3600,
+        int $sleep = 3,
+        int $delay = 5,
+        int $tries = 3,
+        array|string $queue = 'default'
+    )
+ */
 class QueueManager
 {
     /** @var array<string, Queue> */

@@ -8,8 +8,8 @@ use Spark\Database\DB;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Hash;
-use Spark\Queue\Queue;
 use Spark\Http\Routing\Router;
+use Spark\Queue\QueueManager;
 use Spark\Translator;
 use Spark\Cache\Cache;
 use Spark\Utils\File;
@@ -171,7 +171,7 @@ class Tinker
         $this->context['translator'] = Application::$app->make(Translator::class);
         $this->context['hash'] = Application::$app->make(Hash::class);
         $this->context['http'] = Application::$app->make(Http::class);
-        $this->context['queue'] = Application::$app->make(Queue::class);
+        $this->context['queue'] = Application::$app->make(QueueManager::class);
         $this->context['cache'] = Application::$app->make(Cache::class);
         $this->context['fm'] = Application::$app->make(File::class);
         $this->context['image'] = Application::$app->make(Image::class);

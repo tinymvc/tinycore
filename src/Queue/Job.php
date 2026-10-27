@@ -59,6 +59,11 @@ class Job implements JobContract
     private object|false|null $resolvedCallbackObject = null;
 
     /**
+     * @var string|null The connection name for the job, if applicable.
+     */
+    private ?string $connection = null;
+
+    /**
      * Constructor.
      *
      * Creates a new Job instance.
@@ -479,6 +484,22 @@ class Job implements JobContract
     }
 
     /**
+     * Sets the connection name for the job.
+     *
+     * This method sets the connection name that should be used when dispatching
+     * the job to the queue. It allows you to specify which connection should be
+     * used for this particular job.
+     *
+     * @param string|null $connection The name of the connection to use for this job.
+     * @return JobContract Returns the current Job instance for method chaining.
+     */
+    public function onConnection(?string $connection = null): JobContract
+    {
+        $this->connection = $connection;
+        return $this;
+    }
+
+    /**
      * Dispatches the job to the queue.
      *
      * This method will add the job to the queue. It is typically used
@@ -489,9 +510,7 @@ class Job implements JobContract
      */
     public function dispatch(string $queue = 'default'): void
     {
-        /** @var \Spark\Queue\Queue $queueInstance The queue instance */
-        $queueInstance = Application::$app->get(Queue::class);
-        $queueInstance->push($this, $queue);
+        $this->queueInstance()->push($this, $queue);
     }
 
     /**
@@ -506,9 +525,18 @@ class Job implements JobContract
      */
     public function dispatchOnce(string $queue = 'default'): void
     {
+        $this->queueInstance()->pushOnce($this, $queue);
+    }
+
+    /** get the queue instance */
+    private function queueInstance(): QueueManager
+    {
+        if ($this->connection !== null) {
+            return Application::$app->get(QueueManager::class)->connection($this->connection);
+        }
+
         /** @var \Spark\Queue\Queue $queueInstance The queue instance */
-        $queueInstance = Application::$app->get(Queue::class);
-        $queueInstance->pushOnce($this, $queue);
+        return Application::$app->get(QueueManager::class);
     }
 
     /**

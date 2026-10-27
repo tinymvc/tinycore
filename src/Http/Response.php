@@ -675,5 +675,4 @@ class Response implements ResponseContract
     {
         $this->message = $this->message->withoutHeader($name);
     }
-
 }

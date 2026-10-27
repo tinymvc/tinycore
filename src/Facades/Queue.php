@@ -4,6 +4,7 @@ namespace Spark\Facades;
 
 use Spark\Queue\Queue as BaseQueue;
 use Spark\Queue\QueueManager;
+use Spark\Queue\Contracts\JobContract;
 
 /**
  * Facade Queue

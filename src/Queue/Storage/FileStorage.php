@@ -130,14 +130,6 @@ class FileStorage implements QueueStorageContract
         $this->guardTimeout = max(0.05, (float) ($config['guard_timeout'] ?? 5.0));
     }
 
-    /**
-     * The file driver has no PDO/Redis connection.
-     */
-    public function getConnection(): \Redis|\PDO
-    {
-        throw new RuntimeException('The file queue driver does not use a database or Redis connection.');
-    }
-
     /* ---------------------------------------------------------------------
      | Producing
      | ------------------------------------------------------------------ */

@@ -8,15 +8,6 @@ namespace Spark\Queue\Contracts;
 interface QueueContract
 {
     /**
-     * Gets the PDO connection used by the queue.
-     *
-     * This returns null when the queue is configured to use Redis.
-     *
-     * @return \PDO|\Redis The PDO or Redis connection instance.
-     */
-    public function getConnection(): \PDO|\Redis;
-
-    /**
      * Adds a job to the queue.
      *
      * @param JobContract $job The job to be added.

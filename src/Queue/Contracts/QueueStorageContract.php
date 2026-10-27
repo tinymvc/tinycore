@@ -7,8 +7,6 @@ use Spark\Queue\Contracts\JobContract;
 
 interface QueueStorageContract
 {
-    public function getConnection(): \Redis|\PDO;
-
     public function push(JobContract $job, string $queue = 'default'): void;
 
     public function pushOnce(JobContract $job, string $queue = 'default'): void;

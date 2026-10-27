@@ -292,7 +292,7 @@ class Auth implements AuthContract, ArrayAccess
         $identifier = \Spark\Support\Arr::except($credentials, ['password']);
 
         $user = $this->model::where($identifier)->first();
-        if ($user && passcode($credentials['password'], $user->password)) {
+        if ($user && Hash::verify($credentials['password'], $user->password)) {
             $this->login($user, $remember);
             return true;
         }
@@ -403,8 +403,9 @@ class Auth implements AuthContract, ArrayAccess
             cookie($this->config['cookie_name'], $token, [
                 'expires' => $tokenExpire,
                 'path' => '/',
-                'secure' => true,
+                'secure' => str_starts_with(request()->getRootUrl(), 'https://'),
                 'httponly' => true,
+                'samesite' => 'Lax',
             ]);
         }
     }

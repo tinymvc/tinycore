@@ -2,7 +2,6 @@
 
 namespace Spark\Queue;
 
-use PDO;
 use Spark\Console\Prompt;
 use Spark\Cache\Cache;
 use Spark\Queue\Contracts\JobContract;
@@ -44,11 +43,6 @@ class Queue implements QueueContract
             'database' => new DatabaseStorage($connection),
             default => throw new \InvalidArgumentException("Unsupported storage driver [{$driver}]. Use database, file or redis."),
         };
-    }
-
-    public function getConnection(): PDO|\Redis
-    {
-        return $this->storage->getConnection();
     }
 
     /**

@@ -124,11 +124,6 @@ class DatabaseStorage implements QueueStorageContract
         }
     }
 
-    public function getConnection(): PDO
-    {
-        return $this->pdo;
-    }
-
     /* ---------------------------------------------------------------------
      | Producing
      | ------------------------------------------------------------------ */

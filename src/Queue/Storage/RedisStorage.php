@@ -51,11 +51,6 @@ class RedisStorage implements QueueStorageContract
         $this->redisPrefix = sprintf('%s:queue:%s', $prefix, md5('redis'));
     }
 
-    public function getConnection(): \Redis
-    {
-        return $this->redis;
-    }
-
     public function push(JobContract $job, string $queue = 'default'): void
     {
         $this->pushRedis($job, $queue);
