@@ -42,7 +42,7 @@ Use Spark's native APIs and the application's conventions. Laravel is a style re
 | Validation factory | `Validator::make($rules, $data)` takes rules first. See [validation](references/requests-validation.md) for parameter-array rules. |
 | Passwords | `Hash::password($password)` / `Hash::verify($password, $hash)`. `make()` / `check()` are keyed HMAC helpers. |
 | Cache | `Cache::remember($key, fn () => ..., '+1 hour')` takes the callback before expiration. |
-| Jobs | Implement `Spark\Queue\Contracts\JobInterface` and use `Spark\Queue\Dispatchable`; `SendEmail::dispatch($id)->onQueue('emails')`. Reserve `job()` for recurring registration or raw callbacks. |
+| Jobs | Implement `Spark\Queue\Contracts\JobInterface` and use `Spark\Queue\Dispatchable`; `SendEmail::dispatch($id)->onQueue('emails')`. Reserve `job()` for recurring registration or function/callable-array jobs; closures are unsupported. |
 | Dates | `now()`, `carbon()`, `Spark\Carbon` follow the configured app timezone. Resources normalize Carbon to UTC; pass model dates through unless the contract requires another format. |
 
 Model binding does not authorize access. Preserve ownership/tenant conditions and assign server-owned identity explicitly. Prefer model scopes/relations and eager loading for domain data. Use `DB` for transactions and deliberate low-level work, accounting for model casts, events, and soft deletes. A service should coordinate a workflow or reusable business rule; one model call needs no wrapper. Keep request/user/tenant state out of singletons and explicit in job payloads. Consult [advanced workflows](references/advanced-workflows.md) for transactions, external effects, retries, and idempotency; do not invent after-commit APIs.
@@ -67,7 +67,7 @@ Use four-space indentation, next-line class/method braces, explicit visibility/t
 
 ## Read the reference for the task
 
-Load one primary topic first. The feature map is a discovery aid, not a requirement to load every reference.
+Load one primary topic first. The references cover the framework by subsystem; use the feature map to find related topics and API lookup for exact installed declarations. Paths and commands in references are relative to the application root unless stated otherwise.
 
 | Task | Reference |
 | --- | --- |

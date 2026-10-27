@@ -2,7 +2,7 @@
 
 Contents:
 
-- [What TinyMVC Is](#what-tinymvc-is)
+- [What TinyMVC / Spark Is](#what-tinymvc--spark-is)
 - [Framework Source Lookup Paths](#framework-source-lookup-paths)
 - [Typical Application Layout](#typical-application-layout)
 - [Core Bootstrap](#core-bootstrap)
@@ -41,7 +41,7 @@ In an application project, TinyCore source is normally installed under:
 
 Resolve the application's installed version from `composer.lock` / Composer installed metadata and read the matching implementation. Source code takes precedence over old examples and docblocks. A separate TinyCore source checkout may differ from the installed package. Locate it explicitly for a core task; do not assume a sibling directory exists or proves the installed version.
 
-Treat installed vendor files as reference during application tasks. If the user requests a core change, edit the actual TinyCore checkout and verify the application's dependency separately. Do not silently change dependency versions or patch vendor code to make an example work.
+For explicit core work, use the requested checkout. Follow [API discovery](api-discovery.md) for bounded declaration lookup and [the feature map](native-feature-map.md) for subsystem locations; do not patch vendor code or infer the installed version from a sibling checkout.
 
 Core bootstrap and container:
 

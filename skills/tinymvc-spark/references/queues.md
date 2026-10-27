@@ -1,32 +1,23 @@
 # Queues
 
-Contents:
+Use class jobs implementing `Spark\Queue\Contracts\JobInterface` with `Spark\Queue\Dispatchable`. Queue configuration is independent of cache.
 
-- [Queue and Jobs](#queue-and-jobs)
+## Connections and storage
 
-Read this reference for queue and jobs. Source paths and command working directories refer to the application root unless explicitly stated otherwise. Check the installed package when versions differ.
+`queue.default` (`QUEUE_CONNECTION`) names an entry in `queue.connections`; its `driver` is `database`, `file`, or `redis`. `Queue::connection('redis')`, job `onConnection('redis')`, and CLI `--connection=redis` select that configuration. `onQueue('emails')` selects a queue within it.
 
-## Queue and Jobs
+Managers resolve connections lazily and reuse them within the application. `Queue::purge($name)` reloads configuration on the next resolution without deleting jobs; existing references keep their configuration. Names sharing the same paths, prefixes, or tables may share data.
 
-`php spark queue:work --queue=emails --once --sleep=0` processes at most one due job and exits. Without `--once`, the worker polls until its lifetime expires. `--timeout` is the worker lifetime checked between jobs, not a hard execution deadline for a job; `--timeout=0` disables that lifetime limit. Timeout, sleep, and retry delay must be non-negative; tries must be at least one. The first poll is immediate. Use a process supervisor to restart exited workers. After deployments, `php spark queue:restart` signals workers to finish their current job and exit; idle workers stop on their next poll. The command and workers must share the configured cache store and namespace (shared storage for file cache). New workers ignore earlier restart signals.
+- **Database:** configure `connection`, `table` (default `jobs`), and `failed_table` (default `failed_jobs`); migrate both tables first. Keep table names unprefixed: the selected database connection applies its prefix. Jobs have no `created_at`; treat metadata as driver-dependent.
+- **File:** configure a private local `path`; intended for modest backlogs. `getConnection()` throws because there is no PDO/Redis connection.
+- **Redis:** requires `ext-redis`; configure host/socket, port, password, database, and an application-specific prefix. Atomic queue transitions target standalone Redis, not Redis Cluster.
 
-Job-construction and retry-policy failures follow the same retry/failure path as handler errors, using worker defaults when job settings cannot be resolved. Stale reservations are recovered at worker startup after 3600 seconds; an indefinitely running worker needs restarting to repeat recovery. Keep job execution below that reservation window. The worker does not forcibly interrupt a running job.
-
-Worker logs use unbracketed timestamps and compact job labels (`App\Jobs\Example  #2 · 1/3`). Job lines use dotted leaders before `RUNNING`, `DONE`, or `FAIL`, with elapsed time on completion. Workers listening to multiple queues also show the job's queue name. Informational and error lines put their status first. Recurring schedules and retries appear underneath as indented `↳ Next run: ...` and `↳ Retry at: ...` notes; blank lines separate job groups. The final summary counts completed jobs and failed attempts. Colors auto-detect the terminal and respect `NO_COLOR` by default; `--ansi` forces colors and `--no-ansi` disables them, taking precedence if both flags are present.
-
-A pending dispatch attempts to enqueue only once, including when explicit `send()` throws. Its destructor does not retry an ambiguous transport failure. Any deliberate producer retry needs application-level deduplication or idempotency.
-
-Database queue operations use the configured connection, including their transactions. Default-connection dispatch participates in the business transaction; named connection/file/Redis dispatch does not. MySQL `pushOnce()`/`dispatchOnce()` rejects active transactions; call it after commit so deduplication does not outlive its advisory lock. Queue delivery is at least once: handlers must be idempotent, and stale recovery must exceed the longest execution time. File storage is for local, modest backlogs. Redis queue transitions are atomic and target standalone Redis, not Redis Cluster. Stop workers before clearing or changing storage. `getConnection()` throws for file queues.
-
-Prefer class jobs for application work. A class job implements `Spark\Queue\Contracts\JobInterface` and usually uses `Spark\Queue\Dispatchable`.
+## Class jobs and dispatch
 
 ```php
-<?php
-
 namespace App\Jobs;
 
-use Spark\Queue\Contracts\JobContract;
-use Spark\Queue\Contracts\JobInterface;
+use Spark\Queue\Contracts\{JobContract, JobInterface};
 use Spark\Queue\Dispatchable;
 use Throwable;
 
@@ -35,7 +26,6 @@ class SendWelcomeEmail implements JobInterface
     use Dispatchable;
 
     public int $tries = 3;
-
     public array $backoff = [120, 300];
 
     public function __construct(private int $userId)
@@ -44,166 +34,60 @@ class SendWelcomeEmail implements JobInterface
 
     public function handle(): void
     {
-        // send email
+        // Load the user and perform the application work.
     }
 
     public function failed(JobContract $job, Throwable $exception): void
     {
-        // called only after the queue exhausts all tries
+        // Report final failure after attempts are exhausted.
     }
 }
 ```
 
-### Smart Class Job Dispatching
-
-Application jobs implement `Spark\Queue\Contracts\JobInterface` and use `Spark\Queue\Dispatchable`. In application controllers, models, event listeners, and services, **always use static dispatch methods**:
-
 ```php
-use App\Jobs\SendAccountMail;
-use App\Jobs\SyncReports;
-
-// Standard queue dispatch
-SendAccountMail::dispatch($user->id)->onQueue('emails');
-
-// Dispatch with delay (in seconds)
-SendAccountMail::dispatch($user->id)->onQueue('emails')->delay(60);
-
-// Dispatch with duplicate protection (runs once)
-SendAccountMail::dispatchOnce($user->id)->onQueue('emails');
-
-// Conditional dispatch
-SendAccountMail::dispatchIf($user->is_active, $user->id)->onQueue('emails');
-SendAccountMail::dispatchUnless($user->is_banned, $user->id)->onQueue('emails');
-
-// Immediate synchronous execution in current process
-SendAccountMail::dispatchSync($user->id);
-
-// Recurring scheduled jobs
-SyncReports::dispatchOnce()
-    ->onQueue('reports')
-    ->repeatEveryMinutes(5);
+SendWelcomeEmail::dispatch($userId)->onConnection('redis')->onQueue('emails')->delay(60);
+SendWelcomeEmail::dispatchOnce($userId)->onQueue('emails');
+SendWelcomeEmail::dispatchIf($condition, $userId)->onQueue('emails');
+SendWelcomeEmail::dispatchUnless($condition, $userId)->onQueue('emails');
+SendWelcomeEmail::dispatchSync($userId);
 ```
 
-> [!IMPORTANT]
-> **Never write `job(SendAccountMail::class, [$user->id])->dispatch('emails')` in application code**.
-> Because the job uses `Dispatchable`, always write `SendAccountMail::dispatch($user->id)->onQueue('emails')`.
-> The procedural `job()` helper is legacy and should only be used when defining raw closure jobs or in `bootstrap/app.php` scheduler registration.
+Constructor arguments should be small and serializable; handler dependencies are container-injected. Pending dispatches send when they leave scope, or explicitly through `send()` / `dispatch()`. An explicit send failure is not retried by the destructor; deliberate producer retries need deduplication or idempotency.
 
-### Real-World Smart Job Example: Queued Mail
+`delay()` uses seconds; `schedule()` accepts a date string or `Spark\Carbon`. Drivers persist schedules in UTC; strings without offsets use the application timezone. The low-level `job()` helper accepts class/function strings or callable arrays, not closures. Prefer static dispatch for application jobs; see [queued mail](mail-http.md#3-smart-standard-queued-mail-in-jobs) for a complete handler.
 
-```php
-<?php
-
-namespace App\Jobs;
-
-use App\Models\User;
-use Spark\Facades\Mail;
-use Spark\Queue\Contracts\JobContract;
-use Spark\Queue\Contracts\JobInterface;
-use Spark\Queue\Dispatchable;
-use Throwable;
-
-class SendAccountMail implements JobInterface
-{
-    use Dispatchable;
-
-    public int $tries = 3;
-
-    public array $backoff = [60, 300];
-
-    public function __construct(private int $userId)
-    {
-    }
-
-    public function handle(): void
-    {
-        $user = User::findOrFail($this->userId);
-
-        Mail::to($user->email, $user->name)
-            ->subject('Welcome to TinyMVC!')
-            ->view('emails.welcome', ['user' => $user])
-            ->send();
-    }
-
-    public function failed(JobContract $job, Throwable $exception): void
-    {
-        // Handle final failure after 3 attempts
-    }
-}
-```
-
-Dispatched cleanly from a controller:
+## Repeating jobs
 
 ```php
-public function store(StoreUserRequest $request): Response
-{
-    $user = User::create($request->validated());
+SyncReports::dispatchOnce()->onQueue('reports')->repeatEveryMinutes(5);
 
-    SendAccountMail::dispatch($user->id)->onQueue('emails');
-
-    return UserResource::make($user)->response(Response::STATUS_CREATED);
-}
+// In bootstrap/app.php:
+$app->withQueue(jobs: [
+    job(App\Jobs\SyncReports::class)->repeatEveryMinutes(5),
+]);
 ```
 
----
+`withQueue()` uses `pushOnce()` and accepts an optional `then` callback. Deduplication avoids duplicate pending registration, not repeated business side effects. Other repeat helpers are `repeatHourly()`, `repeatDaily()`, `repeatWeekly()`, and `repeatMonthly()`; `repeat()` also accepts `biweekly`, `quarterly`, and `yearly`. Repeats are intervals, not cron expressions, and require a running worker.
 
-### Recurring Jobs in Bootstrap
+## Workers, retries, and restarts
 
-In `bootstrap/app.php`, recurring scheduler jobs should be registered with `withQueue()` so they use queue `pushOnce()` behavior and do not duplicate every bootstrap:
-
-```php
-$app->withQueue(
-    jobs: [
-        job(App\Jobs\SyncReports::class)->repeatEveryMinutes(5),
-    ],
-);
+```sh
+php spark queue:work --connection=redis --queue=emails --once --sleep=0
+php spark queue:restart
+php spark queue:failed --connection=redis
+php spark queue:retryFailed --connection=redis
 ```
 
-`withQueue()` accepts `jobs` and an optional `then` callback.
+Without `--once`, workers poll until their lifetime expires. `--timeout` is checked between jobs, not a hard job deadline; zero disables the lifetime limit. Timeout, sleep, and retry delay must be nonnegative; tries must be at least one. The first poll is immediate. Use a supervisor and configure I/O timeouts inside jobs.
 
-Supported repeat intervals and aliases on `Job`:
-- `repeatEveryMinutes(int $minutes)`
-- `repeatHourly()` / `repeat('hourly')`
-- `repeatDaily()` / `repeat('daily')`
-- `repeatWeekly()` / `repeat('weekly')`
-- `repeatMonthly()` / `repeat('monthly')`
-- `repeat('biweekly')`, `repeat('quarterly')`, `repeat('yearly')`
+Public `$tries` and `$backoff` override worker defaults. Backoff accepts seconds or an array indexed by failed attempt; later attempts reuse its last entry. `failed()` runs only after exhaustion and accepts either `Throwable $exception` or `JobContract $job, Throwable $exception`. Constructor/retry-policy failures follow the retry path using worker defaults when necessary. Logs report completed jobs and failed attempts; `--ansi` / `--no-ansi` control color.
 
-The queue connection is selected by `config('queue.default')` (`QUEUE_CONNECTION`), which names an entry in `queue.connections`; that entry's `driver` selects `database`, `file`, or `redis`.
+`queue:restart` signals workers on all connections to finish and acknowledge the current job, then exit; idle workers exit on their next poll. Command and workers share the default cache store's `queue:workers` namespace. Signals survive default `cache:clear`; new workers ignore old signals. Restart old workers through the supervisor once when changing restart-key formats.
 
-```php
-return [
-    // The default queue connection name
-    'default' => env('QUEUE_CONNECTION', 'database'),
+Stale reservations older than 3600 seconds are recovered at worker startup. An indefinitely running worker needs restarting to repeat recovery; keep job execution below that window.
 
-    'connections' => [
-        'database' => [
-            'driver' => 'database',
-            'connection' => env('DB_QUEUE_CONNECTION'),
-            'table' => env('DB_QUEUE_TABLE', 'jobs'),
-        ],
-        'file' => [
-            'driver' => 'file',
-            'path' => dirname(__DIR__) . '/storage/framework/queue.d',
-        ],
-        'redis' => [
-            'driver' => 'redis',
-            'host' => env('REDIS_HOST', '127.0.0.1'),
-            'port' => env('REDIS_PORT', 6379),
-            'password' => env('REDIS_PASSWORD'),
-            'database' => env('REDIS_DATABASE', 0),
-            'prefix' => env('REDIS_PREFIX', 'spark'),
-        ],
-    ],
-];
-```
+## Transactions and delivery
 
-Important:
+Default-connection database dispatch participates in the business transaction. Named database connections, file, and Redis do not join it. MySQL `pushOnce()` / `dispatchOnce()` rejects active transactions; dispatch after commit so deduplication does not outlive its advisory lock. There is no automatic `afterCommit()` API; use an outbox or explicit retry record when enqueueing after commit must be recoverable.
 
-- Use `dispatchOnce()` or `withQueue(jobs: [...])` for scheduler/cron-style repeated jobs.
-- Public job properties `$tries` and `$backoff` override worker retry defaults when present.
-- Job `failed()` hooks are called by `Queue` only after all tries are exhausted, not on every retryable exception.
-- A `failed()` method may accept either `Throwable $exception` or `JobContract $job, Throwable $exception`.
-- Use `Queue::connection('redis')` or `SendEmail::dispatch($id)->onConnection('redis')->onQueue('emails')`; `--connection=redis` selects that connection for worker/management commands. Managers reuse connections until `Queue::purge($name)`; purging preserves queued jobs.
-- Queue has separate config from cache.
-- Database, file, and Redis drivers should behave consistently for push/pushOnce/work. Database jobs have no created_at column. Treat job metadata fields as driver-dependent unless explicitly guaranteed.
+Delivery is at least once: handlers must be idempotent. Stop workers/producers before clearing queues or changing drivers. `queue:clear` / `queue:clearFailed` delete work; purging a connection does not.

@@ -1,6 +1,6 @@
 # Cache and locks
 
-Use `Spark\Facades\Cache` and `Spark\Facades\Lock`. Cache supports `database`, `file`, and `redis`; migrate the framework cache/lock tables before using the database driver.
+Use `Spark\Facades\Cache` and `Spark\Facades\Lock`. Cache supports `database`, `file`, and `redis`; migrate the framework cache/lock tables before using the database driver. Keep configured table names logical/unprefixed; each selected database connection applies its prefix.
 
 ## Stores and namespaces
 
@@ -36,6 +36,8 @@ Cache::purge('redis');         // Forget resolved repositories; preserves stored
 Expiration accepts TTL seconds, date strings, `DateTimeInterface`, `Spark\Carbon`, `DateInterval`, or null (no expiry). Zero/negative TTLs and elapsed deadlines expire immediately; invalid dates throw. `remember()`/`load()` take the callback before expiration and do not serialize concurrent misses. `storeManyWithExpiry()` takes `['key' => ['value' => ..., 'expire' => ...]]`.
 
 Managers reuse repositories and resolved store configuration until `purge($store)` / `forgetDriver($stores)`. Existing references, including subsequent `withNamespace()` calls, retain their original store configuration. Managers are scoped to one application. `flush()`/`clear()` delete values only in the selected namespace.
+
+Database key/group equality follows the column collation; case-insensitive collations can treat `Item` and `item` as one entry. Batch reads return stored key spellings. Lock owner tokens always match exactly; file and Redis keys are case-sensitive.
 
 For PSR-16, inject `Psr\SimpleCache\CacheInterface` or wrap a repository in `Spark\Cache\SimpleCache`. The adapter returns booleans for writes, accepts integer/interval/null TTLs, rejects reserved PSR key characters, and deletes immediately for nonpositive TTLs. The native cache retains fluent writes and its existing key formats.
 
