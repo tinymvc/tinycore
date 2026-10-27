@@ -195,7 +195,6 @@ class Auth implements AuthContract, ArrayAccess
                     callback: fn() => $this->model::find($this->getId()) ?: null,
                     expire: $this->config['cache_expire']
                 );
-                $cache->unload(); // Unload cache after use
             } else {
                 // Fetch user directly from the database if caching is not enabled
                 $user = $this->model::find($this->getId()) ?: null;

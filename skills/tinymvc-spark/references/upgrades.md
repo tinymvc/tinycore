@@ -9,6 +9,11 @@ Check the installed source and back up data before upgrading. Paths below refer 
 - Move uploads to `storage/app/public`, private files to `storage/app/private`, and rebuild the public uploads link. Session/cookie format changes may require fresh logins.
 - `cache:clear` clears the default cache plus compiled views/config, preserving locks; clear named caches explicitly. `key:generate` preserves existing keys.
 
+## Cache, locks, and queues
+
+- `Cache::store('name')` selects a configured store; replace facade writes with `put()`. Namespaces stay in `Cache::make()`/`cache()`. Use `Cache::purge('name')` to reload a store. `Queue::connection('name')`, job `onConnection()`, and CLI `--connection` select queue configurations; `Queue::purge()` preserves jobs.
+- `Lock::make('custom')` and `lock(name: 'custom')` now share a cache namespace, not an owner. `Cache::lock('key', 30)`, `Lock::lock()`, and `lock('key')` return handles: acquire with `get()`/`block()`, release on that handle. Replace `withLock(key, callback, timeout, waitTimeout)` with `lock(key, timeout)->block(waitTimeout, callback)`. Use `seconds:` for named lease arguments; leases require positive integer seconds. Transfer owners with `restoreLock()`. Concrete `Spark\Cache\Lock` retains the old manual API.
+
 ## Database and pagination
 
 - Rename execute-and-fetch `DB::raw(...)` / `$query->raw(...)` calls to `run(...)`; `raw()` now creates an SQL expression.

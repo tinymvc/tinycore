@@ -14,6 +14,7 @@ use Spark\Contracts\LoggerInterface as SparkLoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use Spark\Cache\SimpleCache;
 use Spark\Logger;
+use Spark\Queue\QueueManager;
 use Spark\Support\Clock;
 use Spark\Console\Commands;
 use Spark\Console\Console;
@@ -126,7 +127,6 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(DB::class);
         $this->singleton(Hash::class);
         $this->singleton(Blade::class);
-        $this->singleton(Queue::class);
         $this->singleton(Router::class);
         $this->singleton(Middleware::class);
         $this->singleton(Events::class);
@@ -135,11 +135,24 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(Psr17Factory::class);
         $this->instance(ContainerInterface::class, $this);
 
-        $this->singleton(\Spark\Cache\Lock::class);
-        $this->alias('lock', \Spark\Cache\Lock::class);
+        $this->singleton(QueueManager::class, fn() => new QueueManager($this));
+        $this->bind(
+            Queue::class,
+            fn() => $this->get(QueueManager::class)->connection()
+        );
 
-        $this->singleton(\Spark\Cache\Cache::class);
-        $this->alias('cache', \Spark\Cache\Cache::class);
+        $this->bind(\Spark\Cache\Lock::class); // Legacy manual owners are independent.
+        $this->alias('lock', \Spark\Cache\CacheManager::class);
+
+        $this->singleton(
+            \Spark\Cache\CacheManager::class,
+            fn() => new \Spark\Cache\CacheManager($this)
+        );
+        $this->bind(
+            \Spark\Cache\Cache::class,
+            fn() => $this->get(\Spark\Cache\CacheManager::class)->store()
+        );
+        $this->alias('cache', \Spark\Cache\CacheManager::class);
 
         $this->bind(
             CacheInterface::class,
@@ -169,7 +182,7 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('db', DB::class);
         $this->alias('hash', Hash::class);
         $this->alias('blade', Blade::class);
-        $this->alias('queue', Queue::class);
+        $this->alias('queue', QueueManager::class);
         $this->alias('router', Router::class);
         $this->alias('middleware', Middleware::class);
         $this->alias('events', Events::class);
@@ -602,15 +615,7 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function withQueue(null|array $jobs = null, null|callable $then = null): self
     {
-        $this->singleton(Queue::class, function () use ($jobs, $then) {
-            $queue = new Queue();
-
-            $jobs && array_map($queue->pushOnce(...), $jobs);
-
-            $then && $then($queue);
-
-            return $queue;
-        });
+        $this->get(QueueManager::class)->configure($jobs, $then);
 
         return $this;
     }

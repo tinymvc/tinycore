@@ -68,7 +68,8 @@ class ConsoleServiceProvider extends ServiceProvider
 
         // Add the queue:work command
         $commands->addCommand('queue:work', [PrimaryCommandsHandler::class, 'runQueueJobs'])
-            ->description('Run the queue jobs workers');
+            ->description('Run the queue jobs workers')
+            ->help('Use --connection=name to select a configured queue connection.');
 
         $commands->addCommand('queue:restart', [PrimaryCommandsHandler::class, 'restartQueueWorkers'])
             ->description('Gracefully stop queue workers so a supervisor can restart them')
@@ -76,23 +77,28 @@ class ConsoleServiceProvider extends ServiceProvider
 
         // Add the queue:clear command
         $commands->addCommand('queue:clear', [PrimaryCommandsHandler::class, 'clearQueueJobs'])
-            ->description('Clear all queue jobs');
+            ->description('Clear all queue jobs')
+            ->help('Use --connection=name to select a configured queue connection.');
 
         // Add the queue:list command
         $commands->addCommand('queue:list', [PrimaryCommandsHandler::class, 'listQueueJobs'])
-            ->description('Display all queue jobs');
+            ->description('Display all queue jobs')
+            ->help('Use --connection=name to select a configured queue connection.');
 
         // Add the queue:failed command
         $commands->addCommand('queue:failed', [PrimaryCommandsHandler::class, 'listFailedQueueJobs'])
-            ->description('Display all failed queue jobs');
+            ->description('Display all failed queue jobs')
+            ->help('Use --connection=name to select a configured queue connection.');
 
         // Add the queue:clearFailed command
         $commands->addCommand('queue:clearFailed', [PrimaryCommandsHandler::class, 'clearFailedQueueJobs'])
-            ->description('Clear all failed queue jobs');
+            ->description('Clear all failed queue jobs')
+            ->help('Use --connection=name to select a configured queue connection.');
 
         // Add the queue:retryFailed command
         $commands->addCommand('queue:retryFailed', [PrimaryCommandsHandler::class, 'retryFailedQueueJobs'])
-            ->description('Retry all failed queue jobs');
+            ->description('Retry all failed queue jobs')
+            ->help('Use --connection=name to select a configured queue connection.');
 
         // Add the migrate command
         $commands->addCommand('migrate', [Migration::class, 'up'])

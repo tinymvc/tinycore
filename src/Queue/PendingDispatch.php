@@ -11,6 +11,8 @@ class PendingDispatch
 {
     private string $queue = 'default';
 
+    private ?string $connection = null;
+
     private bool $dispatched = false;
 
     public function __construct(
@@ -27,6 +29,13 @@ class PendingDispatch
         $queue = trim($queue);
         $this->queue = $queue !== '' ? $queue : 'default';
 
+        return $this;
+    }
+
+    /** Select a configured queue connection independently of the queue name. */
+    public function onConnection(?string $connection): static
+    {
+        $this->connection = $connection;
         return $this;
     }
 
@@ -145,7 +154,14 @@ class PendingDispatch
             // A transport failure may follow a successful write; never retry on destruction.
             $this->dispatched = true;
 
-            if ($this->once) {
+            if ($this->connection !== null) {
+                $queue = app(QueueManager::class)->connection($this->connection);
+                if ($this->once) {
+                    $queue->pushOnce($this->job, $this->queue);
+                } else {
+                    $queue->push($this->job, $this->queue);
+                }
+            } elseif ($this->once) {
                 $this->job->dispatchOnce($this->queue);
             } else {
                 $this->job->dispatch($this->queue);

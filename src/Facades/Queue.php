@@ -3,12 +3,15 @@
 namespace Spark\Facades;
 
 use Spark\Queue\Queue as BaseQueue;
+use Spark\Queue\QueueManager;
 
 /**
  * Facade Queue
  *
  * This class provides a static interface to the underlying Queue service.
  *
+ * @method static BaseQueue connection(?string $name = null)
+ * @method static void purge(?string $name = null)
  * @method static \PDO|\Redis getConnection()
  * @method static void push(JobContract $job, string $queue = 'default')
  * @method static void pushOnce(JobContract $job, string $queue = 'default')
@@ -30,6 +33,6 @@ class Queue extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return BaseQueue::class;
+        return QueueManager::class;
     }
 }

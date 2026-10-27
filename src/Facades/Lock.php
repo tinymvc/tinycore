@@ -2,35 +2,22 @@
 
 namespace Spark\Facades;
 
-use Spark\Cache\Lock as BaseLock;
+use Spark\Cache\Cache;
+use Spark\Cache\CacheManager;
+use Spark\Cache\LockHandle;
 
 /**
- * Facade for Lock utility.
- * 
- * Provides static access to lock management methods.
- * 
- * @method static bool lock(string $key, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval $timeout = 10, int $waitTimeout = 5)
- * @method static bool unlock(string $key)
- * @method static int unlockAll()
- * @method static bool forceUnlock(string $key)
- * @method static int releaseExpiredLocks()
- * @method static bool isLocked(string $key)
- * @method static bool ownsLock(string $key)
- * @method static bool extendLock(string $key, int $additionalSeconds)
- * @method static mixed withLock(string $key, callable $callback, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval $timeout = 10, int $waitTimeout = 5)
- * @method static string getLockOwner()
- * @method static null|array getLockInfo(string $key)
- * @method static void optimize()
- * @method static BaseLock make(string $name = 'default')
- * 
- * @package Spark\Facades
- * 
- * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
+ * Namespace factories share repositories; lock handles always have independent owners.
+ *
+ * @method static Cache make(string $name = 'default')
+ * @method static Cache store(?string $name = null)
+ * @method static LockHandle lock(string $key, int $seconds = 10, ?string $owner = null)
+ * @method static LockHandle restoreLock(string $key, string $owner)
  */
 class Lock extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return BaseLock::class;
+        return CacheManager::class;
     }
 }

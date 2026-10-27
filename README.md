@@ -4,7 +4,7 @@
 
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1250%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1282%20passed-brightgreen.svg)](tests/)
 
 Applications built with TinyMVC / Spark start from [Skeleton](https://github.com/tinymvc/skeleton) (`tinymvc/skeleton`), which provides the application structure and installs TinyCore as a Composer dependency under `vendor/tinymvc/tinycore`. This repository contains the core engine's source and regression suite.
 
@@ -54,25 +54,25 @@ The suite uses Spark's native test runner. Fixtures live in this repository; nei
 
 ## Verified test results
 
-Verified on **2026-10-26**, using PHP **8.4.27** on macOS:
+Core suite verified on **2026-10-27**, using PHP **8.4.27** on macOS:
 
 | Command | Result | Assertions | Skipped / failed |
 | --- | --- | --- | --- |
-| `php tests/run.php` | 1,250 passed | 6,413 | 0 / 0 |
+| `php tests/run.php` | 1,282 passed | 6,669 | 0 / 0 |
 | `php tests/database.php` — SQLite | 438 passed | 1,082 | 0 / 0 |
 | `php tests/database.php` — MySQL | 438 passed | 1,082 | 0 / 0 |
 | `php tests/database.php` — PostgreSQL | 438 passed | 1,082 | 0 / 0 |
 
-The prefix audit also ran all 438 scenarios on each driver with empty, `audit_`, and `0_` prefixes (3,942 scenario executions). Repeat a prefixed matrix with `SPARK_TEST_TABLE_PREFIX=audit_ php tests/database.php`. The database matrix reuses the same 438 scenarios; these are not 1,314 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
+The database matrix was last verified on **2026-10-26**. The prefix audit also ran all 438 scenarios on each driver with empty, `audit_`, and `0_` prefixes (3,942 scenario executions). Repeat a prefixed matrix with `SPARK_TEST_TABLE_PREFIX=audit_ php tests/database.php`. The database matrix reuses the same 438 scenarios; these are not 1,314 distinct tests. They are also included in the main suite on SQLite. MySQL and PostgreSQL disposable databases were removed successfully. Redis integration, process contention, and local HTTP/S3 transport fixtures ran successfully in the main suite.
 
 | Test location | Classes | Independently reported tests |
 | --- | --- | --- |
 | `tests/Unit/` | 10 | 80 |
 | `tests/Feature/Database/` | 22 | 438 |
-| Other `tests/Feature/` classes | 65 | 732 |
-| **Total** | **97** | **1,250** |
+| Other `tests/Feature/` classes | 70 | 764 |
+| **Total** | **102** | **1,282** |
 
-Every test has a descriptive name and fresh test state. The storage driver contract defines 38 shared behaviors and runs each on file, database and Redis storage (114 backend-specific tests), with 10 additional database storage cases. These are included in the 1,250 total. The suite also covers PSR integration and the application lifecycle over real HTTP connections.
+Every test has a descriptive name and fresh test state. The storage driver contract defines 38 shared behaviors and runs each on file, database and Redis storage (114 backend-specific tests), with 10 additional database storage cases. These are included in the 1,282 total. The suite also covers PSR integration and the application lifecycle over real HTTP connections.
 
 | Selected class / contract | Tests | Focus |
 | --- | --- | --- |
@@ -86,7 +86,8 @@ Every test has a descriptive name and fresh test state. The storage driver contr
 | `RequestBoundaryTest` | 34 | Bearer/Basic header parsing, method flags, IPv4/IPv6 proxy ranges, malformed forwarded addresses, ports and trust boundaries |
 | `BladeDirectiveTest` | 27 | Conditional attributes, nested expressions, conditionals, loops, comments, verbatim/PHP blocks and escaped/raw output; first/cached render consistency and output-buffer balance |
 | `DatabasePrefixTest` / `DatabasePrefixEdgeTest` / `DatabaseExpressionTest` | 6 / 12 / 2 | Connection/schema/service prefixes, alias and subquery isolation, namespace changes, numeric prefixes/cursors, qualified DDL, raw expressions and prepared execution |
-| `QueueWorkerTest` | 6 | Constructor failure recovery, worker options, registered restart command, graceful success/failure acknowledgment, fresh-worker signals and cross-process idle restart |
+| `QueueWorkerTest` | 7 | Constructor failure recovery, worker options, registered restart command, graceful success/failure acknowledgment, fresh-worker signals, cross-process idle restart and restart persistence through default cache clearing |
+| `CacheLifecycleTest` / `LockFactoryTest` | 5 / 4 | Shared factories, PSR integration, configuration retention after purge/manager disposal, cross-application isolation, independent owners, subclass factories and expired-lease replacement across file/SQLite/Redis |
 | `StateOwnershipTest` | 5 | Facade lock lifetime, application-scoped cache/lock helpers, zero lock keys, current URL roots and failed pending-dispatch destruction |
 | `UtilityBoundaryTest` | 7 | Atomic environment/config publication, partial file-write cleanup, empty/quoted environment values, error bags and zero-valued input |
 | `RedisLockOwnershipTest` | 1 | Forced owner takeover during bulk lock cleanup using real Redis |
@@ -112,6 +113,7 @@ This is **behavioral regression coverage**, not a measured line or branch percen
 
 | Additional area | Test classes and checks |
 | --- | --- |
+| Cache/queue lifecycle | `CacheManagerTest`, `CacheLockHandleTest`, `QueueManagerTest`: configured store/connection isolation, database lock connection fallback/overrides and transaction independence, shared namespace factories, safe purging, independent owners, cross-process owner transfer and blocking, expired-owner protection, named dispatch/work/management, lazy initialization and failure recovery |
 | Gate | `GateTest`: deny-by-default, authorization exceptions, argument forwarding, before/after overrides, any/none, short circuiting |
 | Hash | `HashTest`: binary/empty round trips, randomized IVs, tampered envelopes, wrong keys, malformed fields, array encoding errors, password rehash and keyed digests |
 | Validation | `ValidationRulesTest`, `ValidationTest`, `ValidatorStateTest`, `Database/ValidationDatabaseTest`: presence/type/size boundaries, nested wildcards, state reset, confirmation, unique/exists/exclusions, bound values and avoiding database queries after invalid input |
@@ -155,7 +157,7 @@ The older database and migration tests also remain, including grammar compilatio
 php tests/run.php
 ```
 
-`composer test` runs the same command. This runs the framework suite with SQLite, plus Redis integration checks and four external SQL cache/transaction/lock checks. Connection defaults come from `tests/config.php`; start your local DBngin services first. The external SQL checks create and remove their own disposable databases. Filters, unit-only runs and test discovery remain available:
+`composer test` runs the same command. This runs the framework suite with SQLite, plus Redis integration checks and six external SQL cache/transaction/lock/prefix checks. Connection defaults come from `tests/config.php`; start your local DBngin services first. The external SQL checks create and remove their own disposable databases. Filters, unit-only runs and test discovery remain available:
 
 ```sh
 php tests/run.php --filter AuthenticationTest

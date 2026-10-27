@@ -3,6 +3,8 @@
 namespace Spark\Facades;
 
 use Spark\Cache\Cache as BaseCache;
+use Spark\Cache\CacheManager;
+use Spark\Cache\LockHandle;
 
 /**
  * Facade Cache
@@ -14,7 +16,10 @@ use Spark\Cache\Cache as BaseCache;
  * @method static mixed get(string $key, mixed $default = null)
  * @method static BaseCache set(string $key, mixed $data, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval|null $expire = null)
  * @method static BaseCache put(string $key, mixed $data, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval|null $expire = null)
- * @method static BaseCache store(string $key, mixed $data, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval|null $expire = null)
+ * @method static BaseCache store(?string $name = null)
+ * @method static BaseCache driver(?string $name = null)
+ * @method static void purge(?string $name = null)
+ * @method static CacheManager forgetDriver(array|string|null $name = null)
  * @method static bool has(string $key, bool $eraseExpired = false)
  * @method static mixed load(string $key, callable $callback, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval|null $expire = null)
  * @method static mixed retrieve(string|array $keys, bool $eraseExpired = false)
@@ -34,10 +39,10 @@ use Spark\Cache\Cache as BaseCache;
  * @method static int|false decrement(string $key, int $amount = 1)
  * @method static bool add(string $key, mixed $value, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval|null $expire = null)
  * @method static mixed remember(string $key, callable $callback, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval|null $expire = null)
- * @method static mixed lock(?string $key = null, ?callable $callback = null, int|string|\DateTimeInterface|\Spark\Carbon|\DateInterval $timeout = 10, int $waitTimeout = 5)
+ * @method static LockHandle lock(string $key, int $seconds = 10, ?string $owner = null)
+ * @method static LockHandle restoreLock(string $key, string $owner)
  * @method static mixed pull(string $key, mixed $default = null)
  * @method static array stats()
- * @method static void unload()
  * @method static null|int ttl(string $key)
  * @method static BaseCache optimize()
  * @method static BaseCache make(string $name = 'default')
@@ -50,6 +55,6 @@ class Cache extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return BaseCache::class;
+        return CacheManager::class;
     }
 }

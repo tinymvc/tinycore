@@ -124,7 +124,7 @@ final class FacadesIntegrationTest extends FrameworkTestCase
     public function test_lock_facade(): void
     {
         $lock = Lock::make('default');
-        $this->assertInstanceOf(\Spark\Cache\Lock::class, $lock);
+        $this->assertInstanceOf(\Spark\Cache\Cache::class, $lock);
     }
 
     public function test_log_facade(): void

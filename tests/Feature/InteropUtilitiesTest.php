@@ -54,7 +54,7 @@ final class InteropUtilitiesTest extends FrameworkTestCase
         $lock['array'] = ['timeout' => Carbon::now()->addMinutes(1), 'waitTimeout' => 0];
         $this->assertTrue($lock->ownsLock('array'));
         $lock->unlock('array');
-        $this->assertSame('helper', Cache::lock('helper', fn() => 'helper', new DateInterval('PT1M'), 0));
+        $this->assertSame('helper', Cache::make()->lock('helper', 60)->get(fn() => 'helper'));
     }
 
     public function test_carbon_locales_translate_relative_time_and_names_without_leaking(): void

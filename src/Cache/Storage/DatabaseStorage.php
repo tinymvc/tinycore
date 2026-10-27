@@ -79,9 +79,8 @@ class DatabaseStorage implements CacheStorageContract
     /**
      * Locks acquired through this instance: owner => [key => true].
      *
-     * The owner token is unique per Lock instance and every Lock owns its storage instance, so this
-     * is the complete set of rows for that owner. It lets unlockAll() (called from Lock::__destruct)
-     * skip the database entirely when nothing was locked.
+     * Used by legacy manual owners for unlockAll(). Shared cache repositories disable tracking;
+     * independent handles release individual keys and do not accumulate per-owner process state.
      *
      * @var array<string, array<string, true>>
      */
@@ -94,6 +93,7 @@ class DatabaseStorage implements CacheStorageContract
         private readonly string $name = 'default',
         private readonly array $config = [],
         private readonly string $type = 'cache',
+        private readonly bool $trackLocks = true,
     ) {
         $this->lockPrefix = md5($name) . ':';
     }
@@ -471,7 +471,9 @@ class DatabaseStorage implements CacheStorageContract
         while (true) {
             try {
                 if ($this->tryAcquire($h, $physical, $owner, $timeout)) {
-                    $this->held[$owner][$key] = true;
+                    if ($this->trackLocks) {
+                        $this->held[$owner][$key] = true;
+                    }
                     return true;
                 }
             } catch (CacheException $e) {
@@ -495,6 +497,9 @@ class DatabaseStorage implements CacheStorageContract
     public function unlock(string $key, string $owner): bool
     {
         unset($this->held[$owner][$key]);
+        if (empty($this->held[$owner])) {
+            unset($this->held[$owner]);
+        }
 
         $h = $this->lockHandle();
         $ownerColumn = $h['owner_match'];
@@ -788,7 +793,7 @@ class DatabaseStorage implements CacheStorageContract
     {
         return $this->lockHandle ??= $this->makeHandle(
             (string) ($this->config['lock_table'] ?? 'locks'),
-            $this->config['lock_connection'] ?? null,
+            $this->config['lock_connection'] ?? $this->config['connection'] ?? null,
             true,
         );
     }

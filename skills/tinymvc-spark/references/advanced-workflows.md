@@ -64,7 +64,7 @@ Test pre-commit invisibility where supported, rollback, commit followed by dispa
 
 A cache miss and `remember()` do not guarantee one computation. When duplicates violate an invariant, acquire a named lock, recheck the cache after acquisition, compute/store the result, and release in `finally` using the same owner instance. Distinguish “another process holds the lock” from a storage error. Use a bounded wait and an explicit timeout/fallback policy.
 
-Lock expiry can let a second worker enter while the first is still running. An ownership-safe unlock prevents deleting a successor's lock, but does not stop the old worker from writing stale data. For important writes, also enforce a database version/status condition or another persistent invariant. Do not use `forceUnlock()` as normal cleanup. A lock backend shared across processes/hosts is necessary when the protected resource is shared.
+Lock expiry can let a second worker enter while the first is still running. An ownership-safe unlock prevents deleting a successor's lock, but does not stop the old worker from writing stale data. For important writes, also enforce a database version/status condition or another persistent invariant. Do not use `forceRelease()` as normal cleanup. A lock backend shared across processes/hosts is necessary when the protected resource is shared.
 
 Invalidate caches after successful business commit, not before rollback is still possible. Define key dimensions (tenant, user/permission context, locale, query version) and distinguish cached null from a missing key. When returning stale data is acceptable, document the freshness bound and refresh policy. Test owner mismatch, expiry/reacquisition, callback failure, concurrent misses, and namespace isolation.
 

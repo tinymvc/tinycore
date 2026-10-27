@@ -13,13 +13,14 @@ final class StateOwnershipTest extends FrameworkTestCase
     public function test_manual_facade_lock_survives_until_explicit_release(): void
     {
         $competitor = new Lock();
-        $this->assertTrue(LockFacade::lock('invoice', 30, 0));
+        $handle = LockFacade::lock('invoice', 30);
+        $this->assertTrue($handle->get());
         try {
             $this->assertTrue($competitor->isLocked('invoice'));
             $this->assertFalse($competitor->lock('invoice', 30, 0));
-            $this->assertTrue(LockFacade::ownsLock('invoice'));
+            $this->assertTrue($handle->isOwnedByCurrentProcess());
         } finally {
-            LockFacade::unlock('invoice');
+            $handle->release();
         }
         $this->assertTrue($competitor->lock('invoice', 30, 0));
     }
@@ -40,7 +41,7 @@ final class StateOwnershipTest extends FrameworkTestCase
             $this->assertFalse($firstLock === lock(name: 'ownership'));
             $this->assertNull(cache('ownership')->get('value'));
             cache('ownership')->put('value', 'second');
-            cache('ownership')->unload();
+            $second->get(Spark\Cache\CacheManager::class)->purge();
             $this->assertSame('second', cache('ownership')->get('value'));
         } finally {
             Application::$app = $this->app;
@@ -53,9 +54,10 @@ final class StateOwnershipTest extends FrameworkTestCase
 
     public function test_lock_helper_accepts_zero_as_a_key(): void
     {
-        $this->assertTrue(lock('0', waitTimeout: 0));
-        $this->assertTrue(lock()->ownsLock('0'));
-        $this->assertTrue(lock()->unlock('0'));
+        $handle = lock('0');
+        $this->assertTrue($handle->get());
+        $this->assertTrue($handle->isOwnedByCurrentProcess());
+        $this->assertTrue($handle->release());
     }
 
     public function test_url_helper_does_not_reuse_another_application_root(): void

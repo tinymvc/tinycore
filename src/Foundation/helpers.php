@@ -25,7 +25,6 @@ use Spark\Cache\Cache;
 use Spark\Carbon;
 use Spark\Utils\File;
 use Spark\Utils\Image;
-use Spark\Cache\Lock;
 use Spark\Utils\Mail;
 use Spark\Paginator\Paginator;
 use Spark\Tracer;
@@ -1442,28 +1441,16 @@ if (!function_exists('cache')) {
 
 if (!function_exists('lock')) {
     /**
-     * Acquire a lock for a given key.
-     *
-     * This function attempts to acquire a lock for the specified key. If the lock
-     * is successfully acquired within the specified wait timeout, it will be held
-     * for the specified timeout duration.
-     *
-     * @param ?string $key The key to lock.
-     * @param int $timeout The duration (in seconds) to hold the lock. Default is 10 seconds.
-     * @param int $waitTimeout The maximum time (in seconds) to wait for the lock. Default is 5 seconds.
-     * @param string $name The name of the lock instance to use. Default is 'default'.
-     *
-     * @return ($key is null ? Lock : bool) The Lock instance if no key is provided, or true if the lock was acquired, false otherwise.
+     * Create a lock handle, or resolve a cache namespace when no key is supplied.
+     * Acquire explicitly with get()/block(); each handle has an independent owner.
      */
-    function lock(null|string $key = null, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5, string $name = 'default'): bool|Lock
+    function lock(?string $key = null, int $seconds = 10, string $name = 'default', ?string $store = null): \Spark\Cache\LockHandle|Cache
     {
-        $manager = Lock::make($name);
-
-        if ($key === null) {
-            return $manager;
+        $cache = Application::$app->get(\Spark\Cache\CacheManager::class)->repository($store, $name);
+        if ($key !== null) {
+            return $cache->lock($key, $seconds);
         }
-
-        return $manager->lock($key, $timeout, $waitTimeout);
+        return $cache;
     }
 }
 

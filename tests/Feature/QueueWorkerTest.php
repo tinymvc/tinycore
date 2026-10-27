@@ -45,7 +45,7 @@ final class QueueWorkerTest extends FrameworkTestCase
         $args = Spark\Console\Prompt::parseArguments(['--once', '--timeout=0', '--sleep=0', '--queue=emails']);
         ob_start();
         try {
-            (new Spark\Foundation\Console\PrimaryCommandsHandler())->runQueueJobs($queue, $args);
+            (new Spark\Foundation\Console\PrimaryCommandsHandler())->runQueueJobs(app(Spark\Queue\QueueManager::class), $args);
         } finally {
             ob_end_clean();
         }
@@ -87,11 +87,11 @@ final class QueueWorkerTest extends FrameworkTestCase
         [$handler, $method] = $commands['queue:restart']['callback'];
         ob_start();
         try {
-            (new $handler())->$method($queue);
-            $first = cache('queue-workers')->retrieve('restart');
-            (new $handler())->$method($queue);
+            (new $handler())->$method(app(Spark\Queue\QueueManager::class));
+            $first = cache('queue:workers')->retrieve('restart');
+            (new $handler())->$method(app(Spark\Queue\QueueManager::class));
             $this->assertTrue(is_string($first));
-            $this->assertTrue($first !== cache('queue-workers')->retrieve('restart'));
+            $this->assertTrue($first !== cache('queue:workers')->retrieve('restart'));
             $path = $this->storagePath . '/fresh-worker';
             $queue->push(new Job('file_put_contents', [$path, 'done']));
             $queue->work(once: true, sleep: 0);
@@ -138,6 +138,24 @@ final class QueueWorkerTest extends FrameworkTestCase
         $this->assertFalse(str_contains($output, 'Worker timeout reached.'));
     }
 
+    public function test_default_cache_clearing_does_not_cancel_a_worker_restart(): void
+    {
+        $queue = $this->queue();
+        $marker = $this->storagePath . '/unexpected-second-job';
+        $queue->push(new Job(RestartThenClearCacheJob::class));
+        $queue->push(new Job('file_put_contents', [$marker, 'ran']));
+        ob_start();
+        try {
+            $queue->work(timeout: 2, sleep: 0);
+            $output = ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+        $this->assertFalse(is_file($marker));
+        $this->assertCount(1, $queue->getJobs(status: 'pending'));
+        $this->assertStringContainsString('Worker restart requested.', $output);
+    }
+
     public function test_invalid_worker_options_are_rejected_before_claiming_jobs(): void
     {
         $queue = $this->queue();
@@ -162,6 +180,15 @@ final class RestartWorkerJob
         if ($this->fail) {
             throw new RuntimeException('Failure after restart request.');
         }
+    }
+}
+
+final class RestartThenClearCacheJob
+{
+    public function handle(): void
+    {
+        (new Queue())->restart();
+        (new Spark\Foundation\Console\PrimaryCommandsHandler())->clearCache();
     }
 }
 

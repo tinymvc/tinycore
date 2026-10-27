@@ -204,6 +204,6 @@ Important:
 - Public job properties `$tries` and `$backoff` override worker retry defaults when present.
 - Job `failed()` hooks are called by `Queue` only after all tries are exhausted, not on every retryable exception.
 - A `failed()` method may accept either `Throwable $exception` or `JobContract $job, Throwable $exception`.
-- The queue connection comes from `config('queue.default')`; do not invent Laravel-style `onConnection()` usage.
+- Use `Queue::connection('redis')` or `SendEmail::dispatch($id)->onConnection('redis')->onQueue('emails')`; `--connection=redis` selects that connection for worker/management commands. Managers reuse connections until `Queue::purge($name)`; purging preserves queued jobs.
 - Queue has separate config from cache.
 - Database, file, and Redis drivers should behave consistently for push/pushOnce/work. Database jobs have no created_at column. Treat job metadata fields as driver-dependent unless explicitly guaranteed.

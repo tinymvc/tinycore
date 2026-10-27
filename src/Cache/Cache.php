@@ -14,9 +14,7 @@ use Spark\Cache\Storage\DatabaseStorage;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use Spark\Utils\RedisConnector;
 use function func_get_args;
-use function in_array;
 use function is_array;
 use function strtolower;
 
@@ -34,66 +32,71 @@ class Cache implements CacheContract, \ArrayAccess
 
     private CacheStorageContract $storage;
 
+    private ?\WeakReference $manager = null;
+
+    private array $config;
+
     /**
      * Create a cache repository by name.
      *
      * The name is used by storage drivers to isolate cache data, such as by
      * database group, file directory or Redis key namespace.
      */
-    public function __construct(private string $name = 'default')
-    {
-        $connection = $this->resolveDriverConfig($name);
+    public function __construct(
+        private string $name = 'default',
+        ?array $config = null,
+        ?CacheManager $manager = null,
+        private ?string $storeName = null,
+    ) {
+        $this->manager = $manager === null ? null : \WeakReference::create($manager);
+        $connection = $this->config = $config ?? CacheManager::resolveConfig((array) config('cache', []));
         $driver = strtolower((string) ($connection['driver'] ?? 'database'));
 
         $this->storage = match ($driver) {
             'redis' => new RedisStorage($name, $connection),
-            'file' => new FileStorage($name, $connection),
-            'database' => new DatabaseStorage($name, $connection, 'cache'),
+            'file' => new FileStorage($name, $connection, trackLocks: false),
+            'database' => new DatabaseStorage($name, $connection, 'cache', trackLocks: false),
             default => throw new \InvalidArgumentException("Unsupported storage driver [{$driver}]. Use database, file or redis."),
         };
     }
 
     /**
-     * Create a named cache repository.
-     *
-     * This is a convenience method for creating a new instance of the Cache class.
+     * Resolve a named cache repository shared within the current application.
      *
      * @param string $name The name of the cache repository.
-     * @return Cache A new instance of the Cache class.
+     * @return Cache The application's cache instance for this namespace.
      */
     public static function make(string $name = 'default'): Cache
     {
-        $app = Application::$app;
-
-        if ($app === null) {
-            return new Cache($name);
+        if (Application::$app !== null) {
+            return Application::$app->get(CacheManager::class)->make($name);
         }
-
-        $binding = Cache::class . ($name === 'default' ? '' : ":$name");
-
-        if (!$app->has($binding)) {
-            $app->instance($binding, new Cache($name));
-        }
-
-        return $app->get($binding);
+        return new Cache($name);
     }
 
-    /**
-     * Create a lock instance or acquire a lock on a key.
-     *
-     * @param ?string $key The key to lock.
-     * @param ?callable $callback The callback to execute while the lock is held.
-     * @param int|string|DateTimeInterface|Carbon|DateInterval $timeout The timeout for the lock.
-     * @param int $waitTimeout The timeout for waiting for the lock.
-     * @return mixed The result of the callback or the lock instance.
-     */
-    public static function lock(?string $key = null, ?callable $callback = null, int|string|DateTimeInterface|Carbon|DateInterval $timeout = 10, int $waitTimeout = 5): mixed
+    /** Select a namespace within this repository's configured store. */
+    public function withNamespace(string $name): Cache
     {
-        if (\func_num_args() >= 2) {
-            return Lock::make()->withLock($key, $callback, $timeout, $waitTimeout);
+        if ($name === $this->name) {
+            return $this;
         }
+        $manager = $this->manager?->get();
+        if ($manager !== null && $this->storeName !== null && $manager->ownsRepository($this->storeName, $this->name, $this)) {
+            return $manager->repository($this->storeName, $name);
+        }
+        return new Cache($name, $this->config);
+    }
 
-        return Lock::make();
+    /** Create an independent owner for one resource in this cache store and namespace. */
+    public function lock(string $key, int $seconds = 10, ?string $owner = null): LockHandle
+    {
+        return new LockHandle($this->storage, $key, $seconds, $owner);
+    }
+
+    /** Restore a transferred owner token, typically to release a lock in another process. */
+    public function restoreLock(string $key, string $owner): LockHandle
+    {
+        return $this->lock($key, owner: $owner);
     }
 
     /**
@@ -445,32 +448,4 @@ class Cache implements CacheContract, \ArrayAccess
         $this->erase((string) $offset);
     }
 
-    /** Unload this cache instance from the application container. */
-    public function unload(): void
-    {
-        Application::$app !== null && Application::$app->forget(self::class . ':' . $this->name);
-    }
-
-    /**
-     * Resolve the configured default cache store and its settings.
-     */
-    private function resolveDriverConfig(string $name): array
-    {
-        $cacheConfig = (array) config('cache', []);
-        $store = (string) (($cacheConfig['default'] ?? null) ?: ($cacheConfig['store'] ?? null) ?: ($cacheConfig['driver'] ?? null) ?: 'database');
-        $storeConfig = $cacheConfig['connections'][$store] ?? null;
-
-        if (!is_array($storeConfig)) {
-            if (!in_array(strtolower($store), ['database', 'file', 'redis'], true)) {
-                throw new \InvalidArgumentException("Cache store [{$store}] is not defined in cache.connections.");
-            }
-
-            $storeConfig = []; // Built-in driver name without an entry: use driver defaults.
-        }
-
-        return RedisConnector::mergeConfig([
-            'driver' => $store,
-            'name' => $name,
-        ], $storeConfig);
-    }
 }

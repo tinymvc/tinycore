@@ -275,9 +275,9 @@ final class FrameworkServicesTest extends FrameworkTestCase
         session()->flash('notice', 'Saved');
         $this->assertSame('Saved', session()->getFlash('notice'));
         $this->assertFalse(session()->hasFlash('notice'));
-        $lock = lock(name: 'docs-smoke');
-        $this->assertSame('completed', $lock->withLock('report', fn() => 'completed', 10, 0));
-        $this->assertFalse($lock->isLocked('report'));
+        $lock = lock('report', 10, name: 'docs-smoke');
+        $this->assertSame('completed', $lock->block(0, fn() => 'completed'));
+        $this->assertFalse($lock->isOwnedByCurrentProcess());
         $cache = cache('batch');
         $cache->storeManyWithExpiry([
             'counts' => ['value' => [1, 2], 'expire' => '+1 minute'],

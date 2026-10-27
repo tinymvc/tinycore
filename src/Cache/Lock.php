@@ -12,13 +12,10 @@ use Spark\Cache\Exceptions\LockException;
 use Spark\Cache\Storage\FileStorage;
 use Spark\Cache\Storage\RedisStorage;
 use Spark\Cache\Storage\DatabaseStorage;
-use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-use Spark\Utils\RedisConnector;
 use function gethostname;
 use function getmypid;
-use function in_array;
 use function is_array;
 use function is_int;
 use function sprintf;
@@ -26,10 +23,9 @@ use function strtolower;
 use function uniqid;
 
 /**
- * Public lock manager for the configured cache lock driver.
+ * Legacy manual-owner API. Prefer cache()->lock() handles in new code.
  *
- * This class owns the process-specific lock owner token and delegates SQLite
- * or Redis persistence details to storage classes.
+ * Each instance owns its token and delegates persistence to the storage driver.
  *
  * @implements \ArrayAccess<string, mixed>
  */
@@ -49,7 +45,7 @@ class Lock implements LockContract, \ArrayAccess
      */
     public function __construct(string $name = 'default')
     {
-        $connection = $this->resolveDriverConfig($name);
+        $connection = CacheManager::resolveConfig((array) config('cache', []));
         $driver = strtolower((string) ($connection['driver'] ?? 'database'));
 
         $this->storage = match ($driver) {
@@ -63,7 +59,7 @@ class Lock implements LockContract, \ArrayAccess
     }
 
     /**
-     * Create a named lock manager instance.
+     * Create an independent lock owner in the named namespace.
      *
      * This is a convenience method for creating a new instance without using the `new` keyword.
      *
@@ -72,18 +68,7 @@ class Lock implements LockContract, \ArrayAccess
      */
     public static function make(string $name = 'default'): static
     {
-        $app = Application::$app;
-        if ($app === null) {
-            return new Lock($name);
-        }
-
-        $binding = Lock::class . ($name === 'default' ? '' : ":$name");
-
-        if (!$app->has($binding)) {
-            $app->instance($binding, new Lock($name));
-        }
-
-        return $app->get($binding);
+        return new static($name);
     }
 
     /**
@@ -295,26 +280,4 @@ class Lock implements LockContract, \ArrayAccess
         $this->unlock((string) $offset);
     }
 
-    /**
-     * Resolve the configured default cache store and its settings.
-     */
-    private function resolveDriverConfig(string $name): array
-    {
-        $cacheConfig = (array) config('cache', []);
-        $store = (string) (($cacheConfig['default'] ?? null) ?: ($cacheConfig['store'] ?? null) ?: ($cacheConfig['driver'] ?? null) ?: 'database');
-        $storeConfig = $cacheConfig['connections'][$store] ?? null;
-
-        if (!is_array($storeConfig)) {
-            if (!in_array(strtolower($store), ['database', 'file', 'redis'], true)) {
-                throw new \InvalidArgumentException("Cache store [{$store}] is not defined in cache.connections.");
-            }
-
-            $storeConfig = []; // Built-in driver name without an entry: use driver defaults.
-        }
-
-        return RedisConnector::mergeConfig([
-            'driver' => $store,
-            'name' => $name,
-        ], $storeConfig);
-    }
 }

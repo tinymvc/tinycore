@@ -111,6 +111,7 @@ class FileStorage implements CacheStorageContract
     public function __construct(
         private readonly string $name,
         private readonly array $config = [],
+        private readonly bool $trackLocks = true,
     ) {
         $cacheBase = $this->resolveDirectory($config['path'] ?? null);
         $lockBase = $this->resolveDirectory($config['lock_path'] ?? $config['path'] ?? null);
@@ -443,7 +444,9 @@ class FileStorage implements CacheStorageContract
 
         while (true) {
             if ($this->tryAcquire($dir, $path, $key, $owner, $timeout)) {
-                $this->held[$owner][$key] = true;
+                if ($this->trackLocks) {
+                    $this->held[$owner][$key] = true;
+                }
                 return true;
             }
 
@@ -462,6 +465,9 @@ class FileStorage implements CacheStorageContract
         [$dir, $path] = $this->target($this->lockRoot, $key, self::LOCK_EXT);
 
         unset($this->held[$owner][$key]);
+        if (empty($this->held[$owner])) {
+            unset($this->held[$owner]);
+        }
 
         try {
             return (bool) $this->withGuard($dir, function () use ($path, $key, $owner) {

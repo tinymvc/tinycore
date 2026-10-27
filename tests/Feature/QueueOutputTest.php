@@ -48,9 +48,9 @@ final class QueueOutputTest extends FrameworkTestCase
                 $handler = new \Spark\Foundation\Console\PrimaryCommandsHandler;
 
                 if ($failed) {
-                    $handler->listFailedQueueJobs($queue, []);
+                    $handler->listFailedQueueJobs(app(Spark\Queue\QueueManager::class), []);
                 } else {
-                    $handler->listQueueJobs($queue, []);
+                    $handler->listQueueJobs(app(Spark\Queue\QueueManager::class), []);
                 }
 
                 return ob_get_contents();

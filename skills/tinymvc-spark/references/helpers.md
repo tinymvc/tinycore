@@ -13,16 +13,16 @@ TinyCore provides first-class static facades under `Spark\Facades\*`. They provi
 | `Spark\Facades\App` | `Spark\Foundation\Application` | Service container binding, resolving, environment checks (`App::isProduction()`, `App::isTesting()`, `App::isDebugMode()`). |
 | `Spark\Facades\Auth` | `Spark\Http\Auth` | User authentication, guards, credentials verification, tokens (`Auth::attempt()`, `Auth::user()`, `Auth::id()`, `Auth::loginUsingId()`, `Auth::createToken()`, `Auth::revokeToken()`). |
 | `Spark\Facades\Blade` | `Spark\View\Blade` | Template compilation, directive registration (`Blade::directive()`), component rendering, variable sharing (`Blade::share()`). |
-| `Spark\Facades\Cache` | `Spark\Cache\Cache` | Storing, retrieving, atomic operations, and cache invalidation (`Cache::remember()`, `Cache::get()`, `Cache::put()`, `Cache::forget()`, `Cache::erase()`, `Cache::flush()`, `Cache::make('store')`). |
+| `Spark\Facades\Cache` | `Spark\Cache\CacheManager`, `Spark\Cache\Cache` | Storing, retrieving, atomic operations, and cache invalidation (`Cache::remember()`, `Cache::get()`, `Cache::put()`, `Cache::forget()`, `Cache::erase()`, `Cache::flush()`, `Cache::store('redis')`). |
 | `Spark\Facades\DB` | `Spark\Database\DB` | Database transactions, connection switching, raw queries, table queries (`DB::transaction()`, `DB::table()`, `DB::raw()`, row locking `lockForUpdate()`). |
 | `Spark\Facades\Event` | `Spark\Events` | Event dispatching and listener registration (`Event::listen()`, `Event::dispatch()`, `Event::dispatchIf()`, `Event::until()`, `Event::once()`). |
 | `Spark\Facades\Gate` | `Spark\Http\Gate` | User authorization policies and ability checks (`Gate::define()`, `Gate::allows()`, `Gate::denies()`, `Gate::check()`, `Gate::authorize()`). |
 | `Spark\Facades\Hash` | `Spark\Hash` | Password hashing (`password()`, `bcrypt()`, `argon2id()`) and verification (`verify()`), encryption (`encrypt()`, `decrypt()`), and UUIDs (`uuid()`). `make()` / `check()` are keyed HMAC helpers, not password hashing. |
 | `Spark\Facades\Http` | `Spark\Http\Client\Http` | Fluent outbound HTTP client with JSON handling and authentication (`Http::withToken()`, `Http::timeout()`, `Http::post()`, `Http::get()`, `Http::pool()`). |
-| `Spark\Facades\Lock` | `Spark\Cache\Lock` | Atomic distributed locking (`Lock::withLock()`, `Lock::lock()`, `Lock::unlock()`, `Lock::isLocked()`, `Lock::make('store')`). |
+| `Spark\Facades\Lock` | `Spark\Cache\LockHandle` | `Lock::lock('key', 30)->block(5, $callback)`; `Lock::make('namespace')` shares a cache repository, while each lock handle has its own owner. |
 | `Spark\Facades\Log` | `Psr\Log\LoggerInterface` (native `Spark\Logger`) | Application logging (`Log::info()`, `Log::error()`, `Log::warning()`, `Log::debug()`). |
 | `Spark\Facades\Mail` | `Spark\Utils\Mail` | Fluent email sending with Blade view rendering (`Mail::to()`, `Mail::subject()`, `Mail::view()`, `Mail::send()`). |
-| `Spark\Facades\Queue` | `Spark\Queue\Queue` | Background queue operations, queue size inspection, clearing. |
+| `Spark\Facades\Queue` | `Spark\Queue\QueueManager`, `Spark\Queue\Queue` | Background queue operations, queue size inspection, clearing. |
 | `Spark\Facades\Route` | `Spark\Http\Routing\Router` | Defining routes, route groups, resource routes, model binding, middleware. |
 | `Spark\Facades\Schema` | `Spark\Database\Schema\Schema` | Database migrations and schema building (`Schema::create()`, `Schema::table()`, `Schema::dropIfExists()`). |
 | `Spark\Facades\Session` | `Spark\Http\Session` | Web session manipulation (`Session::get()`, `Session::put()`, `Session::flash()`, `Session::regenerate()`, `Session::invalidate()`). |

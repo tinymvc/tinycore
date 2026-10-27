@@ -7,7 +7,6 @@ use Spark\Foundation\Exceptions\ThrottleException;
 use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Cache\Cache;
-use Spark\Cache\Lock;
 use function count;
 use function is_array;
 use function is_numeric;
@@ -73,7 +72,7 @@ abstract class ThrottleIncomingRequests implements MiddlewareInterface
         $key = "{$duration}m:$attempts:$identifier";
 
         // Serialize the read/check/write so simultaneous requests cannot lose hits.
-        return Lock::make('throttle')->withLock($key, function () use ($storage, $key, $duration, $attempts): bool {
+        return $storage->lock($key)->block(5, function () use ($storage, $key, $duration, $attempts): bool {
             $now = time();
             $windowStart = $now - ($duration * 60);
             $timestamps = $storage->retrieve($key, eraseExpired: true);

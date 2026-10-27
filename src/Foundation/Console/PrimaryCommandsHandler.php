@@ -6,7 +6,7 @@ use Spark\Cache\Cache;
 use Spark\Console\Commands;
 use Spark\Console\Process;
 use Spark\Console\Prompt;
-use Spark\Queue\Queue;
+use Spark\Queue\QueueManager;
 use Spark\Http\Routing\Router;
 use Spark\Utils\File;
 use function count;
@@ -174,16 +174,16 @@ class PrimaryCommandsHandler
     /**
      * Handles the "queue:work" command by processing pending jobs.
      *
-     * @param Queue $queue
-     *   An instance of the Queue class for running queue jobs.
+     * @param QueueManager $queue
+     *   The queue connection manager for running queue jobs.
      *  @param array $args
      *   An associative array of arguments, where the maximum number of jobs to run
      *
      * @return void
      */
-    public function runQueueJobs(Queue $queue, array $args)
+    public function runQueueJobs(QueueManager $queue, array $args)
     {
-        $queue->work(
+        $queue->connection($args['connection'] ?? null)->work(
             once: isset($args['once']),
             timeout: $args['timeout'] ?? 3580, // 59 minutes and 40 seconds
             sleep: $args['sleep'] ?? 4, // 4 seconds
@@ -193,7 +193,7 @@ class PrimaryCommandsHandler
         ); // Run all pending queue jobs
     }
 
-    public function restartQueueWorkers(Queue $queue): void
+    public function restartQueueWorkers(QueueManager $queue): void
     {
         $queue->restart();
         Prompt::success('Queue restart requested. Workers will exit after their current job; a process supervisor must restart them.');
@@ -202,14 +202,14 @@ class PrimaryCommandsHandler
     /**
      * Lists all scheduled queue jobs.
      *
-     * @param Queue $queue
-     *   An instance of the Queue class for managing queue jobs.
+     * @param QueueManager $queue
+     *   The queue connection manager for managing queue jobs.
      *
      * @return void
      */
-    public function listQueueJobs(Queue $queue, array $args)
+    public function listQueueJobs(QueueManager $queue, array $args)
     {
-        $jobs = $queue->getJobs(
+        $jobs = $queue->connection($args['connection'] ?? null)->getJobs(
             from: $args['from'] ?? 0,
             to: $args['to'] ?? 500,
             queue: $args['queue'] ?? null,
@@ -241,14 +241,14 @@ class PrimaryCommandsHandler
     /**
      * Lists all failed queue jobs.
      *
-     * @param Queue $queue
-     *   An instance of the Queue class for managing queue jobs.
+     * @param QueueManager $queue
+     *   The queue connection manager for managing queue jobs.
      * 
      * @return void
      */
-    public function listFailedQueueJobs(Queue $queue, array $args)
+    public function listFailedQueueJobs(QueueManager $queue, array $args)
     {
-        $failedJobs = $queue->getFailedJobs(
+        $failedJobs = $queue->connection($args['connection'] ?? null)->getFailedJobs(
             from: $args['from'] ?? 0,
             to: $args['to'] ?? 500,
         );
@@ -278,42 +278,42 @@ class PrimaryCommandsHandler
     /**
      * Clears all the pending jobs in the queue.
      *
-     * @param Queue $queue
-     *   An instance of the Queue class for clearing queue jobs.
+     * @param QueueManager $queue
+     *   The queue connection manager for clearing queue jobs.
      * 
      * @return void
      */
-    public function clearQueueJobs(Queue $queue)
+    public function clearQueueJobs(QueueManager $queue, array $args = [])
     {
-        $queue->clearAllJobs();
+        $queue->connection($args['connection'] ?? null)->clearAllJobs();
         Prompt::message("Queue jobs cleared.", "success");
     }
 
     /**
      * Lists all failed queue jobs.
      *
-     * @param Queue $queue
-     *   An instance of the Queue class for managing queue jobs.
+     * @param QueueManager $queue
+     *   The queue connection manager for managing queue jobs.
      * 
      * @return void
      */
-    public function clearFailedQueueJobs(Queue $queue)
+    public function clearFailedQueueJobs(QueueManager $queue, array $args = [])
     {
-        $queue->clearFailedJobs();
+        $queue->connection($args['connection'] ?? null)->clearFailedJobs();
         Prompt::message("Failed queue jobs cleared.", "success");
     }
 
     /**
      * Retries all failed queue jobs.
      *
-     * @param Queue $queue
-     *   An instance of the Queue class for managing queue jobs.
+     * @param QueueManager $queue
+     *   The queue connection manager for managing queue jobs.
      * 
      * @return void
      */
-    public function retryFailedQueueJobs(Queue $queue)
+    public function retryFailedQueueJobs(QueueManager $queue, array $args = [])
     {
-        $queue->retryFailedJobs();
+        $queue->connection($args['connection'] ?? null)->retryFailedJobs();
         Prompt::message("Failed queue jobs retried.", "success");
     }
 
