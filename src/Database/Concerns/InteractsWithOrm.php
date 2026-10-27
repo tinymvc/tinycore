@@ -15,6 +15,7 @@ use Spark\Database\Relation\HasOne;
 use Spark\Database\Relation\Relation;
 use Spark\Support\Str;
 use function array_key_exists;
+use function count;
 use function func_get_args;
 use function get_class;
 use function in_array;
@@ -526,6 +527,19 @@ trait InteractsWithOrm
      */
     public function loadRelation(array $models, array $config, string $name, null|Closure $constraints = null, null|array $nested = null, null|array|string $columns = null): array
     {
+        $groups = [];
+        foreach ($models as $model) {
+            if ($model instanceof \Spark\Database\Model) {
+                $groups[$model->getQueryContext()?->key() ?? 'default'][] = $model;
+            }
+        }
+        if (count($groups) > 1 || ($groups && reset($groups)[0] !== $this)) {
+            foreach ($groups as $group) {
+                $group[0]->loadRelation($group, $config, $name, $constraints, $nested, $columns);
+            }
+            return $models;
+        }
+
         // Store nested relationships in config for later use
         if ($nested && !empty($nested)) {
             $config['nested'] = $nested;
@@ -561,6 +575,19 @@ trait InteractsWithOrm
      */
     public function loadMorphRelation(array $models, string $relation, array $morphMap, string|null $typeColumn = null, string|null $idColumn = null): array
     {
+        $groups = [];
+        foreach ($models as $model) {
+            if ($model instanceof \Spark\Database\Model) {
+                $groups[$model->getQueryContext()?->key() ?? 'default'][] = $model;
+            }
+        }
+        if (count($groups) > 1 || ($groups && reset($groups)[0] !== $this)) {
+            foreach ($groups as $group) {
+                $group[0]->loadMorphRelation($group, $relation, $morphMap, $typeColumn, $idColumn);
+            }
+            return $models;
+        }
+
         if (empty($models)) {
             return $models;
         }
@@ -612,7 +639,7 @@ trait InteractsWithOrm
             $morphModel = new $morphClass;
             $primaryKey = $morphModel->getPrimaryKey();
 
-            $query = $morphModel->query()->whereIn($primaryKey, $ids);
+            $query = $this->newRelatedQuery($morphModel)->whereIn($primaryKey, $ids);
 
             // Eager load nested relationships
             if (!empty($relations)) {
@@ -663,7 +690,7 @@ trait InteractsWithOrm
 
         $columns = $this->ensureColumns($config['columns'] ?? '*', [$config['foreignKey']]);
 
-        $query = $relatedModel->query()
+        $query = $this->newRelatedQuery($relatedModel)
             ->select($columns)
             ->whereIn($config['foreignKey'], $localValues);
 
@@ -703,7 +730,7 @@ trait InteractsWithOrm
 
         $columns = $this->ensureColumns($config['columns'] ?? '*', [$config['ownerKey']]);
 
-        $query = $relatedModel->query()
+        $query = $this->newRelatedQuery($relatedModel)
             ->select($columns)
             ->whereIn($config['ownerKey'], $foreignValues);
 
@@ -746,7 +773,7 @@ trait InteractsWithOrm
             (array) ($config['columns'] ??= ['*'])
         );
 
-        $query = $relatedModel->query()
+        $query = $this->newRelatedQuery($relatedModel)
             ->select([
                 ...$columns,
                 add_pivot_field_alias($config['table'] . "." . $config['foreignPivotKey']),
@@ -812,7 +839,7 @@ trait InteractsWithOrm
             (array) ($config['columns'] ??= ['*'])
         );
 
-        $query = $relatedModel->query()
+        $query = $this->newRelatedQuery($relatedModel)
             ->useThroughModel($throughModel)
             ->withTrashedParents($config['withTrashedParents'] ?? false)
             ->select([

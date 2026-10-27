@@ -49,7 +49,7 @@ class BelongsTo extends Relation
     {
         /** @var Model $relatedInstance */
         $relatedInstance = new ($this->related)();
-        $query = $relatedInstance::query();
+        $query = $this->relatedQuery($relatedInstance);
 
         // Add relationship constraint
         if ($this->model) {

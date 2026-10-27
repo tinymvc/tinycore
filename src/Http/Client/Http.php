@@ -51,6 +51,13 @@ class Http extends HttpRequest implements HttpContract
     private ?string $download = null;
 
     /**
+     * Whether to overwrite the download file if it already exists.
+     *
+     * @var bool
+     */
+    private bool $overwriteDownload = false;
+
+    /**
      * Resets the current configuration back to default, optionally overriding
      * certain configuration settings.
      * 
@@ -74,7 +81,8 @@ class Http extends HttpRequest implements HttpContract
         $this->setParams($params);
         $this->setData($data);
 
-        $this->download = null; // Reset download file
+        $this->download = null;
+        $this->overwriteDownload = false; // Reset download file
         $this->options = []; // Reset cURL options
         $this->postFieldData = null;
         $this->headers = []; // Reset headers
@@ -134,8 +142,14 @@ class Http extends HttpRequest implements HttpContract
                 }
             });
 
-            if ($downloadMode && $data['status'] !== 0 && @rename($temporaryDownload, $downloadPath) === false) {
-                throw new HttpException("Unable to save download file: {$downloadPath}");
+            if ($downloadMode && $data['status'] !== 0) {
+                // link() publishes without replacing a target created during the request.
+                $saved = $this->overwriteDownload
+                    ? @rename($temporaryDownload, $downloadPath)
+                    : @link($temporaryDownload, $downloadPath);
+                if (!$saved) {
+                    throw new HttpException("Unable to save download file: $downloadPath");
+                }
             }
 
             $this->triggerHttpRequestEvent(
@@ -157,6 +171,7 @@ class Http extends HttpRequest implements HttpContract
                 @unlink($temporaryDownload);
             }
             $this->download = null;
+            $this->overwriteDownload = false;
         }
     }
 
@@ -173,8 +188,8 @@ class Http extends HttpRequest implements HttpContract
             throw new HttpException("Download directory does not exist: {$directory}");
         }
 
-        if (file_exists($downloadPath)) {
-            throw new HttpException("Download target already exists: {$downloadPath}");
+        if ((file_exists($downloadPath) || is_link($downloadPath)) && (!$this->overwriteDownload || is_dir($downloadPath))) {
+            throw new HttpException("Download target already exists: $downloadPath");
         }
     }
 
@@ -189,7 +204,7 @@ class Http extends HttpRequest implements HttpContract
     {
         $stream = @fopen($downloadPath, 'wb');
         if (!is_resource($stream)) {
-            throw new HttpException("Unable to open download file: {$downloadPath}");
+            throw new HttpException("Unable to open download file: $downloadPath");
         }
 
         return $stream;
@@ -386,6 +401,7 @@ class Http extends HttpRequest implements HttpContract
         }
 
         $this->download = $location;
+        $this->overwriteDownload = $force;
         return $this;
     }
 

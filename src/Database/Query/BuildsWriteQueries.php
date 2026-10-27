@@ -167,6 +167,7 @@ trait BuildsWriteQueries
      */
     public function update(array|Arrayable $data, null|string|array|Arrayable|Closure $where = null): int
     {
+        $this->assertSupportedWriteQuery();
         if ($data instanceof Arrayable) {
             $data = $data->toArray();
         }
@@ -175,8 +176,15 @@ trait BuildsWriteQueries
             return 0;
         }
 
+        // Apply WHERE condition if provided
+        $this->where($where);
+        $this->assertSupportedWriteQuery();
+
         // Apply related model condition if necessary
-        if (($model = $this->getModelBeingUsed()) !== null && $model->hasPrimaryValue()) {
+        $model = $this->getModelBeingUsed();
+        $identity = $model?->getPersistenceKey();
+        $hasIdentity = $identity !== null && $identity !== '';
+        if ($hasIdentity) {
             $model->fill($data);
 
             // Cast the data for storage, including timestamps if applicable
@@ -190,9 +198,6 @@ trait BuildsWriteQueries
 
             $this->applyModelPrimaryCondition();
         }
-
-        // Apply WHERE condition if provided
-        $this->where($where);
 
         // Require a WHERE condition or an explicit model trash scope.
         if (!$this->hasAnyCondition()) {
@@ -243,8 +248,9 @@ trait BuildsWriteQueries
         // Returns the number of affected rows.
         $count = $statement->rowCount();
 
-        if ($model !== null && $model->hasPrimaryValue()) {
+        if ($hasIdentity) {
             if ($count) {
+                $model->syncPersistenceKey($data[$model->getPrimaryKey()] ?? $model->getPersistenceKey());
                 $model->trackUpdated();
             } else {
                 $model->restoreOriginal();
@@ -264,6 +270,7 @@ trait BuildsWriteQueries
      */
     public function delete(null|string|array|Arrayable|Closure $where = null, bool $force = false): int
     {
+        $this->assertSupportedWriteQuery();
         // Apply related model condition if necessary
         if (($model = $this->getModelBeingUsed()) !== null) {
             $this->applyModelPrimaryCondition();
@@ -271,6 +278,7 @@ trait BuildsWriteQueries
 
         // Apply WHERE condition if provided
         $this->where($where);
+        $this->assertSupportedWriteQuery();
 
         // Require a WHERE condition or an explicit model trash scope.
         if (!$this->hasAnyCondition()) {
@@ -326,7 +334,7 @@ trait BuildsWriteQueries
         // Returns the number of affected rows.
         $deleted = $statement->rowCount();
 
-        if ($deleted && isset($model) && $model->hasPrimaryValue()) {
+        if ($deleted && isset($model) && $model->getPersistenceKey() !== null && $model->getPersistenceKey() !== '') {
             $model->trackDeleted();
         }
 
@@ -352,6 +360,7 @@ trait BuildsWriteQueries
      */
     public function restore(): bool
     {
+        $this->assertSupportedWriteQuery();
         if (($model = $this->getModelBeingUsed()) === null || $model->usesSoftDeletes() === false) {
             return false; // No model being used or model does not support soft deletes
         }
@@ -510,6 +519,7 @@ trait BuildsWriteQueries
      */
     public function updateOrInsert(array $attributes, array $values = []): int|bool
     {
+        $this->assertSupportedWriteQuery();
         // Check if record exists
         if ((clone $this)->where($attributes)->exists()) {
             if ($values === []) {
@@ -546,6 +556,7 @@ trait BuildsWriteQueries
         if ($id) {
             $result = ['id' => $id, ...$attributes, ...$values];
             if (($model = $this->getModelBeingUsed()) !== null) {
+                $model->setQueryContext($this->getModelContext());
                 $model->fill($result);
                 $model->trackCreated();
                 return $model;
@@ -569,6 +580,7 @@ trait BuildsWriteQueries
         if ($id) {
             $result = ['id' => $id, ...$data];
             if (($model = $this->getModelBeingUsed()) !== null) {
+                $model->setQueryContext($this->getModelContext());
                 $model->fill($result);
                 $model->trackCreated();
                 return $model;
@@ -589,6 +601,7 @@ trait BuildsWriteQueries
      */
     public function increment(string $column, int $value = 1, $where = null): bool
     {
+        $this->assertSupportedWriteQuery();
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
 
@@ -598,14 +611,16 @@ trait BuildsWriteQueries
         }
 
         $this->where($where);
+        $this->assertSupportedWriteQuery();
 
         $positional = $this->parameters !== [];
         if ($positional && $this->bindings !== []) {
             throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
         }
 
-        $bindings = $positional ? [$value, ...$this->parameters] : ['increment' => $value, ...$this->getBindings()];
-        $placeholder = $positional ? '?' : ':increment';
+        $parameter = $this->getWhereSqlColumn('increment');
+        $bindings = $positional ? [$value, ...$this->parameters] : [$parameter => $value, ...$this->getBindings()];
+        $placeholder = $positional ? '?' : ":$parameter";
         $sql = "UPDATE " . $this->getTableName()
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} + $placeholder "
             . $this->preparedWhereClauseSql(forWrite: true);
@@ -613,8 +628,12 @@ trait BuildsWriteQueries
         $result = $this->executeAffectingStatement($sql, $bindings);
 
         // Apply related model condition if necessary
-        if (isset($model) && $model->hasPrimaryValue() && $result > 0) {
-            $model->fill([$column => ($model->{$column} ?: 0) + $value]);
+        if (isset($model) && $model->getPersistenceKey() !== null && $model->getPersistenceKey() !== '' && $result > 0) {
+            $current = $column === $model->getPrimaryKey() ? $model->getPersistenceKey() : $model->{$column};
+            $model->fill([$column => ($current ?: 0) + $value]);
+            if ($column === $model->getPrimaryKey()) {
+                $model->syncPersistenceKey($model->primaryValue());
+            }
             $model->trackUpdated();
         }
 
@@ -633,6 +652,7 @@ trait BuildsWriteQueries
      */
     public function decrement(string $column, int $value = 1, $where = null): bool
     {
+        $this->assertSupportedWriteQuery();
         $started = microtime(true); // Start timing the operation
         $startedMemory = memory_get_usage(true);
 
@@ -642,14 +662,16 @@ trait BuildsWriteQueries
         }
 
         $this->where($where);
+        $this->assertSupportedWriteQuery();
 
         $positional = $this->parameters !== [];
         if ($positional && $this->bindings !== []) {
             throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
         }
 
-        $bindings = $positional ? [$value, ...$this->parameters] : ['decrement' => $value, ...$this->getBindings()];
-        $placeholder = $positional ? '?' : ':decrement';
+        $parameter = $this->getWhereSqlColumn('decrement');
+        $bindings = $positional ? [$value, ...$this->parameters] : [$parameter => $value, ...$this->getBindings()];
+        $placeholder = $positional ? '?' : ":$parameter";
         $sql = "UPDATE " . $this->getTableName()
             . " SET {$this->wrapper->wrapColumn($column)} = {$this->wrapper->wrapColumn($column)} - $placeholder "
             . $this->preparedWhereClauseSql(forWrite: true);
@@ -657,8 +679,12 @@ trait BuildsWriteQueries
         $result = $this->executeAffectingStatement($sql, $bindings);
 
         // Apply related model condition if necessary
-        if (isset($model) && $model->hasPrimaryValue() && $result > 0) {
-            $model->fill([$column => ($model->{$column} ?: 0) - $value]);
+        if (isset($model) && $model->getPersistenceKey() !== null && $model->getPersistenceKey() !== '' && $result > 0) {
+            $current = $column === $model->getPrimaryKey() ? $model->getPersistenceKey() : $model->{$column};
+            $model->fill([$column => ($current ?: 0) - $value]);
+            if ($column === $model->getPrimaryKey()) {
+                $model->syncPersistenceKey($model->primaryValue());
+            }
             $model->trackUpdated();
         }
 
@@ -947,5 +973,17 @@ trait BuildsWriteQueries
             return PDO::PARAM_NULL;
         }
         return PDO::PARAM_STR;
+    }
+
+    private function assertSupportedWriteQuery(): void
+    {
+        foreach (['sql', 'joins', 'group', 'having', 'unions', 'order', 'limit', 'offset'] as $clause) {
+            if (isset($this->query[$clause]) && $this->query[$clause] !== '') {
+                throw new QueryBuilderException("Writes do not support the $clause clause; select the target keys first.");
+            }
+        }
+        if (array_filter($this->clauseBindings) || array_filter($this->clauseParameters)) {
+            throw new QueryBuilderException('Writes do not support bindings outside the WHERE clause.');
+        }
     }
 }

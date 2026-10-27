@@ -51,7 +51,7 @@ class HasMany extends Relation
     {
         /** @var Model $relatedInstance */
         $relatedInstance = new ($this->related)();
-        $query = $relatedInstance::query();
+        $query = $this->relatedQuery($relatedInstance);
 
         // Add relationship constraint
         if ($this->model) {
@@ -117,11 +117,7 @@ class HasMany extends Relation
         // Merge the foreign key into the attributes
         $attributes[$this->foreignKey] = $foreignKeyValue;
 
-        // Create the related model with the foreign key set
-        $relatedClass = $this->related;
-        $relatedModel = $relatedClass::create($attributes);
-
-        return $relatedModel;
+        return $this->createRelated($attributes);
     }
 
     /**
@@ -146,10 +142,9 @@ class HasMany extends Relation
         }
 
         $models = [];
-        $relatedClass = $this->related;
 
         foreach ($records as $attributes) {
-            $models[] = $relatedClass::create([...$attributes, $this->foreignKey => $foreignKeyValue]);
+            $models[] = $this->createRelated([...$attributes, $this->foreignKey => $foreignKeyValue]);
         }
 
         return $models;
@@ -185,7 +180,14 @@ class HasMany extends Relation
         $attributes[$this->foreignKey] = $foreignKeyValue;
 
         $relatedClass = $this->related;
-        return $relatedClass::createOrUpdate([...$attributes, ...$values], array_keys($attributes));
+        $candidate = $this->newRelatedModel()->fill([...$attributes, ...$values]);
+        $data = $candidate->getFillableData();
+
+        $where = array_intersect_key($data, array_flip(array_keys($attributes)));
+        $model = $this->relatedQuery(new $relatedClass())->where($where)->first() ?? $candidate;
+        $model->fill($data)->save();
+
+        return $model;
     }
 
     /**
@@ -217,7 +219,8 @@ class HasMany extends Relation
         $attributes[$this->foreignKey] = $foreignKeyValue;
 
         $relatedClass = $this->related;
-        return $relatedClass::firstOrCreate($attributes, $values);
+        return $this->relatedQuery(new $relatedClass())->where($attributes)->first()
+            ?: $this->createRelated([...$attributes, ...$values]);
     }
 
     /**
@@ -244,7 +247,7 @@ class HasMany extends Relation
         }
 
         $relatedClass = new ($this->related);
-        $query = $relatedClass->where($this->foreignKey, $foreignKeyValue);
+        $query = $this->relatedQuery($relatedClass)->where($this->foreignKey, $foreignKeyValue);
 
         if ($conditions !== null) {
             if (is_int($conditions)) {
@@ -299,6 +302,7 @@ class HasMany extends Relation
             throw new \RuntimeException("Parent model's {$this->localKey} must be set before saving related models.");
         }
 
+        $model->setQueryContext($this->relatedQuery(new ($this->related)())->getModelContext());
         $model->{$this->foreignKey} = $foreignKeyValue;
         $model->save();
 
@@ -318,5 +322,18 @@ class HasMany extends Relation
         }
 
         return $models;
+    }
+
+    private function newRelatedModel(): Model
+    {
+        $model = new ($this->related)();
+        return $model->setQueryContext($this->relatedQuery($model)->getModelContext());
+    }
+
+    private function createRelated(array $attributes): Model
+    {
+        $model = $this->newRelatedModel();
+        $model->fill($attributes)->save(forceCreate: true);
+        return $model;
     }
 }

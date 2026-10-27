@@ -162,6 +162,32 @@ class DB implements DBContract, DatabaseDriver
         return $this->config[$key] ?? $default;
     }
 
+    /** @internal Identify a configured connection without serializing its credentials. */
+    public function connectionFingerprint(): string
+    {
+        $normalize = static function (array $config) use (&$normalize): array {
+            ksort($config);
+            foreach ($config as &$value) {
+                if (is_array($value)) {
+                    $value = $normalize($value);
+                }
+            }
+            return $config;
+        };
+
+        $config = $this->config;
+        $dsn = $config['dsn'] ?? $this->buildDsn();
+        if ($this->isSQLite() && ($dsn === 'sqlite:' || str_contains($dsn, ':memory:') || preg_match('/[?&]mode=memory(?:&|$)/', $dsn))) {
+            // Identical in-memory configurations can refer to entirely different databases.
+            static $instances = new \WeakMap();
+
+            $pdo = $this->getPdo();
+            $config['connection_instance'] = $instances[$pdo] ??= bin2hex(random_bytes(16));
+        }
+
+        return hash('sha256', serialize($normalize($config)));
+    }
+
     /** Table prefix shared by queries, schema, and framework storage. */
     public function getTablePrefix(): string
     {

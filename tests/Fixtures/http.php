@@ -70,6 +70,11 @@ Route::any('/input/{id}', fn(Request $request, string $id) => [
     'middleware' => $request->getRouteParams()['middleware'],
     'type' => $request->header('Content-Type'),
 ]);
+Route::post('/validate-upload/{kind}', function (Request $request, string $kind) {
+    $request = $kind === 'psr' ? Request::fromPsrRequest($request->toPsrRequest()) : $request;
+    $request->validate(['file' => 'required|file|min:0.01|max:1|between:0.01,1|mimes:text/plain']);
+    return 'valid upload';
+});
 Route::post('/upload/{kind}', function (Request $request, string $kind) use ($storage) {
     $file = match ($kind) {
         'psr' => $request->toPsrRequest()->getUploadedFiles()['file'],

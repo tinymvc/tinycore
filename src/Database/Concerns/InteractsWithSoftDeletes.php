@@ -2,8 +2,6 @@
 
 namespace Spark\Database\Concerns;
 
-use Spark\Database\DB;
-
 /**
  * Trait InteractsWithSoftDeletes
  *
@@ -91,12 +89,15 @@ trait InteractsWithSoftDeletes
 
         $column = $this->getSoftDeleteColumn();
 
-        if ($this->trashed() && $this->hasPrimaryValue()) {
-            $this->attributes[$column] = null;
-
-            return (bool) DB::table($this->getTable())
-                ->where($this->getPrimaryKey(), $this->primaryValue())
+        $identity = $this->getPersistenceKey();
+        if ($this->trashed() && $identity !== null && $identity !== '') {
+            $restored = $this->newQuery()->withTrashed()
+                ->where($this->getPrimaryKey(), $identity)
                 ->update([$column => null]) > 0;
+            if ($restored) {
+                $this->attributes[$column] = null;
+            }
+            return $restored;
         }
 
         return false;

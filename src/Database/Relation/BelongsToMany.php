@@ -61,7 +61,7 @@ class BelongsToMany extends Relation
     {
         /** @var Model $relatedInstance */
         $relatedInstance = new ($this->related)();
-        $query = $relatedInstance::query();
+        $query = $this->relatedQuery($relatedInstance);
 
         // Append Pivot Fields
         $pivotFields = map_pivot_fields($this->buildPivotFields(), $this->table, $relatedInstance->getTable());
@@ -391,6 +391,6 @@ class BelongsToMany extends Relation
      */
     protected function newPivotQuery(): QueryBuilder
     {
-        return new QueryBuilder($this->query()->getDB());
+        return (new QueryBuilder($this->query()->getDB()))->prefix($this->query()->getTablePrefix());
     }
 }

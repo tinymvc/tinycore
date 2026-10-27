@@ -155,6 +155,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         __callStatic as staticMacroCall;
     }
 
+    /** @var ModelContext|null The context for the model's database and table namespace. */
+    private ?ModelContext $queryContext = null;
+
+    /** Identity of the stored row, independent of unsaved attribute changes. */
+    private mixed $persistenceKey = null;
+
     /** Indicates whether the model should automatically manage timestamps. */
     protected const USE_TIMESTAMPS = true;
 
@@ -232,13 +238,61 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public static function query(): QueryBuilder
     {
-        /** @var QueryBuilder The query builder instance. */
-        $query = app(QueryBuilder::class);
         $model = new static();
+        $model->queryContext = ModelContext::currentQueryContext(static::class);
+        return $model->buildModelQuery($model);
+    }
 
-        return $query->table($model->getTable())
-            ->fetchModel(static::class)
-            ->useModel($model);
+    /** Create a fresh query in this model's database and table namespace. */
+    public function newQuery(): QueryBuilder
+    {
+        if ($this->queryContext !== null) {
+            return $this->queryContext->queryFor(static::class, static fn() => static::query());
+        }
+        return static::query();
+    }
+
+    private function buildModelQuery(Model $model): QueryBuilder
+    {
+        $query = app(QueryBuilder::class);
+        if ($this->queryContext !== null) {
+            $query->setDB($this->queryContext->database())->prefix($this->queryContext->prefix);
+        }
+
+        $model->queryContext = $this->queryContext;
+        return $query->table($this->getTable())->fetchModel(static::class)->useModel($model);
+    }
+
+    /** @internal Propagate the parent's context to a related model. */
+    public function newRelatedQuery(Model $model): QueryBuilder
+    {
+        $model->queryContext = $this->queryContext;
+        return $model->newQuery();
+    }
+
+    /** @internal */
+    public function setQueryContext(ModelContext $context): static
+    {
+        $this->queryContext = $context;
+        return $this;
+    }
+
+    /** @internal */
+    public function getQueryContext(): ?ModelContext
+    {
+        return $this->queryContext;
+    }
+
+    /** @internal Identity used for instance reads and writes. */
+    public function getPersistenceKey(): mixed
+    {
+        return $this->persistenceKey ?? $this->getOriginal($this->getPrimaryKey());
+    }
+
+    /** @internal Record the identity actually read from or written to storage. */
+    public function syncPersistenceKey(mixed $key): void
+    {
+        $this->persistenceKey = $key;
     }
 
     /**
@@ -402,6 +456,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function save(bool $forceCreate = false): bool
     {
+        $this->queryContext ??= $this->newQuery()->getModelContext();
         $data = $this->getFillableData();
 
         // Apply timestamp casting if the model uses HasTimestamp trait and timestamps are defined.
@@ -418,11 +473,12 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         unset($this->tracking['__was_updated'], $this->tracking['__was_created']); // Reset update and create tracking.
 
-        // Update this records if it has an id, else insert this records into database.
-        if ($this->hasPrimaryValue()) {
-            $condition = [$this->getPrimaryKey() => $this->primaryValue()];
-            $updatedStatus = (bool) $this->query()->update($data, $condition);
-            if (!$updatedStatus && $this->query()->where($condition)->exists()) {
+        // Update the stored row even if its primary-key attribute was edited.
+        $identity = $this->getPersistenceKey();
+        if ($identity !== null && $identity !== '') {
+            $condition = [$this->getPrimaryKey() => $identity];
+            $updatedStatus = (bool) $this->newQuery()->update($data, $condition);
+            if (!$updatedStatus && $this->newQuery()->where($condition)->exists()) {
                 $this->tracking['__hash'] = $this->makeHash();
                 return true;
             }
@@ -430,15 +486,15 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             // If update fails and no record exists, insert a new record.
             if (!$updatedStatus && $forceCreate) {
                 try {
-                    if ($this->query()->where($condition)->doesntExist()) {
-                        $createdId = $this->query()->insert($data);
+                    if ($this->newQuery()->where($condition)->doesntExist()) {
+                        $createdId = $this->newQuery()->insert($data);
                     }
                 } catch (\Exception $e) {
                     return false; // Return false on failure.
                 }
             }
         } else {
-            $createdId = $this->query()->insert($data);
+            $createdId = $this->newQuery()->insert($data);
         }
 
         // Save model id if it is newly created.
@@ -446,7 +502,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $this->attributes[$this->getPrimaryKey()] = $createdId;
         }
 
-        $updatedStatus && $this->trackUpdated();
+        if ($updatedStatus) {
+            $this->syncPersistenceKey($data[$this->getPrimaryKey()] ?? $identity);
+            $this->trackUpdated();
+        }
         $createdId && $this->trackCreated();
 
         return $updatedStatus || $createdId; // Return true on success.
@@ -459,7 +518,11 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function remove(): bool
     {
-        $deleted = $this->query()->delete([$this->getPrimaryKey() => $this->primaryValue()]);
+        $identity = $this->getPersistenceKey();
+        if ($identity === null || $identity === '') {
+            return false;
+        }
+        $deleted = $this->newQuery()->delete([$this->getPrimaryKey() => $identity]);
         if ($deleted) {
             $this->trackDeleted();
         }
@@ -598,12 +661,13 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function exists(): bool
     {
-        if (!$this->hasPrimaryValue()) {
+        $identity = $this->getPersistenceKey();
+        if ($identity === null || $identity === '') {
             return false;
         }
 
-        return $this->tracking['__exists'] ??= $this->query()
-            ->where([$this->getPrimaryKey() => $this->primaryValue()])
+        return $this->tracking['__exists'] ??= $this->newQuery()
+            ->where([$this->getPrimaryKey() => $identity])
             ->exists();
     }
 
@@ -1156,6 +1220,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function trackCreated(): void
     {
+        $this->syncPersistenceKey($this->primaryValue());
         $this->tracking['__was_created'] = true;
         $this->tracking['__hash'] = $this->makeHash();
         $this->triggerEvent('created'); // Trigger the 'created' event.
@@ -1338,9 +1403,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function refresh(): static
     {
-        if ($this->hasPrimaryValue()) {
-            $fresh = static::query()
-                ->where([$this->getPrimaryKey() => $this->primaryValue()])
+        $identity = $this->getPersistenceKey();
+        if ($identity !== null && $identity !== '') {
+            $fresh = $this->newQuery()
+                ->where([$this->getPrimaryKey() => $identity])
                 ->fetchAssoc()
                 ->first();
 
@@ -1348,6 +1414,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
                 $this->attributes = $fresh; // Update attributes with fresh data.
                 $this->clearTracks();
                 $this->castStoredData();
+                $this->syncPersistenceKey($this->primaryValue());
                 $this->reloadRelations();
             }
         }
@@ -1368,7 +1435,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return $this->macroCall($name, $arguments);
         }
 
-        return $this->query()->useModel($this)->$name(...$arguments);
+        return $this->newQuery()->useModel($this)->$name(...$arguments);
     }
 
     /**
@@ -1517,6 +1584,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function getCastedTimestampsForStorage(): array
     {
+        if (!static::USE_TIMESTAMPS) {
+            return [];
+        }
+
         $timestamps = array_filter([static::CREATED_AT, static::UPDATED_AT]);
 
         $castedTimestamps = [];

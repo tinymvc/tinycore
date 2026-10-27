@@ -210,6 +210,8 @@ $user->makeVisible(['api_token']);
 $user->makeHidden(['created_at', 'updated_at']);
 ```
 
+Loaded models retain their stored primary key for instance writes and `refresh()`, even if the key attribute is edited. A successful key update changes that stored identity; a conflicting key raises the database error without targeting another row. `USE_TIMESTAMPS = false` also applies to instance `update()`.
+
 ---
 
 ## Model Actions & Lifecycle

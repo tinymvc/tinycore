@@ -71,6 +71,11 @@ abstract class Relation
         return $this->query ??= $this->buildQuery();
     }
 
+    protected function relatedQuery(Model $model): QueryBuilder
+    {
+        return $this->model?->newRelatedQuery($model) ?? $model->newQuery();
+    }
+
     /**
      * Determine if a relationship key is missing.
      *

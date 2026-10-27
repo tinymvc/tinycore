@@ -9,6 +9,7 @@ use Spark\Database\Exceptions\QueryBuilderInvalidWhereClauseException;
 use Spark\Database\QueryBuilder;
 use Spark\Database\Relation\Relation;
 use Spark\Facades\DB;
+use function array_key_exists;
 use function func_num_args;
 use function in_array;
 use function is_array;
@@ -229,6 +230,7 @@ trait BuildsConditionalClauses
     public function whereRaw(string $sql, string|array $bindings = [], string $boolean = 'AND'): QueryBuilder
     {
         $boolean = $this->normalizeBoolean($boolean);
+        $this->addBindings($sql, $bindings);
 
         $this->where['sql'] .= sprintf(
             ' %s (%s)',
@@ -236,7 +238,6 @@ trait BuildsConditionalClauses
             $sql
         );
 
-        $this->addBindings($sql, $bindings);
 
         return $this;
     }
@@ -1496,12 +1497,14 @@ trait BuildsConditionalClauses
     {
         $column = $this->makeParameterName($column);
 
+        $bindings = $this->getBindings();
+        $bindings = [...$bindings, ...$this->expandNamedBindings($bindings)];
         $index = 0;
         $x_column = $column;
         do {
             $x_column = $index === 0 ? $column : "$column$index";
             $index++;
-        } while (isset($this->bindings[$x_column]));
+        } while (array_key_exists($x_column, $bindings));
 
         return $x_column;
     }

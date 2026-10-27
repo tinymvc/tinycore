@@ -438,7 +438,7 @@ class FileStorage implements CacheStorageContract
     {
         $timeout = max(1, $timeout);
         $waitTimeout = max(0, $waitTimeout);
-        $deadline = microtime(true) + $waitTimeout;
+        $deadline = hrtime(true) + $waitTimeout * 1_000_000_000;
         [$dir, $path] = $this->target($this->lockRoot, $key, self::LOCK_EXT);
         $sleep = 5000;
 
@@ -450,12 +450,12 @@ class FileStorage implements CacheStorageContract
                 return true;
             }
 
-            if ($waitTimeout === 0 || microtime(true) >= $deadline) {
+            if ($waitTimeout === 0 || hrtime(true) >= $deadline) {
                 return false;
             }
 
             // Backoff with jitter (5ms -> 50ms) so waiters do not stampede the guard.
-            usleep($sleep + random_int(0, 2000));
+            usleep(min($sleep + random_int(0, 2000), max(1, (int) (($deadline - hrtime(true)) / 1000))));
             $sleep = min($sleep * 2, 50000);
         }
     }
@@ -614,22 +614,17 @@ class FileStorage implements CacheStorageContract
      */
     private function tryAcquire(string $dir, string $path, string $key, string $owner, int $timeout): bool
     {
-        try {
-            return (bool) $this->withGuard($dir, function () use ($dir, $path, $key, $owner, $timeout) {
-                $now = time();
-                $record = $this->readLock($path, $key);
+        return (bool) $this->withGuard($dir, function () use ($dir, $path, $key, $owner, $timeout) {
+            $now = time();
+            $record = $this->readLock($path, $key);
 
-                if ($record !== null && $record['expire_at'] > $now) {
-                    return false;
-                }
+            if ($record !== null && $record['expire_at'] > $now) {
+                return false;
+            }
 
-                $this->writeAtomic($dir, $path, $this->encodeLock($key, $owner, $now + $timeout));
-
-                return true;
-            });
-        } catch (CacheException) {
-            return false;
-        }
+            $this->writeAtomic($dir, $path, $this->encodeLock($key, $owner, $now + $timeout));
+            return true;
+        }, blocking: false);
     }
 
     /**
@@ -638,7 +633,7 @@ class FileStorage implements CacheStorageContract
      * Never call this re-entrantly for the same shard and never run user code inside the callback:
      * two descriptors in one process contend with each other and would only time out.
      */
-    private function withGuard(string $dir, callable $callback): mixed
+    private function withGuard(string $dir, callable $callback, bool $blocking = true): mixed
     {
         $this->ensureDirectory($dir);
 
@@ -654,6 +649,10 @@ class FileStorage implements CacheStorageContract
             while (!flock($handle, LOCK_EX | LOCK_NB, $wouldBlock)) {
                 if (!$wouldBlock) {
                     throw new CacheException("Unable to lock cache guard file in [{$dir}].");
+                }
+
+                if (!$blocking) {
+                    return false;
                 }
 
                 if (microtime(true) >= $deadline) {

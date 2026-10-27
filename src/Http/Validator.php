@@ -2,6 +2,7 @@
 
 namespace Spark\Http;
 
+use Psr\Http\Message\UploadedFileInterface;
 use Spark\Contracts\Http\ValidatorContract;
 use Spark\Support\Arr;
 use Spark\Support\Str;
@@ -14,6 +15,7 @@ use function intval;
 use function is_array;
 use function is_bool;
 use function is_int;
+use function is_resource;
 use function is_scalar;
 use function is_string;
 use function strlen;
@@ -206,7 +208,7 @@ class Validator implements ValidatorContract
                     'accepted' => $this->validateAccepted($value),
                     'declined' => $this->validateDeclined($value),
                     'prohibited' => !$has_valid_value, // Field must be absent or empty
-                    'file' => is_array($value) && $this->isUploadedFile($value),
+                    'file' => $this->isUploadedFile($value),
                     'image' => $this->validateImage($value),
                     'mimes' => $this->validateMimes($value, $ruleParams),
                     'min_value' => isset($ruleParams[0]) ? is_numeric($value) && (float) $value >= (float) $ruleParams[0] : true,
@@ -513,6 +515,10 @@ class Validator implements ValidatorContract
             return false;
         }
 
+        if ($value instanceof UploadedFileInterface) {
+            return $value->getError() !== UPLOAD_ERR_NO_FILE;
+        }
+
         // PHP represents an unselected upload as a non-empty array.
         if (is_array($value) && isset($value['tmp_name'], $value['error'])) {
             return $value['error'] !== UPLOAD_ERR_NO_FILE && $value['tmp_name'] !== '';
@@ -715,25 +721,18 @@ class Validator implements ValidatorContract
         } elseif (is_string($value) && is_string($other)) {
             $left = mb_strlen($value, 'UTF-8');
             $right = mb_strlen($other, 'UTF-8');
-        } elseif (is_array($value) && is_array($other)) {
-            $isFile = array_key_exists('tmp_name', $value);
-            $otherIsFile = array_key_exists('tmp_name', $other);
-            if ($isFile || $otherIsFile) {
-                if (!$isFile || !$otherIsFile || !$this->isUploadedFile($value) || !$this->isUploadedFile($other)) {
-                    return false;
-                }
-                if (!is_file($value['tmp_name']) || !is_file($other['tmp_name'])) {
-                    return false;
-                }
-                $left = filesize($value['tmp_name']);
-                $right = filesize($other['tmp_name']);
-                if ($left === false || $right === false) {
-                    return false;
-                }
-            } else {
-                $left = count($value);
-                $right = count($other);
+        } elseif ($this->isUploadedFile($value) || $this->isUploadedFile($other)) {
+            if (!$this->isUploadedFile($value) || !$this->isUploadedFile($other)) {
+                return false;
             }
+            $left = $this->uploadedFileSize($value);
+            $right = $this->uploadedFileSize($other);
+            if ($left === null || $right === null) {
+                return false;
+            }
+        } elseif (is_array($value) && is_array($other)) {
+            $left = count($value);
+            $right = count($other);
         } else {
             return false;
         }
@@ -763,9 +762,9 @@ class Validator implements ValidatorContract
             return (float) $value >= (float) $min;
         }
 
-        // For file uploads (always check this before string check)
-        if (is_array($value) && isset($value['size'])) {
-            return (int) $value['size'] >= ((int) $min * 1024);
+        if ($this->isUploadedFile($value)) {
+            $bytes = $this->uploadedFileSize($value);
+            return $bytes !== null && $bytes >= ((float) $min * 1024);
         }
 
         // For arrays
@@ -798,9 +797,9 @@ class Validator implements ValidatorContract
             return (float) $value <= (float) $max;
         }
 
-        // For file uploads (always check this before string check)
-        if (is_array($value) && isset($value['size'])) {
-            return (int) $value['size'] <= ((int) $max * 1024);
+        if ($this->isUploadedFile($value)) {
+            $bytes = $this->uploadedFileSize($value);
+            return $bytes !== null && $bytes <= ((float) $max * 1024);
         }
 
         // For arrays
@@ -919,12 +918,9 @@ class Validator implements ValidatorContract
             return (float) $value == (float) $size;
         }
 
-        // For file uploads (always check this before string check)
-        if (is_array($value) && isset($value['size'])) {
-            $fileSizeMB = $value['size'] / 1024 / 1024;
-            $targetMB = $size / 1024;
-
-            return $fileSizeMB >= $targetMB && $fileSizeMB < ($targetMB + 1);
+        if ($this->isUploadedFile($value)) {
+            $bytes = $this->uploadedFileSize($value);
+            return $bytes !== null && $bytes == ((float) $size * 1024);
         }
 
         // For arrays
@@ -970,27 +966,8 @@ class Validator implements ValidatorContract
             return false;
         }
 
-        $min = $params[0];
-        $max = $params[1];
-
-        // ONLY treat as numeric if field explicitly has numeric validation rules
-        if ($isNumericField && is_numeric($value)) {
-            return (float) $value >= (float) $min && (float) $value <= (float) $max;
-        }
-
-        // For arrays, check count
-        if (is_array($value)) {
-            $count = count($value);
-            return $count >= (int) $min && $count <= (int) $max;
-        }
-
-        // For everything else (including numeric strings without numeric rules), check string length
-        if (is_scalar($value)) {
-            $length = strlen((string) $value);
-            return $length >= (int) $min && $length <= (int) $max;
-        }
-
-        return false;
+        return $this->compareMin($value, $params[0], $isNumericField)
+            && $this->compareMax($value, $params[1], $isNumericField);
     }
 
     /**
@@ -1019,13 +996,13 @@ class Validator implements ValidatorContract
      */
     private function validateImage($file): bool
     {
-        if (!is_array($file) || !$this->isUploadedFile($file)) {
+        if (!$this->isUploadedFile($file)) {
             return false;
         }
 
         // Use getimagesize for better validation
-        $imageInfo = getimagesize($file['tmp_name']);
-        if ($imageInfo === false) {
+        $imageInfo = $this->inspectUploadedFile($file, static fn($path) => @getimagesize($path));
+        if (!is_array($imageInfo)) {
             return false;
         }
 
@@ -1053,17 +1030,12 @@ class Validator implements ValidatorContract
      */
     private function validateMimes($file, array $allowedMimes): bool
     {
-        if (!is_array($file) || !$this->isUploadedFile($file)) {
+        if (!$this->isUploadedFile($file)) {
             return false;
         }
 
         // Check if file has an allowed type list.
         if (empty($allowedMimes)) {
-            return false;
-        }
-
-        $tmpPath = $file['tmp_name'];
-        if (!is_string($tmpPath)) {
             return false;
         }
 
@@ -1076,9 +1048,9 @@ class Validator implements ValidatorContract
             return false;
         }
 
-        $mimeType = \Spark\Utils\File::mimeType($tmpPath);
+        $mimeType = $this->inspectUploadedFile($file, static fn($path) => \Spark\Utils\File::mimeType($path));
 
-        if ($mimeType === false) {
+        if (!is_string($mimeType)) {
             return false;
         }
 
@@ -1090,29 +1062,86 @@ class Validator implements ValidatorContract
             || in_array($extension, $normalizedAllowedMimes, true);
     }
 
-    /**
-     * Checks whether a file array references a readable file path.
-     *
-     * @param array $file
-     * @return bool
-     */
-    private function isUploadedFile(array $file): bool
+    /** Accept server-provided PSR uploads or files actually received by PHP. */
+    private function isUploadedFile(mixed $file): bool
     {
-        $tmpPath = $file['tmp_name'] ?? null;
-
-        if (!is_string($tmpPath) || $tmpPath === '') {
-            return false;
+        if ($file instanceof UploadedFileInterface) {
+            try {
+                return $file->getError() === UPLOAD_ERR_OK && $file->getStream()->isReadable();
+            } catch (\RuntimeException) {
+                return false;
+            }
         }
 
-        if (!file_exists($tmpPath) || !is_readable($tmpPath)) {
-            return false;
+        return is_array($file) && ($file['error'] ?? null) === UPLOAD_ERR_OK
+            && is_string($file['tmp_name'] ?? null) && is_uploaded_file($file['tmp_name']);
+    }
+
+    private function uploadedFileSize(mixed $file): ?int
+    {
+        if (is_array($file)) {
+            $size = filesize($file['tmp_name']);
+            return $size === false ? null : $size;
         }
 
-        if (array_key_exists('error', $file) && is_int($file['error'])) {
-            return $file['error'] === UPLOAD_ERR_OK;
+        try {
+            $stream = $file->getStream();
+            if (($size = $stream->getSize()) !== null) {
+                return $size;
+            }
+            if (!$stream->isSeekable()) {
+                return null;
+            }
+            $position = $stream->tell();
+            try {
+                $stream->seek(0, SEEK_END);
+                return $stream->tell();
+            } finally {
+                $stream->seek($position);
+            }
+        } catch (\RuntimeException) {
+            return null;
+        }
+    }
+
+    /** Inspect bytes without consuming or moving the upload; spool streams with bounded memory. */
+    private function inspectUploadedFile(mixed $file, callable $inspect): mixed
+    {
+        if (is_array($file)) {
+            return $inspect($file['tmp_name']);
         }
 
-        return true;
+        $temporary = null;
+        try {
+            $stream = $file->getStream();
+            if (!$stream->isSeekable()) {
+                return null;
+            }
+            $position = $stream->tell();
+            try {
+                $stream->rewind();
+                $temporary = tmpfile();
+                if ($temporary === false) {
+                    return null;
+                }
+                while (!$stream->eof()) {
+                    $chunk = $stream->read(8192);
+                    if ($chunk === '' && !$stream->eof()) {
+                        return null;
+                    }
+                    if (fwrite($temporary, $chunk) !== strlen($chunk)) {
+                        return null;
+                    }
+                }
+                return $inspect(stream_get_meta_data($temporary)['uri']);
+            } finally {
+                $stream->seek($position);
+            }
+        } catch (\RuntimeException) {
+            return null;
+        } finally {
+            is_resource($temporary) && fclose($temporary);
+        }
     }
 
     /**
@@ -1345,7 +1374,7 @@ class Validator implements ValidatorContract
 
         if (
             in_array($rule, ['min', 'minimum', 'max', 'maximum', 'length', 'size']) &&
-            is_array($value) && $this->isUploadedFile($value)
+            $this->isUploadedFile($value)
         ) {
             $this->errors[$field][] = match ($rule) {
                 'min', 'minimum' => __($this->getErrorMessagePlaceholder('file_min', $field, 'The %s file must be at least %s KB.'), [$prettyField, $params[0] ?? 0]),

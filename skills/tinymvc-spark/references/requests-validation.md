@@ -303,6 +303,8 @@ $rules = [
 
 ## File Uploads via Request / Input
 
+File rules accept genuine PHP uploads and PSR `UploadedFileInterface` values; arbitrary local-path arrays fail `file`, `image`, and `mimes`. Size rules use actual bytes in KB (1024 bytes), with exact `size` matching; ordinary arrays use element counts even when they contain a `size` key. PSR content checks preserve the stream position and require a seekable stream.
+
 Check and process uploaded files:
 
 ```php

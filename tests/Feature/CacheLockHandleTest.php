@@ -10,6 +10,32 @@ use Spark\Foundation\Application;
 
 final class CacheLockHandleTest extends DriverTestCase
 {
+    public function test_file_lock_get_and_block_observe_their_deadlines_when_the_shard_guard_is_busy(): void
+    {
+        $path = $this->storagePath . '/guard-contention';
+        $cache = new \Spark\Cache\Cache('guard-test', ['driver' => 'file', 'path' => $path]);
+        $lock = $cache->lock('resource', 10);
+        $this->assertTrue($lock->get());
+        $this->assertTrue($lock->release());
+        $guard = glob($path . '/' . md5('guard-test') . '.lock.d/*/.guard')[0];
+        $stream = fopen($guard, 'c+');
+        flock($stream, LOCK_EX);
+        try {
+            $start = hrtime(true);
+            $this->assertFalse($lock->get());
+            $this->assertTrue((hrtime(true) - $start) / 1e9 < 0.5);
+            $start = hrtime(true);
+            $this->assertThrows(LockTimeoutException::class, fn() => $lock->block(1));
+            $elapsed = (hrtime(true) - $start) / 1e9;
+            $this->assertTrue($elapsed >= 0.9 && $elapsed < 2.0);
+        } finally {
+            flock($stream, LOCK_UN);
+            fclose($stream);
+        }
+        $this->assertTrue($lock->get());
+        $this->assertTrue($lock->release());
+    }
+
     private function stores(): array
     {
         $this->schema();
@@ -166,7 +192,8 @@ final class CacheLockHandleTest extends DriverTestCase
             $second = $cache->lock('callback');
             $called = false;
             $this->assertFalse($second->get(function () use (&$called) {
-                $called = true; }));
+                $called = true;
+            }));
             $this->assertFalse($called);
             $this->assertThrows(LockTimeoutException::class, fn() => $second->block(0));
             $this->assertTrue($first->release());

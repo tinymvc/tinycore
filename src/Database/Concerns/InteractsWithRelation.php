@@ -793,7 +793,7 @@ trait InteractsWithRelation
         }
 
         $key = $model->getPrimaryKey();
-        $value = $model->getOriginal($key);
+        $value = $model->getPersistenceKey();
 
         if ($value !== null && $value !== '') {
             $placeholder = $this->getWhereSqlColumn('spark_model_primary');
@@ -818,7 +818,7 @@ trait InteractsWithRelation
     {
         $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, 'count', '*');
 
-        $sql = "({$subquery['sql']}) {$operator} {$count}";
+        $sql = "COALESCE(({$subquery['sql']}), 0) $operator $count";
 
         $this->bindings = [...$this->bindings, ...$subquery['bindings']];
         $this->parameters = [...$this->parameters, ...$subquery['parameters']];
@@ -838,12 +838,14 @@ trait InteractsWithRelation
     private function buildRelationshipSubquery(array $relationConfig, ?Closure $callback = null, string $function = 'count', string $column = '*'): array
     {
         $relatedModel = new $relationConfig['related'];
-        $query = $relatedModel->query()->setDB($this->database)->prefix($this->prefix);
+        $context = new \Spark\Database\ModelContext($this->database, $this->prefix, snapshot: false);
+        $query = $relatedModel->setQueryContext($context)->newQuery();
 
-        if ($query->getTableName() === $this->getTableName()) {
-            static $selfRelation = 0;
+        $selfRelation = $query->getTableName() === $this->getTableName();
+        if ($selfRelation) {
+            static $selfRelationId = 0;
 
-            $query->as('spark_relation_' . ++$selfRelation);
+            $query->as('spark_relation_' . ++$selfRelationId);
         }
 
         if ($relationConfig['type'] === 'hasManyThrough') {
@@ -856,6 +858,12 @@ trait InteractsWithRelation
 
         $callback && $callback($query);
 
+        if ($query->getTableReference() === $this->getTableReference()) {
+            throw new \Spark\Database\Exceptions\QueryBuilderException(
+                'A relationship aggregate must use a different table alias from its parent query.'
+            );
+        }
+
         // OR branches in user constraints must not bypass the parent correlation.
         if ($query->hasWhere()) {
             $query->where['sql'] = '(' . trim($query->where['sql']) . ')';
@@ -866,6 +874,21 @@ trait InteractsWithRelation
         $query->selectRaw(
             $query->buildAggregateExpression($function, $column, $relatedTable)
         );
+
+        if ($selfRelation) {
+            // After aliasing, the original qualifier would resolve to the outer row.
+            // Compiled scopes cannot be safely rewritten across nested SQL scopes.
+            $parts = explode('.', $query->wrapper->tableName($relatedModel->getTable()));
+            $table = preg_quote(end($parts), '~');
+            $pattern = '~\'(?:\'\'|[^\'])*\'(*SKIP)(*F)|--[^\r\n]*(*SKIP)(*F)|/\*.*?\*/(*SKIP)(*F)'
+                . '|(?<![\w$])(?:"' . $table . '"|`' . $table . '`|' . $table . ')\s*\.~s';
+            $constraints = $query->where['sql'] . ' ' . ($query->query['joins'] ?? '') . ' ' . $query->query['select'];
+            if (preg_match($pattern, $constraints)) {
+                throw new \Spark\Database\Exceptions\QueryBuilderException(
+                    'Self-relation aggregates require unqualified scope columns or the query alias from getAlias().'
+                );
+            }
+        }
 
         switch ($relationConfig['type']) {
             case 'hasOne':
@@ -937,7 +960,18 @@ trait InteractsWithRelation
                 throw new InvalidOrmException("Unsupported relationship type: {$relationConfig['type']}");
         }
 
-        // Get the built SQL from the query
+        // These cannot produce a portable scalar relationship aggregate.
+        foreach (['group', 'having', 'unions'] as $clause) {
+            if (!empty($query->query[$clause])) {
+                throw new \Spark\Database\Exceptions\QueryBuilderException(
+                    "Relationship aggregates do not support $clause; use row conditions or an explicit subquery."
+                );
+            }
+        }
+        // Ordering cannot change an aggregate or existence result; retain pagination constraints.
+        unset($query->query['order']);
+        $query->clearClauseBindings('order');
+
         return $this->getSubquerySQL($query);
     }
 
@@ -1007,18 +1041,12 @@ trait InteractsWithRelation
     {
         $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, $function, $column);
 
-        if ($subquery['parameters'] && $this->parameters) {
-            throw new \Spark\Database\Exceptions\QueryBuilderException(
-                'Use named bindings for relationship aggregates composed with other positional SQL fragments.'
-            );
-        }
-
         // Modify the select to include the aggregate subquery
         $currentSelect = $this->query['select'] ?: '*';
-        $this->query['select'] = $currentSelect . ", ({$subquery['sql']}) AS {$this->wrapper->wrapColumn($alias)}";
+        $expression = $function === 'count' ? "COALESCE(({$subquery['sql']}), 0)" : "({$subquery['sql']})";
+        $this->query['select'] = $currentSelect . ", $expression AS {$this->wrapper->wrapColumn($alias)}";
 
-        $this->bindings = [...$this->bindings, ...$subquery['bindings']];
-        $this->parameters = [...$this->parameters, ...$subquery['parameters']];
+        $this->addClauseBindings('select', $subquery['bindings'], $subquery['parameters']);
     }
 
     /**
@@ -1077,13 +1105,7 @@ trait InteractsWithRelation
      */
     private function getSubquerySQL(QueryBuilder $query): array
     {
-        $table = $query->getTableName() . $query->query['alias'];
-        $select = $query->query['select'] ?: 'COUNT(*)';
-        $joins = $query->query['joins'] ?? '';
-        $where = $query->preparedWhereClauseSql();
-
-        $sql = "SELECT {$select} FROM {$table}{$joins}{$where}" . $query->compileLock();
-        return $this->importSubquery($sql, $query);
+        return $this->importSubquery($query->toSql(), $query);
     }
 
     /**
@@ -1098,17 +1120,10 @@ trait InteractsWithRelation
     {
         $subquery = $this->buildRelationshipSubquery($relationConfig, $callback, 'exists', '*');
 
-        if ($subquery['parameters'] && $this->parameters) {
-            throw new \Spark\Database\Exceptions\QueryBuilderException(
-                'Use named bindings for relationship aggregates composed with other positional SQL fragments.'
-            );
-        }
-
         $currentSelect = $this->query['select'] ?: '*';
         $this->query['select'] = $currentSelect . ", EXISTS({$subquery['sql']}) AS " . $this->wrapper->wrapColumn($alias);
 
-        $this->bindings = [...$this->bindings, ...$subquery['bindings']];
-        $this->parameters = [...$this->parameters, ...$subquery['parameters']];
+        $this->addClauseBindings('select', $subquery['bindings'], $subquery['parameters']);
     }
 
     /**

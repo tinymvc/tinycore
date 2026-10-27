@@ -121,6 +121,49 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
         $this->assertSame('cookies', $response['body']);
     }
 
+    public function test_native_and_psr_upload_validation_works_over_http(): void
+    {
+        $boundary = 'spark-validation';
+        $body = "--{$boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.txt\"\r\n"
+            . "Content-Type: text/plain\r\n\r\nupload content\r\n--{$boundary}--\r\n";
+        foreach (['native', 'psr'] as $kind) {
+            $response = $this->exchange('POST', '/validate-upload/' . $kind, $body, [
+                'Content-Type' => 'multipart/form-data; boundary=' . $boundary,
+            ]);
+            $this->assertSame(200, $response['status']);
+            $this->assertSame('valid upload', $response['body']);
+        }
+    }
+
+    public function test_forced_download_atomically_replaces_the_target_and_resets_its_state(): void
+    {
+        $path = $this->storagePath . '/download.txt';
+        file_put_contents($path, 'original');
+        $client = new \Spark\Http\Client\Http();
+        $this->assertThrows(\RuntimeException::class, fn() => $client->download($path));
+        $response = $client->download($path, true)->get('http://' . $this->address . '/psr-response');
+        $this->assertSame(200, $response->status());
+        $this->assertSame('cookies', file_get_contents($path));
+        $this->assertThrows(\RuntimeException::class, fn() => $client->download($path));
+        $second = $this->storagePath . '/new-download.txt';
+        $client->download($second)->get('http://' . $this->address . '/psr-response');
+        $this->assertSame('cookies', file_get_contents($second));
+        $client->get('http://' . $this->address . '/csrf/other');
+        $this->assertSame('cookies', file_get_contents($second));
+        $this->assertSame([], glob($this->storagePath . '/.spark_download_*'));
+    }
+
+    public function test_failed_forced_download_preserves_the_existing_file(): void
+    {
+        $path = $this->storagePath . '/download.txt';
+        file_put_contents($path, 'original');
+        $client = new \Spark\Http\Client\Http();
+        $response = $client->withRetry(0)->download($path, true)->get('http://127.0.0.1:1');
+        $this->assertSame(0, $response->status());
+        $this->assertSame('original', file_get_contents($path));
+        $this->assertSame([], glob($this->storagePath . '/.spark_download_*'));
+    }
+
     public function testNativeAndPsrUploadsShareTheSameHttpUploadPipeline(): void
     {
         $boundary = 'tinycore-upload-boundary';

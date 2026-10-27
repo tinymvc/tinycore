@@ -55,6 +55,7 @@ Supported request chain methods:
 - `withAccept(string $type)`: Sets request `Accept` header.
 - `withoutVerifying()`: Disables SSL certificate verification (use only in local testing).
 - `attach(string $name, mixed $contents, ?string $filename = null)`: Multipart file attachment.
+- `download(string $path, bool $force = false)`: Saves the next response to disk. `force: true` atomically replaces an existing file after transport success; transport failure preserves it. Without force, an existing target is never replaced.
 
 ### 3. Inspecting the Response
 

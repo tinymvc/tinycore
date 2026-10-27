@@ -55,7 +55,7 @@ if ($lock->get()) {
 }
 ```
 
-`Cache::lock()`, `Lock::lock()`, and `lock($key)` create fresh owner tokens; acquisition is explicit. `get()` returns false immediately on contention. `block($seconds)` throws `Spark\Cache\Exceptions\LockTimeoutException` on timeout. Both accept callbacks, return their result, and release in `finally`. Leases are positive integer seconds (default 10); waits are nonnegative seconds. The key `'0'` is valid.
+`Cache::lock()`, `Lock::lock()`, and `lock($key)` create fresh owner tokens; acquisition is explicit. `get()` returns false immediately on contention, including file shard-guard contention; backend I/O failures throw. `block($seconds)` throws `Spark\Cache\Exceptions\LockTimeoutException` on timeout. Both accept callbacks, return their result, and release in `finally`. Leases are positive integer seconds (default 10); waits are nonnegative seconds. The key `'0'` is valid.
 
 `owner()` and the same repository's `restoreLock($key, $owner)` transfer ownership across processes. Handles do not release on destruction; use a callback or explicit `release()`. `isOwnedByCurrentProcess()` checks ownership; `forceRelease()` bypasses it for deliberate recovery. Purging/flushing must not release live locks. Processes must share the backend and namespace; expired leases can permit overlap, so retain database constraints and idempotency.
 

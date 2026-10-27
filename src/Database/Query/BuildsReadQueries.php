@@ -38,6 +38,8 @@ trait BuildsReadQueries
      */
     public function select(array|string|Expression $fields = '*'): QueryBuilder
     {
+        $this->clearClauseBindings('select');
+
         // Handle multiple arguments as an array
         if (func_num_args() > 1) {
             $fields = func_get_args();
@@ -81,8 +83,7 @@ trait BuildsReadQueries
             $subquery = $this->importSubquery($subquery->toSql(), $subquery);
             $subquerySql = $subquery['sql'];
 
-            $this->bindings = [...$this->bindings, ...$subquery['bindings']];
-            $this->parameters = [...$this->parameters, ...$subquery['parameters']];
+            $this->addClauseBindings('select', $subquery['bindings'], $subquery['parameters']);
         } else {
             $subquerySql = $subquery;
         }
@@ -166,9 +167,7 @@ trait BuildsReadQueries
      */
     public function selectRaw(string $sql, array $bindings = []): QueryBuilder
     {
-        $this->query['select'] = preg_replace('/^\s*select\s+/i', '', $sql);
-
-        $this->addBindings($sql, $bindings);
+        $this->replaceRawClause('select', preg_replace('/^\s*select\s+/i', '', $sql), $bindings);
 
         return $this;
     }
@@ -208,9 +207,9 @@ trait BuildsReadQueries
      * Calculates the maximum value of a specified field.
      * 
      * @param string $field
-     * @return float
+     * @return float|null
      */
-    public function max(string $field): float
+    public function max(string $field): ?float
     {
         $column = 'MAX(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
@@ -222,9 +221,9 @@ trait BuildsReadQueries
      * Calculates the minimum value of a specified field.
      * 
      * @param string $field
-     * @return float
+     * @return float|null
      */
-    public function min(string $field): float
+    public function min(string $field): ?float
     {
         $column = 'MIN(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
@@ -243,16 +242,16 @@ trait BuildsReadQueries
         $column = 'SUM(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
 
-        return $this->fetchColumn()->first();
+        return $this->fetchColumn()->first() ?? 0.0;
     }
 
     /**
      * Calculates the average value of a specified field.
      * 
      * @param string $field
-     * @return float
+     * @return float|null
      */
-    public function avg(string $field): float
+    public function avg(string $field): ?float
     {
         $column = 'AVG(' . $this->wrapper->wrapColumn($field) . ')';
         $this->select($column);
@@ -323,9 +322,8 @@ trait BuildsReadQueries
      */
     public function joinRaw(string $sql, array $bindings = []): QueryBuilder
     {
+        $this->addBindings($sql, $bindings, 'joins');
         $this->query['joins'] .= " $sql";
-
-        $this->addBindings($sql, $bindings);
 
         return $this;
     }
@@ -354,7 +352,7 @@ trait BuildsReadQueries
         }
 
         if ($parameters) {
-            $this->param($parameters);
+            $this->addClauseBindings('joins', [], (array) $parameters);
         }
 
         return $this;
@@ -490,6 +488,7 @@ trait BuildsReadQueries
     public function order(null|string $sort = null): QueryBuilder
     {
         if ($sort !== null) {
+            $this->clearClauseBindings('order');
             $this->query['order'] = $sort;
         }
 
@@ -519,9 +518,7 @@ trait BuildsReadQueries
      */
     public function orderByRaw(string $sql, array $bindings = []): QueryBuilder
     {
-        $this->query['order'] = $sql;
-
-        $this->addBindings($sql, $bindings);
+        $this->replaceRawClause('order', $sql, $bindings);
 
         return $this;
     }
@@ -534,6 +531,7 @@ trait BuildsReadQueries
      */
     public function orderAsc(null|string $field = null): QueryBuilder
     {
+        $this->clearClauseBindings('order');
         $field = $field === null ? $this->quoteNumericOrder($this->withAlias('id')) : $this->prefixOrderColumn($field);
 
         $this->query['order'] = "$field ASC";
@@ -548,6 +546,7 @@ trait BuildsReadQueries
      */
     public function orderDesc(null|string $field = null): QueryBuilder
     {
+        $this->clearClauseBindings('order');
         $field = $field === null ? $this->quoteNumericOrder($this->withAlias('id')) : $this->prefixOrderColumn($field);
 
         $this->query['order'] = "$field DESC";
@@ -562,6 +561,7 @@ trait BuildsReadQueries
      */
     public function groupBy(string|array|Expression $field): QueryBuilder
     {
+        $this->clearClauseBindings('group');
         $field = is_array($field) ? $field : func_get_args();
 
         $this->query['group'] = $this->wrapper->columnize($field);
@@ -577,9 +577,7 @@ trait BuildsReadQueries
      */
     public function groupByRaw(string $sql, array $bindings = []): QueryBuilder
     {
-        $this->query['group'] = $sql;
-
-        $this->addBindings($sql, $bindings);
+        $this->replaceRawClause('group', $sql, $bindings);
 
         return $this;
     }
@@ -702,6 +700,7 @@ trait BuildsReadQueries
     public function distinct(null|string $column = null): QueryBuilder
     {
         if ($column) {
+            $this->clearClauseBindings('select');
             $this->query['select'] = "DISTINCT {$this->wrapAndEscapeColumns($column)}";
         } else {
             $select = $this->query['select'] ?: '*';
@@ -718,7 +717,7 @@ trait BuildsReadQueries
      */
     public function toSql(): string
     {
-        if ($this->bindings && $this->parameters) {
+        if ($this->getBindings() && $this->getParameters()) {
             throw new QueryBuilderException('Cannot bind both named and positional parameters at the same time.');
         }
 
@@ -770,8 +769,7 @@ trait BuildsReadQueries
         $this->query['unions'] .= " {$unionType} SELECT * FROM ({$unionSql}) AS spark_union";
 
         // Merge bindings
-        $this->bindings = [...$this->bindings, ...$subquery['bindings']];
-        $this->parameters = [...$this->parameters, ...$subquery['parameters']];
+        $this->addClauseBindings('unions', $subquery['bindings'], $subquery['parameters']);
 
         return $this;
     }
@@ -870,6 +868,7 @@ trait BuildsReadQueries
      */
     public function random(): QueryBuilder
     {
+        $this->clearClauseBindings('order');
         $this->query['order'] = $this->database->isMySQL() ? 'RAND()' : 'RANDOM()';
         return $this;
     }
@@ -1101,11 +1100,11 @@ trait BuildsReadQueries
     private function cursorWhere(string $column, string $operator, mixed $value): void
     {
         $wrapped = $this->wrapCursorColumn($column);
-        if ($this->parameters !== []) {
-            $this->whereRaw($wrapped . " $operator ?", [$value]);
+        if ($this->getParameters() !== []) {
+            $this->whereRaw("$wrapped $operator ?", [$value]);
         } else {
             $placeholder = $this->getWhereSqlColumn($column);
-            $this->whereRaw($wrapped . " $operator :$placeholder", [$placeholder => $value]);
+            $this->whereRaw("$wrapped $operator :$placeholder", [$placeholder => $value]);
         }
     }
 
@@ -1280,13 +1279,46 @@ trait BuildsReadQueries
      * @param string|array $bindings The bindings to add.
      * @return void
      */
-    private function addBindings(string $sql, string|array $bindings = []): void
+    private function addBindings(string $sql, string|array $bindings = [], string $clause = 'where'): void
     {
-        if (is_array($bindings) && !str_contains($sql, '?') && preg_match('/\:(\w+)/', $sql)) {
-            $this->bindings = [...$this->bindings, ...$bindings];
-        } else {
-            $this->param($bindings);
+        $named = is_array($bindings) && array_filter(array_keys($bindings), 'is_string') !== [];
+        if ($named) {
+            $this->assertNamedBindingsAvailable($bindings);
         }
+        if ($clause === 'where') {
+            $named ? $this->bind($bindings) : $this->param($bindings);
+            return;
+        }
+
+        $this->addClauseBindings($clause, $named ? $bindings : [], $named ? [] : (array) $bindings);
+    }
+
+    private function replaceRawClause(string $clause, string $sql, array $bindings): void
+    {
+        $previousBindings = $this->clauseBindings;
+        $previousParameters = $this->clauseParameters;
+        $this->clearClauseBindings($clause);
+
+        try {
+            $this->addBindings($sql, $bindings, $clause);
+        } catch (\Throwable $exception) {
+            $this->clauseBindings = $previousBindings;
+            $this->clauseParameters = $previousParameters;
+            throw $exception;
+        }
+
+        $this->query[$clause] = $sql;
+    }
+
+    private function addClauseBindings(string $clause, array $bindings, array $parameters): void
+    {
+        $this->clauseBindings[$clause] = [...($this->clauseBindings[$clause] ?? []), ...$bindings];
+        $this->clauseParameters[$clause] = [...($this->clauseParameters[$clause] ?? []), ...$parameters];
+    }
+
+    private function clearClauseBindings(string $clause): void
+    {
+        unset($this->clauseBindings[$clause], $this->clauseParameters[$clause]);
     }
 
     /**

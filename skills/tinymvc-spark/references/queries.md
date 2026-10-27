@@ -6,11 +6,11 @@ Driver names come from `Spark\Database\Contracts\DatabaseDriver`: `DRIVER_MYSQL`
 
 ## Prefixes and raw SQL
 
-Set database `prefix` at the top level or per connection; an explicit `''` disables it. Use logical table names in queries, models, schema, and database-backed storage. Qualified columns receive the table prefix; aliases do not. Raw SQL stays verbatim: use the executing connection's `wrapTable('users')` for a quoted, prefixed identifier. Configuration does not rename existing tables.
+Set database `prefix` at the top level or per connection; an explicit `''` disables it. Use logical table names in queries, models, schema, and database-backed storage. Qualified columns receive the table prefix; aliases do not. Raw SQL stays verbatim: use the executing connection's `wrapTable('users')` for a quoted, prefixed identifier. Configuration does not rename existing tables. Hydrated models retain the executing connection and prefix for instance writes, refreshes, and eager/lazy relations (including pivots), while preserving custom model query factories. Use `$model->newQuery()` for a fresh query in that context; static `Model::query()` starts from the default connection. Serialized models reconnect only to a matching configured connection; an unavailable connection throws instead of falling back.
 
 Set builder `prefix()` / `setDB()` and declare aliases before adding clauses. These methods cannot rewrite already compiled SQL; use connection configuration for application-wide prefixes.
 
-`DB::raw('visits + 1')` creates a trusted SQL expression without executing it. Use `DB::run($sql, $bindings)` to execute and fetch associative rows, or `statement()` for success/failure. Bind user input through query conditions or raw-clause bindings.
+`DB::raw('visits + 1')` creates a trusted SQL expression without executing it. Use `DB::run($sql, $bindings)` to execute and fetch associative rows, or `statement()` for success/failure. Bind user input through query conditions or raw-clause bindings. Positional raw bindings follow SQL clause order, independently of chain order; do not mix named and positional placeholders in one query. Give different values distinct named placeholders; conflicts, including expanded `whereIn()` placeholders, throw.
 
 ---
 
@@ -95,7 +95,7 @@ $tagNames = Tag::pluck('name');                      // Returns array ['php', 's
 $count = Post::where('published', true)->count();
 $exists = Post::where('slug', $slug)->exists();
 $missing = Post::where('slug', $slug)->doesntExist();
-$totalCredits = User::sum('credits');
+$totalCredits = User::sum('credits'); // 0.0 when empty; avg/min/max return null when empty.
 
 // Advanced Where Clauses
 $adults = User::whereBetween('age', [18, 65])->get();
@@ -232,6 +232,10 @@ Common QueryBuilder / Model methods:
 ---
 
 ## Upserts and Mass Writes
+
+`update()`, `delete()` / `forceDelete()`, `restore()`, `increment()`, and `decrement()` reject joins, grouping/HAVING, unions, ordering, limits/offsets, and bindings outside WHERE. Select the intended primary keys first, then write through a fresh `whereIn()` query; use a transaction when selection and mutation must be coordinated. Unsupported clauses are never silently dropped. Relationship aggregate callbacks likewise reject GROUP BY, HAVING, and UNION; row conditions and joins remain supported, ordering is discarded with its bindings, and limits/offsets are retained.
+
+Self-relation aggregates automatically alias the inner table. Use unqualified columns in model query scopes and aggregate column arguments, or `$query->getAlias()` in callbacks; qualifying the original table is rejected because it can filter the outer row instead.
 
 ```php
 Product::upsert(

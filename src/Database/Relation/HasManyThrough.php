@@ -80,7 +80,7 @@ class HasManyThrough extends Relation
         /** @var Model $throughInstance */
         $throughInstance = new ($this->through)();
 
-        $query = $relatedInstance::query()
+        $query = $this->relatedQuery($relatedInstance)
             ->useThroughModel($throughInstance)
             ->withTrashedParents($this->withTrashedParents);
 
