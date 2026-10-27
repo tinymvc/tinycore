@@ -287,15 +287,22 @@ Spark includes a rich set of built-in validation rules:
 - **Booleans**: `boolean`, `accepted`, `declined`
 - **Security**: `password`
 
-### Parameter Arrays vs Pipe Strings
+### Fluent Rules, Closures, and Parameter Arrays
 
-Rules can be specified as pipe-delimited strings (`'required|string|max:255'`) or arrays (`['required', 'string', 'max:255']`). Rules that take complex arguments (such as `in`, `unique`, or `exists`) must use associative parameter arrays:
+Rules can be pipe strings (`'required|string|max:255'`), fluent `Rule` builders, custom `Spark\Contracts\Http\RuleContract` classes, closures, or legacy parameter arrays (`['unique' => ['table', 'col']]`, `['in' => ['a', 'b']]`):
 
 ```php
+use Spark\Http\Rule;
+
 $rules = [
-    'role' => ['required', ['in' => ['admin', 'editor', 'author']]],
-    'email' => ['required', 'email', ['unique' => ['users', 'email', $userId]]],
-    'category_id' => ['required', ['exists' => ['categories', 'id']]],
+    'role' => ['required', Rule::in(['admin', 'editor', 'author'])],
+    'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($userId)],
+    'category_id' => ['required', Rule::exists('categories', 'id')],
+    'password' => ['required', Rule::password()->min(8)->letters()->numbers()->symbols()],
+    'company' => [Rule::requiredIf(fn() => request('is_business'))],
+    'custom' => [function (string $attribute, mixed $value, \Closure $fail) {
+        if ($value === 'forbidden') $fail('The :attribute cannot be forbidden.');
+    }],
 ];
 ```
 

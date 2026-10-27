@@ -3,7 +3,7 @@
 namespace Spark\Facades;
 
 use Spark\Contracts\Http\InputContract;
-use Spark\Http\Validator as BaseValidator;
+use Spark\Http\Validation\Validator as BaseValidator;
 
 /**
  * Facade Validator

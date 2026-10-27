@@ -397,7 +397,7 @@ class QueryBuilder implements QueryBuilderContract
         $expanded = [];
         foreach ($bindings as $name => $value) {
             $name = ltrim((string) $name, ':');
-            $values = is_array($value) ? $value : [null => $value];
+            $values = is_array($value) ? $value : ['' => $value];
             foreach ($values as $index => $item) {
                 $placeholder = is_array($value) ? "{$name}_$index" : $name;
                 if (array_key_exists($placeholder, $expanded) && $expanded[$placeholder] !== $item) {

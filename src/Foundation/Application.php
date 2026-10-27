@@ -221,6 +221,7 @@ class Application extends \Spark\Container implements ApplicationContract
             \Spark\Contracts\Http\ResponseContract::class => Response::class,
             \Spark\Contracts\Http\GateContract::class => Gate::class,
             \Spark\Contracts\Http\AuthContract::class => Auth::class,
+            \Spark\Contracts\Http\ValidatorContract::class => \Spark\Http\Validation\Validator::class,
             \Spark\Contracts\Utils\ViteContract::class => Vite::class,
         ] as $contract => $service) {
             $this->bind($contract, fn() => $this->get($service));
@@ -243,7 +244,8 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('storage', \Spark\Storage\Storage::class);
         $this->alias('uploader', \Spark\Storage\Uploader::class);
         $this->alias('query', \Spark\Database\QueryBuilder::class);
-        $this->alias('validator', \Spark\Http\Validator::class);
+        $this->alias('validator', \Spark\Http\Validation\Validator::class);
+        $this->alias(\Spark\Http\Validator::class, \Spark\Http\Validation\Validator::class);
         $this->alias('schema', \Spark\Database\Schema\Schema::class);
         $this->alias('mail', \Spark\Utils\Mail::class);
         $this->alias('jwt', \Spark\Utils\JWT::class);
