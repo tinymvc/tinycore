@@ -75,10 +75,9 @@ class QueueManager
     }
 
     /** Signal all workers without opening a queue transport. */
-    public function restart(): void
+    public static function restart(): void
     {
-        $this->app->get(\Spark\Cache\CacheManager::class)->make('queue:workers')
-            ->put('restart', bin2hex(random_bytes(16)));
+        (new RestartSignal(RestartSignal::configuredPath()))->request();
     }
 
     public function __call(string $method, array $arguments): mixed

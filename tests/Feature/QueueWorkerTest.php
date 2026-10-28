@@ -57,6 +57,7 @@ final class QueueWorkerTest extends FrameworkTestCase
     public function test_restart_finishes_and_acknowledges_the_current_job_before_stopping(): void
     {
         $queue = $this->queue();
+        $this->app->setConfig('cache.default', 'missing');
         foreach ([false, true] as $fail) {
             $path = $this->storagePath . '/restart-job';
             $queue->push(new Job(RestartWorkerJob::class, [$path, $fail]));
@@ -88,10 +89,10 @@ final class QueueWorkerTest extends FrameworkTestCase
         ob_start();
         try {
             (new $handler())->$method(app(Spark\Queue\QueueManager::class));
-            $first = cache('queue:workers')->retrieve('restart');
+            $first = file_get_contents(storage_dir('queue.restart'));
             (new $handler())->$method(app(Spark\Queue\QueueManager::class));
             $this->assertTrue(is_string($first));
-            $this->assertTrue($first !== cache('queue:workers')->retrieve('restart'));
+            $this->assertTrue($first !== file_get_contents(storage_dir('queue.restart')));
             $path = $this->storagePath . '/fresh-worker';
             $queue->push(new Job('file_put_contents', [$path, 'done']));
             $queue->work(once: true, sleep: 0);
@@ -105,14 +106,20 @@ final class QueueWorkerTest extends FrameworkTestCase
     public function test_idle_worker_observes_restart_from_another_process(): void
     {
         $queue = $this->queue();
+        $this->app->setConfig('queue.restart_file', $this->storagePath . '/signals/queue.restart');
+        $this->app->setConfig('cache.default', 'missing');
         $autoload = var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true);
         $path = var_export($this->storagePath, true);
         $script = $this->storagePath . '/idle-worker.php';
         file_put_contents($script, '<?php require ' . $autoload . '; $path = ' . $path . ';' . <<<'PHP'
             Spark\Foundation\Application::create(path: $path, config: [
                 'app' => ['storage_dir' => $path],
-                'cache' => ['driver' => 'file', 'connections' => ['file' => ['path' => $path . '/cache']]],
-                'queue' => ['default' => 'file', 'connections' => ['file' => ['path' => $path . '/queue']]],
+                'cache' => ['default' => 'missing'],
+                'queue' => [
+                    'default' => 'file',
+                    'restart_file' => $path . '/signals/queue.restart',
+                    'connections' => ['file' => ['path' => $path . '/queue']],
+                ],
             ], providers: []);
             (new Spark\Queue\Queue())->work(timeout: 3, sleep: 0);
             PHP);

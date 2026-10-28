@@ -6,7 +6,7 @@ Read this reference when a task touches a framework service beyond the ordinary 
 
 ## Framework feature directory
 
-| Core Domain | Native Classes / Namespaces | Primary Facade / Helper | Canonical Idiom / Standard | Reference Guide |
+| Feature | Classes | Facade / helper | Usage | Reference |
 | --- | --- | --- | --- | --- |
 | **REST APIs** | `Spark\Http\Resources\JsonResource`, `ResourceCollection` | `JsonResource::make()`, `JsonResource::collection()`, `json()` | `ThingResource::make($model)`, `ThingResource::collection($paginator)` for entities; `json(['message' => '...'], $code)` for non-resource contracts | [responses.md](responses.md) |
 | **Controller Blade** | `Spark\View\Blade`, `Spark\View\BladeCompiler`, `Spark\View\Attributes` | `view()`, `blade()`, `<x-component>` | Component-first UI (`<x-alert :$message />`), `$attributes->merge()`, global helpers in views, **never** facades in Blade | [views-frontend.md](views-frontend.md) |
@@ -34,8 +34,8 @@ Read this reference when a task touches a framework service beyond the ordinary 
 | **Http: Validator** | `Spark\Http\Validator` | `Spark\Facades\Validator`, `validator()` | `Validator::make($rules, $data)`, pipe or array rules, parameter arrays (`['unique' => ['posts', 'slug']]`, `['in' => [...]]`) | [requests-validation.md](requests-validation.md) |
 | **Queue** | `Spark\Queue\QueueManager`, `Queue`, `JobInterface`, `Dispatchable` | `Spark\Facades\Queue`, `JobClass::dispatch()` | `JobClass::dispatch(...)->onQueue('emails')->delay(60)`, `dispatchOnce()`, `dispatchIf()`, `dispatchSync()`, retry `$tries`/`$backoff`, `failed()` hook | [queues.md](queues.md) |
 | **Storage** | `Spark\Storage\Storage`, `LocalStorage`, `S3Storage` | `Spark\Facades\Storage`, `storage()` | `Storage::disk('public')->put('path/file', $data)`, `Storage::url()`, `Storage::temporaryUrl()`, disk uploaders | [files-storage.md](files-storage.md) |
-| **Supports: Collection** | `Spark\Support\Collection` (Laravel 12 style) | `collect()` | Higher-Order Collection Proxies (`$users->map->name`, `$users->filter->is_active`, `$orders->each->cancel()`), `pluck()`, `keyBy()`, `groupBy()`, `sum()` | [helpers.md](helpers.md) |
-| **Supports: LazyCollection** | `Spark\Support\LazyCollection` | `LazyCollection::make()` | Memory-efficient generators for processing massive data streams without memory exhaustion | [helpers.md](helpers.md) |
+| **Supports: Collection** | `Spark\Support\Collection` | `collect()` | Higher-order proxies (`$users->map->name`, `$users->filter->is_active`, `$orders->each->cancel()`), `pluck()`, `keyBy()`, `groupBy()`, `sum()` | [helpers.md](helpers.md) |
+| **Supports: LazyCollection** | `Spark\Support\LazyCollection` | `LazyCollection::make()` | Process iterable values lazily with generators | [helpers.md](helpers.md) |
 | **Supports: Arr** | `Spark\Support\Arr` | `Arr::*` | `Arr::get($data, 'nested.key', $default)`, `Arr::only()`, `Arr::except()`, `Arr::dot()`, `Arr::undot()`, `Arr::first()`, `Arr::join()` | [helpers.md](helpers.md) |
 | **Supports: Str** | `Spark\Support\Str`, `Spark\Support\Stringable` | `str()`, `Str::*` | `str('My Title')->slug()`, `Str::uuid()`, `Str::random(32)`, `Str::headline()`, `Str::contains()`, `Str::between()`, `Str::markdown()` | [helpers.md](helpers.md) |
 | **Supports: Number** | `Spark\Support\Number` | `Number::*` | `Number::currency($amount, 'USD')`, `Number::fileSize($bytes)`, `Number::percentage(85)`, `Number::spell($num)`, `Number::clamp()` | [helpers.md](helpers.md) |

@@ -106,6 +106,40 @@ final class TranslatorTest extends FrameworkTestCase
         $this->assertFalse(method_exists($t, 'translate'));
     }
 
+    public function test_formatting_preserves_arguments_errors_and_scoped_locales(): void
+    {
+        $t = $this->translator();
+        $t->addLines(['fruit' => ['one' => '%s apple', 'other' => '%s apples']]);
+        $this->app->instance(Translator::class, $t);
+        $name = new class implements Stringable {
+            public function __toString(): string
+            {
+                return 'Ada';
+            }
+        };
+
+        $cases = [
+            ['Plain text', null, [], [], 'Plain text'],
+            ['Hello :name :name', [$name], [], [], 'Hello Ada Ada'],
+            ['Values :a/:b/:c', [null, false, true], [], [], 'Values /0/1'],
+            ['Hello :name :missing', ['Ada'], [], [], 'Hello Ada :missing'],
+            ['%s has %d apples', ['Ada', 2], [], [], 'Ada has 2 apples'],
+            ['Missing %s %s', ['Ada'], [], [], 'Missing %s %s'],
+            ['Invalid %q', ['Ada'], [], [], 'Invalid %q'],
+            ['fruit', 1, ['one'], ['many'], 'one apple'],
+            ['fruit', 2, ['one'], ['many'], 'many apples'],
+            ['fruit', null, ['one'], [], 'one apple'],
+        ];
+        foreach ($cases as [$text, $arg, $args, $args2, $expected]) {
+            $this->assertSame($expected, $t->format($text, $arg, $args, $args2));
+            $this->assertSame($expected, __($text, $arg, $args, $args2));
+        }
+
+        $this->assertSame('Bonjour Ada', $t->withLocale('fr')->format('greeting', [$name]));
+        $this->assertSame('Hello Ada', __('greeting', [$name]));
+        $this->assertThrows(InvalidArgumentException::class, fn() => $t->format(':name', [[]]));
+    }
+
     public function test_files_have_deterministic_precedence_and_are_cached_until_flush(): void
     {
         $t = $this->translator();

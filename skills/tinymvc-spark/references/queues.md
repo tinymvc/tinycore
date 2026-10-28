@@ -82,7 +82,7 @@ Without `--once`, workers poll until their lifetime expires. `--timeout` is chec
 
 Public `$tries` and `$backoff` override worker defaults. Backoff accepts seconds or an array indexed by failed attempt; later attempts reuse its last entry. `failed()` runs only after exhaustion and accepts either `Throwable $exception` or `JobContract $job, Throwable $exception`. Constructor/retry-policy failures follow the retry path using worker defaults when necessary. Logs report completed jobs and failed attempts; `--ansi` / `--no-ansi` control color.
 
-`queue:restart` signals workers on all connections to finish and acknowledge the current job, then exit; idle workers exit on their next poll. Command and workers share the default cache store's `queue:workers` namespace. Signals survive default `cache:clear`; new workers ignore old signals. Restart old workers through the supervisor once when changing restart-key formats.
+`queue:restart` signals workers on all connections to finish and acknowledge the current job, then exit; idle workers exit on their next poll. new workers ignore old markers. Restart existing cache-based workers through the supervisor once when upgrading.
 
 Stale reservations older than 3600 seconds are recovered at worker startup. An indefinitely running worker needs restarting to repeat recovery; keep job execution below that window.
 

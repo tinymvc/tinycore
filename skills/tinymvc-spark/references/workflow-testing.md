@@ -6,7 +6,7 @@ Read this reference for unit and feature testing, test assertions, database veri
 
 ## The Dependency-Free Test Runner
 
-TinyMVC includes a native, high-performance, plain PHP test runner:
+TinyMVC includes a plain PHP test runner:
 
 ```bash
 # Run the entire test suite
@@ -126,7 +126,7 @@ final class PostApiTest extends TestCase
 
 ## Request and State Helpers on `$this`
 
-In feature tests, `$this` provides modern HTTP verbs and state configurators:
+Feature tests provide HTTP request and state helpers:
 
 ### 1. HTTP Verbs
 - `$this->get(string $uri, array $headers = [])`

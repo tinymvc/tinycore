@@ -10,14 +10,11 @@ use Spark\Support\Arr;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Translator\Contracts\TranslatorContract;
-use Stringable;
 use UnexpectedValueException;
 use function array_key_exists;
 use function count;
 use function is_array;
-use function is_bool;
 use function is_float;
-use function is_scalar;
 use function is_string;
 
 /**
@@ -119,7 +116,7 @@ class Translator implements TranslatorContract
             $line = $key;
         }
 
-        return $this->replace($line, $replace);
+        return Formatter::replace($line, $replace);
     }
 
     public function has(string $key, ?string $locale = null, bool $fallback = true): bool
@@ -141,49 +138,16 @@ class Translator implements TranslatorContract
         $line = $this->lookup($key, $locale, true, $resolvedLocale);
         if ($line === null) {
             $this->reportMissing($key, $locale);
-            return $this->replace($key, [...$replace, 'count' => $number]);
+            return Formatter::replace($key, [...$replace, 'count' => $number]);
         }
 
-        return $this->replace($this->select($line, $number, $resolvedLocale), [...$replace, 'count' => $number]);
+        return Formatter::replace($this->select($line, $number, $resolvedLocale), [...$replace, 'count' => $number]);
     }
 
     /** Resolve a string with named, positional, printf, or plural arguments. */
     public function format(string $text, mixed $arg = null, array $args = [], array $args2 = [], ?string $locale = null): string
     {
-        $number = is_numeric($arg) ? $arg + 0 : null;
-        $arguments = $args2 !== [] && $number !== null && $number != 1
-            ? $args2
-            : ($args ?: (is_array($arg) ? $arg : ($arg === null ? [] : [$arg])));
-
-        $named = $arguments !== [] && !array_is_list($arguments);
-        $replace = $named ? $arguments : [];
-        $line = $number !== null
-            ? $this->choice($text, $number, $replace, $locale)
-            : $this->get($text, $replace, $locale);
-
-        if (is_array($line)) {
-            $line = $this->choice($text, 1, $replace, $locale);
-        }
-        if ($named || $arguments === []) {
-            return $line;
-        }
-        if (preg_match_all('/:\\w+/', $line, $matches)) {
-            $pairs = [];
-            foreach (array_values(array_unique($matches[0])) as $index => $placeholder) {
-                if (array_key_exists($index, $arguments)) {
-                    $pairs[$placeholder] = self::stringify($arguments[$index]);
-                }
-            }
-            return strtr($line, $pairs);
-        }
-        if (!str_contains($line, '%')) {
-            return $line;
-        }
-        try {
-            return vsprintf($line, $arguments);
-        } catch (\ValueError | \ArgumentCountError) {
-            return $line;
-        }
+        return Formatter::format($this, $text, $arg, $args, $args2, $locale);
     }
 
     public function handleMissingKeysUsing(?callable $callback): static
@@ -425,68 +389,6 @@ class Translator implements TranslatorContract
         } finally {
             $this->reporting = false;
         }
-    }
-
-    // ------------------------------------------------------------------
-    // Replacements
-    // ------------------------------------------------------------------
-
-    /** :name  :NAME  :Name — longest placeholder wins, replaced values are never re-processed. */
-    private function replace(string|array $line, array $replace): string|array
-    {
-        if ($replace === []) {
-            return $line;
-        }
-
-        if (is_array($line)) {
-            foreach ($line as $k => $value) {
-                if (is_string($value) || is_array($value)) {
-                    $line[$k] = $this->replace($value, $replace);
-                }
-            }
-            return $line;
-        }
-
-        if (!str_contains($line, ':')) {
-            return $line;
-        }
-
-        $pairs = [];
-        foreach ($replace as $key => $value) {
-            $key = (string) $key;
-            $text = self::stringify($value);
-            $pairs[":$key"] = $text;
-
-            if ($key !== strtolower($key)) {
-                continue;
-            }
-
-            // Case variants are built only when the line actually uses them.
-            $upper = ':' . strtoupper($key);
-            if ($upper !== ":$key" && str_contains($line, $upper)) {
-                $pairs[$upper] = function_exists('mb_strtoupper') ? mb_strtoupper($text, 'UTF-8') : strtoupper($text);
-            }
-
-            $first = ':' . ucfirst($key);
-            if ($first !== ":$key" && str_contains($line, $first)) {
-                $pairs[$first] = function_exists('mb_strtoupper') && function_exists('mb_substr')
-                    ? mb_strtoupper(mb_substr($text, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($text, 1, null, 'UTF-8')
-                    : ucfirst($text);
-            }
-        }
-
-        return strtr($line, $pairs);
-    }
-
-    private static function stringify(mixed $value): string
-    {
-        return match (true) {
-            is_string($value) => $value,
-            $value === null => '',
-            is_bool($value) => $value ? '1' : '0',
-            is_scalar($value), $value instanceof Stringable => (string) $value,
-            default => throw new InvalidArgumentException('Replacement values must be scalar, null or Stringable.'),
-        };
     }
 
     // ------------------------------------------------------------------

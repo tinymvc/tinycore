@@ -4,7 +4,7 @@ TinyCore (`tinymvc/tinycore`) is the PHP runtime for **TinyMVC / Spark**, provid
 
 [![PHP](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1361%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1362%20passed-brightgreen.svg)](tests/)
 
 Start an application with [Skeleton](https://github.com/tinymvc/skeleton):
 

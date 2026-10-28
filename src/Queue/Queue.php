@@ -3,7 +3,6 @@
 namespace Spark\Queue;
 
 use Spark\Console\Prompt;
-use Spark\Cache\Cache;
 use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueContract;
 use Spark\Queue\Storage\{RedisStorage, DatabaseStorage, FileStorage};
@@ -25,10 +24,6 @@ use function strlen;
 class Queue implements QueueContract
 {
     use Macroable;
-
-    private const RESTART_CACHE = 'queue:workers';
-
-    private const RESTART_KEY = 'restart';
 
     /** The queue storage implementation used for job persistence and retrieval. */
     private \Spark\Queue\Contracts\QueueStorageContract $storage;
@@ -116,7 +111,7 @@ class Queue implements QueueContract
     /** Signal running workers to exit after their current job finishes. */
     public function restart(): void
     {
-        Cache::make(self::RESTART_CACHE)->store(self::RESTART_KEY, bin2hex(random_bytes(16)));
+        QueueManager::restart();
     }
 
     /**
@@ -144,8 +139,7 @@ class Queue implements QueueContract
         $ranJobs = 0;
         $failedJobs = 0;
         $startedAt = microtime(true);
-        $restartCache = Cache::make(self::RESTART_CACHE);
-        $restartToken = $restartCache->retrieve(self::RESTART_KEY);
+        $restartSignal = new RestartSignal(RestartSignal::configuredPath());
 
         $queueNames = is_array($queue) ? implode(', ', $queue) : $queue;
         $this->message("Processing jobs from [$queueNames].");
@@ -156,7 +150,7 @@ class Queue implements QueueContract
         echo PHP_EOL;
 
         do {
-            if ($restartCache->retrieve(self::RESTART_KEY) !== $restartToken) {
+            if ($restartSignal->requested()) {
                 $this->message('Worker restart requested. Shutting down.');
                 break;
             }
