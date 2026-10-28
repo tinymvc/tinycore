@@ -167,42 +167,26 @@ Pass Carbon directly to resources for the default UTC serialization. Format expl
 
 ## Translation and Localization
 
-### Language Files
-
-Language files reside in `resources/languages` (configured via `app.locale_dir`):
+Use PHP arrays in `resources/languages/{locale}.php` (`app.locale_dir`). The translator uses `app.locale` and `app.fallback_locale` (default `en`), caches each catalogue, and returns missing keys unchanged.
 
 ```php
 // resources/languages/en.php
 return [
     'greeting' => 'Hello, :name.',
-    'welcome' => 'Welcome to TinyMVC!',
-    'message_count' => ['%d message', '%d messages'],
+    'account' => ['title' => 'Account'],
+    'messages' => '{0} No messages|{1} One message|[2,*] :count messages',
 ];
 ```
 
-### Translation Helpers
-
-- `__('greeting', ['name' => 'Ada'])`: Returns translated string with placeholders replaced.
-- `_e('greeting', ['name' => $name])`: Returns HTML-escaped translation.
-- `__('message_count', 2)`: Selects singular/plural from an indexed array.
-
-```blade
-{{-- In Blade templates (automatically escaped) --}}
-<h1>{{ __('welcome') }}</h1>
-<p>{{ __('greeting', ['name' => $user->name]) }}</p>
-```
-
-### Switching Request Locale
-
-To dynamically switch locale per request:
-
 ```php
-$locale = $request->query('lang', 'en');
-
-abort_unless(in_array($locale, ['en', 'bn', 'es'], true), \Spark\Http\Response::STATUS_BAD_REQUEST, 'Unsupported language.');
-
-app()->instance(
-    \Spark\Translator::class,
-    new \Spark\Translator(locale_dir($locale . '.php')),
-);
+__('greeting', ['name' => 'Ada']);
+trans('account.title');
+trans('greeting', ['name' => 'Ada'], 'fr'); // override for this call
+trans_choice('messages', 5);
+_e('greeting', ['name' => '<Ada>']); // returns escaped HTML
+trans()->setLocale('fr'); // select from the application's supported locales first
 ```
+
+`trans()` returns `Spark\Translator`. `get($key, $replace, $locale)` accepts named replacements, `has($key, $locale, fallback: false)` checks only that locale, and `setFallback(null)` disables fallback. `addLines($lines, $locale)` adds runtime overrides; `addLanguageFile($path)` appends a deferred PHP catalogue for the current locale. Later files win consistently. `flush()` drops cached/runtime lines and reloads configured files on demand.
+
+Nested keys and exact dotted keys are supported; exact keys win. `:name`, `:Name`, and `:NAME` support replacement case. `choice()` / `trans_choice()` supply `:count` and support inclusive numeric ranges, exact counts, `one|many`, indexed pairs, or `['one' => ..., 'other' => ...]`. This is a singular/other selector, not a full ICU plural engine. Existing `__()` printf and numeric plural-array calls remain supported. In Blade, use `{{ __('greeting', ['name' => $name]) }}` for escaped output.

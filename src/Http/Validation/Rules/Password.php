@@ -3,7 +3,7 @@
 namespace Spark\Http\Validation\Rules;
 
 use Spark\Contracts\Http\RuleContract;
-use function is_scalar;
+use function is_string;
 use function mb_strlen;
 use function preg_match;
 
@@ -17,6 +17,8 @@ class Password implements RuleContract
 
     /** @var bool Require at least one lowercase letter. */
     protected bool $requireLowercase = false;
+
+    protected bool $requireLetters = false;
 
     /** @var bool Require at least one numeric digit. */
     protected bool $requireNumbers = false;
@@ -41,14 +43,13 @@ class Password implements RuleContract
     }
 
     /**
-     * Require at least one uppercase and one lowercase letter.
+     * Require at least one letter in any case.
      *
      * @return static
      */
     public function letters(): static
     {
-        $this->requireUppercase = true;
-        $this->requireLowercase = true;
+        $this->requireLetters = true;
         return $this;
     }
 
@@ -59,7 +60,9 @@ class Password implements RuleContract
      */
     public function mixedCase(): static
     {
-        return $this->letters();
+        $this->requireUppercase = true;
+        $this->requireLowercase = true;
+        return $this;
     }
 
     /**
@@ -93,15 +96,19 @@ class Password implements RuleContract
      */
     public function passes(string $attribute, mixed $value): bool
     {
-        if (!is_scalar($value)) {
+        $this->failedRuleMessage = null;
+        if (!is_string($value)) {
             $this->failedRuleMessage = __('The %s field must be a valid string.', [':attribute']);
             return false;
         }
 
-        $value = (string) $value;
-
         if (mb_strlen($value, 'UTF-8') < $this->min) {
             $this->failedRuleMessage = __('The %s field must be at least %s characters long.', [':attribute', $this->min]);
+            return false;
+        }
+
+        if ($this->requireLetters && !preg_match('/\p{L}/u', $value)) {
+            $this->failedRuleMessage = __('The %s field must contain at least one letter.', [':attribute']);
             return false;
         }
 

@@ -9,11 +9,11 @@ use Throwable;
 
 class Exists implements RuleContract, Stringable
 {
-    /** @var array<string,mixed> Additional where clauses. */
+    /** @var list<array{string, mixed}> Additional where clauses. */
     protected array $wheres = [];
 
-    /** @var Closure|null Custom query callback. */
-    protected ?Closure $queryCallback = null;
+    /** @var list<Closure> Custom query callbacks. */
+    protected array $queryCallbacks = [];
 
     /**
      * Create a new exists rule instance.
@@ -37,9 +37,9 @@ class Exists implements RuleContract, Stringable
     public function where(string|Closure $column, mixed $value = null): static
     {
         if ($column instanceof Closure) {
-            $this->queryCallback = $column;
+            $this->queryCallbacks[] = $column;
         } else {
-            $this->wheres[$column] = $value;
+            $this->wheres[] = [$column, $value];
         }
 
         return $this;
@@ -59,12 +59,12 @@ class Exists implements RuleContract, Stringable
         try {
             $query = query($this->table)->where($column, $value);
 
-            foreach ($this->wheres as $col => $val) {
+            foreach ($this->wheres as [$col, $val]) {
                 $query->where($col, $val);
             }
 
-            if ($this->queryCallback !== null) {
-                ($this->queryCallback)($query);
+            foreach ($this->queryCallbacks as $callback) {
+                $callback($query);
             }
 
             return $query->exists();
@@ -90,6 +90,10 @@ class Exists implements RuleContract, Stringable
      */
     public function __toString(): string
     {
+        if ($this->wheres !== [] || $this->queryCallbacks !== []) {
+            throw new \LogicException('Pass constrained database rules as objects to preserve their query conditions.');
+        }
+
         return 'exists:' . $this->table . ',' . ($this->column ?: 'NULL');
     }
 }

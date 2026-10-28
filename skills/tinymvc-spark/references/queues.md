@@ -9,7 +9,7 @@ Use class jobs implementing `Spark\Queue\Contracts\JobInterface` with `Spark\Que
 Managers resolve connections lazily and reuse them within the application. `Queue::purge($name)` reloads configuration on the next resolution without deleting jobs; existing references keep their configuration. Names sharing the same paths, prefixes, or tables may share data.
 
 - **Database:** configure `connection`, `table` (default `jobs`), and `failed_table` (default `failed_jobs`); migrate both tables first. Keep table names unprefixed: the selected database connection applies its prefix. Jobs have no `created_at`; treat metadata as driver-dependent.
-- **File:** configure a private local `path`; intended for modest backlogs. `getConnection()` throws because there is no PDO/Redis connection.
+- **File:** configure a private local `path`; intended for modest backlogs.
 - **Redis:** requires `ext-redis`; configure host/socket, port, password, database, and an application-specific prefix. Atomic queue transitions target standalone Redis, not Redis Cluster.
 
 ## Class jobs and dispatch

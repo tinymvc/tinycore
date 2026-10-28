@@ -529,14 +529,9 @@ class Job implements JobContract
     }
 
     /** get the queue instance */
-    private function queueInstance(): QueueManager
+    private function queueInstance(): Queue
     {
-        if ($this->connection !== null) {
-            return Application::$app->get(QueueManager::class)->connection($this->connection);
-        }
-
-        /** @var \Spark\Queue\Queue $queueInstance The queue instance */
-        return Application::$app->get(QueueManager::class);
+        return Application::$app->get(QueueManager::class)->connection($this->connection);
     }
 
     /**

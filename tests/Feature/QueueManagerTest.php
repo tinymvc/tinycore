@@ -13,10 +13,13 @@ final class QueueManagerTest extends FrameworkTestCase
 {
     private function configureConnections(): QueueManager
     {
-        $this->app->setConfig('queue', ['default' => 'primary', 'connections' => [
-            'primary' => ['driver' => 'file', 'path' => $this->storagePath . '/primary'],
-            'secondary' => ['driver' => 'file', 'path' => $this->storagePath . '/secondary'],
-        ]]);
+        $this->app->setConfig('queue', [
+            'default' => 'primary',
+            'connections' => [
+                'primary' => ['driver' => 'file', 'path' => $this->storagePath . '/primary'],
+                'secondary' => ['driver' => 'file', 'path' => $this->storagePath . '/secondary'],
+            ]
+        ]);
         return app(QueueManager::class);
     }
 
@@ -42,6 +45,18 @@ final class QueueManagerTest extends FrameworkTestCase
         $this->assertSame($secondary, app(Connection::class));
     }
 
+    public function test_job_instance_dispatch_and_deduplication_use_the_selected_connection(): void
+    {
+        $this->configureConnections();
+        (new Job('strlen', ['default']))->dispatch();
+        (new Job('strlen', ['named']))->onConnection('secondary')->dispatch('emails');
+        $once = (new Job('strlen', ['once']))->onConnection('secondary');
+        $once->dispatchOnce('emails');
+        $once->dispatchOnce('emails');
+        $this->assertCount(1, Queue::getJobs());
+        $this->assertCount(2, Queue::connection('secondary')->getJobs('emails'));
+    }
+
     public function test_named_dispatch_and_worker_use_selected_connection_and_queue(): void
     {
         $manager = $this->configureConnections();
@@ -53,7 +68,11 @@ final class QueueManagerTest extends FrameworkTestCase
         ob_start();
         try {
             (new PrimaryCommandsHandler())->runQueueJobs($manager, [
-                'connection' => 'secondary', 'queue' => 'emails', 'once' => true, 'sleep' => 0, 'timeout' => 0,
+                'connection' => 'secondary',
+                'queue' => 'emails',
+                'once' => true,
+                'sleep' => 0,
+                'timeout' => 0,
             ]);
         } finally {
             ob_end_clean();

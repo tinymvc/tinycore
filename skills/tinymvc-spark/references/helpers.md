@@ -116,7 +116,8 @@ Use Carbon for application dates; preserve explicit timezone/output contracts. P
 ### 9. Translations & Localization
 - `__(string $key, array|int $replace = [])`: Translates a text string using language files in `resources/languages/`.
 - `_e(string $key, array $replace = [])`: Translates and HTML-escapes the result.
-- `trans(string $key, mixed $arg = null, array $args = [])`: Alias for `__()`.
+- `trans(?string $key = null, array $replace = [], ?string $locale = null)`: Named translation, or the translator when no key is supplied.
+- `trans_choice(string $key, int|float $number, array $replace = [], ?string $locale = null)`: Plural selection with `:count`.
 
 ---
 

@@ -14,6 +14,9 @@ use Spark\Http\Validation\Concerns\ValidatesFiles;
 use Spark\Http\Validation\Rules\ProhibitedIf;
 use Spark\Http\Validation\Rules\RequiredIf;
 use Spark\Http\Validation\Rules\RequiredUnless;
+use Spark\Http\Validation\Rules\Exists;
+use Spark\Http\Validation\Rules\NotExists;
+use Spark\Http\Validation\Rules\Unique;
 use Spark\Support\Str;
 use Spark\Support\Traits\Macroable;
 use function array_column;
@@ -149,12 +152,14 @@ class Validator implements ValidatorContract
                 // Handle RuleContract instances
                 if ($ruleName instanceof RuleContract) {
                     $isImplicit = $ruleName instanceof RequiredIf || $ruleName instanceof RequiredUnless || $ruleName instanceof ProhibitedIf;
+                    $isDatabaseRule = $ruleName instanceof Unique || $ruleName instanceof Exists || $ruleName instanceof NotExists;
 
-                    if (!$isImplicit && (!$fieldExists || (is_string($value) && trim($value) === '') || ($nullable && $value === null))) {
+                    if ((!$valid && $isDatabaseRule) || (!$isImplicit && (!$fieldExists || (is_string($value) && trim($value) === '') || ($nullable && $value === null)))) {
                         continue;
                     }
 
-                    if (!$ruleName->passes((string) $field, $value)) {
+                    $attribute = $isDatabaseRule ? $this->fieldColumn((string) $field) : (string) $field;
+                    if (!$ruleName->passes($attribute, $value)) {
                         $valid = false;
                         $this->addCustomError((string) $field, $ruleName->message());
                         if ($isImplicit) {

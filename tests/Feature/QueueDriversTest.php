@@ -114,7 +114,6 @@ final class QueueDriversTest extends DriverTestCase
             $queue->clearAllJobs();
         }
 
-        $this->assertTrue((new \Spark\Queue\Queue())->getConnection() instanceof \PDO);
     }
 
     public function test_named_queue_transaction_uses_its_connection(): void
@@ -125,7 +124,7 @@ final class QueueDriversTest extends DriverTestCase
         $this->app->mergeConfig(['database' => ['connections' => ['queue_test' => ['driver' => 'sqlite', 'file' => $named]]]]);
         $queue = new \Spark\Queue\Storage\DatabaseStorage(['connection' => 'queue_test']);
         $queue->push(new \Spark\Queue\Job('strlen', ['value']));
-        $pdo = $queue->getConnection();
+        $pdo = \Spark\Database\DB::connection('queue_test')->getPdo();
         $pdo->exec("CREATE TRIGGER reject_failure BEFORE INSERT ON failed_jobs BEGIN SELECT RAISE(ABORT, 'injected failure'); END");
         $id = (int) $queue->getJobs()[0]->getMetadata()['id'];
 

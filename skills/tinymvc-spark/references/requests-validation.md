@@ -289,16 +289,18 @@ Spark includes a rich set of built-in validation rules:
 
 ### Fluent Rules, Closures, and Parameter Arrays
 
+Use `Spark\Http\Validation\Rule` with `Spark\Facades\Validator` or `Spark\Http\Validation\Validator`; the old `Spark\Http\Validator` class remains compatible. Keep database rule objects intact when adding `where()` constraints, and pass only a trusted model ID to `ignore()`. `letters()` requires any letter; `mixedCase()` requires both uppercase and lowercase.
+
 Rules can be pipe strings (`'required|string|max:255'`), fluent `Rule` builders, custom `Spark\Contracts\Http\RuleContract` classes, closures, or legacy parameter arrays (`['unique' => ['table', 'col']]`, `['in' => ['a', 'b']]`):
 
 ```php
-use Spark\Http\Rule;
+use Spark\Http\Validation\Rule;
 
 $rules = [
     'role' => ['required', Rule::in(['admin', 'editor', 'author'])],
     'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($userId)],
     'category_id' => ['required', Rule::exists('categories', 'id')],
-    'password' => ['required', Rule::password()->min(8)->letters()->numbers()->symbols()],
+    'password' => ['required', Rule::password(8)->letters()->numbers()->symbols()],
     'company' => [Rule::requiredIf(fn() => request('is_business'))],
     'custom' => [function (string $attribute, mixed $value, \Closure $fail) {
         if ($value === 'forbidden') $fail('The :attribute cannot be forbidden.');

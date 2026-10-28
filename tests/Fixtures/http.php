@@ -26,11 +26,18 @@ $app = (new Application($storage))->withApp(config: [
     ]
 ]);
 $app->singleton(Request::class, TransportRequest::class);
-if ($_SERVER['REQUEST_URI'] === '/csrf/trusted') {
+if (in_array($_SERVER['REQUEST_URI'], ['/csrf/trusted', '/remember/trusted'], true)) {
     $app->setConfig('app.trusted_proxies', ['127.0.0.1']);
 }
 $app->withMiddleware(register: ['csrf' => TransportCsrfProtection::class]);
 Route::get('/csrf/{kind}', fn() => 'ok')->middleware('csrf');
+Route::get('/remember/{kind}', function () {
+    $user = new class extends \Spark\Database\Model {};
+    $user->id = 7;
+    $user->password = 'test-password-fingerprint';
+    (new \Spark\Http\Auth($user::class, ['channels' => ['session']]))->login($user, true);
+    return 'remembered';
+});
 Route::get('/session/{action}', function (string $action) {
     $session = session();
     if ($action === 'write') {

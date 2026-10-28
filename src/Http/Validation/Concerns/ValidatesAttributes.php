@@ -17,7 +17,6 @@ use function date;
 use function in_array;
 use function ini_get;
 use function ini_set;
-use function intval;
 use function is_array;
 use function is_bool;
 use function is_countable;
@@ -293,10 +292,11 @@ trait ValidatesAttributes
         }
 
         try {
-            $query = query($params[0])->where($params[1] ?? $field, $value);
+            $column = empty($params[1]) || $params[1] === 'NULL' ? $field : $params[1];
+            $query = query($params[0])->where($column, $value);
 
-            if (isset($params[2]) && is_numeric($params[2])) {
-                $query->where($params[3] ?? 'id', '!=', intval($params[2]));
+            if (isset($params[2]) && $params[2] !== '' && $params[2] !== 'NULL') {
+                $query->where($params[3] ?? 'id', '!=', $params[2]);
             }
 
             return $query->count() === 0;
@@ -320,7 +320,8 @@ trait ValidatesAttributes
         }
 
         try {
-            return query($params[0])->where($params[1] ?? $field, $value)->exists();
+            $column = empty($params[1]) || $params[1] === 'NULL' ? $field : $params[1];
+            return query($params[0])->where($column, $value)->exists();
         } catch (\Throwable $e) {
             return false;
         }
@@ -341,7 +342,8 @@ trait ValidatesAttributes
         }
 
         try {
-            return query($params[0])->where($params[1] ?? $field, $value)->doesntExist();
+            $column = empty($params[1]) || $params[1] === 'NULL' ? $field : $params[1];
+            return query($params[0])->where($column, $value)->doesntExist();
         } catch (\Throwable $e) {
             return false;
         }

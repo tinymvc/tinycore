@@ -3,18 +3,81 @@
 require_once dirname(__DIR__) . '/Support/DatabaseScenarioTestCase.php';
 
 use Spark\Contracts\Http\RuleContract;
-use Spark\Http\Rule;
-use Spark\Http\Validation\Rule as ValidationRule;
+use Spark\Http\Validation\Rule;
 use Spark\Http\Validation\Validator as CoreValidator;
 use Spark\Http\Validator;
 
 final class FluentValidationRulesTest extends DatabaseScenarioTestCase
 {
+    public function test_standalone_rules_and_closures_are_not_silently_ignored(): void
+    {
+        $this->assertTrue(Validator::make(['role' => Rule::in(['admin'])], ['role' => 'guest'])->fails());
+        $this->assertTrue(Validator::make(['role' => fn($field, $value, $fail) => $fail('Invalid role')], ['role' => 'guest'])->fails());
+    }
+
+    public function test_password_letters_are_distinct_from_mixed_case_and_require_strings(): void
+    {
+        $letters = Rule::password(3)->letters();
+        $this->assertTrue($letters->passes('password', 'abc'));
+        $this->assertTrue($letters->passes('password', '中文密碼'));
+        $this->assertFalse($letters->passes('password', '123'));
+        $this->assertFalse(Rule::password(3)->passes('password', 1234));
+        $this->assertFalse(Rule::password(3)->mixedCase()->passes('password', 'abc'));
+    }
+
+    public function test_nested_database_rules_infer_leaf_columns_and_keep_all_callbacks(): void
+    {
+        $this->assertTrue(Validator::make(['users.*.name' => Rule::exists('scenario_users')], ['users' => [['name' => 'Ada']]])->passes());
+        foreach (['exists', 'notExists', 'unique'] as $method) {
+            $rule = Rule::$method('scenario_users', 'name')
+                ->where(fn($q) => $q->where('id', 999))
+                ->where(fn($q) => $q->where('name', 'Ada'));
+            $this->assertSame($method !== 'exists', $rule->passes('name', 'Ada'));
+        }
+    }
+
+    public function test_database_rules_skip_fields_that_already_failed(): void
+    {
+        $calls = 0;
+        $rule = Rule::exists('scenario_users')->where(function () use (&$calls) {
+            $calls++; });
+        $this->assertTrue(Validator::make(['name' => ['email', $rule]], ['name' => 'Ada'])->fails());
+        $this->assertSame(0, $calls);
+    }
+
+    public function test_database_rule_strings_preserve_default_columns_and_string_ignore_ids(): void
+    {
+        $this->assertTrue(Validator::make(['name' => (string) Rule::exists('scenario_users')], ['name' => 'Ada'])->passes());
+        $this->assertTrue(Validator::make(['name' => (string) Rule::unique('scenario_users')->ignore('Ada', 'name')], ['name' => 'Ada'])->passes());
+        foreach (['exists', 'notExists', 'unique'] as $method) {
+            $rule = Rule::$method('scenario_users')->where('id', 1)->where('id', 999);
+            $this->assertSame($method !== 'exists', $rule->passes('name', 'Ada'));
+            $this->assertThrows(LogicException::class, fn() => (string) $rule);
+        }
+    }
+
+    public function test_prohibited_rule_accepts_unselected_uploads(): void
+    {
+        $this->assertTrue(Validator::make(['file' => Rule::prohibitedIf(true)], [
+            'file' => ['tmp_name' => '', 'error' => UPLOAD_ERR_NO_FILE],
+        ])->passes());
+        $this->assertTrue(Validator::make(['file' => Rule::requiredIf(true)], [
+            'file' => ['tmp_name' => '', 'error' => UPLOAD_ERR_NO_FILE],
+        ])->fails());
+    }
+
+    public function test_container_preserves_legacy_validator_type_hints(): void
+    {
+        $this->assertInstanceOf(Validator::class, app(Validator::class));
+        $this->assertInstanceOf(CoreValidator::class, app('validator'));
+        $this->assertInstanceOf(CoreValidator::class, app(\Spark\Contracts\Http\ValidatorContract::class));
+    }
+
     public function test_rule_in_and_not_in(): void
     {
         $rules = [
             'role' => ['required', Rule::in(['admin', 'editor', 'author'])],
-            'status' => ['required', ValidationRule::notIn(['banned', 'deleted'])],
+            'status' => ['required', Rule::notIn(['banned', 'deleted'])],
         ];
 
         $v1 = Validator::make($rules, ['role' => 'editor', 'status' => 'active']);

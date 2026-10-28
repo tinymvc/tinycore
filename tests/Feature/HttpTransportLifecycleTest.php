@@ -215,6 +215,20 @@ final class HttpTransportLifecycleTest extends LifecycleTestCase
         }
     }
 
+    public function test_remember_cookie_matches_trusted_scheme_and_is_http_only_and_lax(): void
+    {
+        foreach (['trusted' => true, 'untrusted' => false] as $kind => $secure) {
+            $response = $this->exchange('GET', '/remember/' . $kind, headers: ['X-Forwarded-Proto' => 'https']);
+            $this->assertSame(200, $response['status']);
+            $cookies = array_values(array_filter($response['headers']['set-cookie'] ?? [], fn($cookie) => str_starts_with($cookie, 'auth=')));
+            $this->assertCount(1, $cookies);
+            $cookie = strtolower($cookies[0]);
+            $this->assertSame($secure, str_contains($cookie, '; secure'));
+            $this->assertStringContainsString('; httponly', $cookie);
+            $this->assertStringContainsString('; samesite=lax', $cookie);
+        }
+    }
+
     public function test_session_cookie_persists_data_and_invalidation_rejects_the_old_id(): void
     {
         $created = $this->exchange('GET', '/session/write');

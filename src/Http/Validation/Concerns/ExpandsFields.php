@@ -223,6 +223,10 @@ trait ExpandsFields
             $fieldRules = explode('|', $fieldRules);
         }
 
+        if ($fieldRules instanceof RuleContract || $fieldRules instanceof Closure) {
+            $fieldRules = [$fieldRules];
+        }
+
         if (!is_array($fieldRules)) {
             return [];
         }

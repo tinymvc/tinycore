@@ -3,6 +3,7 @@
 namespace Spark\Http\Validation\Rules;
 
 use Closure;
+use Psr\Http\Message\UploadedFileInterface;
 use Spark\Contracts\Http\RuleContract;
 use function count;
 use function is_callable;
@@ -46,6 +47,14 @@ class ProhibitedIf implements RuleContract
 
         if (is_countable($value) && count($value) === 0) {
             return true;
+        }
+
+        if ($value instanceof UploadedFileInterface) {
+            return $value->getError() === UPLOAD_ERR_NO_FILE;
+        }
+
+        if (is_array($value) && isset($value['tmp_name'], $value['error'])) {
+            return $value['error'] === UPLOAD_ERR_NO_FILE || $value['tmp_name'] === '';
         }
 
         return false;

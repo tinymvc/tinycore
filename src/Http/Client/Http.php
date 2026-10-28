@@ -6,7 +6,6 @@ use Spark\Http\Client\Contracts\HttpContract;
 use Spark\Http\Client\Contracts\HttpResponseContract;
 use Spark\Http\Client\Exceptions\HttpException;
 use Spark\Support\Traits\Macroable;
-use Spark\Utils\File;
 use function is_array;
 use function is_resource;
 use function is_string;
@@ -147,7 +146,7 @@ class Http extends HttpRequest implements HttpContract
                 // link() publishes without replacing a target created during the request.
                 $saved = $this->overwriteDownload
                     ? @rename($temporaryDownload, $downloadPath)
-                    : @File::link($temporaryDownload, $downloadPath);
+                    : @link($temporaryDownload, $downloadPath);
                 if (!$saved) {
                     throw new HttpException("Unable to save download file: $downloadPath");
                 }

@@ -3,433 +3,281 @@
 namespace Spark;
 
 use ArrayAccess;
+use Countable;
+use InvalidArgumentException;
 use Spark\Contracts\TranslatorContract;
+use Spark\Support\Arr;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
-
+use UnexpectedValueException;
 use function array_key_exists;
 use function count;
-use function in_array;
 use function is_array;
 use function is_string;
-use function sprintf;
 
-/**
- * Class Translator
- * 
- * Translator class for handling multilingual text translations.
- * 
- * @package Spark\Utils
- * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
- */
-class Translator implements TranslatorContract, ArrayAccess
+class Translator implements TranslatorContract, ArrayAccess, Countable
 {
     use Macroable, Conditionable;
 
-    /**
-     * Holds translated texts.
-     * 
-     * @var array
-     */
-    private array $translatedTexts = [];
-
-    /**
-     * List of deferred language files to be loaded.
-     * 
-     * @var array
-     */
-    private array $deferredLanguageFiles = [];
-
-    /**
-     * Loaded language files to prevent duplicate loading.
-     * 
-     * @var array
-     */
+    private string $locale;
+    private ?string $fallback;
+    private array $catalogues = [];
+    private array $languageFiles = [];
     private array $loadedFiles = [];
+    private array $lines = [];
 
-    /**
-     * Constructor for the translator class.
-     * 
-     * Optionally loads a language file during initialization.
-     * 
-     * @param string|null $lang_file Path to the language file. Defaults to the file based on environment settings.
-     */
-    public function __construct(?string $lang_file = null)
+    public function __construct(?string $lang_file = null, ?string $locale = null, ?string $fallback = null)
     {
-        // Determine the default language file if none is provided
-        if ($lang_file === null) {
-            $lang_file = locale_dir(sprintf('%s.php', config('app.locale', 'en')));
+        $this->setLocale($locale ?? config('app.locale', 'en'));
+        $this->setFallback($fallback ?? config('app.fallback_locale', 'en'));
+        if ($lang_file !== null) {
+            $this->languageFiles[$this->locale] = [dir_path($lang_file)];
         }
-
-        $this->addLanguageFile($lang_file);
     }
 
-    /**
-     * Merges the given translations with the existing ones.
-     * 
-     * Useful for adding or overriding translations for a specific context.
-     * 
-     * @param array $translatedTexts The translations to be merged.
-     * @return void
-     */
-    public function mergeTranslatedTexts(array $translatedTexts): void
+    public function getLocale(): string
     {
-        $this->translatedTexts = [...$this->translatedTexts, ...$translatedTexts];
+        return $this->locale;
     }
 
-    /**
-     * Adds a language file to the list of deferred language files.
-     *
-     * If the prepend flag is true, the language file is added to the beginning
-     * of the list. Otherwise, it is added to the end of the list.
-     *
-     * @param string $file The path to the language file to add.
-     * @param bool $prepend Whether to add the language file to the beginning of the list.
-     * @return void
-     */
+    public function setLocale(string $locale): void
+    {
+        $this->validateLocale($locale);
+        $this->locale = $locale;
+    }
+
+    public function getFallback(): ?string
+    {
+        return $this->fallback;
+    }
+
+    public function setFallback(?string $locale): void
+    {
+        if ($locale !== null) {
+            $this->validateLocale($locale);
+        }
+        $this->fallback = $locale;
+    }
+
+    /** Resolve exact or nested keys, then the fallback locale, then the key itself. */
+    public function get(string $key, array $replace = [], ?string $locale = null): string|array
+    {
+        return $this->replace($this->find($key, $locale ?? $this->locale) ?? $key, $replace);
+    }
+
+    public function has(string $key, ?string $locale = null, bool $fallback = true): bool
+    {
+        return $this->find($key, $locale ?? $this->locale, $fallback) !== null;
+    }
+
+    public function choice(string $key, int|float $number, array $replace = [], ?string $locale = null): string
+    {
+        $line = $this->find($key, $locale ?? $this->locale) ?? $key;
+        $line = $this->format($this->select($line, $number), [$number]);
+        return $this->replace($line, ['count' => $number, ...$replace]);
+    }
+
+    public function addLines(array $lines, ?string $locale = null): void
+    {
+        $locale ??= $this->locale;
+        $this->validateLocale($locale);
+        $this->lines[$locale] = array_replace_recursive($this->lines[$locale] ?? [], $lines);
+        unset($this->catalogues[$locale]);
+    }
+
     public function addLanguageFile(string $file, bool $prepend = false): void
     {
+        $files = $this->languageFiles[$this->locale] ?? [locale_dir($this->locale . '.php')];
         $file = dir_path($file);
-
-        if ($prepend) {
-            array_unshift($this->deferredLanguageFiles, $file);
-            return;
-        }
-
-        $this->deferredLanguageFiles[] = $file;
+        $this->languageFiles[$this->locale] = array_values(array_unique(
+            $prepend ? [$file, ...$files] : [...$files, $file]
+        ));
+        unset($this->catalogues[$this->locale]);
     }
 
-    /**
-     * Sets the translations for the translator.
-     * 
-     * Replaces any existing translations with the provided array of translated texts.
-     * 
-     * @param array $translatedTexts The translations to set.
-     * @return void
-     */
-    public function setTranslatedTexts(array $translatedTexts): void
+    public function all(?string $locale = null): array
     {
-        $this->translatedTexts = $translatedTexts;
-    }
-
-    /**
-     * Translates a given text based on the local translations or returns the original text if translation is unavailable.
-     * Supports pluralization and argument substitution with both %s and :name styles.
-     *
-     * @param string $text The text to be translated.
-     * @param mixed $arg The number to determine pluralization or replace placeholder in the translated text, or associative array for :name style.
-     * @param array $args An array of arguments to replace placeholders in the translated text.
-     * @param array $args2 An array of arguments to replace plural placeholders in the translated text.
-     * @return string The translated text with any placeholders replaced by the provided arguments.
-     */
-    public function translate(string $text, mixed $arg = null, array $args = [], array $args2 = []): string
-    {
-        // Check if the text has a translation
-        $translation = $this->getTranslatedText($text);
-        $resolvedArgs = $args;
-
-        if ($arg !== null && empty($resolvedArgs)) {
-            $resolvedArgs = is_array($arg) ? $arg : [$arg];
-        }
-
-        if (is_array($translation)) {
-            $index = 0;
-            if (is_numeric($arg) && $arg != 1) {
-                $index = 1;
+        $locale ??= $this->locale;
+        $this->validateLocale($locale);
+        if (!isset($this->catalogues[$locale])) {
+            $catalogue = [];
+            foreach ($this->languageFiles[$locale] ?? [locale_dir($locale . '.php')] as $file) {
+                $catalogue = array_replace_recursive($catalogue, $this->load($file));
             }
-
-            if (array_is_list($translation) && isset($translation[$index])) {
-                $translation = $translation[$index];
-            } elseif (isset($translation['other'])) {
-                $translation = $translation['other'];
-            } elseif (isset($translation['one'])) {
-                $translation = $translation['one'];
-            } else {
-                $translation = $translation[0] ?? '';
-            }
-
-            if (!empty($args2) && is_numeric($arg) && $arg != 1) {
-                $resolvedArgs = $args2;
-            }
-        } else {
-            if (!empty($args2) && is_numeric($arg) && $arg != 1) {
-                $resolvedArgs = $args2;
-            }
+            $this->catalogues[$locale] = array_replace_recursive($catalogue, $this->lines[$locale] ?? []);
         }
-
-        // Ensure translation is string and use empty arguments when non-replacement style is passed.
-        if (!is_string($translation)) {
-            $translation = (string) $translation;
-        }
-
-        // Check if we're using :name style placeholders
-        if ($this->hasNamedPlaceholders($translation) && !empty($resolvedArgs)) {
-            return $this->replaceNamedPlaceholders($translation, $resolvedArgs);
-        }
-
-        if (!$resolvedArgs) {
-            return $translation;
-        }
-
-        // Use vsprintf for %s style placeholders (backward compatibility)
-        try {
-            return vsprintf($translation, $resolvedArgs);
-        } catch (\Throwable $e) {
-            // If vsprintf fails, return the translation as-is
-            return $translation;
-        }
+        return $this->catalogues[$locale];
     }
 
-    /**
-     * Checks if the translation text contains :name style placeholders.
-     *
-     * @param string $text The text to check.
-     * @return bool True if the text contains :name style placeholders, false otherwise.
-     */
-    private function hasNamedPlaceholders(string $text): bool
-    {
-        return preg_match('/:\w+/', $text) === 1;
-    }
-
-    /**
-     * Replaces :name style placeholders with values from associative or indexed array.
-     *
-     * @param string $text The text containing :name placeholders.
-     * @param array $args The arguments to replace placeholders with.
-     * @return string The text with placeholders replaced.
-     */
-    private function replaceNamedPlaceholders(string $text, array $args): string
-    {
-        // If args is associative array, replace by key names
-        if (!array_is_list($args)) {
-            foreach ($args as $key => $value) {
-                $text = str_replace(":$key", (string) $value, $text);
-            }
-        } else {
-            // If args is indexed array, replace placeholders in order they appear
-            preg_match_all('/:\w+/', $text, $matches);
-            foreach ($matches[0] as $index => $placeholder) {
-                if (isset($args[$index])) {
-                    $text = str_replace($placeholder, (string) $args[$index], $text);
-                }
-            }
-        }
-
-        return $text;
-    }
-
-    /**
-     * Gets the translated text based on the given text.
-     * 
-     * Checks if the given text has a translation in the loaded language files.
-     * If the translation is not found, it loads deferred language files until
-     * the translation is found or all files are loaded.
-     * 
-     * @param string $text The text to be translated.
-     * @return string|array The translated text or an array of plural translations.
-     */
-    public function getTranslatedText(string $text): string|array
-    {
-        // Load all deferred language files until translation is found
-        while (!isset($this->translatedTexts[$text]) && !empty($this->deferredLanguageFiles)) {
-            $lang_file = array_shift($this->deferredLanguageFiles);
-
-            // Skip if file was already loaded
-            if (in_array($lang_file, $this->loadedFiles, true)) {
-                continue;
-            }
-
-            // Check if the language file exists
-            if (file_exists($lang_file)) {
-                $this->loadLanguageFile($lang_file);
-            }
-        }
-
-        // Return the translated text if found, else return the original text
-        return $this->translatedTexts[$text] ?? $text;
-    }
-
-    /**
-     * Load a language file and merge its translations.
-     * 
-     * @param string $lang_file Path to the language file.
-     * @return void
-     */
-    private function loadLanguageFile(string $lang_file): void
-    {
-        if (is_debug_mode()) {
-            $started = microtime(true);
-            $startedMemory = memory_get_usage(true);
-
-            // Load and validate translations
-            $translations = require $lang_file;
-
-            if (!is_array($translations)) {
-                trigger_error("Language file [{$lang_file}] must return an array.", E_USER_WARNING);
-                $translations = [];
-            }
-
-            // Merge the loaded translations with the existing ones
-            $this->mergeTranslatedTexts($translations);
-            $this->loadedFiles[] = $lang_file;
-
-            $loadTime = round((microtime(true) - $started) * 1000, 6);
-            event('app:translator.loadedLanguageFile', [
-                'file' => $lang_file,
-                'load_time' => $loadTime,
-                'memory_before' => $startedMemory
-            ]);
-        } else {
-            $translations = require $lang_file;
-
-            if (!is_array($translations)) {
-                $translations = [];
-            }
-
-            $this->mergeTranslatedTexts($translations);
-            $this->loadedFiles[] = $lang_file;
-        }
-    }
-
-    /**
-     * Check if a translation exists for the given key.
-     * 
-     * @param string $key The translation key to check.
-     * @return bool True if translation exists, false otherwise.
-     */
-    public function has(string $key): bool
-    {
-        if (array_key_exists($key, $this->translatedTexts)) {
-            return true;
-        }
-
-        // Load pending files to check if translation exists
-        $this->getTranslatedText($key);
-
-        return array_key_exists($key, $this->translatedTexts);
-    }
-
-    /**
-     * Get a translation by key without placeholder replacement.
-     * 
-     * @param string $key The translation key.
-     * @param mixed $default The default value if translation doesn't exist.
-     * @return string|array The translation or default value.
-     */
-    public function get(string $key, mixed $default = null): string|array
-    {
-        $translation = $this->getTranslatedText($key);
-
-        // If we got the key back and it's not in translations, return default
-        if ($translation === $key && !isset($this->translatedTexts[$key])) {
-            return $default ?? $key;
-        }
-
-        return $translation;
-    }
-
-    /**
-     * Handle pluralization using Laravel-style choice syntax.
-     * 
-     * @param string $key The translation key.
-     * @param int|float $number The count for pluralization.
-     * @param array $replace Replacement values.
-     * @return string The pluralized translation.
-     */
-    public function choice(string $key, int|float $number, array $replace = []): string
-    {
-        return $this->translate($key, $number, $replace);
-    }
-
-    /**
-     * Get all translations.
-     * 
-     * @return array All loaded translations.
-     */
-    public function all(): array
-    {
-        // Load all deferred files first
-        while (!empty($this->deferredLanguageFiles)) {
-            $lang_file = array_shift($this->deferredLanguageFiles);
-
-            if (file_exists($lang_file) && !in_array($lang_file, $this->loadedFiles, true)) {
-                $this->loadLanguageFile($lang_file);
-            }
-        }
-
-        return $this->translatedTexts;
-    }
-
-    /**
-     * Get all loaded language files.
-     * 
-     * @return array List of loaded language file paths.
-     */
-    public function getLoadedFiles(): array
-    {
-        return $this->loadedFiles;
-    }
-
-    /**
-     * Check if any language files have been loaded.
-     * 
-     * @return bool True if files have been loaded, false otherwise.
-     */
-    public function hasLoadedFiles(): bool
-    {
-        return !empty($this->loadedFiles);
-    }
-
-    /**
-     * Get count of loaded translations.
-     * 
-     * @return int Number of loaded translations.
-     */
-    public function count(): int
-    {
-        return count($this->translatedTexts);
-    }
-
-    /**
-     * Clear all loaded translations and reset state.
-     * 
-     * @return void
-     */
+    /** Clear cached catalogues and runtime lines; configured files are loaded again on demand. */
     public function flush(): void
     {
-        $this->translatedTexts = [];
-        $this->loadedFiles = [];
-        $this->deferredLanguageFiles = [];
+        $this->catalogues = $this->loadedFiles = $this->lines = [];
     }
 
-    /**
-     * Alias for translate method.
-     * 
-     * @param string $text The text to be translated.
-     * @param mixed $arg Arguments for placeholder replacement.
-     * @param array $args Additional arguments.
-     * @param array $args2 Plural arguments.
-     * @return string The translated text.
-     */
+    public function count(): int
+    {
+        return count($this->all());
+    }
+
+    private function find(string $key, string $locale, bool $fallback = true): string|array|null
+    {
+        $line = Arr::get($this->all($locale), $key);
+        if ($line === null && $fallback && $this->fallback !== null && $locale !== $this->fallback) {
+            $line = Arr::get($this->all($this->fallback), $key);
+        }
+        if ($line !== null && !is_string($line) && !is_array($line)) {
+            throw new UnexpectedValueException("Translation [$key] must be a string or array.");
+        }
+        return $line;
+    }
+
+    private function load(string $file): array
+    {
+        if (array_key_exists($file, $this->loadedFiles)) {
+            return $this->loadedFiles[$file] ?? [];
+        }
+        if (!is_file($file)) {
+            $this->loadedFiles[$file] = null;
+            return [];
+        }
+        $started = microtime(true);
+        $memory = memory_get_usage(true);
+        $lines = require $file;
+        if (!is_array($lines)) {
+            throw new UnexpectedValueException("Language file [$file] must return an array.");
+        }
+        $this->loadedFiles[$file] = $lines;
+        if (is_debug_mode()) {
+            event('app:translator.loadedLanguageFile', [
+                'file' => $file,
+                'load_time' => round((microtime(true) - $started) * 1000, 6),
+                'memory_before' => $memory,
+            ]);
+        }
+        return $lines;
+    }
+
+    private function validateLocale(string $locale): void
+    {
+        if (!preg_match('/^[a-zA-Z]{2,8}(?:[-_][a-zA-Z0-9]{2,8})*$/D', $locale)) {
+            throw new InvalidArgumentException('Invalid locale identifier.');
+        }
+    }
+
+    private function replace(string|array $line, array $replace): string|array
+    {
+        if (is_array($line)) {
+            return array_map(fn($value) => $this->replace($value, $replace), $line);
+        }
+        $pairs = [];
+        foreach ($replace as $key => $value) {
+            $value = (string) $value;
+            $pairs[":$key"] = $value;
+            if (is_string($key) && strtolower($key) === $key) {
+                $pairs[':' . strtoupper($key)] = function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+                $pairs[':' . ucfirst($key)] = function_exists('mb_convert_case') ? mb_convert_case($value, MB_CASE_TITLE, 'UTF-8') : ucwords($value);
+            }
+        }
+        // Longest matches win; replacement values are never processed a second time.
+        return strtr($line, $pairs);
+    }
+
+    private function select(string|array $line, int|float $number): string
+    {
+        if (is_array($line)) {
+            return (string) ($number == 1
+                ? ($line['one'] ?? $line[0] ?? $line['other'] ?? '')
+                : ($line['other'] ?? $line[1] ?? $line['one'] ?? $line[0] ?? ''));
+        }
+        $forms = [];
+        foreach (explode('|', $line) as $part) {
+            if (preg_match('/^\s*\{(-?[\d.]+)\}\s*(.*)$/s', $part, $match)) {
+                if ($number == (float) $match[1]) {
+                    return $match[2];
+                }
+            } elseif (preg_match('/^\s*\[(-?[\d.]+|\*),\s*(-?[\d.]+|\*)\]\s*(.*)$/s', $part, $match)) {
+                if (($match[1] === '*' || $number >= (float) $match[1]) && ($match[2] === '*' || $number <= (float) $match[2])) {
+                    return $match[3];
+                }
+            } else {
+                $forms[] = $part;
+            }
+        }
+        return $forms[$number == 1 ? 0 : 1] ?? $forms[0] ?? $line;
+    }
+
+    private function format(string $line, array $args): string
+    {
+        if ($args === [] || !str_contains($line, '%')) {
+            return $line;
+        }
+        try {
+            return vsprintf($line, $args);
+        } catch (\ValueError) {
+            return $line;
+        }
+    }
+
+    /** Compatibility for existing printf, positional replacement and plural-array calls. */
+    public function translate(string $text, mixed $arg = null, array $args = [], array $args2 = []): string
+    {
+        $line = $this->getTranslatedText($text);
+        $number = is_numeric($arg) ? (float) $arg : 1;
+        if (is_array($line) || is_numeric($arg)) {
+            $line = $this->select($line, $number);
+        }
+        $args = $args2 !== [] && $number != 1 ? $args2 : ($args ?: (is_array($arg) ? $arg : ($arg === null ? [] : [$arg])));
+        if (preg_match_all('/:\w+/', $line, $matches) && $args !== []) {
+            if (array_is_list($args)) {
+                $pairs = [];
+                foreach (array_values(array_unique($matches[0])) as $index => $placeholder) {
+                    if (array_key_exists($index, $args)) {
+                        $pairs[$placeholder] = (string) $args[$index];
+                    }
+                }
+                return strtr($line, $pairs);
+            }
+            return $this->replace($line, $args);
+        }
+        return $this->format($line, $args);
+    }
+
+    public function getTranslatedText(string $text): string|array
+    {
+        return $this->get($text);
+    }
+
+    public function mergeTranslatedTexts(array $translatedTexts): void
+    {
+        $this->addLines($translatedTexts);
+    }
+
+    public function setTranslatedTexts(array $translatedTexts): void
+    {
+        $this->catalogues[$this->locale] = $translatedTexts;
+        $this->lines[$this->locale] = $translatedTexts;
+    }
+
+    public function getLoadedFiles(): array
+    {
+        return array_keys(array_filter($this->loadedFiles, fn($lines) => $lines !== null));
+    }
+
+    public function hasLoadedFiles(): bool
+    {
+        return $this->getLoadedFiles() !== [];
+    }
+
     public function trans(string $text, mixed $arg = null, array $args = [], array $args2 = []): string
     {
         return $this->translate($text, $arg, $args, $args2);
     }
 
-    /**
-     * Translate with named placeholders (Laravel-style).
-     * 
-     * @param string $key The translation key.
-     * @param array $replace Associative array of replacements.
-     * @return string The translated text with replacements.
-     */
     public function transWithReplace(string $key, array $replace = []): string
     {
         return $this->translate($key, $replace);
     }
-
-
-    /** ArrayAccess methods. */
 
     public function offsetExists(mixed $offset): bool
     {
@@ -444,14 +292,15 @@ class Translator implements TranslatorContract, ArrayAccess
     public function offsetSet(mixed $offset, mixed $value): void
     {
         if (is_string($offset)) {
-            $this->translatedTexts[$offset] = $value;
+            $this->addLines([$offset => $value]);
         }
     }
 
     public function offsetUnset(mixed $offset): void
     {
-        if (is_string($offset) && isset($this->translatedTexts[$offset])) {
-            unset($this->translatedTexts[$offset]);
-        }
+        $lines = $this->all();
+
+        Arr::forget($lines, (string) $offset);
+        $this->setTranslatedTexts($lines);
     }
 }

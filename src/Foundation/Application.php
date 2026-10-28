@@ -13,6 +13,7 @@ use Psr\Log\LoggerInterface;
 use Spark\Contracts\LoggerInterface as SparkLoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use Spark\Cache\SimpleCache;
+use Spark\Http\Session\Session;
 use Spark\Logger;
 use Spark\Queue\QueueManager;
 use Spark\Support\Clock;
@@ -40,7 +41,6 @@ use Spark\Support\ItemNotFoundException;
 use Spark\Support\Traits\Macroable;
 use Spark\Translator;
 use Spark\Http\Gate;
-use Spark\Http\Session;
 use Spark\Tracer;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
@@ -186,7 +186,6 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('events', Events::class);
 
         // Registration is lazy, including in CLI jobs and PSR hosts.
-        $this->singleton(Session::class);
         $this->singleton(InputErrors::class);
         $this->singleton(Request::class);
         $this->singleton(Response::class);
@@ -204,6 +203,9 @@ class Application extends \Spark\Container implements ApplicationContract
 
         $this->instance(ApplicationContract::class, $this);
         $this->instance(\Spark\Contracts\ContainerContract::class, $this);
+
+        $this->singleton(Session::class);
+        $this->alias(\Spark\Http\Session::class, Session::class);
 
         // Contracts resolve the current service, including request replacements.
         foreach ([
@@ -245,7 +247,6 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('uploader', \Spark\Storage\Uploader::class);
         $this->alias('query', \Spark\Database\QueryBuilder::class);
         $this->alias('validator', \Spark\Http\Validation\Validator::class);
-        $this->alias(\Spark\Http\Validator::class, \Spark\Http\Validation\Validator::class);
         $this->alias('schema', \Spark\Database\Schema\Schema::class);
         $this->alias('mail', \Spark\Utils\Mail::class);
         $this->alias('jwt', \Spark\Utils\JWT::class);

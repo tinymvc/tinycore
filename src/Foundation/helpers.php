@@ -1473,6 +1473,22 @@ if (!function_exists('__')) {
     }
 }
 
+if (!function_exists('trans')) {
+    /** Resolve the translator or a translation with named replacements. */
+    function trans(?string $key = null, array $replace = [], ?string $locale = null): Translator|string|array
+    {
+        $translator = app(Translator::class);
+        return $key === null ? $translator : $translator->get($key, $replace, $locale);
+    }
+}
+
+if (!function_exists('trans_choice')) {
+    function trans_choice(string $key, int|float $number, array $replace = [], ?string $locale = null): string
+    {
+        return app(Translator::class)->choice($key, $number, $replace, $locale);
+    }
+}
+
 if (!function_exists('vite')) {
     /**
      * Create a new Vite instance.

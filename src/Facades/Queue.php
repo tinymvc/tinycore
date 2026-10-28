@@ -13,7 +13,6 @@ use Spark\Queue\Contracts\JobContract;
  *
  * @method static BaseQueue connection(?string $name = null)
  * @method static void purge(?string $name = null)
- * @method static \PDO|\Redis getConnection()
  * @method static void push(JobContract $job, string $queue = 'default')
  * @method static void pushOnce(JobContract $job, string $queue = 'default')
  * @method static void restart()

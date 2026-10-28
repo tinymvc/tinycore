@@ -2,60 +2,29 @@
 
 namespace Spark\Contracts;
 
-/**
- * Interface TranslatorUtilContract
- *
- * This interface defines the methods required by the TranslatorUtil class.
- */
 interface TranslatorContract
 {
-    /**
-     * Translates a given text based on the local translations or returns the original text
-     * if translation is unavailable. Supports pluralization and argument substitution.
-     *
-     * @param string $text The text to be translated.
-     * @param $arg The number to determine pluralization or replace placeholder in the translated text.
-     * @param array $args An array of arguments to replace placeholders in the translated text.
-     * @param array $args2 An array of arguments to replace plural placeholders in the translated text.
-     * @return string The translated text with any placeholders replaced by the provided arguments.
-     */
-    public function translate(string $text, $arg = null, array $args = [], array $args2 = []): string;
+    public function get(string $key, array $replace = [], ?string $locale = null): string|array;
 
-    /**
-     * Checks if a translation exists for the given key.
-     *
-     * @param string $key The key to check for translation.
-     * @return bool True if a translation exists, false otherwise.
-     */
-    public function has(string $key): bool;
+    public function choice(string $key, int|float $number, array $replace = [], ?string $locale = null): string;
 
-    /**
-     * Translates a given key based on the local translations or returns the original key
-     * 
-     * @param string $key
-     * @param int|float $number
-     * @param array $replace
-     * @return string The translated choice text.
-     */
-    public function choice(string $key, int|float $number, array $replace = []): string;
+    public function has(string $key, ?string $locale = null, bool $fallback = true): bool;
 
-    /**
-     * Flushes all loaded translations from memory.
-     */
+    public function getLocale(): string;
+
+    public function setLocale(string $locale): void;
+
+    public function getFallback(): ?string;
+
+    public function setFallback(?string $locale): void;
+
+    public function addLines(array $lines, ?string $locale = null): void;
+
+    public function addLanguageFile(string $file, bool $prepend = false): void;
+
     public function flush(): void;
 
-    /**
-     * Merges the provided translated texts into the existing translations.
-     *
-     * @param array $translatedTexts An array of translated texts to be merged.
-     */
-    public function mergeTranslatedTexts(array $translatedTexts): void;
+    public function translate(string $text, mixed $arg = null, array $args = [], array $args2 = []): string;
 
-    /**
-     * Adds a language file to the translator.
-     *
-     * @param string $file The path to the language file to be added.
-     * @param bool $prepend Whether to prepend the translations from the file (default: false).
-     */
-    public function addLanguageFile(string $file, bool $prepend = false): void;
+    public function mergeTranslatedTexts(array $translatedTexts): void;
 }

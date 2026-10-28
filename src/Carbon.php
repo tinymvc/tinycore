@@ -267,10 +267,11 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
 
     private function dateTranslator(): Translator
     {
-        if ($this->locale() === strtolower(config('app.locale', 'en'))) {
-            return app(Translator::class);
+        $translator = app(Translator::class);
+        if ($this->locale() === self::normalizeLocale($translator->getLocale())) {
+            return $translator;
         }
-        return new Translator(locale_dir($this->locale() . '.php'));
+        return new Translator(locale_dir($this->locale() . '.php'), $this->locale(), $translator->getFallback());
     }
 
     /** PHP date format with translated day/month names and AM/PM markers. */
