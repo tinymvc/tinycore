@@ -10,6 +10,7 @@ use Spark\Contracts\Support\Arrayable;
 use Spark\Contracts\Support\Htmlable;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Translator\Translator;
 use function is_float;
 use function is_string;
 use function sprintf;
@@ -262,7 +263,14 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
             throw new InvalidArgumentException('Invalid locale identifier.');
         }
 
-        return str_replace('-', '_', strtolower($locale));
+        $parts = explode('_', str_replace('-', '_', $locale));
+        $parts[0] = strtolower($parts[0]);
+        foreach ($parts as $index => $part) {
+            if ($index > 0) {
+                $parts[$index] = strlen($part) === 4 ? ucfirst(strtolower($part)) : strtoupper($part);
+            }
+        }
+        return implode('_', $parts);
     }
 
     private function dateTranslator(): Translator
@@ -271,7 +279,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         if ($this->locale() === self::normalizeLocale($translator->getLocale())) {
             return $translator;
         }
-        return new Translator(locale_dir($this->locale() . '.php'), $this->locale(), $translator->getFallback());
+        return $translator->withLocale($this->locale());
     }
 
     /** PHP date format with translated day/month names and AM/PM markers. */
@@ -286,7 +294,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
                 continue;
             }
             $value = $this->format($token);
-            $result .= str_contains('lDFMaA', $token) ? $translator->translate($value) : $value;
+            $result .= str_contains('lDFMaA', $token) ? $translator->get($value) : $value;
         }
 
         return $result;
@@ -1082,10 +1090,10 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         $translator = $this->dateTranslator();
 
         if (!$short && $seconds < 60) {
-            return $translator->translate($difference > 0 ? 'in a few seconds' : 'a few seconds ago');
+            return $translator->get($difference > 0 ? 'in a few seconds' : 'a few seconds ago');
         }
         if ($short && $seconds === 0 && $withSuffix) {
-            return $translator->translate('now');
+            return $translator->get('now');
         }
 
         foreach ([
@@ -1107,7 +1115,7 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
             $text = $difference > 0 ? "in $text" : "$text ago";
         }
 
-        return $translator->translate($text, $count);
+        return $translator->format($text, $count);
     }
 
     /**

@@ -2,10 +2,20 @@
 
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
-use Spark\Translator;
+use Spark\Translator\Translator;
 
 final class TranslatorTest extends FrameworkTestCase
 {
+    public function test_canonical_class_and_contract_share_one_service(): void
+    {
+        $t = app(Translator::class);
+        $this->assertSame(Translator::class, $t::class);
+        $this->assertSame($t, app('translator'));
+        $this->assertSame($t, app(\Spark\Translator\Contracts\TranslatorContract::class));
+        $this->assertSame($t, app()->call(fn(Translator $translator) => $translator));
+        $this->assertSame($t, trans());
+    }
+
     private function translator(): Translator
     {
         config(['app.locale_dir' => $this->storagePath . '/languages', 'app.locale' => 'en', 'app.fallback_locale' => 'en']);
@@ -20,7 +30,8 @@ final class TranslatorTest extends FrameworkTestCase
             'apples' => '{0} None|{1} One for :name|[2,*] :count for :name',
         ], true) . ';');
         file_put_contents(locale_dir('fr.php'), '<?php return ' . var_export([
-            'greeting' => 'Bonjour :name', 'Monday' => 'Lundi',
+            'greeting' => 'Bonjour :name',
+            'Monday' => 'Lundi',
         ], true) . ';');
         return new Translator();
     }
@@ -57,10 +68,13 @@ final class TranslatorTest extends FrameworkTestCase
         $t = $this->translator();
         $t->addLines(['names' => ':name_full :name :NAME :Name :other']);
         $this->assertSame('Ada Lovelace ada ADA Ada :name', $t->get('names', [
-            'name' => 'ada', 'name_full' => 'Ada Lovelace', 'other' => ':name',
+            'name' => 'ada',
+            'name_full' => 'Ada Lovelace',
+            'other' => ':name',
         ]));
         $t->addLines(['repeat' => ':a :a :b']);
-        $this->assertSame('one one two', $t->translate('repeat', ['one', 'two']));
+        $this->app->instance(Translator::class, $t);
+        $this->assertSame('one one two', __('repeat', ['one', 'two']));
     }
 
     public function test_plural_counts_intervals_and_legacy_arrays(): void
@@ -70,7 +84,8 @@ final class TranslatorTest extends FrameworkTestCase
         $this->assertSame('One for Ada', $t->choice('apples', 1, ['name' => 'Ada']));
         $this->assertSame('2 for Ada', $t->choice('apples', 2, ['name' => 'Ada']));
         $t->addLines([
-            'indexed' => ['%d apple', '%d apples'],
+            'indexed' => [':count apple', ':count apples'],
+            'legacy' => ['%d apple', '%d apples'],
             'named' => ['one' => ':count apple', 'other' => ':count apples'],
             'pipe' => ':count apple|:count apples',
             'fraction' => '[0,1] Small|[2,*] Large|Other',
@@ -82,9 +97,13 @@ final class TranslatorTest extends FrameworkTestCase
         }
         $this->assertSame('Small', $t->choice('fraction', 0.5));
         $this->assertSame('Other', $t->choice('fraction', 1.5));
-        $this->assertSame('1 apple', $t->translate('named', 1));
-        $this->assertSame('2 apples', $t->translate('indexed', 2));
-        $this->assertSame('Count 2', $t->translate('Count %d', 2));
+        $this->app->instance(Translator::class, $t);
+        $this->assertSame('1 apple', __('named', 1));
+        $this->assertSame('2 apples', __('legacy', 2));
+        $this->assertSame('Count 2', __('Count %d', 2));
+        $this->assertSame('Bonjour Ada', __('greeting', ['name' => 'Ada'], locale: 'fr'));
+        $this->assertSame('Bonjour &lt;Ada&gt;', _e('greeting', ['name' => '<Ada>'], locale: 'fr'));
+        $this->assertFalse(method_exists($t, 'translate'));
     }
 
     public function test_files_have_deterministic_precedence_and_are_cached_until_flush(): void
@@ -105,34 +124,33 @@ final class TranslatorTest extends FrameworkTestCase
         $t->flush();
         $this->assertFalse($t->hasLoadedFiles());
         $this->assertSame('Changed', $t->get('greeting'));
-        $this->assertSame(count($t->all()), count($t));
+        $this->assertCount(7, $t->all());
     }
 
     public function test_invalid_locales_and_catalogues_fail_clearly(): void
     {
         $t = $this->translator();
         foreach (['../en', '/en', 'en.php', 'en/US'] as $locale) {
-            $this->assertThrows(InvalidArgumentException::class, fn () => $t->setLocale($locale));
-            $this->assertThrows(InvalidArgumentException::class, fn () => $t->get('greeting', locale: $locale));
+            $this->assertThrows(InvalidArgumentException::class, fn() => $t->setLocale($locale));
+            $this->assertThrows(InvalidArgumentException::class, fn() => $t->get('greeting', locale: $locale));
         }
         file_put_contents(locale_dir('bad.php'), '<?php return 42;');
         $t->addLanguageFile(locale_dir('bad.php'));
-        $this->assertThrows(UnexpectedValueException::class, fn () => $t->all());
+        $this->assertThrows(UnexpectedValueException::class, fn() => $t->all());
     }
 
-    public function test_helpers_and_array_access_share_the_application_translator(): void
+    public function test_helpers_share_the_application_translator(): void
     {
         $t = $this->translator();
         $this->app->instance(Translator::class, $t);
         $this->assertSame($t, trans());
-        $this->assertSame($t, app(\Spark\Contracts\TranslatorContract::class));
+        $this->assertSame($t, app(\Spark\Translator\Contracts\TranslatorContract::class));
         $this->assertSame('Bonjour Ada', trans('greeting', ['name' => 'Ada'], 'fr'));
         $this->assertSame('2 for Ada', trans_choice('apples', 2, ['name' => 'Ada']));
         $this->assertSame('Hello &lt;Ada&gt;', _e('greeting', ['name' => '<Ada>']));
-        $t['custom'] = 'Custom';
-        $this->assertSame('Custom', $t['custom']);
-        unset($t['custom']);
-        $this->assertFalse(isset($t['custom']));
+        $t->addLines(['custom' => 'Custom']);
+        $this->assertSame('Custom', $t->get('custom'));
+        $this->assertSame('2 for Ada', trans_choice('apples', ['a', 'b'], ['name' => 'Ada']));
     }
 
     public function test_carbon_locale_does_not_leak_when_the_translator_switches_locale(): void
@@ -143,5 +161,148 @@ final class TranslatorTest extends FrameworkTestCase
         $date = \Spark\Carbon::parse('2026-01-05');
         $this->assertSame('Monday', $date->locale('en')->getDayName());
         $this->assertSame('Lundi', $date->locale('fr')->getDayName());
+    }
+
+    public function test_group_files_are_lazy_and_paths_runtime_and_flat_keys_have_defined_precedence(): void
+    {
+        $t = $this->translator();
+        mkdir(locale_dir('en'), 0700, true);
+        file_put_contents(locale_dir('en/auth.php'), "<?php return ['failed' => 'Default', 'nested' => ['label' => 'Nested']];");
+        $extra = $this->storagePath . '/overrides';
+        mkdir($extra . '/en', 0700, true);
+        file_put_contents($extra . '/en/auth.php', "<?php return ['failed' => 'Override'];");
+        $t->get('greeting');
+        $this->assertCount(1, $t->getLoadedFiles());
+        $t->addPath($extra);
+        $this->assertSame('Override', $t->get('auth.failed'));
+        $this->assertSame('Nested', $t->get('auth.nested.label'));
+        $t->addLines(['failed' => 'Runtime'], group: 'auth');
+        $this->assertSame('Runtime', $t->get('auth.failed'));
+        $t->addLines(['auth.failed' => 'Flat']);
+        $this->assertSame('Flat', $t->get('auth.failed'));
+        $this->assertSame('Runtime', $t->all(group: 'auth')['failed']);
+    }
+
+    public function test_runtime_updates_do_not_reload_files_until_flush(): void
+    {
+        $t = $this->translator();
+        $this->assertSame('Hello Ada', $t->get('greeting', ['name' => 'Ada']));
+        file_put_contents(locale_dir('en.php'), "<?php return ['greeting' => 'Changed'];");
+        $t->addLines(['new' => 'Added']);
+        $this->assertSame('Hello Ada', $t->get('greeting', ['name' => 'Ada']));
+        $t->addPath($this->storagePath . '/missing');
+        $this->assertSame('Hello Ada', $t->get('greeting', ['name' => 'Ada']));
+        $t->flush();
+        $this->assertSame('Changed', $t->get('greeting'));
+        $this->assertFalse($t->has('new'));
+    }
+
+    public function test_parent_fallback_uses_the_resolved_language_for_plural_rules(): void
+    {
+        $t = $this->translator();
+        $t->addLines(['items' => ['one' => ':count item', 'other' => ':count items']], 'en');
+        $this->assertSame('21 items', $t->choice('items', 21, locale: 'ru'));
+        $t->addLines(['parent' => 'Script parent'], 'zh_Hant');
+        $this->assertSame('Script parent', $t->get('parent', locale: 'zh_Hant_TW'));
+        $this->assertFalse($t->has('parent', 'zh_Hant_TW', false));
+        $t->setFallback('fr_CA');
+        $this->assertSame('Bonjour Ada', $t->get('greeting', ['name' => 'Ada'], 'de'));
+        $t->setFallback(null);
+        $this->assertSame('Bonjour Ada', $t->get('greeting', ['name' => 'Ada'], 'fr_CA'));
+    }
+
+    public function test_scoped_carbon_uses_custom_paths_runtime_lines_and_preserves_the_original_locale(): void
+    {
+        $t = $this->translator();
+        $t->addLines(['Monday' => 'Runtime Monday', '%d minutes ago' => ':count minutes translated'], 'fr');
+        $this->app->instance(Translator::class, $t);
+        $date = \Spark\Carbon::parse('2026-01-05 12:00:00')->locale('fr');
+        $this->assertSame('Runtime Monday', $date->getDayName());
+        $this->assertSame('2 minutes translated', $date->subMinutes(2)->diffForHumans($date));
+        $scoped = $t->withLocale('fr');
+        $scoped->addLines(['greeting' => 'Scoped']);
+        $this->assertSame('Scoped', $scoped->get('greeting'));
+        $this->assertSame('Bonjour Ada', $t->get('greeting', ['name' => 'Ada'], 'fr'));
+        $this->assertSame('en', $t->getLocale());
+    }
+
+    public function test_carbon_preserves_regional_catalogue_names(): void
+    {
+        $t = $this->translator();
+        file_put_contents(locale_dir('fr_CA.php'), "<?php return ['Monday' => 'Regional Monday'];");
+        $this->app->instance(Translator::class, $t);
+        $date = \Spark\Carbon::parse('2026-01-05')->locale('fr-ca');
+        $this->assertSame('fr_CA', $date->locale());
+        $this->assertSame('Regional Monday', $date->getDayName());
+        $this->assertSame('en', $t->getLocale());
+    }
+
+    public function test_missing_handler_is_reentrant_and_recovers_after_exceptions(): void
+    {
+        $t = $this->translator();
+        $calls = [];
+        $t->handleMissingKeysUsing(function ($key, $locale) use ($t, &$calls) {
+            $calls[] = [$key, $locale];
+            $t->get('nested miss');
+        });
+        $this->assertSame('missing', $t->get('missing', locale: 'fr'));
+        $this->assertSame([['missing', 'fr']], $calls);
+        $t->handleMissingKeysUsing(fn() => throw new RuntimeException('handler failed'));
+        $this->assertThrows(RuntimeException::class, fn() => $t->get('missing'));
+        $t->handleMissingKeysUsing(null);
+        $this->assertSame('missing', $t->get('missing'));
+    }
+
+    public function test_choice_accepts_countables_and_rejects_invalid_inputs(): void
+    {
+        $t = $this->translator();
+        $this->assertSame('2 for Ada', $t->choice('apples', new ArrayObject([1, 2]), ['name' => 'Ada', 'count' => 99]));
+        $this->assertSame('2 missing', $t->choice(':count missing', 2, ['count' => 99]));
+        foreach ([INF, -INF, NAN] as $number) {
+            $this->assertThrows(InvalidArgumentException::class, fn() => $t->choice('apples', $number));
+        }
+        $this->assertThrows(InvalidArgumentException::class, fn() => $t->addLines([], group: '../outside'));
+        $this->assertThrows(InvalidArgumentException::class, fn() => $t->all('../outside'));
+        $this->assertThrows(InvalidArgumentException::class, fn() => $t->get('greeting', ['name' => []]));
+        $t->addLines(['invalid' => ['one' => ['nested']]]);
+        $this->assertThrows(UnexpectedValueException::class, fn() => $t->choice('invalid', 1));
+    }
+
+    public function test_plural_categories_cover_supported_language_boundaries(): void
+    {
+        $t = new Translator([]);
+        $cases = [
+            ['en', 1, 'one'],
+            ['en', 1.5, 'other'],
+            ['bn', 0, 'one'],
+            ['bn', 0.5, 'one'],
+            ['ja', 1, 'other'],
+            ['ru', 1, 'one'],
+            ['ru', 2, 'few'],
+            ['ru', 5, 'many'],
+            ['ru', 11, 'many'],
+            ['ru', 21, 'one'],
+            ['ru', 1.5, 'other'],
+            ['pl', 21, 'many'],
+            ['ar', 0, 'zero'],
+            ['ar', 1, 'one'],
+            ['ar', 2, 'two'],
+            ['ar', 3, 'few'],
+            ['ar', 11, 'many'],
+            ['ar', 100, 'other'],
+            ['ar', 1.5, 'other'],
+            ['fr', 1.5, 'one'],
+            ['fr', 1000000, 'many'],
+            ['pt', 0, 'one'],
+            ['pt-PT', 0, 'other'],
+            ['pt_PT', 1.5, 'other'],
+            ['pt_PT', 1000000, 'many'],
+            ['en', -1, 'one'],
+            ['ru', PHP_INT_MAX, 'many'],
+        ];
+        foreach ($cases as [$locale, $number, $category]) {
+            $t->addLines(['forms' => array_combine(['zero', 'one', 'two', 'few', 'many', 'other'], ['zero', 'one', 'two', 'few', 'many', 'other'])], $locale);
+            $this->assertSame($category, $t->choice('forms', $number, locale: $locale), "$locale: $number");
+        }
     }
 }

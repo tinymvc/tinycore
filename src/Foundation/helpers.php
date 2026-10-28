@@ -20,7 +20,7 @@ use Spark\Http\Response;
 use Spark\Http\Session;
 use Spark\DotEnv;
 use Spark\Queue\Job;
-use Spark\Translator;
+use Spark\Translator\Translator;
 use Spark\Cache\Cache;
 use Spark\Carbon;
 use Spark\Utils\File;
@@ -1453,23 +1453,10 @@ if (!function_exists('lock')) {
 }
 
 if (!function_exists('__')) {
-    /**
-     * Translates a given text using the application's translator service.
-     *
-     * This function wraps the translator's `translate` method, allowing
-     * for text translation with optional pluralization and argument substitution.
-     *
-     * @param string $text The text to be translated.
-     * @param $arg The number to determine pluralization or replace placeholder in the translated text.
-     * @param array $args Optional arguments for replacing placeholders in the text.
-     * @param array $args2 Optional arguments for replacing plural placeholders in the translated text.
-     * 
-     * @return string The translated text or original text if translation is unavailable.
-     */
-    function __(string $text, $arg = null, array $args = [], array $args2 = []): string
+    /** Translate and format a string using the application translator. */
+    function __(string $text, mixed $arg = null, array $args = [], array $args2 = [], ?string $locale = null): string
     {
-        return Application::$app->get(Translator::class)
-            ->translate($text, $arg, $args, $args2);
+        return app(Translator::class)->format($text, $arg, $args, $args2, $locale);
     }
 }
 
@@ -1483,7 +1470,7 @@ if (!function_exists('trans')) {
 }
 
 if (!function_exists('trans_choice')) {
-    function trans_choice(string $key, int|float $number, array $replace = [], ?string $locale = null): string
+    function trans_choice(string $key, int|float|array|Countable $number, array $replace = [], ?string $locale = null): string
     {
         return app(Translator::class)->choice($key, $number, $replace, $locale);
     }
@@ -1585,10 +1572,10 @@ if (!function_exists('_e')) {
      *
      * @return string The translated and escaped text, safe for HTML output.
      */
-    function _e(string $text, $arg = null, array $args = [], array $args2 = []): string
+    function _e(string $text, $arg = null, array $args = [], array $args2 = [], ?string $locale = null): string
     {
         return e(
-            __($text, $arg, $args, $args2)
+            __($text, $arg, $args, $args2, $locale)
         );
     }
 }

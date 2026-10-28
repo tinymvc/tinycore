@@ -3,6 +3,7 @@
 namespace Spark\Http;
 
 use Spark\Contracts\Http\InputErrorsContract;
+use Spark\Http\Session\Session;
 use Spark\Contracts\Support\Arrayable;
 use function array_key_exists;
 use function count;

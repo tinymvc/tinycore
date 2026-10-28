@@ -10,7 +10,7 @@ use Spark\Http\Request;
 use Spark\Hash;
 use Spark\Http\Routing\Router;
 use Spark\Queue\QueueManager;
-use Spark\Translator;
+use Spark\Translator\Translator;
 use Spark\Cache\Cache;
 use Spark\Utils\File;
 use Spark\Http\Client\Http;

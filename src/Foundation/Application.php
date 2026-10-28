@@ -39,7 +39,7 @@ use Spark\Http\Routing\Exceptions\RouteNotFoundException;
 use Spark\Http\Routing\Router;
 use Spark\Support\ItemNotFoundException;
 use Spark\Support\Traits\Macroable;
-use Spark\Translator;
+use Spark\Translator\Translator;
 use Spark\Http\Gate;
 use Spark\Tracer;
 use Spark\Utils\Vite;
@@ -123,7 +123,6 @@ class Application extends \Spark\Container implements ApplicationContract
         }
 
         // Register core services for global use
-        $this->singleton(Translator::class);
         $this->singleton(DB::class);
         $this->singleton(Hash::class);
         $this->singleton(Blade::class);
@@ -140,7 +139,6 @@ class Application extends \Spark\Container implements ApplicationContract
             Queue::class,
             fn() => $this->get(QueueManager::class)->connection()
         );
-
 
         $this->singleton(
             \Spark\Cache\CacheManager::class,
@@ -176,7 +174,6 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('log', LoggerInterface::class);
         $this->alias('clock', ClockInterface::class);
 
-        $this->alias('translator', Translator::class);
         $this->alias('db', DB::class);
         $this->alias('hash', Hash::class);
         $this->alias('blade', Blade::class);
@@ -186,6 +183,7 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('events', Events::class);
 
         // Registration is lazy, including in CLI jobs and PSR hosts.
+        $this->singleton(Translator::class);
         $this->singleton(InputErrors::class);
         $this->singleton(Request::class);
         $this->singleton(Response::class);
@@ -193,6 +191,7 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(Auth::class);
         $this->singleton(Vite::class);
 
+        $this->alias('translator', Translator::class);
         $this->alias('session', Session::class);
         $this->alias('inputErrors', InputErrors::class);
         $this->alias('request', Request::class);
@@ -209,7 +208,7 @@ class Application extends \Spark\Container implements ApplicationContract
 
         // Contracts resolve the current service, including request replacements.
         foreach ([
-            \Spark\Contracts\TranslatorContract::class => Translator::class,
+            \Spark\Translator\Contracts\TranslatorContract::class => Translator::class,
             \Spark\Database\Contracts\DBContract::class => DB::class,
             \Spark\Contracts\HashContract::class => Hash::class,
             \Spark\View\Contracts\BladeContract::class => Blade::class,

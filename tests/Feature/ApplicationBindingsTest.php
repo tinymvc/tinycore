@@ -10,7 +10,7 @@ final class ApplicationBindingsTest extends FrameworkTestCase
         $this->app->setConfig('queue.connections.file.path', $this->storagePath . '/queue');
 
         foreach ([
-            Spark\Contracts\TranslatorContract::class => Spark\Translator::class,
+            Spark\Translator\Contracts\TranslatorContract::class => Spark\Translator\Translator::class,
             Spark\Database\Contracts\DBContract::class => Spark\Database\DB::class,
             Spark\View\Contracts\BladeContract::class => Spark\View\Blade::class,
             Spark\Queue\Contracts\QueueContract::class => Spark\Queue\Queue::class,
@@ -28,8 +28,8 @@ final class ApplicationBindingsTest extends FrameworkTestCase
         $this->app->instance(Spark\Http\Request::class, $incoming);
         $this->assertSame($incoming, $this->app->get(Spark\Contracts\Http\RequestContract::class));
 
-        $translator = new Spark\Translator();
-        $this->app->bind(Spark\Contracts\TranslatorContract::class, fn() => $translator);
-        $this->assertSame($translator, $this->app->get(Spark\Contracts\TranslatorContract::class));
+        $translator = new Spark\Translator\Translator();
+        $this->app->bind(Spark\Translator\Contracts\TranslatorContract::class, fn() => $translator);
+        $this->assertSame($translator, $this->app->get(Spark\Translator\Contracts\TranslatorContract::class));
     }
 }

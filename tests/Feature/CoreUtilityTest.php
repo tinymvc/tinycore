@@ -2,7 +2,8 @@
 
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
-use Spark\{DotEnv, Pipeline, Translator, Url};
+use Spark\{DotEnv, Pipeline, Url};
+use Spark\Translator\Translator;
 
 final class CoreUtilityTest extends FrameworkTestCase
 {
@@ -54,12 +55,12 @@ final class CoreUtilityTest extends FrameworkTestCase
 
     public function test_translator_fallback_replacements_and_pluralization(): void
     {
-        $translator = new Translator($this->storagePath . '/missing.php');
-        $translator->setTranslatedTexts(['hello' => 'Hello :name', 'apples' => ['%s apple', '%s apples']]);
-        $this->assertSame('unknown', $translator->translate('unknown'));
-        $this->assertSame('Hello Ada', $translator->translate('hello', ['name' => 'Ada']));
-        $this->assertSame('1 apple', $translator->translate('apples', 1));
-        $this->assertSame('3 apples', $translator->translate('apples', 3));
+        $translator = new Translator([]);
+        $translator->addLines(['hello' => 'Hello :name', 'apples' => [':count apple', ':count apples']]);
+        $this->assertSame('unknown', $translator->get('unknown'));
+        $this->assertSame('Hello Ada', $translator->get('hello', ['name' => 'Ada']));
+        $this->assertSame('1 apple', $translator->choice('apples', 1));
+        $this->assertSame('3 apples', $translator->choice('apples', 3));
     }
 
     public function test_url_query_mutations_are_immutable_and_preserve_fragment(): void
