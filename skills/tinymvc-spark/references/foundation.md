@@ -87,6 +87,7 @@ Database, ORM, and migrations:
 - Query builder: `./vendor/tinymvc/tinycore/src/Database/QueryBuilder.php`
 - Read/write/condition methods: `./vendor/tinymvc/tinycore/src/Database/Query/`
 - Soft deletes: `./vendor/tinymvc/tinycore/src/Database/Concerns/InteractsWithSoftDeletes.php`
+- Model tracking and change detection: `./vendor/tinymvc/tinycore/src/Database/Concerns/InteractsWithTracking.php`
 - ORM, relation subqueries, and pivots: `./vendor/tinymvc/tinycore/src/Database/Concerns/`
 - Model callbacks: `./vendor/tinymvc/tinycore/src/Database/Events.php`
 - DB facade transactions: `./vendor/tinymvc/tinycore/src/Facades/DB.php`

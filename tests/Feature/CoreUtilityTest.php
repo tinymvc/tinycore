@@ -1,5 +1,7 @@
 <?php
 
+use Spark\Configuration;
+
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
 use Spark\{DotEnv, Pipeline, Url};
@@ -12,7 +14,7 @@ final class CoreUtilityTest extends FrameworkTestCase
         mkdir($this->storagePath . '/config/services', 0700, true);
         file_put_contents($this->storagePath . '/config/app.php', '<?php return ["name" => "Test"];');
         file_put_contents($this->storagePath . '/config/services/mail.php', '<?php return ["enabled" => false];');
-        $config = DotEnv::discoverConfig($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env', false);
+        $config = Configuration::discover($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env', false);
         $this->assertSame(['app' => ['name' => 'Test'], 'services' => ['mail' => ['enabled' => false]]], $config);
         $this->assertFalse(is_file($this->storagePath . '/compiled.php'));
     }
@@ -22,7 +24,7 @@ final class CoreUtilityTest extends FrameworkTestCase
         mkdir($this->storagePath . '/config');
         $source = $this->storagePath . '/config/app.php';
         file_put_contents($source, '<?php return ["name" => "Test"];');
-        $load = fn () => DotEnv::discoverConfig($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env');
+        $load = fn() => Configuration::discover($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env');
         $this->assertSame(['app' => ['name' => 'Test']], $load());
         unlink($source);
         $this->assertSame([], $load());
@@ -31,7 +33,7 @@ final class CoreUtilityTest extends FrameworkTestCase
     public function test_pipeline_order_and_middleware_wrap_destination(): void
     {
         $log = [];
-        $result = Pipeline::make(2)->through(fn ($n, $next) => $next($n + 1), fn ($n, $next) => $next($n * 3))
+        $result = Pipeline::make(2)->through(fn($n, $next) => $next($n + 1), fn($n, $next) => $next($n * 3))
             ->middleware(function ($value, $next) use (&$log) {
                 $log[] = 'before';
                 $result = $next($value);
@@ -44,13 +46,13 @@ final class CoreUtilityTest extends FrameworkTestCase
 
     public function test_pipeline_short_circuit_skips_downstream(): void
     {
-        $result = Pipeline::make(2)->through(fn ($n, $next) => 'stopped', fn () => $this->fail('Downstream executed'))->thenReturn();
+        $result = Pipeline::make(2)->through(fn($n, $next) => 'stopped', fn() => $this->fail('Downstream executed'))->thenReturn();
         $this->assertSame('stopped', $result);
     }
 
     public function test_pipeline_propagates_unhandled_errors(): void
     {
-        $this->assertThrows(RuntimeException::class, fn () => Pipeline::make(1)->through(fn () => throw new RuntimeException('pipe failed'))->thenReturn());
+        $this->assertThrows(RuntimeException::class, fn() => Pipeline::make(1)->through(fn() => throw new RuntimeException('pipe failed'))->thenReturn());
     }
 
     public function test_translator_fallback_replacements_and_pluralization(): void

@@ -515,12 +515,7 @@ class DB implements DBContract, DatabaseDriver
         }
 
         $query = new QueryBuilder($this);
-
-        if (method_exists($query, $name) || $query->hasMacro($name)) {
-            return $query->$name(...$args);
-        }
-
-        return $this->getPdo()->$name(...$args);
+        return $query->$name(...$args);
     }
 
     /**

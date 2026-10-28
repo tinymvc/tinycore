@@ -510,12 +510,7 @@ class Pipeline
      */
     private function resolvePipeInstance(string $pipe, array $constructorParameters = []): object
     {
-        if (
-            class_exists(Application::class)
-            && isset(Application::$app)
-            && Application::$app !== null
-            && method_exists(Application::$app, 'make')
-        ) {
+        if (Application::$app !== null) {
             try {
                 return Application::$app->make($pipe, $constructorParameters);
             } catch (Throwable) {

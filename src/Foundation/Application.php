@@ -263,7 +263,7 @@ class Application extends \Spark\Container implements ApplicationContract
     public static function create(string $path, null|string|array $config = 'config', null|array $providers = null): self
     {
         $app = new self($path);
-        $providers ??= require dir_path("$path/bootstrap/providers.php");
+        $providers ??= (static fn() => require dir_path("$path/bootstrap/providers.php"))();
 
         return $app->withApp(config: $config, providers: $providers);
     }
@@ -421,7 +421,7 @@ class Application extends \Spark\Container implements ApplicationContract
             $config = ltrim($config, '/\\');
 
             $this->mergeConfig(
-                DotEnv::discoverConfig(
+                \Spark\Configuration::discover(
                     folder: dir_path("$rootPath/$config"),
                     cache: dir_path("$rootPath/bootstrap/cache/" . preg_replace('/[^a-zA-Z0-9]/', '_', $config) . '.php'),
                     env: dir_path("$rootPath/.env"),
@@ -483,17 +483,17 @@ class Application extends \Spark\Container implements ApplicationContract
 
         $api && $router->group(
             ['prefix' => 'api', 'middleware' => ['cors'], 'withoutMiddleware' => ['csrf']],
-            fn() => require $api
+            static fn() => require $api
         );
 
         $webhook && $router->group(
             ['prefix' => 'webhook', 'withoutMiddleware' => ['csrf']],
-            fn() => require $webhook
+            static fn() => require $webhook
         );
 
-        $web && require $web;
+        $web && (static fn() => require $web)();
 
-        $commands && require $commands;
+        $commands && (static fn() => require $commands)();
 
         $then && $then($router);
 
@@ -515,7 +515,7 @@ class Application extends \Spark\Container implements ApplicationContract
         null|string $load = null,
         null|callable $then = null,
     ): self {
-        $load && require $load;
+        $load && (static fn() => require $load)();
 
         $then && $then($this->get(Commands::class));
 
@@ -546,7 +546,7 @@ class Application extends \Spark\Container implements ApplicationContract
 
         $register && $middleware->registerMany($register);
 
-        $load && $middleware->registerMany(require $load);
+        $load && $middleware->registerMany((static fn() => require $load)());
 
         $queue && $middleware->queue($queue);
 

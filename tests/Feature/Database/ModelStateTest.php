@@ -264,4 +264,36 @@ final class ModelStateTest extends DatabaseScenarioTestCase
 
         $this->assertSame('Alpha', $post->title);
     }
+
+    public function test_model_uses_interacts_with_tracking_trait(): void
+    {
+        $traits = class_uses_recursive(ScenarioPost::class);
+        $this->assertArrayHasKey(\Spark\Database\Concerns\InteractsWithTracking::class, $traits);
+    }
+
+    public function test_tracking_nested_and_lifecycle_states(): void
+    {
+        $post = ScenarioPost::findOrFail(1);
+        $this->assertFalse($post->isDirty());
+        $this->assertTrue($post->isClean());
+        $this->assertFalse($post->isNestedDirty());
+
+        $post->metadata = ['theme' => ['color' => 'blue', 'font' => 'sans']];
+        $post->save();
+
+        $post->set('metadata.theme.color', 'red');
+        $this->assertTrue($post->isNestedDirty('metadata.theme.color'));
+        $this->assertTrue($post->isNestedDirty('metadata.theme'));
+        $this->assertSame('blue', $post->getNestedOriginal('metadata.theme.color'));
+
+        $this->assertTrue($post->isDirty());
+        $post->save();
+
+        $this->assertTrue($post->wasUpdated());
+        $this->assertTrue($post->wasChanged());
+        $this->assertFalse($post->wasDeleted());
+
+        $post->clearTracks();
+        $this->assertFalse($post->wasUpdated());
+    }
 }

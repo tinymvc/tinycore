@@ -586,6 +586,34 @@ BLADE,
         $this->assertRenders($blade, 'Ada|ADA|{{ literal }}', ['name' => 'Ada']);
     }
 
+    public function test_subcompilers_are_loaded_on_demand(): void
+    {
+        $blade = $this->views(['page' => 'Hello {{ $name }}']);
+        $compiler = $blade->getCompiler();
+
+        $ref = new \ReflectionClass($compiler);
+        $componentProp = $ref->getProperty('componentCompiler');
+        $includeProp = $ref->getProperty('includeCompiler');
+        $layoutProp = $ref->getProperty('layoutCompiler');
+
+        $compiler->compileString('Hello {{ $name }}');
+        $this->assertNull($componentProp->getValue($compiler));
+        $this->assertNull($includeProp->getValue($compiler));
+        $this->assertNull($layoutProp->getValue($compiler));
+
+        $compiler->compileString('<x-alert />');
+        $this->assertInstanceOf(\Spark\View\Compilers\ComponentCompiler::class, $componentProp->getValue($compiler));
+        $this->assertNull($includeProp->getValue($compiler));
+        $this->assertNull($layoutProp->getValue($compiler));
+
+        $compiler->compileString('@include("partials.header")');
+        $this->assertInstanceOf(\Spark\View\Compilers\IncludeCompiler::class, $includeProp->getValue($compiler));
+        $this->assertNull($layoutProp->getValue($compiler));
+
+        $compiler->compileString('@extends("layouts.app")');
+        $this->assertInstanceOf(\Spark\View\Compilers\LayoutCompiler::class, $layoutProp->getValue($compiler));
+    }
+
     public function test_css_at_rules_and_text_after_closing_directives_remain_literal(): void
     {
         $css = '@supports (background: url(https://example.test/a.png)) { @media (min-width: 1px) { .a { color: red; } } }';

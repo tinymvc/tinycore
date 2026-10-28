@@ -717,6 +717,38 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         return $new;
     }
 
+    /** Add a year, month, day, hour, minute, or second to the DateTime instance */
+
+    public function addYear(int $years = 1): self
+    {
+        return $this->addYears($years);
+    }
+
+    public function addMonth(int $months = 1): self
+    {
+        return $this->addMonths($months);
+    }
+
+    public function addDay(int $days = 1): self
+    {
+        return $this->addDays($days);
+    }
+
+    public function addHour(int $hours = 1): self
+    {
+        return $this->addHours($hours);
+    }
+
+    public function addMinute(int $minutes = 1): self
+    {
+        return $this->addMinutes($minutes);
+    }
+
+    public function addSecond(int $seconds = 1): self
+    {
+        return $this->addSeconds($seconds);
+    }
+
     /**
      * Subtract years from the DateTime instance
      * 
@@ -793,6 +825,38 @@ class Carbon implements Arrayable, Htmlable, \JsonSerializable, \Stringable
         $new = clone $this;
         $new->dateTime->modify("-{$seconds} seconds");
         return $new;
+    }
+
+    /** Subtract a year, month, day, hour, minute, or second from the DateTime instance */
+
+    public function subYear(int $years = 1): self
+    {
+        return $this->subYears($years);
+    }
+
+    public function subMonth(int $months = 1): self
+    {
+        return $this->subMonths($months);
+    }
+
+    public function subDay(int $days = 1): self
+    {
+        return $this->subDays($days);
+    }
+
+    public function subHour(int $hours = 1): self
+    {
+        return $this->subHours($hours);
+    }
+
+    public function subMinute(int $minutes = 1): self
+    {
+        return $this->subMinutes($minutes);
+    }
+
+    public function subSecond(int $seconds = 1): self
+    {
+        return $this->subSeconds($seconds);
     }
 
     /**

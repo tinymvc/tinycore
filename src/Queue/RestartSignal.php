@@ -4,6 +4,7 @@ namespace Spark\Queue;
 
 use InvalidArgumentException;
 use RuntimeException;
+use function strlen;
 
 /** A local, atomic deployment marker shared by the CLI and supervised daemon. */
 class RestartSignal
