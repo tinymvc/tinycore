@@ -465,7 +465,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         $updatedStatus = false;
         $createdId = 0;
 
-        unset($this->tracking['__was_updated'], $this->tracking['__was_created']); // Reset update and create tracking.
+        unset($this->tracking['was_updated'], $this->tracking['was_created']); // Reset update and create tracking.
 
         // Update the stored row even if its primary-key attribute was edited.
         $identity = $this->getPersistenceKey();
@@ -473,7 +473,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $condition = [$this->getPrimaryKey() => $identity];
             $updatedStatus = (bool) $this->newQuery()->update($data, $condition);
             if (!$updatedStatus && $this->newQuery()->where($condition)->exists()) {
-                $this->tracking['__hash'] = $this->makeHash();
+                $this->tracking['hash'] = $this->makeHash();
                 return true;
             }
 
@@ -626,7 +626,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         static::USE_TIMESTAMPS && $this->decodeTimestamps();
 
         // Store the initial hash of the model's data for change tracking.
-        $this->hasPrimaryValue() && ($this->tracking['__hash'] ??= $this->makeHash());
+        $this->hasPrimaryValue() && ($this->tracking['hash'] ??= $this->makeHash());
     }
 
     /**
@@ -664,7 +664,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             return false;
         }
 
-        return $this->tracking['__exists'] ??= $this->newQuery()
+        return $this->tracking['exists'] ??= $this->newQuery()
             ->where([$this->getPrimaryKey() => $identity])
             ->exists();
     }
@@ -777,7 +777,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function getHidden(): array
     {
         return [
-            ...$this->tracking['__hidden'] ?? [],
+            ...$this->tracking['hidden'] ?? [],
             ...$this->hidden
         ];
     }
@@ -789,7 +789,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
      */
     public function getVisible(): array
     {
-        $visible = $this->tracking['__visible'] ?? [];
+        $visible = $this->tracking['visible'] ?? [];
 
         return array_diff($visible, $this->getHidden());
     }
@@ -803,9 +803,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function makeVisible(string|array $attributes): static
     {
         $attributes = is_array($attributes) ? $attributes : func_get_args();
-        $visible = $this->tracking['__visible'] ?? [];
+        $visible = $this->tracking['visible'] ?? [];
 
-        $this->tracking['__visible'] = [...$visible, ...$attributes];
+        $this->tracking['visible'] = [...$visible, ...$attributes];
 
         return $this;
     }
@@ -819,9 +819,9 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
     public function makeHidden(string|array $attributes): static
     {
         $attributes = is_array($attributes) ? $attributes : func_get_args();
-        $hidden = $this->tracking['__hidden'] ?? [];
+        $hidden = $this->tracking['hidden'] ?? [];
 
-        $this->tracking['__hidden'] = [...$hidden, ...$attributes];
+        $this->tracking['hidden'] = [...$hidden, ...$attributes];
 
         return $this;
     }

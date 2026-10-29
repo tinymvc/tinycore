@@ -65,6 +65,12 @@ class DotEnv
         );
     }
 
+    /** Forward configuration discovery for existing callers. */
+    public static function discoverConfig(string $folder, string $cache, string $env, bool $useCache = true): array
+    {
+        return Configuration::discover($folder, $cache, $env, $useCache);
+    }
+
     /**
      * Parse a raw environment value using Laravel-like casting rules.
      */

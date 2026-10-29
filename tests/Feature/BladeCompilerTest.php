@@ -586,32 +586,30 @@ BLADE,
         $this->assertRenders($blade, 'Ada|ADA|{{ literal }}', ['name' => 'Ada']);
     }
 
-    public function test_subcompilers_are_loaded_on_demand(): void
+    public function test_cloned_compiler_renders_independently_after_compilation(): void
     {
-        $blade = $this->views(['page' => 'Hello {{ $name }}']);
+        $template = '@extends("layout")@section("content")'
+            . '<x-label :value="$name">@verbatim{{ literal }}@endverbatim</x-label>'
+            . '@include("partial", ["name" => $name])@if(true)|@marker@endif@endsection';
+        $blade = $this->views([
+            'page' => $template,
+            'layout' => '<main>@yield("content")</main>',
+            'components/label' => '@props(["value"])<b>{{ $value }}</b>{{ $slot }}',
+            'partial' => '|{{ strtoupper($name) }}',
+        ]);
         $compiler = $blade->getCompiler();
+        $compiler->directive('marker', fn() => 'original');
+        $original = $compiler->compileString($template);
 
-        $ref = new \ReflectionClass($compiler);
-        $componentProp = $ref->getProperty('componentCompiler');
-        $includeProp = $ref->getProperty('includeCompiler');
-        $layoutProp = $ref->getProperty('layoutCompiler');
+        $copy = clone $compiler;
+        $this->assertSame($original, $copy->compileString($template));
+        $copy->directive('marker', fn() => 'copy');
+        $this->assertSame('original', $compiler->compileString('@marker'));
+        $this->assertSame('copy', $copy->compileString('@marker'));
+        $this->assertSame($original, $compiler->compileString($template));
 
-        $compiler->compileString('Hello {{ $name }}');
-        $this->assertNull($componentProp->getValue($compiler));
-        $this->assertNull($includeProp->getValue($compiler));
-        $this->assertNull($layoutProp->getValue($compiler));
-
-        $compiler->compileString('<x-alert />');
-        $this->assertInstanceOf(\Spark\View\Compilers\ComponentCompiler::class, $componentProp->getValue($compiler));
-        $this->assertNull($includeProp->getValue($compiler));
-        $this->assertNull($layoutProp->getValue($compiler));
-
-        $compiler->compileString('@include("partials.header")');
-        $this->assertInstanceOf(\Spark\View\Compilers\IncludeCompiler::class, $includeProp->getValue($compiler));
-        $this->assertNull($layoutProp->getValue($compiler));
-
-        $compiler->compileString('@extends("layouts.app")');
-        $this->assertInstanceOf(\Spark\View\Compilers\LayoutCompiler::class, $layoutProp->getValue($compiler));
+        (new \ReflectionProperty(Blade::class, 'compiler'))->setValue($blade, $copy);
+        $this->assertRenders($blade, '<main><b>Ada</b>{{ literal }}|ADA|copy</main>', ['name' => 'Ada']);
     }
 
     public function test_css_at_rules_and_text_after_closing_directives_remain_literal(): void

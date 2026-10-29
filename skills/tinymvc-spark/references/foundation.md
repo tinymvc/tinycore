@@ -50,7 +50,8 @@ Core bootstrap and container:
 - Service container and dependency injection: `./vendor/tinymvc/tinycore/src/Container.php`
 - Service provider base class: `./vendor/tinymvc/tinycore/src/Foundation/Providers/ServiceProvider.php`
 - Core console provider: `./vendor/tinymvc/tinycore/src/Foundation/Providers/ConsoleServiceProvider.php`
-- Environment and config cache: `./vendor/tinymvc/tinycore/src/DotEnv.php`
+- Environment loading: `./vendor/tinymvc/tinycore/src/DotEnv.php`
+- Configuration discovery and cache: `./vendor/tinymvc/tinycore/src/Configuration.php`
 - Global helpers: `./vendor/tinymvc/tinycore/src/Foundation/helpers.php`
 
 Routing and request lifecycle:
@@ -250,6 +251,8 @@ Important defer notes:
 ## Configuration
 
 Config files return PHP arrays. Use `config('key.path')` and `env('KEY', $default)`.
+
+`Configuration::discover($folder, $cache, $env, $useCache)` loads configuration files; `DotEnv::discoverConfig()` forwards to it for existing callers.
 
 Quoted environment values stay strings, including when followed by a whitespace-separated comment: `CODE="123" # text`. Hashes inside quotes are preserved. An empty or comment-only `.env` produces a valid empty environment cache.
 

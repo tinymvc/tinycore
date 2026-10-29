@@ -37,7 +37,7 @@ trait InteractsWithTracking
      */
     public function wasNewlyCreated(): bool
     {
-        return $this->exists() && !$this->hasOriginal() && ($this->tracking['__was_created'] ?? false);
+        return $this->exists() && !$this->hasOriginal() && ($this->tracking['was_created'] ?? false);
     }
 
     /**
@@ -47,7 +47,7 @@ trait InteractsWithTracking
      */
     public function wasUpdated(): bool
     {
-        return $this->exists() && $this->hasOriginal() && ($this->tracking['__was_updated'] ?? false);
+        return $this->exists() && $this->hasOriginal() && ($this->tracking['was_updated'] ?? false);
     }
 
     /**
@@ -57,7 +57,7 @@ trait InteractsWithTracking
      */
     public function wasCreated(): bool
     {
-        return $this->exists() && ($this->tracking['__was_created'] ?? false);
+        return $this->exists() && ($this->tracking['was_created'] ?? false);
     }
 
     /**
@@ -77,7 +77,7 @@ trait InteractsWithTracking
      */
     public function wasDeleted(): bool
     {
-        return $this->tracking['__was_deleted'] ?? false;
+        return $this->tracking['was_deleted'] ?? false;
     }
 
     /**
@@ -89,7 +89,7 @@ trait InteractsWithTracking
      */
     public function getOriginal(string $name, $default = null): mixed
     {
-        return $this->tracking['__original_attributes'][$name] ?? $this->attributes[$name] ?? $default;
+        return $this->tracking['original_attributes'][$name] ?? $this->attributes[$name] ?? $default;
     }
 
     /**
@@ -102,16 +102,16 @@ trait InteractsWithTracking
     public function getNestedOriginal(string $path, mixed $default = null): mixed
     {
         // Check if we have a direct record of this path's original value
-        if (isset($this->tracking['__changed_paths'][$path])) {
-            return $this->tracking['__changed_paths'][$path]['original'];
+        if (isset($this->tracking['changed_paths'][$path])) {
+            return $this->tracking['changed_paths'][$path]['original'];
         }
 
         // Fall back to getting from the original root attribute
         $segments = explode('.', $path);
         $rootKey = array_shift($segments);
 
-        if (isset($this->tracking['__original_attributes'][$rootKey])) {
-            $originalRoot = $this->tracking['__original_attributes'][$rootKey];
+        if (isset($this->tracking['original_attributes'][$rootKey])) {
+            $originalRoot = $this->tracking['original_attributes'][$rootKey];
             return data_get($originalRoot, implode('.', $segments), $default);
         }
 
@@ -129,7 +129,7 @@ trait InteractsWithTracking
             return []; // No original data to compare with.
         }
 
-        return $this->tracking['__original_attributes'];
+        return $this->tracking['original_attributes'];
     }
 
     /**
@@ -139,7 +139,7 @@ trait InteractsWithTracking
      */
     public function getNestedChanges(): array
     {
-        return $this->tracking['__changed_paths'] ?? [];
+        return $this->tracking['changed_paths'] ?? [];
     }
 
     /**
@@ -159,7 +159,7 @@ trait InteractsWithTracking
      */
     public function clearOriginal(): void
     {
-        unset($this->tracking['__original_attributes'], $this->tracking['__changed_paths']);
+        unset($this->tracking['original_attributes'], $this->tracking['changed_paths']);
     }
 
     /**
@@ -169,7 +169,7 @@ trait InteractsWithTracking
      */
     public function hasOriginal(): bool
     {
-        return isset($this->tracking['__original_attributes']);
+        return isset($this->tracking['original_attributes']);
     }
 
     /**
@@ -180,7 +180,7 @@ trait InteractsWithTracking
      */
     public function isDirty(null|string $field = null): bool
     {
-        if (($originalHash = ($this->tracking['__hash'] ?? null)) === null) {
+        if (($originalHash = ($this->tracking['hash'] ?? null)) === null) {
             return false; // No original hash means we can't determine if it's dirty.
         }
 
@@ -213,7 +213,7 @@ trait InteractsWithTracking
      */
     public function isNestedDirty(null|string $path = null): bool
     {
-        $changedPaths = $this->tracking['__changed_paths'] ?? [];
+        $changedPaths = $this->tracking['changed_paths'] ?? [];
 
         if ($path === null) {
             return !empty($changedPaths);
@@ -245,7 +245,7 @@ trait InteractsWithTracking
     public function restoreOriginal(): void
     {
         if ($this->hasOriginal()) {
-            $this->attributes = [...$this->attributes, ...$this->tracking['__original_attributes']];
+            $this->attributes = [...$this->attributes, ...$this->tracking['original_attributes']];
             $this->clearOriginal();
         }
     }
@@ -257,8 +257,8 @@ trait InteractsWithTracking
      */
     public function trackUpdated(): void
     {
-        $this->tracking['__was_updated'] = true;
-        $this->tracking['__hash'] = $this->makeHash();
+        $this->tracking['was_updated'] = true;
+        $this->tracking['hash'] = $this->makeHash();
         $this->triggerEvent('updated'); // Trigger the 'updated' event.
     }
 
@@ -270,8 +270,8 @@ trait InteractsWithTracking
     public function trackCreated(): void
     {
         $this->syncPersistenceKey($this->primaryValue());
-        $this->tracking['__was_created'] = true;
-        $this->tracking['__hash'] = $this->makeHash();
+        $this->tracking['was_created'] = true;
+        $this->tracking['hash'] = $this->makeHash();
         $this->triggerEvent('created'); // Trigger the 'created' event.
     }
 
@@ -282,7 +282,7 @@ trait InteractsWithTracking
      */
     public function trackDeleted(): void
     {
-        $this->tracking['__was_deleted'] = true;
+        $this->tracking['was_deleted'] = true;
         $this->triggerEvent('deleted'); // Trigger the 'deleted' event.
     }
 
@@ -338,17 +338,17 @@ trait InteractsWithTracking
      */
     protected function updateAttributeValue(string $key, mixed $value): void
     {
-        if (isset($this->tracking['__hash']) && $this->tracking['__hash'] === $this->makeHash()) {
+        if (isset($this->tracking['hash']) && $this->tracking['hash'] === $this->makeHash()) {
             $this->clearOriginal();
         }
 
         // Only track changes if the model has a primary key and an original hash exists (i.e., it exists in the database).
         if (
-            $this->hasPrimaryValue() && isset($this->tracking['__hash']) &&
-            !array_key_exists($key, $this->tracking['__original_attributes'] ?? []) &&
+            $this->hasPrimaryValue() && isset($this->tracking['hash']) &&
+            !array_key_exists($key, $this->tracking['original_attributes'] ?? []) &&
             ($this->attributes[$key] ?? null) !== $value
         ) {
-            $this->tracking['__original_attributes'][$key] = ($this->attributes[$key] ?? null);
+            $this->tracking['original_attributes'][$key] = ($this->attributes[$key] ?? null);
         }
 
         $this->attributes[$key] = $value; // Set the new value for the attribute.
@@ -374,7 +374,7 @@ trait InteractsWithTracking
         }
 
         // Only track if model exists in database
-        if ($this->hasPrimaryValue() && isset($this->tracking['__hash'])) {
+        if ($this->hasPrimaryValue() && isset($this->tracking['hash'])) {
             // Track the specific nested path that was changed
             $currentValue = data_get($this->attributes, $path);
             if ($currentValue === $value) {
@@ -386,12 +386,12 @@ trait InteractsWithTracking
             $rootKey = $segments[0];
 
             // Track the original value of the root attribute if not already tracked
-            if (!array_key_exists($rootKey, $this->tracking['__original_attributes'] ?? [])) {
-                $this->tracking['__original_attributes'][$rootKey] = $this->attributes[$rootKey] ?? null;
+            if (!array_key_exists($rootKey, $this->tracking['original_attributes'] ?? [])) {
+                $this->tracking['original_attributes'][$rootKey] = $this->attributes[$rootKey] ?? null;
             }
 
             // Track the specific nested path change with original and new values
-            $this->tracking['__changed_paths'][$path] = ['original' => $currentValue, 'new' => $value];
+            $this->tracking['changed_paths'][$path] = ['original' => $currentValue, 'new' => $value];
         }
 
         // Set the nested value
@@ -407,17 +407,17 @@ trait InteractsWithTracking
     protected function trackNestedAttributeRemoval(string $path): void
     {
         // Only track if model exists in database
-        if (!$this->hasPrimaryValue() || !isset($this->tracking['__hash'])) {
+        if (!$this->hasPrimaryValue() || !isset($this->tracking['hash'])) {
             return;
         }
 
         if (!str_contains($path, '.')) {
             // Simple attribute removal - track the original value
             if (
-                !array_key_exists($path, $this->tracking['__original_attributes'] ?? []) &&
+                !array_key_exists($path, $this->tracking['original_attributes'] ?? []) &&
                 array_key_exists($path, $this->attributes)
             ) {
-                $this->tracking['__original_attributes'][$path] = $this->attributes[$path];
+                $this->tracking['original_attributes'][$path] = $this->attributes[$path];
             }
             return;
         }
@@ -426,14 +426,14 @@ trait InteractsWithTracking
         $segments = explode('.', $path);
         $rootKey = $segments[0];
 
-        if (!array_key_exists($rootKey, $this->tracking['__original_attributes'] ?? [])) {
-            $this->tracking['__original_attributes'][$rootKey] = $this->attributes[$rootKey] ?? null;
+        if (!array_key_exists($rootKey, $this->tracking['original_attributes'] ?? [])) {
+            $this->tracking['original_attributes'][$rootKey] = $this->attributes[$rootKey] ?? null;
         }
 
         // Track the specific path removal
         $currentValue = data_get($this->attributes, $path);
         if ($currentValue !== null) {
-            $this->tracking['__changed_paths'][$path] = [
+            $this->tracking['changed_paths'][$path] = [
                 'original' => $currentValue,
                 'new' => null,
                 'removed' => true,

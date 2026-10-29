@@ -22,7 +22,6 @@ use function is_file;
 use function is_writable;
 use function md5;
 use function random_bytes;
-use function str_contains;
 use function str_replace;
 use function strtr;
 use function unlink;
@@ -30,7 +29,7 @@ use function unlink;
 /**
  * Class BladeCompiler
  * 
- * Compiles Blade-like templates to PHP using modular, on-demand sub-compilers.
+ * Compiles Blade-like templates to PHP using dedicated sub-compilers.
  * 
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>
  */
@@ -40,40 +39,28 @@ class BladeCompiler implements BladeCompilerContract
 
     public const EXPRESSION_DIRECTIVES = RawBlockCompiler::EXPRESSION_DIRECTIVES;
 
-    /**
-     * Path to store compiled templates
-     */
+    /** Path to store compiled templates */
     private string $cachePath;
 
-    /**
-     * Array of custom directives
-     */
+    /* Array of custom directives */
     private array $customDirectives = [];
 
-    /**
-     * Raw PHP blocks to preserve during compilation
-     */
+    /* Raw PHP blocks to preserve during compilation */
     private array $rawBlocks = [];
 
-    /**
-     * Literal blocks to preserve during compilation
-     */
+    /* Literal blocks to preserve during compilation */
     private array $literalBlocks = [];
 
-    /**
-     * Expression blocks to preserve during compilation
-     */
+    /* Expression blocks to preserve during compilation */
     private array $expressionBlocks = [];
 
-    /**
-     * Lazy-loaded sub-compilers
-     */
-    private ?RawBlockCompiler $rawBlockCompiler = null;
-    private ?ComponentCompiler $componentCompiler = null;
-    private ?EchoCompiler $echoCompiler = null;
-    private ?LayoutCompiler $layoutCompiler = null;
-    private ?IncludeCompiler $includeCompiler = null;
-    private ?DirectiveCompiler $directiveCompiler = null;
+    /** Compiler instances */
+    private RawBlockCompiler $rawBlockCompiler;
+    private ComponentCompiler $componentCompiler;
+    private EchoCompiler $echoCompiler;
+    private LayoutCompiler $layoutCompiler;
+    private IncludeCompiler $includeCompiler;
+    private DirectiveCompiler $directiveCompiler;
 
     public function __construct(string $cachePath)
     {
@@ -83,6 +70,23 @@ class BladeCompiler implements BladeCompilerContract
         if (!@File::ensureDirectoryWritable($this->cachePath) || !is_writable($this->cachePath)) {
             throw new RuntimeException("View cache directory is not writable: {$this->cachePath}");
         }
+
+        $this->initializeCompilers();
+    }
+
+    private function initializeCompilers(): void
+    {
+        $this->rawBlockCompiler = new RawBlockCompiler($this);
+        $this->componentCompiler = new ComponentCompiler($this);
+        $this->echoCompiler = new EchoCompiler();
+        $this->layoutCompiler = new LayoutCompiler($this);
+        $this->includeCompiler = new IncludeCompiler($this);
+        $this->directiveCompiler = new DirectiveCompiler($this);
+    }
+
+    public function __clone(): void
+    {
+        $this->initializeCompilers();
     }
 
     /**
@@ -124,43 +128,12 @@ class BladeCompiler implements BladeCompilerContract
         $this->expressionBlocks = [];
 
         try {
-            // 1. Raw blocks & comments preservation
-            if (str_contains($template, '{') || str_contains($template, '@') || str_contains($template, '<?')) {
-                $template = $this->getRawBlockCompiler()->preserveRawBlocks($template);
-            }
-
-            // 2. <x-component /> tags (only loaded/invoked when template contains '<x-' or '</x-')
-            if (str_contains($template, '<x-') || str_contains($template, '</x-')) {
-                $template = $this->getComponentCompiler()->compile($template);
-            }
-
-            // 3. Inline @php blocks & echoes
-            if (str_contains($template, '@php(') || str_contains($template, '{{') || str_contains($template, '{!!')) {
-                $template = $this->getEchoCompiler()->compile($template);
-            }
-
-            // 4. Layouts, sections, yields, and use directives
-            if (
-                str_contains($template, '@extends') ||
-                str_contains($template, '@section') ||
-                str_contains($template, '@endsection') ||
-                str_contains($template, '@stop') ||
-                str_contains($template, '@show') ||
-                str_contains($template, '@yield') ||
-                str_contains($template, '@use')
-            ) {
-                $template = $this->getLayoutCompiler()->compile($template);
-            }
-
-            // 5. Includes (@include, @includeIf, @includeWhen)
-            if (str_contains($template, '@include')) {
-                $template = $this->getIncludeCompiler()->compile($template);
-            }
-
-            // 6. Directives (@if, @foreach, custom directives, etc.)
-            if (str_contains($template, '@')) {
-                $template = $this->getDirectiveCompiler()->compile($template);
-            }
+            $template = $this->rawBlockCompiler->preserveRawBlocks($template);
+            $template = $this->componentCompiler->compile($template);
+            $template = $this->echoCompiler->compile($template);
+            $template = $this->layoutCompiler->compile($template);
+            $template = $this->includeCompiler->compile($template);
+            $template = $this->directiveCompiler->compile($template);
 
             return strtr($template, $this->rawBlocks + $this->expressionBlocks);
         } finally {
@@ -205,32 +178,32 @@ class BladeCompiler implements BladeCompilerContract
 
     public function getRawBlockCompiler(): RawBlockCompiler
     {
-        return $this->rawBlockCompiler ??= new RawBlockCompiler($this);
+        return $this->rawBlockCompiler;
     }
 
     public function getComponentCompiler(): ComponentCompiler
     {
-        return $this->componentCompiler ??= new ComponentCompiler($this);
+        return $this->componentCompiler;
     }
 
     public function getEchoCompiler(): EchoCompiler
     {
-        return $this->echoCompiler ??= new EchoCompiler();
+        return $this->echoCompiler;
     }
 
     public function getLayoutCompiler(): LayoutCompiler
     {
-        return $this->layoutCompiler ??= new LayoutCompiler($this);
+        return $this->layoutCompiler;
     }
 
     public function getIncludeCompiler(): IncludeCompiler
     {
-        return $this->includeCompiler ??= new IncludeCompiler($this);
+        return $this->includeCompiler;
     }
 
     public function getDirectiveCompiler(): DirectiveCompiler
     {
-        return $this->directiveCompiler ??= new DirectiveCompiler($this);
+        return $this->directiveCompiler;
     }
 
     /**
