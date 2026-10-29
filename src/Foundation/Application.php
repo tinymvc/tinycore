@@ -155,16 +155,12 @@ class Application extends \Spark\Container implements ApplicationContract
             fn() => new SimpleCache($this->get(\Spark\Cache\Cache::class))
         );
 
-        foreach ([
-            \Psr\Http\Message\RequestFactoryInterface::class,
-            \Psr\Http\Message\ResponseFactoryInterface::class,
-            \Psr\Http\Message\ServerRequestFactoryInterface::class,
-            \Psr\Http\Message\StreamFactoryInterface::class,
-            \Psr\Http\Message\UploadedFileFactoryInterface::class,
-            \Psr\Http\Message\UriFactoryInterface::class,
-        ] as $factory) {
-            $this->bind($factory, fn() => $this->get(Psr17Factory::class));
-        }
+        $this->bind(\Psr\Http\Message\RequestFactoryInterface::class, fn() => $this->get(Psr17Factory::class));
+        $this->bind(\Psr\Http\Message\ResponseFactoryInterface::class, fn() => $this->get(Psr17Factory::class));
+        $this->bind(\Psr\Http\Message\ServerRequestFactoryInterface::class, fn() => $this->get(Psr17Factory::class));
+        $this->bind(\Psr\Http\Message\StreamFactoryInterface::class, fn() => $this->get(Psr17Factory::class));
+        $this->bind(\Psr\Http\Message\UploadedFileFactoryInterface::class, fn() => $this->get(Psr17Factory::class));
+        $this->bind(\Psr\Http\Message\UriFactoryInterface::class, fn() => $this->get(Psr17Factory::class));
 
         $this->alias(EventDispatcherInterface::class, Events::class);
         $this->alias(ListenerProviderInterface::class, Events::class);
@@ -207,26 +203,22 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias(\Spark\Http\Session::class, Session::class);
 
         // Contracts resolve the current service, including request replacements.
-        foreach ([
-            \Spark\Translator\Contracts\TranslatorContract::class => Translator::class,
-            \Spark\Database\Contracts\DBContract::class => DB::class,
-            \Spark\Contracts\HashContract::class => Hash::class,
-            \Spark\View\Contracts\BladeContract::class => Blade::class,
-            \Spark\Queue\Contracts\QueueContract::class => Queue::class,
-            \Spark\Http\Routing\Contracts\RouterContract::class => Router::class,
-            \Spark\Contracts\Http\MiddlewareContract::class => Middleware::class,
-            \Spark\Contracts\EventDispatcherContract::class => Events::class,
-            \Spark\Contracts\Http\SessionContract::class => Session::class,
-            \Spark\Contracts\Http\InputErrorsContract::class => InputErrors::class,
-            \Spark\Contracts\Http\RequestContract::class => Request::class,
-            \Spark\Contracts\Http\ResponseContract::class => Response::class,
-            \Spark\Contracts\Http\GateContract::class => Gate::class,
-            \Spark\Contracts\Http\AuthContract::class => Auth::class,
-            \Spark\Contracts\Http\ValidatorContract::class => \Spark\Http\Validation\Validator::class,
-            \Spark\Contracts\Utils\ViteContract::class => Vite::class,
-        ] as $contract => $service) {
-            $this->bind($contract, fn() => $this->get($service));
-        }
+        $this->bind(\Spark\Translator\Contracts\TranslatorContract::class, fn() => $this->get(Translator::class));
+        $this->bind(\Spark\Database\Contracts\DBContract::class, fn() => $this->get(DB::class));
+        $this->bind(\Spark\Contracts\HashContract::class, fn() => $this->get(Hash::class));
+        $this->bind(\Spark\View\Contracts\BladeContract::class, fn() => $this->get(Blade::class));
+        $this->bind(\Spark\Queue\Contracts\QueueContract::class, fn() => $this->get(Queue::class));
+        $this->bind(\Spark\Http\Routing\Contracts\RouterContract::class, fn() => $this->get(Router::class));
+        $this->bind(\Spark\Contracts\Http\MiddlewareContract::class, fn() => $this->get(Middleware::class));
+        $this->bind(\Spark\Contracts\EventDispatcherContract::class, fn() => $this->get(Events::class));
+        $this->bind(\Spark\Contracts\Http\SessionContract::class, fn() => $this->get(Session::class));
+        $this->bind(\Spark\Contracts\Http\InputErrorsContract::class, fn() => $this->get(InputErrors::class));
+        $this->bind(\Spark\Contracts\Http\RequestContract::class, fn() => $this->get(Request::class));
+        $this->bind(\Spark\Contracts\Http\ResponseContract::class, fn() => $this->get(Response::class));
+        $this->bind(\Spark\Contracts\Http\GateContract::class, fn() => $this->get(Gate::class));
+        $this->bind(\Spark\Contracts\Http\AuthContract::class, fn() => $this->get(Auth::class));
+        $this->bind(\Spark\Contracts\Http\ValidatorContract::class, fn() => $this->get(\Spark\Http\Validation\Validator::class));
+        $this->bind(\Spark\Contracts\Utils\ViteContract::class, fn() => $this->get(Vite::class));
 
         $this->bind('input', fn() => $this->get(Request::class)->input());
         $this->bind(
