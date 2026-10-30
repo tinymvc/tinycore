@@ -50,8 +50,8 @@ Core bootstrap and container:
 - Service container and dependency injection: `./vendor/tinymvc/tinycore/src/Container.php`
 - Service provider base class: `./vendor/tinymvc/tinycore/src/Foundation/Providers/ServiceProvider.php`
 - Core console provider: `./vendor/tinymvc/tinycore/src/Foundation/Providers/ConsoleServiceProvider.php`
-- Environment loading: `./vendor/tinymvc/tinycore/src/DotEnv.php`
-- Configuration discovery and cache: `./vendor/tinymvc/tinycore/src/Configuration.php`
+- Environment loading: `./vendor/tinymvc/tinycore/src/Utils/DotEnv.php`
+- Configuration discovery and cache: `./vendor/tinymvc/tinycore/src/Utils/Configuration.php`
 - Global helpers: `./vendor/tinymvc/tinycore/src/Foundation/helpers.php`
 
 Routing and request lifecycle:
@@ -132,7 +132,7 @@ Views, console, events, facades, utilities, testing:
 - Mail utility: `./vendor/tinymvc/tinycore/src/Utils/Mail.php`
 - HTTP client: `./vendor/tinymvc/tinycore/src/Http/Client/`
 - Upload/file/image utilities: `./vendor/tinymvc/tinycore/src/Storage/Uploader.php`, `./vendor/tinymvc/tinycore/src/Utils/File.php`, `./vendor/tinymvc/tinycore/src/Utils/Image.php`
-- Tracer/debugging: `./vendor/tinymvc/tinycore/src/Tracer.php`
+- Tracer/debugging: `./vendor/tinymvc/tinycore/src/Utils/Tracer.php`
 - Vite integration: `./vendor/tinymvc/tinycore/src/Utils/Vite.php`
 - Unit/Feature Testing: `vendor/tinymvc/tinycore/src/Testing/ApplicationTestCase.php`, `vendor/tinymvc/tinycore/src/Testing/Assert.php`, `vendor/tinymvc/tinycore/src/Testing/TestCase.php`
 

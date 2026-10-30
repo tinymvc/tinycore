@@ -21,7 +21,7 @@ use Spark\Events;
 use Spark\Facades\Log;
 use Spark\Logger;
 use Spark\Support\Clock;
-use Spark\Tracer;
+use Spark\Utils\Tracer;
 
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 

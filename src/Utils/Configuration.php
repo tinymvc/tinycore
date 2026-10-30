@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark;
+namespace Spark\Utils;
 
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;

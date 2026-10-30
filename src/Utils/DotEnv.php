@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark;
+namespace Spark\Utils;
 
 use Spark\Utils\File;
 use function array_key_exists;

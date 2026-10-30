@@ -1,10 +1,9 @@
 <?php
 
-use Spark\Configuration;
-
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
-use Spark\{DotEnv, Pipeline, Url};
+use Spark\Utils\DotEnv;
+use Spark\{Pipeline, Url};
 use Spark\Translator\Translator;
 
 final class CoreUtilityTest extends FrameworkTestCase
@@ -14,7 +13,7 @@ final class CoreUtilityTest extends FrameworkTestCase
         mkdir($this->storagePath . '/config/services', 0700, true);
         file_put_contents($this->storagePath . '/config/app.php', '<?php return ["name" => "Test"];');
         file_put_contents($this->storagePath . '/config/services/mail.php', '<?php return ["enabled" => false];');
-        $config = Configuration::discover($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env', false);
+        $config = DotEnv::discoverConfig($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env', false);
         $this->assertSame(['app' => ['name' => 'Test'], 'services' => ['mail' => ['enabled' => false]]], $config);
         $this->assertFalse(is_file($this->storagePath . '/compiled.php'));
     }
@@ -24,7 +23,7 @@ final class CoreUtilityTest extends FrameworkTestCase
         mkdir($this->storagePath . '/config');
         $source = $this->storagePath . '/config/app.php';
         file_put_contents($source, '<?php return ["name" => "Test"];');
-        $load = fn() => Configuration::discover($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env');
+        $load = fn() => DotEnv::discoverConfig($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env');
         $this->assertSame(['app' => ['name' => 'Test']], $load());
         unlink($source);
         $this->assertSame([], $load());

@@ -7,6 +7,7 @@ use Spark\Console\Console;
 use Spark\Database\Migration;
 use Spark\Foundation\Console\PrimaryCommandsHandler;
 use Spark\Foundation\Console\MakeStubCommandsHandler;
+use Spark\Utils\Tinker;
 
 /**
  * Registers services for CLI commands.
@@ -26,12 +27,6 @@ class ConsoleServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Register the console singleton
-        $this->app->singleton(Console::class);
-
-        // Register the commands singleton
-        $this->app->singleton(Commands::class);
-
         // Register the migration singleton
         $this->app->singleton(Migration::class);
 
@@ -184,7 +179,7 @@ class ConsoleServiceProvider extends ServiceProvider
             ->description('Create a new view component file');
 
         // Add the tinker command
-        $commands->addCommand('tinker', \Spark\Tinker::start(...))
+        $commands->addCommand('tinker', Tinker::start(...))
             ->description('Start an interactive shell session');
     }
 }

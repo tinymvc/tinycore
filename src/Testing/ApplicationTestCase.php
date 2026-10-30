@@ -5,7 +5,7 @@ namespace Spark\Testing;
 use Spark\Foundation\Application;
 use Spark\Http\Header;
 use Spark\Http\Request;
-use Spark\Tracer;
+use Spark\Utils\Tracer;
 use function in_array;
 
 /** A fresh application and temporary storage for each feature test. */

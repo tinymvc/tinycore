@@ -28,7 +28,7 @@ use Spark\Foundation\Exceptions\InvalidCsrfTokenException;
 use Spark\Foundation\Exceptions\ThrottleException;
 use Spark\Foundation\Exceptions\ValidationException;
 use Spark\Hash;
-use Spark\DotEnv;
+use Spark\Utils\DotEnv;
 use Spark\Http\Auth;
 use Spark\Http\InputErrors;
 use Spark\Http\Middleware;
@@ -42,7 +42,7 @@ use Spark\Support\Traits\Macroable;
 use Spark\Telemetry;
 use Spark\Translator\Translator;
 use Spark\Http\Gate;
-use Spark\Tracer;
+use Spark\Utils\Tracer;
 use Spark\Utils\Vite;
 use Spark\View\Blade;
 use Throwable;
@@ -442,7 +442,7 @@ class Application extends \Spark\Container implements ApplicationContract
             $config = ltrim($config, '/\\');
 
             $this->mergeConfig(
-                \Spark\Configuration::discover(
+                DotEnv::discoverConfig(
                     folder: dir_path("$rootPath/$config"),
                     cache: dir_path("$rootPath/bootstrap/cache/" . preg_replace('/[^a-zA-Z0-9]/', '_', $config) . '.php'),
                     env: dir_path("$rootPath/.env"),

@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark;
+namespace Spark\Utils;
 
 use Spark\Console\Prompt;
 use Spark\Contracts\TracerContract;
@@ -269,7 +269,7 @@ class Tracer implements TracerContract
 
             echo json_encode($data, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
         } else {
-            Blade::setPath(__DIR__ . '/Foundation/resources/views');
+            Blade::setPath(dirname(__DIR__) . '/Foundation/resources/views');
 
             if ($debug) {
                 echo Blade::render('tracer', compact('type', 'message', 'file', 'line', 'trace'));
@@ -290,7 +290,7 @@ class Tracer implements TracerContract
      */
     private function isFromTinkerContext(string $file): bool
     {
-        return is_cli() && str_contains($file, dir_path('src/Tinker.php'));
+        return is_cli() && str_contains($file, dir_path('src/Utils/Tinker.php'));
     }
 
     /**

@@ -60,8 +60,8 @@ final class ConsoleAnsiTest extends FrameworkTestCase
             ]
         ]);
         $queue = new \Spark\Queue\Queue();
-        $tinker = (new ReflectionClass(\Spark\Tinker::class))->newInstanceWithoutConstructor();
-        $color = new ReflectionMethod(\Spark\Tinker::class, 'color');
+        $tinker = (new ReflectionClass(\Spark\Utils\Tinker::class))->newInstanceWithoutConstructor();
+        $color = new ReflectionMethod(\Spark\Utils\Tinker::class, 'color');
 
         try {
             foreach (['--ansi' => true, '--no-ansi' => false] as $flag => $colors) {

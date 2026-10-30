@@ -1,6 +1,6 @@
 <?php
 
-namespace Spark;
+namespace Spark\Utils;
 
 use Spark\Console\Commands;
 use Spark\Console\Prompt;

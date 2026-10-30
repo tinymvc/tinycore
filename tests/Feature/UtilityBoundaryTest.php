@@ -1,10 +1,8 @@
 <?php
 
-use Spark\Configuration;
-
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
-use Spark\DotEnv;
+use Spark\Utils\DotEnv;
 use Spark\Http\Input;
 use Spark\Http\InputErrors;
 
@@ -51,14 +49,14 @@ final class UtilityBoundaryTest extends FrameworkTestCase
         $source = $directory . '/app.php';
         $compiled = $this->storagePath . '/atomic-config.php';
         file_put_contents($source, '<?php return ["name" => "old"];');
-        Configuration::discover($directory, $compiled, '');
+        DotEnv::discoverConfig($directory, $compiled, '');
         $original = file_get_contents($compiled);
         $reader = fopen($compiled, 'rb');
         try {
             file_put_contents($source, '<?php return ["name" => "new"];');
             touch($source, time() + 5);
             clearstatcache();
-            Configuration::discover($directory, $compiled, '');
+            DotEnv::discoverConfig($directory, $compiled, '');
             $this->assertSame($original, stream_get_contents($reader));
             $this->assertSame('new', (require $compiled)['config']['app']['name']);
         } finally {
