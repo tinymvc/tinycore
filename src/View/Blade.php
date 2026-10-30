@@ -572,12 +572,11 @@ class Blade implements BladeContract
             }
         }
 
-        $renderTime = round((microtime(true) - $started) * 1000, 6);
-
-        is_debug_mode() && event('app:bladeTemplateRendered', [
+        \Spark\Telemetry::emit('bladeTemplateRendered', fn() => [
             'path' => $compiledPath,
-            'time' => $renderTime,
-            'memory_before' => $startedMemory
+            'time' => round((microtime(true) - $started) * 1000, 6),
+            'memory_before' => $startedMemory,
+            'data_keys' => array_keys($context),
         ]);
 
         return $content;

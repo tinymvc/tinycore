@@ -14,6 +14,7 @@ use Spark\Cache\Storage\DatabaseStorage;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use function func_get_args;
 use function is_array;
 use function strtolower;
@@ -123,6 +124,13 @@ class Cache implements CacheContract, \ArrayAccess
     {
         $this->storage->store($key, $data, Expiration::forStorage($expire));
 
+        Telemetry::emit('cache.written', fn() => [
+            'key' => $key,
+            'store' => $this->name,
+            'value' => $data,
+            'expiration' => $expire,
+        ]);
+
         return $this;
     }
 
@@ -154,7 +162,15 @@ class Cache implements CacheContract, \ArrayAccess
      */
     public function retrieve(string|array $keys, bool $eraseExpired = false): mixed
     {
-        return $this->storage->retrieve($keys, $eraseExpired);
+        $result = $this->storage->retrieve($keys, $eraseExpired);
+
+        Telemetry::emit($result !== null ? 'cache.hit' : 'cache.miss', fn() => [
+            'key' => is_array($keys) ? implode(',', $keys) : $keys,
+            'store' => $this->name,
+            'value' => $result,
+        ]);
+
+        return $result;
     }
 
     /**
@@ -178,6 +194,11 @@ class Cache implements CacheContract, \ArrayAccess
     {
         $keys = is_array($keys) ? $keys : func_get_args();
         $this->storage->erase($keys);
+
+        Telemetry::emit('cache.forgotten', fn() => [
+            'keys' => (array) $keys,
+            'store' => $this->name,
+        ]);
 
         return $this;
     }

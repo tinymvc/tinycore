@@ -294,6 +294,15 @@ trait InteractsWithTracking
      */
     public function triggerEvent(string $event): void
     {
+        \Spark\Telemetry::emit('model.action', fn() => [
+            'action' => $event,
+            'model' => static::class,
+            'key' => $this->primaryValue(),
+            'table' => $this->getTable(),
+            'attributes' => $this->getAttributes(),
+            'changes' => $this->getChanges(),
+        ]);
+
         /** @var \Spark\Database\Events $events */
         $events = $this->events();
 

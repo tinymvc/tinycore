@@ -32,6 +32,13 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
     private bool $shouldHalt = false;
 
     /**
+     * Guard against recursive wildcard event handling.
+     *
+     * @var bool
+     */
+    private bool $dispatchingWildcard = false;
+
+    /**
      * Constructor for the EventDispatcher class.
      *
      * Initializes the EventDispatcher with an optional array of listeners.
@@ -88,7 +95,7 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
      */
     public function hasListeners(string $eventName): bool
     {
-        return isset($this->listeners[$eventName]) && !empty($this->listeners[$eventName]);
+        return (!empty($this->listeners[$eventName])) || ($eventName !== '*' && !empty($this->listeners['*']));
     }
 
     /**
@@ -184,7 +191,10 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
      */
     public function dispatchWithResponse(string $eventName, ...$args): array
     {
-        if (!isset($this->listeners[$eventName])) {
+        $hasDirect = isset($this->listeners[$eventName]) && !empty($this->listeners[$eventName]);
+        $hasWildcard = !$this->dispatchingWildcard && $eventName !== '*' && isset($this->listeners['*']) && !empty($this->listeners['*']);
+
+        if (!$hasDirect && !$hasWildcard) {
             return [];
         }
 
@@ -193,12 +203,30 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
         $responses = [];
 
         try {
-            foreach ($this->getSortedEventListeners($eventName) as $listener) {
-                $result = $this->callListener($listener['callback'], $args, $eventName);
-                $responses[] = $result;
+            if ($hasDirect) {
+                foreach ($this->getSortedEventListeners($eventName) as $listener) {
+                    $result = $this->callListener($listener['callback'], $args, $eventName);
+                    $responses[] = $result;
 
-                if ($result === false || $this->shouldHalt) {
-                    break;
+                    if ($result === false || $this->shouldHalt) {
+                        return $responses;
+                    }
+                }
+            }
+
+            if ($hasWildcard) {
+                $this->dispatchingWildcard = true;
+                try {
+                    foreach ($this->getSortedEventListeners('*') as $listener) {
+                        $result = $this->callListener($listener['callback'], [$eventName, ...$args], $eventName);
+                        $responses[] = $result;
+
+                        if ($result === false || $this->shouldHalt) {
+                            break;
+                        }
+                    }
+                } finally {
+                    $this->dispatchingWildcard = false;
                 }
             }
         } finally {

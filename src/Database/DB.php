@@ -654,13 +654,11 @@ class DB implements DBContract, DatabaseDriver
      */
     private function log(float $started, string $sql, int $startedMemory): void
     {
-        if (!is_debug_mode()) {
-            return; // Skip in non-debug mode.
-        }
-
-        $ended = microtime(true);
-        $time = round(($ended - $started) * 1000, 6);
-
-        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'memory_before' => $startedMemory]);
+        \Spark\Telemetry::emit('db.queryExecuted', fn() => [
+            'query' => $sql,
+            'time' => round((microtime(true) - $started) * 1000, 6),
+            'memory_before' => $startedMemory,
+            'connection' => $this->config['connection'] ?? $this->config['default'] ?? null,
+        ]);
     }
 }

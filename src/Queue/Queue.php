@@ -7,6 +7,7 @@ use Spark\Queue\Contracts\JobContract;
 use Spark\Queue\Contracts\QueueContract;
 use Spark\Queue\Storage\{RedisStorage, DatabaseStorage, FileStorage};
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use function implode;
 use function in_array;
 use function is_array;
@@ -49,6 +50,7 @@ class Queue implements QueueContract
     public function push(JobContract $job, string $queue = 'default'): void
     {
         $this->storage->push($job, $queue);
+        Telemetry::emit('job.pushed', fn() => ['job' => $job, 'queue' => $queue]);
     }
 
     /**
@@ -60,6 +62,7 @@ class Queue implements QueueContract
     public function pushOnce(JobContract $job, string $queue = 'default'): void
     {
         $this->storage->pushOnce($job, $queue);
+        Telemetry::emit('job.pushed', fn() => ['job' => $job, 'queue' => $queue]);
     }
 
     /**
@@ -196,7 +199,21 @@ class Queue implements QueueContract
                 $this->message($label, 'RUNNING');
                 $this->storage->updateJobStatus($jobId, 'processing', $attempts + 1);
 
+                Telemetry::emit('job.processing', fn() => [
+                    'job' => $job,
+                    'queue' => is_array($queue) ? ($job->getMetadata('queue', 'default')) : $queue,
+                    'id' => $jobId,
+                    'attempts' => $attempts + 1,
+                ]);
+
                 $job->handle();
+
+                Telemetry::emit('job.processed', fn() => [
+                    'job' => $job,
+                    'queue' => is_array($queue) ? ($job->getMetadata('queue', 'default')) : $queue,
+                    'id' => $jobId,
+                    'duration_ms' => round((microtime(true) - $jobStartedAt) * 1000, 2),
+                ]);
 
                 if ($job->isRepeated()) {
                     $nextRun = now()->modify('+' . $job->getRepeat());
@@ -212,6 +229,15 @@ class Queue implements QueueContract
                 $ranJobs++;
             } catch (\Throwable $e) {
                 $newAttempts = $attempts + 1;
+
+                Telemetry::emit('job.failed', fn() => [
+                    'job' => $job,
+                    'queue' => is_array($queue) ? ($job->getMetadata('queue', 'default')) : $queue,
+                    'id' => $jobId,
+                    'duration_ms' => round((microtime(true) - $jobStartedAt) * 1000, 2),
+                    'exception' => $e,
+                    'attempts' => $newAttempts,
+                ]);
 
                 $this->message($label, 'FAIL', microtime(true) - $jobStartedAt);
                 $this->message($e->getMessage(), 'ERROR');

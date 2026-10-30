@@ -39,6 +39,7 @@ use Spark\Http\Routing\Exceptions\RouteNotFoundException;
 use Spark\Http\Routing\Router;
 use Spark\Support\ItemNotFoundException;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use Spark\Translator\Translator;
 use Spark\Http\Gate;
 use Spark\Tracer;
@@ -63,6 +64,9 @@ use function sprintf;
 class Application extends \Spark\Container implements ApplicationContract
 {
     use Macroable;
+
+    /** The current version of the application. */
+    public const VERSION = '4.2.12';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -129,6 +133,8 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(Router::class);
         $this->singleton(Middleware::class);
         $this->singleton(Events::class);
+        $this->singleton(Commands::class);
+        $this->singleton(Console::class);
         $this->singleton(LoggerInterface::class, Logger::class);
         $this->singleton(ClockInterface::class, fn() => new Clock());
         $this->singleton(Psr17Factory::class);
@@ -268,6 +274,29 @@ class Application extends \Spark\Container implements ApplicationContract
     public function isTesting(): bool
     {
         return $this->testing;
+    }
+
+    /**
+     * Boot the application and its service providers.
+     *
+     * @return self
+     */
+    public function boot(): self
+    {
+        if (!$this->booted) {
+            Telemetry::emit('booting');
+
+            date_default_timezone_set(
+                $this->getConfig('app.timezone', 'UTC')
+            );
+
+            $this->bootServiceProviders();
+            $this->booted = true;
+
+            Telemetry::emit('booted');
+        }
+
+        return $this;
     }
 
     /**
@@ -708,9 +737,20 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->preparedResponses = new \WeakMap();
         $this->terminated = false;
         $this->handlingRequest = true;
+        $startTime = microtime(true);
 
         try {
-            return $this->prepareResponse($this->dispatchRequest($request));
+            $response = $this->prepareResponse($this->dispatchRequest($request));
+
+            Telemetry::emit('request.handled', fn() => [
+                'request' => $request,
+                'response' => $response,
+                'duration_ms' => round((microtime(true) - $startTime) * 1000, 2),
+                'memory_peak' => memory_get_peak_usage(true),
+                'start_time' => $startTime,
+            ]);
+
+            return $response;
         } catch (Throwable $e) {
             if ($this->testing) {
                 $this->deferredCallbacks = [];
@@ -769,17 +809,7 @@ class Application extends \Spark\Container implements ApplicationContract
 
         try {
             try {
-                if (!$this->booted) {
-                    $this->isDebugMode() && event('app:booting');
-
-                    date_default_timezone_set(
-                        $this->getConfig('app.timezone', 'UTC')
-                    );
-
-                    $this->bootServiceProviders();
-                    $this->booted = true;
-                    $this->isDebugMode() && event('app:booted');
-                }
+                $this->boot();
 
                 return $this->get(Router::class)->dispatch($request);
             } catch (\Spark\Exceptions\Http\ResponseException $e) {
@@ -799,6 +829,12 @@ class Application extends \Spark\Container implements ApplicationContract
                     attributes: $e->getAttributes()
                 );
             } catch (Throwable $e) {
+                Telemetry::emit('exception.occurred', fn() => [
+                    'exception' => $e,
+                    'request' => $request,
+                    'handled' => $this->getExceptionHandler($e) !== null,
+                ]);
+
                 $handler = $this->getExceptionHandler($e);
                 $response = $handler !== null ? $handler($e) : null;
 
@@ -889,7 +925,7 @@ class Application extends \Spark\Container implements ApplicationContract
                 }
 
                 try {
-                    $this->isDebugMode() && event('app:terminated');
+                    Telemetry::emit('terminated');
                 } catch (Throwable $e) {
                     $this->reportDeferredException($e);
                 }

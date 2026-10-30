@@ -63,7 +63,8 @@ final class EventDispatcherTest extends FrameworkTestCase
         $events = new Events();
         $calls = 0;
         $events->addListener('run', function () use (&$calls) {
-            $calls++; });
+            $calls++;
+        });
         $events->dispatchIf('run', false);
         $events->dispatchUnless('run', true);
         $this->assertSame(0, $calls);
@@ -91,5 +92,21 @@ final class EventDispatcherTest extends FrameworkTestCase
         });
         $events->addListener('stopped', fn() => 'must not run');
         $this->assertSame([null], $events->dispatchWithResponse('stopped'));
+    }
+
+    public function test_wildcard_listener_receives_any_event(): void
+    {
+        $events = new Events();
+        $captured = [];
+        $events->addListener('*', function (string $eventName, ...$payload) use (&$captured) {
+            $captured[] = [$eventName, $payload];
+        });
+
+        $this->assertTrue($events->hasListeners('custom.order'));
+        $events->dispatch('custom.order', ['id' => 42]);
+
+        $this->assertCount(1, $captured);
+        $this->assertSame('custom.order', $captured[0][0]);
+        $this->assertSame([['id' => 42]], $captured[0][1]);
     }
 }

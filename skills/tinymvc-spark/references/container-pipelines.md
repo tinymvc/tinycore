@@ -59,6 +59,10 @@ An event does not establish a durable job or an after-commit boundary. A listene
 
 Object events use PSR-14: register listeners by class, parent class, or interface using `app()->on(OrderPlaced::class, $listener)`, then call `event(new OrderPlaced($order))`. Dispatch returns the same event, ignores listener return values, and propagates exceptions unchanged in every environment. Only `StoppableEventInterface::isPropagationStopped()` stops object dispatch. Higher priorities run first across all matching types. `until()` and response aggregation remain string-event APIs.
 
+Wildcard listeners (`*`) receive all string-based event dispatches with the event name as the first argument: `app()->on('*', fn($event, ...$payload) => ...);`.
+
+For low-overhead runtime telemetry and performance hooks, use `Spark\Telemetry::emit($event, ...$args)`. If arguments contain Closures (lazy payloads), they are only resolved when listeners exist or debug mode is enabled.
+
 `Psr\EventDispatcher\EventDispatcherInterface` and `ListenerProviderInterface` both resolve to the application's `Spark\Events` instance.
 
 ## Staged transformations

@@ -7,6 +7,7 @@ use Spark\Exceptions\Http\AuthorizationException;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use function is_string;
 
 /**
@@ -100,7 +101,14 @@ class Gate implements GateContract
         foreach ($this->beforeCallbacks as $callback) {
             $result = Application::$app->call($callback, $arguments);
             if ($result !== null) {
-                return (bool) $result;
+                $final = (bool) $result;
+                Telemetry::emit('gate.checked', fn() => [
+                    'ability' => $ability,
+                    'result' => $final,
+                    'arguments' => $arguments,
+                    'user' => $arguments['user'] ?? null,
+                ]);
+                return $final;
             }
         }
 
@@ -116,11 +124,19 @@ class Gate implements GateContract
         foreach ($this->afterCallbacks as $callback) {
             $afterResult = Application::$app->call($callback, [$ability, $result, ...$arguments]);
             if ($afterResult !== null) {
-                return (bool) $afterResult;
+                $result = (bool) $afterResult;
             }
         }
 
-        return $result;
+        $final = (bool) $result;
+        Telemetry::emit('gate.checked', fn() => [
+            'ability' => $ability,
+            'result' => $final,
+            'arguments' => $arguments,
+            'user' => $arguments['user'] ?? null,
+        ]);
+
+        return $final;
     }
 
     /**

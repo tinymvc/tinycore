@@ -470,7 +470,9 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function bound(string $abstract): bool
     {
-        return isset($this->bindings[$abstract]) || array_key_exists($abstract, $this->instances) || isset($this->aliases[$abstract]);
+        $abstract = $this->resolveAlias($abstract);
+
+        return isset($this->bindings[$abstract]) || array_key_exists($abstract, $this->instances);
     }
 
     /**

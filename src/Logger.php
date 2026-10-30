@@ -61,6 +61,12 @@ class Logger extends AbstractLogger implements LoggerInterface
             Tracer::start();
         }
 
+        \Spark\Telemetry::emit('log.logged', fn() => [
+            'level' => (string) $level,
+            'message' => $msg,
+            'context' => $context,
+        ]);
+
         Tracer::$instance->log("local.$levelUpper: $msg$contextStr");
     }
 }

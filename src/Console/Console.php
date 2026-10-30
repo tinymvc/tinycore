@@ -6,8 +6,10 @@ use Spark\Console\Contracts\ConsoleContract;
 use Spark\Console\Exceptions\NotAllowedException;
 use Spark\Foundation\Application;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use function array_slice;
 use function in_array;
+use function is_int;
 
 class Console implements ConsoleContract
 {
@@ -103,7 +105,26 @@ class Console implements ConsoleContract
         // Get the command instance
         $command = $this->commands->getCommand($name);
 
-        // Execute the command
-        Application::$app->call($command['callback'], ['args' => $args]);
+        $start = microtime(true);
+        Telemetry::emit('command.starting', fn() => [
+            'name' => $name,
+            'args' => $args,
+        ]);
+
+        $exitCode = 0;
+        try {
+            $result = Application::$app->call($command['callback'], ['args' => $args]);
+            $exitCode = is_int($result) ? $result : 0;
+        } catch (\Throwable $e) {
+            $exitCode = 1;
+            throw $e;
+        } finally {
+            Telemetry::emit('command.finished', fn() => [
+                'name' => $name,
+                'args' => $args,
+                'exit_code' => $exitCode,
+                'duration_ms' => round((microtime(true) - $start) * 1000, 2),
+            ]);
+        }
     }
 }

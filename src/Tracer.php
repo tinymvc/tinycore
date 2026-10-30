@@ -143,6 +143,12 @@ class Tracer implements TracerContract
      */
     public function handleException(Throwable $exception): void
     {
+        Telemetry::emit('exception.occurred', fn() => [
+            'exception' => $exception,
+            'type' => 'Exception',
+            'handled' => false,
+        ]);
+
         $this->renderError(
             'Exception',
             $exception->getMessage(),

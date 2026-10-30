@@ -8,6 +8,7 @@ use Spark\Facades\Blade;
 use Spark\Facades\Log;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 
 /**
  * Utility class for sending emails.
@@ -375,6 +376,8 @@ class Mail extends PHPMailer implements MailContract
      */
     public function send(): bool
     {
+        $sent = false;
+
         try {
             // If the transport method is 'log', log the email instead of sending it
             if ($this->transport === 'log') {
@@ -388,11 +391,33 @@ class Mail extends PHPMailer implements MailContract
                     'raw' => $this->getSentMIMEMessage(),
                 ]);
 
-                return true;
+                $sent = true;
+            } else {
+                $sent = parent::send(); // Call the parent send method for other transport methods
             }
 
-            return parent::send(); // Call the parent send method for other transport methods
+            if ($sent) {
+                Telemetry::emit('mail.sent', fn() => [
+                    'to' => array_column($this->getToAddresses(), 0),
+                    'cc' => array_column($this->getCcAddresses(), 0),
+                    'bcc' => array_column($this->getBccAddresses(), 0),
+                    'reply_to' => array_column($this->getReplyToAddresses(), 0),
+                    'subject' => $this->Subject,
+                    'body' => $this->Body,
+                    'is_html' => $this->ContentType === 'text/html',
+                    'transport' => $this->transport,
+                ]);
+            }
+
+            return $sent;
         } catch (\Throwable $e) {
+            Telemetry::emit('mail.failed', fn() => [
+                'to' => array_column($this->getToAddresses(), 0),
+                'subject' => $this->Subject,
+                'error' => $e->getMessage(),
+                'transport' => $this->transport,
+            ]);
+
             Log::error('Mail send failed: ' . $e->getMessage());
         }
 

@@ -716,23 +716,27 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function log(float $started, int $startedMemory, string $sql, array $bindings = []): void
     {
-        if (!is_debug_mode()) {
-            return; // Skip in non-debug mode.
-        }
+        \Spark\Telemetry::emit('db.queryExecuted', function () use ($started, $startedMemory, $sql, $bindings) {
+            $ended = microtime(true);
+            $time = round(($ended - $started) * 1000, 6);
 
-        $ended = microtime(true);
-        $time = round(($ended - $started) * 1000, 6);
-
-        if ($this->hasWhere()) {
-            $parameters = $this->getBindings() ?: $this->getParameters();
-            if (!empty($bindings)) {
-                $bindings['where'] = $parameters;
-            } else {
-                $bindings = $parameters;
+            if ($this->hasWhere()) {
+                $parameters = $this->getBindings() ?: $this->getParameters();
+                if (!empty($bindings)) {
+                    $bindings['where'] = $parameters;
+                } else {
+                    $bindings = $parameters;
+                }
             }
-        }
 
-        event('app:db.queryExecuted', ['query' => $sql, 'time' => $time, 'bindings' => $bindings, 'memory_before' => $startedMemory]);
+            return [
+                'query' => $sql,
+                'time' => $time,
+                'bindings' => $bindings,
+                'memory_before' => $startedMemory,
+                'connection' => $this->connectionName ?? 'default',
+            ];
+        });
     }
 
     /** Import bindings without allowing independently built queries to overwrite each other. */

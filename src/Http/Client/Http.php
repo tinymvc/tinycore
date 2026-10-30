@@ -514,17 +514,11 @@ class Http extends HttpRequest implements HttpContract
      */
     private function triggerHttpRequestEvent(string $url, array $payload, array $response, float $startedAt): void
     {
-        if (!is_debug_mode()) {
-            return; // Skip logging in non-debug mode
-        }
-
-        $duration = round((microtime(true) - $startedAt) * 1000, 2); // in milliseconds
-
-        event('app:http.request', [
+        \Spark\Telemetry::emit('http.request', fn() => [
             'url' => $url,
             'payload' => $payload,
             'response' => $response,
-            'duration_ms' => $duration,
+            'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
         ]);
     }
 }
