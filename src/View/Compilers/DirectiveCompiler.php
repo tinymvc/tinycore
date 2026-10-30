@@ -56,6 +56,7 @@ class DirectiveCompiler
         'share' => '$this->share(%s);',
         'authorize' => 'authorize(%s);',
         'json' => 'echo \Spark\Support\Js::from(%s);',
+        'js' => 'echo \Spark\Support\Js::from(%s);',
         'case' => 'case %s:',
         'vite' => 'echo vite(%s);',
         'auth' => 'if(is_logged(%s)):',

@@ -25,7 +25,7 @@ $post = Post::findOrFail($id);
 $posts = Post::with('author')->paginate(15);
 ```
 
-### When are `DB::table()` or `query()` Appropriate?
+### When are `DB::table()` Appropriate?
 Typical uses for raw query builders include:
 - Low-level table operations without an associated Model (e.g. migration verification, raw pivot table operations).
 - Performance-critical bulk reads that deliberately bypass model hydration.

@@ -784,11 +784,7 @@ class Application extends \Spark\Container implements ApplicationContract
                 return $this->get(Router::class)->dispatch($request);
             } catch (\Spark\Exceptions\Http\ResponseException $e) {
                 throw $e;
-            } catch (RouteNotFoundException) {
-                return Response::error(Response::STATUS_NOT_FOUND, 'Route not found');
-            } catch (ItemNotFoundException) {
-                return Response::error(Response::STATUS_NOT_FOUND, 'Item not found');
-            } catch (NotFoundException) {
+            } catch (RouteNotFoundException | NotFoundException | ItemNotFoundException) {
                 return Response::error(Response::STATUS_NOT_FOUND, 'Not found');
             } catch (AuthorizationException) {
                 return Response::error(Response::STATUS_FORBIDDEN, 'Forbidden');

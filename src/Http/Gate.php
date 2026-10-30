@@ -91,6 +91,11 @@ class Gate implements GateContract
      */
     public function allows(string $ability, mixed ...$arguments): bool
     {
+        $arguments = [
+            'user' => app(Auth::class)->getUser(),
+            ...$arguments
+        ];
+
         // Run "before" callbacks; if any return a non-null result, use that.
         foreach ($this->beforeCallbacks as $callback) {
             $result = Application::$app->call($callback, $arguments);

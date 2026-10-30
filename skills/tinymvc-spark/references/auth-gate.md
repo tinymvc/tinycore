@@ -95,16 +95,16 @@ Define gates in a service provider or bootstrap file (e.g. `app/Providers/AppSer
 ```php
 use Spark\Facades\Gate;
 use Spark\Facades\Auth;
-use App\Models\Post;
+use App\Models\{Post, User};
 
 // Ability with argument
-Gate::define('update-post', function (Post $post) {
-    return Auth::check() && (int) $post->user_id === (int) Auth::id();
+Gate::define('update-post', function (?User $user, Post $post) {
+    return (int) $post->user_id === $user?->id;
 });
 
 // Admin-only ability
-Gate::define('manage-users', function () {
-    return Auth::check() && Auth::user()?->role === 'admin';
+Gate::define('manage-users', function (?User $user) {
+    return $user?->role === 'admin';
 });
 ```
 

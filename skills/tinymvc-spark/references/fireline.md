@@ -36,7 +36,7 @@ The adapter renders the given template; it does not extract a fragment from a fu
     @extends('layouts/app')
 @endif
 
-@section('title')About us@endsection
+@section('title', 'About us')
 
 @section('content')
 <div>
