@@ -1,6 +1,6 @@
 # Views and Frontend (Blade)
 
-Read this reference for Blade templates, component-first architecture, view helpers, Blade directives, and frontend integrations in TinyMVC / TinyCore (Spark). All paths are relative to the application root. For adapter behavior, read [FireLine](fireline.md) or [Inertia](inertia.md); for asset configuration, read [frontend setup](frontend-setup.md).
+Read this reference for Blade templates, component-first architecture, view helpers, all native Blade directives, and frontend integrations in TinyMVC / TinyCore (Spark). All paths are relative to the application root. For adapter behavior, read [FireLine](fireline.md) or [Inertia](inertia.md); for asset configuration, read [frontend setup](frontend-setup.md).
 
 ---
 
@@ -86,63 +86,265 @@ TinyCore supports clean, expressive component syntax:
 
 {{-- 6. String interpolation in component attributes --}}
 <x-link href="{{ route('register') }}" variant="primary" x-navigate>Register</x-link>
+
+{{-- 7. Literal Alpine / client bindings using double-colon prefix --}}
+<x-button ::disabled="form.processing">Publish</x-button>
 ```
-
-### Required Escaping and Slot Standards
-
-Follow these rules strictly when generating or reviewing Blade templates:
-
-| Syntax | TinyCore behavior | Use |
-| --- | --- | --- |
-| `{{ $value }}` | Calls `e($value)`; escapes ordinary values and honors `Spark\Contracts\Support\Htmlable` | Default for output, including user data |
-| `{!! $value !!}` | Echoes the value without escaping | Intentionally trusted HTML only |
-| `{{ $slot }}` | Renders an HTML-safe `Spark\Support\HtmlString` containing the already rendered child template | Standard default-slot output; do not require a raw-echo workaround |
-| `title="Hello {{ $name }}"` on `<x-...>` | Builds a string, escaping each `{{ }}` expression | Text interpolation, including URLs such as `href="{{ route('register') }}"` |
-| `title="{!! $value !!}"` on `<x-...>` | Builds a string without escaping that expression | Trusted raw interpolation; subsequent output still follows the component template's escaping rules |
-| `:value="$expression"` / `:$value` | Passes the PHP value, preserving its type | Arrays, booleans, numbers, objects, or direct expressions; escape ordinary values when outputting them |
-| `::class="{ active: isActive }"` | Passes a literal `:class` attribute | Alpine/client expressions |
-| `@{{ clientValue }}` / `@{!! clientHtml !!}` | Removes the leading `@` and leaves the echo syntax literal | Client templates |
-| `@@if(...)` | Outputs literal `@if(...)` | Escaping a Blade directive |
-
-`{{ $slot }}` retaining HTML is standard Laravel-style behavior: safe HTML implements `Htmlable`; the compiler must still call `e()`. TinyCore uses its existing `HtmlString` rather than Laravel's `ComponentSlot` class. Slots support `toHtml()`, `isEmpty()`, `isNotEmpty()`, and string conversion. Do not assume Laravel-only slot methods or attributes exist.
-
-Child markup renders in the calling view's scope, including loop variables. Ordinary `{{ $userInput }}` inside that markup is escaped before it becomes the slot. The component preserves that rendered markup without escaping it again. Slot edges are trimmed; internal whitespace and the text `0` are preserved. Never wrap untrusted, unrendered user input in `HtmlString` to bypass escaping.
-
-Mixed attribute values support literal text and multiple escaped/raw expressions. Interpolated attributes are strings; use `:prop` when the PHP type matters. `$attributes` escapes serialized HTML attribute values without double encoding existing entities. A raw expression in an attribute does not disable escaping when the component later renders it through `{{ $prop }}` or `$attributes`.
-
-These conventions match Laravel's [attribute echo compiler](https://github.com/laravel/framework/blob/13.x/src/Illuminate/View/Compilers/ComponentTagCompiler.php) and [HTML-safe slots](https://github.com/laravel/framework/blob/13.x/src/Illuminate/View/ComponentSlot.php). TinyCore's installed source remains the API authority.
-
-### Supported Surface and Laravel Differences
-
-TinyCore supports anonymous view components, default slots, `@props`, the attribute bag, and the directives listed below. Do not invent support for Laravel class components, named `<x-slot>` slots, `<x-dynamic-component>`, `@aware`, `$loop`, `@forelse`, `@once`, or stack/push directives. Register an explicit custom directive or use the documented native syntax when needed.
-
-Use `@class` and `@style` on ordinary HTML tags. On component tags, pass a bound class/style value, such as `<x-button :class="['active' => $active]" />`. Pass include data explicitly (`@include('document', ['name' => $name])`); TinyCore does not automatically inherit all caller locals for includes. Use `@if($condition) @break @endif` for conditional loop exits; conditional `@break(...)` / `@continue(...)` are not implemented.
-
-Quote component attribute values containing spaces or PHP operators. Use the opposite quote type inside their PHP expressions, following ordinary HTML attribute syntax. Native PHP and `@php ... @endphp` blocks remain opaque to Blade compilation, as do `@verbatim` blocks. Malformed component opening/closing tags, unclosed raw blocks, and unbalanced directive parentheses produce compile-time exceptions. Templates are trusted application source; do not compile user-supplied templates.
 
 ### Component Attributes (`Spark\View\Attributes`)
 
-Inside component templates, `$attributes` provides powerful fluent helpers:
+Inside component templates, `$attributes` manages HTML attributes:
 * `$attributes->merge(['class' => 'default-class'])`: Merges defaults with consumer-provided attributes without clobbering.
 * `$attributes->class(['base-btn', 'active' => $isActive, 'opacity-50' => $disabled])`: Conditionally compiles class strings.
 * `$attributes->has('id')`: Checks if an attribute exists.
 * `$attributes->get('name', 'default')`: Reads attribute value.
 * `$attributes->except('class')`: Excludes attributes.
+* `$attributes->props(['title' => 'Default'])`: Extracts declared component props.
+
+### Required Escaping and Slot Standards
+
+| Syntax | TinyCore behavior | Use |
+| --- | --- | --- |
+| `{{ $value }}` | Calls `e($value)`; escapes ordinary values and honors `Spark\Contracts\Support\Htmlable` | Default for output, including user data |
+| `{!! $value !!}` | Echoes the value without escaping | Intentionally trusted HTML only |
+| `{{ $slot }}` | Renders an HTML-safe `Spark\Support\HtmlString` containing rendered child markup | Standard default-slot output; never wrap in raw `{!! !!}` |
+| `title="Hello {{ $name }}"` on `<x-...>` | Builds a string, escaping each `{{ }}` expression | Text interpolation, including URLs such as `href="{{ route('register') }}"` |
+| `title="{!! $value !!}"` on `<x-...>` | Builds a string without escaping that expression | Trusted raw interpolation |
+| `:value="$expression"` / `:$value` | Passes the PHP value, preserving its type | Arrays, booleans, numbers, objects, or direct expressions |
+| `::class="{ active: isActive }"` | Passes a literal `:class` attribute to output | Alpine/client expressions on components |
+| `@{{ clientValue }}` / `@{!! clientHtml !!}` | Removes the leading `@` and leaves echo syntax literal | Client templates (Alpine, Vue) |
+| `@@directive` | Outputs literal `@directive` | Escaping a Blade directive |
 
 ---
 
-## 2. Helpers vs. Facades in Blade Views
+## 2. Exhaustive Blade Directives Reference
+
+TinyCore's Blade compiler features a rich, native directive set. Below is the complete catalog of supported directives:
+
+### 2.1 Conditionals
+
+| Directive | Compiled PHP Equivalent | Description |
+| --- | --- | --- |
+| `@if($condition)` | `if($condition):` | Opens an if block |
+| `@elseif($condition)` | `elseif($condition):` | Else-if condition branch |
+| `@else` | `else:` | Else fallback branch |
+| `@endif` | `endif;` | Closes any open conditional block |
+| `@unless($condition)` | `if(!($condition)):` | Executes block if condition is false |
+| `@endunless` | `endif;` | Closes an unless block |
+| `@isset($var)` | `if(isset($var)):` | Executes block if variable is set and not null |
+| `@endisset` | `endif;` | Closes an isset block |
+| `@empty($var)` | `if(empty($var)):` | Executes block if variable is empty |
+| `@endempty` | `endif;` | Closes an empty block |
+| `@can('ability', $model)` | `if(can('ability', $model)):` | Checks authorization Gate |
+| `@endcan` | `endif;` | Closes a can block |
+| `@cannot('ability', $model)`| `if(cannot('ability', $model)):` | Inverse authorization Gate check |
+| `@endcannot` | `endif;` | Closes a cannot block |
+| `@hasSection('name')` | `if($this->hasSection('name')):` | Checks if section exists |
+| `@endhasSection` | `endif;` | Closes hasSection block |
+| `@sectionMissing('name')` | `if(!$this->hasSection('name')):` | Checks if section is missing |
+| `@endsectionMissing` | `endif;` | Closes sectionMissing block |
+| `@session('key')` | `if(session()->has('key')):` | Checks if session key exists |
+| `@endsession` | `endif;` | Closes session block |
+| `@switch($expr)` | `switch($expr): ...` | Opens a switch block |
+| `@case($val)` | `case $val:` | Switch case branch |
+| `@default` | `default:` | Switch default branch |
+| `@endswitch` | `endswitch;` | Closes a switch block |
+
+### 2.2 Loops
+
+| Directive | Compiled PHP Equivalent | Description |
+| --- | --- | --- |
+| `@foreach($items as $item)` | `foreach($items as $item):` | Standard foreach loop |
+| `@endforeach` | `endforeach;` | Closes foreach loop |
+| `@for($i = 0; $i < 10; $i++)` | `for(...):` | Standard for loop |
+| `@endfor` | `endfor;` | Closes for loop |
+| `@while($condition)` | `while($condition):` | Standard while loop |
+| `@endwhile` | `endwhile;` | Closes while loop |
+| `@break` | `break;` | Breaks out of loop |
+| `@continue` | `continue;` | Continues to next iteration |
+
+### 2.3 Layouts & Sections
+
+| Directive | Compiled PHP Equivalent | Description |
+| --- | --- | --- |
+| `@use('App\Models\Post')` | `use App\Models\Post;` | Imports class into compiled template |
+| `@use('App\Models\Post', 'Article')` | `use App\Models\Post as Article;` | Imports class with alias |
+| `@extends('layouts.app')` | `$this->setExtends('layouts.app');` | Declares parent layout template |
+| `@section('name')` | `$this->startSection('name');` | Starts capturing section content |
+| `@section('name', 'Value')` | `$this->startSection('name'); echo 'Value'; $this->endSection();` | Short inline section definition |
+| `@endsection` | `$this->endSection();` | Closes section capture |
+| `@stop` | `$this->endSection();` | Synonym for `@endsection` |
+| `@show` | `echo $this->stopAndYieldSection();` | Closes section and yields it immediately |
+| `@yield('name', 'Default')`| `echo $this->yieldContent('name', 'Default');` | Yields section content in layout |
+
+### 2.4 Partials & Includes
+
+| Directive | Compiled PHP Equivalent | Description |
+| --- | --- | --- |
+| `@include('path.view', ['k' => $v])` | `echo $this->include('path.view', ['k' => $v]);` | Includes partial view with local context |
+| `@includeIf('path.view', [...])` | Checks if template exists before including | Safe include without throwing missing template error |
+| `@includeWhen($bool, 'view', [...])`| Includes template only if `$bool` evaluates to true | Conditional include |
+
+### 2.5 Form & HTML Helpers
+
+| Directive | Compiled PHP Equivalent | Description |
+| --- | --- | --- |
+| `@csrf` | `<?= csrf(); ?>` | Outputs hidden input with CSRF token |
+| `@method('PUT')` | `echo method('PUT');` | Outputs hidden `_method` input |
+| `@checked($bool)` | `echo ($bool) ? 'checked' : '';` | Outputs checked attribute |
+| `@disabled($bool)` | `echo ($bool) ? 'disabled' : '';` | Outputs disabled attribute |
+| `@selected($bool)` | `echo ($bool) ? 'selected' : '';` | Outputs selected attribute |
+| `@readonly($bool)` | `echo ($bool) ? 'readonly' : '';` | Outputs readonly attribute |
+| `@required($bool)` | `echo ($bool) ? 'required' : '';` | Outputs required attribute |
+| `@class(['btn', 'active' => $ok])` | `echo $this->compileAttributes(['class' => ...]);` | Compiles HTML class string conditionally |
+| `@style(['color: red' => $err])` | `echo $this->compileAttributes(['style' => ...]);` | Compiles inline style string conditionally |
+| `@attributes($array)` | `echo $this->compileAttributes($array);` | Compiles an associative array of HTML attributes |
+
+### 2.6 Auth, Gate & Session Helpers
+
+| Directive | Compiled PHP Equivalent | Description |
+| --- | --- | --- |
+| `@auth` | `if(is_logged()):` | Conditional block for authenticated user |
+| `@auth('admin')` | `if(is_logged('admin')):` | Guard-specific authentication block |
+| `@endauth` | `endif;` | Closes auth block |
+| `@guest` | `if(is_guest()):` | Conditional block for unauthenticated guest |
+| `@guest('admin')` | `if(is_guest('admin')):` | Guard-specific guest block |
+| `@endguest` | `endif;` | Closes guest block |
+| `@authorize('ability', $model)` | `authorize('ability', $model);` | Runs authorization gate check inline (aborts 403 on failure) |
+| `@error('field')` | `if(errors()->any() && errors()->has('field')): $message = errors()->first('field');` | Exposes `$message` for first error on field |
+| `@enderror` | `endif;` | Closes error block |
+| `@errors('field')` | Loops through all error messages for field as `$message` | Loops over each error message |
+| `@enderrors` | `endforeach; endif;` | Closes errors loop |
+| `@old('field', 'default')` | `echo e(old('field', 'default'));` | Escapes and echoes old input |
+
+### 2.7 Output, Scripts & Utilities
+
+| Directive | Compiled PHP Equivalent | Description |
+| --- | --- | --- |
+| `@json($data)` | `echo \Spark\Support\Js::from($data);` | Encodes data safely for JavaScript in script tags |
+| `@js($data)` | `echo \Spark\Support\Js::from($data);` | Synonym for `@json` |
+| `@vite('app.js')` | `echo vite('app.js');` | Generates script/link tags for Vite asset |
+| `@vite` | `<?= vite(); ?>` | Parameterless Vite output |
+| `@abort(404, 'Not found')` | `abort(404, 'Not found');` | Aborts execution with HTTP status and message |
+| `@dump($var)` | `dump($var);` | Dumps variable without terminating execution |
+| `@dd($var)` | `dd($var);` | Dumps variable and dies |
+| `@share(['key' => $val])` | `$this->share(['key' => $val]);` | Shares data into the current view context |
+
+### 2.8 Raw Blocks & PHP Execution
+
+| Directive | Description |
+| --- | --- |
+| `{{-- comment --}}` | Blade comment (completely stripped from compiled output) |
+| `@php($expr)` | Inline PHP statement (e.g. `@php($count = $posts->count())`) |
+| `@php ... @endphp` | Raw multi-line PHP block |
+| `@verbatim ... @endverbatim` | Preserves raw text without evaluating Blade syntax or `{{ }}` |
+
+---
+
+## 3. Strict Guardrails: Banned / Hallucination Traps
+
+> [!CAUTION]
+> **Do NOT Hallucinate Unsupported Features!**
+> The following directives and variables are common in Laravel but **DO NOT EXIST in TinyCore/Spark Blade**.
+> Always use the documented native Spark replacements below.
+
+### ❌ Hallucination 1: `@forelse` and `@empty` loop branch
+TinyCore's Blade compiler does **not** compile `@forelse`. Using it will produce broken or invalid PHP.
+* **Incorrect ❌**:
+  ```blade
+  @forelse($posts as $post)
+      <p>{{ $post->title }}</p>
+  @empty
+      <p>No posts available.</p>
+  @endforelse
+  ```
+* **Native Spark Replacement ✅**:
+  ```blade
+  @if(!empty($posts))
+      @foreach($posts as $post)
+          <p>{{ $post->title }}</p>
+      @endforeach
+  @else
+      <p>No posts available.</p>
+  @endif
+  ```
+
+### ❌ Hallucination 2: The `$loop` variable in `@foreach`
+Inside `@foreach`, the `$loop` variable (`$loop->first`, `$loop->last`, `$loop->iteration`, `$loop->index`) does **not** exist in Spark.
+* **Incorrect ❌**:
+  ```blade
+  @foreach($items as $item)
+      <li class="{{ $loop->first ? 'font-bold' : '' }}">{{ $item }}</li>
+  @endforeach
+  ```
+* **Native Spark Replacement ✅**:
+  ```blade
+  @foreach($items as $index => $item)
+      <li class="{{ $index === 0 ? 'font-bold' : '' }}">{{ $item }}</li>
+  @endforeach
+  ```
+
+### ❌ Hallucination 3: `@push`, `@stack`, `@prepend`
+TinyCore does not have a stack system.
+* **Incorrect ❌**:
+  ```blade
+  @push('scripts')
+      <script src="/page.js"></script>
+  @endpush
+  ```
+* **Native Spark Replacement ✅**:
+  Use layout sections (`@section('scripts') ... @endsection`) and yield them in the layout (`@yield('scripts')`), or bundle scripts with Vite.
+
+### ❌ Hallucination 4: Named slots (`<x-slot:name>` or `<x-slot name="name">`)
+TinyCore's component compiler supports **anonymous components with a single default `$slot`**. Named slots are not implemented.
+* **Incorrect ❌**:
+  ```blade
+  <x-card>
+      <x-slot:header>Title</x-slot:header>
+      Body content
+  </x-card>
+  ```
+* **Native Spark Replacement ✅**:
+  Pass secondary slots or headers as component props or attributes:
+  ```blade
+  <x-card title="Title">
+      Body content
+  </x-card>
+  ```
+  Or use classic layout templates with `@extends` and `@section`.
+
+### ❌ Hallucination 5: Class-based components & `<x-dynamic-component>`
+TinyCore does **not** support class-based components (`App\View\Components\*`) or `<x-dynamic-component>`. All components are anonymous template files located in `resources/views/components/`.
+
+### ❌ Hallucination 6: Conditional `@break($condition)` and `@continue($condition)`
+In Spark, `@break` and `@continue` take no arguments.
+* **Incorrect ❌**: `@break($user->is_blocked)`
+* **Native Spark Replacement ✅**:
+  ```blade
+  @if($user->is_blocked)
+      @break
+  @endif
+  ```
+
+### ❌ Hallucination 7: `@once`, `@inject`, `@each`
+These directives do not exist in Spark.
+* Use `@use('App\Services\PaymentGateway')` or global helper `app(PaymentGateway::class)` instead of `@inject`.
+* Use `@foreach` instead of `@each`.
+
+---
+
+## 4. Helpers vs. Facades in Blade Views
 
 > [!CAUTION]
 > **Strict Rule: Never Use Static Facades in Blade Views!**
-> Do **NOT** use `\Spark\Facades\*` (e.g. `\Spark\Facades\Session`, `\Spark\Facades\Auth`, `\Spark\Facades\App`) inside Blade templates.
+> Do **NOT** use `\Spark\Facades\*` (e.g. `\Spark\Facades\Session`, `\Spark\Facades\Auth`, `\Spark\Facades\App`, `\Spark\Facades\Route`) inside Blade templates.
 > In views, **always use native Spark global helpers and directives**.
 
-| Purpose | Non-Smart / Banned in Blade ❌ | Smart & Idiomatic in Blade ✅ |
+| Purpose | Banned in Blade ❌ | Native & Smart in Blade ✅ |
 | --- | --- | --- |
 | **Session Flash** | `\Spark\Facades\Session::get('status')` | `session('status')` or `@session('status') ... @endsession` |
 | **Session Check** | `\Spark\Facades\Session::has('error')` | `session()->has('error')` |
-| **Auth User** | `\Spark\Facades\Auth::user()` | `auth()->user()` or `user()` or `user('email')` |
+| **Auth User** | `\Spark\Facades\Auth::user()` | `auth()->user()`, `user()`, or `user('email')` |
 | **Auth Check** | `\Spark\Facades\Auth::check()` | `@auth ... @endauth` or `@guest ... @endguest` |
 | **App / Services** | `\Spark\Facades\App::make('cache')` | `app('cache')` or `app(SomeService::class)` |
 | **Config Value** | `\Spark\Facades\Config::get('app.name')` | `config('app.name')` |
@@ -153,7 +355,7 @@ Inside component templates, `$attributes` provides powerful fluent helpers:
 | **Authorization** | `\Spark\Facades\Gate::allows(...)` | `@can('update-post', $post) ... @endcan` or `@cannot` |
 | **Validation Error** | Manual `$session->get('errors')` | `@error('field') {{ $message }} @enderror` |
 
-### Blade Helper & Directives Example
+### Idiomatic Blade View Example
 
 ```blade
 @auth
@@ -178,9 +380,9 @@ Inside component templates, `$attributes` provides powerful fluent helpers:
 
 ---
 
-## 3. Layouts: Components vs. Sections
+## 5. Layout Architectures: Components vs. Sections
 
-### Component-Based Layouts (Recommended)
+### Approach A: Component-Based Layouts (Recommended)
 
 Create `resources/views/components/layout.blade.php`:
 
@@ -209,25 +411,30 @@ Use in a page view:
 <x-layout title="All Posts">
     <h1 class="text-3xl font-bold mb-6">Blog Posts</h1>
     <div class="grid gap-6 md:grid-cols-2">
-        @foreach($posts as $post)
-            <x-card :title="$post->title">
-                <p class="text-gray-600">{{ $post->excerpt }}</p>
-                <div class="mt-4">
-                    <a href="{{ route('posts.show', $post->slug) }}" class="text-indigo-600 hover:text-indigo-800 font-medium">Read more &rarr;</a>
-                </div>
-            </x-card>
-        @endforeach
+        @if(!empty($posts))
+            @foreach($posts as $post)
+                <x-card :title="$post->title">
+                    <p class="text-gray-600">{{ $post->excerpt }}</p>
+                    <div class="mt-4">
+                        <a href="{{ route('posts.show', $post->slug) }}" class="text-indigo-600 hover:text-indigo-800 font-medium">Read more &rarr;</a>
+                    </div>
+                </x-card>
+            @endforeach
+        @else
+            <p class="text-gray-500">No posts published yet.</p>
+        @endif
     </div>
 </x-layout>
 ```
 
-### Classic Section Layouts (`@extends`)
+### Approach B: Classic Section Layouts (`@extends`)
 
 ```blade
 {{-- layouts/app.blade.php --}}
 <!doctype html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
     <title>@yield('title', config('app.name'))</title>
     @vite('app.js')
 </head>
@@ -248,34 +455,7 @@ Use in a page view:
 
 ---
 
-## 4. Blade Directives Reference
-
-| Directive | Purpose | Example |
-| --- | --- | --- |
-| `@props(['name', 'type' => 'text'])` | Declares component props in component files | `@props(['variant' => 'primary'])` |
-| `@use('Namespace\Class', 'Alias')` | Imports a PHP class into the compiled template | `@use('App\Models\Post')` |
-| `@if`, `@elseif`, `@else`, `@endif` | Conditional blocks | `@if($user->isAdmin())` |
-| `@unless`, `@endunless` | Inverse conditional | `@unless($post->is_published)` |
-| `@isset`, `@empty` | Variable state checks | `@isset($user->avatar)` |
-| `@switch`, `@case`, `@default`, `@break`, `@endswitch` | Switch statement | `@switch($status) @case('active') ... @break @endswitch` |
-| `@foreach`, `@for`, `@while` | Loops | `@foreach($posts as $post) ... @endforeach` |
-| `@class([...])` | Conditional CSS classes | `<div @class(['p-4', 'bg-red-50' => $hasError])>` |
-| `@style([...])` | Conditional inline styles | `<div @style(['background-color: red' => $hasError])>` |
-| `@checked($bool)`, `@selected($bool)` | Form state attributes | `<input type="checkbox" @checked($user->active)>` |
-| `@disabled($bool)`, `@readonly($bool)`, `@required($bool)` | Form control attributes | `<input @disabled($isLocked)>` |
-| `@csrf`, `@method('PUT')` | CSRF token & HTTP method spoofing | `@csrf @method('PATCH')` |
-| `@error('field') ... @enderror` | Renders validation error exposing `$message` | `@error('email') <p>{{ $message }}</p> @enderror` |
-| `@errors('field') ... @enderrors` | Loops over all errors for a field | `@errors('tags') <p>{{ $message }}</p> @enderrors` |
-| `@session('key') ... @endsession` | Session presence block | `@session('status') <p>{{ session('status') }}</p> @endsession` |
-| `@auth($guard)`, `@guest($guard)` | Authentication state blocks | `@auth <span>{{ user('name') }}</span> @endauth` |
-| `@can('ability', $model)`, `@cannot` | Gate authorization checks | `@can('update-post', $post) <a href="...">Edit</a> @endcan` |
-| `@json($data)` | Encodes data safely for JS scripts (`Js::from`) | `const user = @json($user);` |
-| `@vite('app.js')` | Renders Vite script and style tags | `@vite('app.js')` |
-| `@verbatim ... @endverbatim` | Preserves raw Alpine/Vue template brackets | `@verbatim <span>{{ alpineVar }}</span> @endverbatim` |
-
----
-
-## 5. Rendering from Controllers & Clearing View Cache
+## 6. Rendering from Controllers & Clearing Cache
 
 ```php
 // Return View Response from Controller

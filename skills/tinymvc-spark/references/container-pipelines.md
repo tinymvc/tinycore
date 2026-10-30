@@ -1,6 +1,17 @@
 # Dependency injection, events, and pipelines
 
-Read for multi-service features, replaceable integrations, request/job isolation, and staged imports. Source paths below are relative to `vendor/tinymvc/tinycore/src`. Pair this with [application patterns](application-patterns.md), [extensions](extensions-errors.md), and [advanced workflows](advanced-workflows.md).
+Read when: building multi-service features, replaceable integrations, request/job isolation, or staged imports. Source paths are relative to `vendor/tinymvc/tinycore/src`. Pair with [application patterns](application-patterns.md), [extensions](extensions-errors.md), and [advanced workflows](advanced-workflows.md).
+
+## Spark vs Laravel habits
+
+| Intent | Spark | Avoid |
+| --- | --- | --- |
+| Contextual binding | `app()->when(concrete:, needs:, give:)` (three arguments) | `when()->needs()->give()` |
+| Binding | `bind()` / `singleton()` / `instance()`; not a fluent builder | Laravel fluent binding methods |
+| Alias | `alias($alias, $abstract)` | Reversed arguments |
+| Event payload | `event('order.created', [$order])`; an array payload is an argument list | Passing an array record and expecting it as one argument |
+| Object events | PSR-14: `app()->on(OrderPlaced::class, $listener)`; `event(new OrderPlaced($order))` | String-event APIs (`until()`, response aggregation) |
+| Pipeline concurrency | `async()` returns a Generator | Assuming parallel execution |
 
 ## Resolve and bind dependencies
 
@@ -17,57 +28,49 @@ app()->singleton(App\Services\RemoteCatalog::class, function () {
 });
 ```
 
-These are application-defined types; the factory must match the actual constructor. `bind()` creates a transient binding and clears an existing shared instance; `singleton()` shares the resolved instance. `instance($abstract, $object)` installs an existing value. Methods are not a Laravel fluent binding builder.
+These are application-defined types; the factory must match the actual constructor.
 
-Contextual binding uses three arguments:
+- `bind()` creates a transient binding and clears an existing shared instance. `singleton()` shares the resolved instance. `instance($abstract, $object)` installs an existing value.
+- Contextual binding:
 
-```php
-app()->when(
-    concrete: App\Services\ExportService::class,
-    needs: App\Contracts\Catalog::class,
-    give: App\Services\ArchiveCatalog::class,
-);
-```
+  ```php
+  app()->when(
+      concrete: App\Services\ExportService::class,
+      needs: App\Contracts\Catalog::class,
+      give: App\Services\ArchiveCatalog::class,
+  );
+  ```
 
-Do not use `when()->needs()->give()`. Aliases use `alias($alias, $abstract)` in that order. `make($class, $parameters)` and `call($callback, $parameters, $bindingFields)` provide explicit construction/action parameters; inspect `Container.php` before mixing route scalars with injected types.
-
-Callable factories and `call()` accept invokable objects and static callables. Supplied positional objects matching a declared class type retain their identity; omitted class dependencies are resolved through the container. Variadic parameters accept remaining positional values or an array under their parameter name, including an empty list.
-
-For resolution failures, trace imports/autoloading, constructor arguments, interface binding, provider registration, and circular dependencies. Use `bound()` / `resolved()` for diagnostics. `forgetInstance()` drops a shared instance; it does not replace references already captured by another object. Avoid broad `flush()` during a request.
-
-Do not capture current users, tenants, requests, or open transactions in long-lived services. Pass operation-specific values to methods. A test fake must be bound before the consumer is resolved. Verify two distinct users/jobs in the same process when changing shared state.
+- `make($class, $parameters)` and `call($callback, $parameters, $bindingFields)` provide explicit construction/action parameters; inspect `Container.php` before mixing route scalars with injected types.
+- Callable factories and `call()` accept invokable objects and static callables. Supplied positional objects matching a declared class type keep their identity; omitted class dependencies resolve through the container. Variadic parameters accept remaining positional values, or an array under their parameter name (including an empty list).
+- Diagnose resolution failures by tracing imports/autoloading, constructor arguments, interface bindings, provider registration, and circular dependencies. Use `bound()` / `resolved()` for diagnostics. `forgetInstance()` drops a shared instance but does not replace references another object already captured. Avoid broad `flush()` during a request.
+- Do not capture current users, tenants, requests, or open transactions in long-lived services; pass operation-specific values to methods. Bind a test fake before the consumer is resolved. When changing shared state, verify two distinct users/jobs in the same process.
 
 ## Standard service interfaces
 
-Native service contracts for Queue, Translator, DB, Blade, Hash, Events, Router, Middleware, and the registered HTTP services resolve their existing shared instances. `ApplicationContract` and `ContainerContract` resolve the application. Contract bindings are lazy and follow replacement request/service instances; they do not create a second singleton. Rebind a concrete service to replace its helper/facade access too, or bind just its contract to replace that interface's consumers.
-
-HTTP service registrations and short aliases (`request`, `response`, `session`, `auth`, `gate`, `inputErrors`, `vite`) are available in CLI as well as web applications. Registration does not capture a request or start a session; services are constructed only when resolved. Native session startup remains SAPI-dependent, and PSR hosts still own session/transport integration.
-
-`ContainerContract` extends PSR-11. `has()` follows aliases; missing entries throw `Psr\Container\NotFoundExceptionInterface`. Container resolution exceptions implement the corresponding PSR-11 interfaces. `app(Psr\Container\ContainerInterface::class)` returns the current application.
-
-Inject `Psr\Log\LoggerInterface` for logging. The default `Spark\Logger` writes through Tracer, supports `{name}` placeholders and rejects unknown levels. `Spark\Facades\Log` forwards to that binding, so replacing the PSR logger also replaces facade logging. `Spark\Contracts\LoggerInterface` is now an instance interface extending PSR-3; call the facade for static logging.
-
-Inject `Psr\Clock\ClockInterface` or resolve `app('clock')` for a `DateTimeImmutable` in the configured application timezone. Use `new Spark\Support\Clock('UTC')` for an explicit timezone. Carbon exports independent dates through `toDateTime()` and `toDateTimeImmutable()`.
+- Native contracts for Queue, Translator, DB, Blade, Hash, Events, Router, Middleware, and the registered HTTP services resolve their existing shared instances. `ApplicationContract` and `ContainerContract` resolve the application.
+- Contract bindings are lazy and follow replacement request/service instances; they do not create a second singleton. Rebind a concrete service to replace its helper/facade access too, or bind only its contract to replace that interface's consumers.
+- HTTP service registrations and short aliases (`request`, `response`, `session`, `auth`, `gate`, `inputErrors`, `vite`) exist in CLI as well as web. Registration neither captures a request nor starts a session; services are built only when resolved. Native session startup remains SAPI-dependent, and PSR hosts own session/transport integration.
+- `ContainerContract` extends PSR-11. `has()` follows aliases; resolving a missing entry throws `Psr\Container\NotFoundExceptionInterface`, and container resolution exceptions implement the matching PSR-11 interfaces. `app(Psr\Container\ContainerInterface::class)` returns the current application.
+- **Logging:** inject `Psr\Log\LoggerInterface`. The default `Spark\Logger` writes through Tracer, supports `{name}` placeholders, and rejects unknown levels. `Spark\Facades\Log` forwards to that binding, so replacing the PSR logger also replaces facade logging. `Spark\Contracts\LoggerInterface` is an instance interface extending PSR-3; call the facade for static logging.
+- **Clock:** inject `Psr\Clock\ClockInterface` or resolve `app('clock')` for a `DateTimeImmutable` in the configured application timezone. Use `new Spark\Support\Clock('UTC')` for an explicit timezone. Carbon exports independent dates through `toDateTime()` and `toDateTimeImmutable()`.
 
 ## Events and payload shape
 
-`event($name, $payload = [], $halt = false)` dispatches synchronously. An array payload is an argument list, so use `event('order.created', [$order])` for a single array/object argument and wrap an array record rather than accidentally spreading its fields. Register listeners through `app()->on()` or `Spark\Events` as the application does.
+`event($name, $payload = [], $halt = false)` dispatches synchronously. Register listeners through `app()->on()` or `Spark\Events` as the application does.
 
-Higher numeric priorities run first. For string events, `dispatch()` stops on a listener returning `false` or calling `halt()`. Nested dispatches keep their halt state separate: an inner event cannot stop or resume its outer event. `until()` returns the first non-null response, including false. Inspect `Events.php` and `Foundation/helpers.php` before choosing response aggregation or one-time listeners.
+- An array payload is an argument list. Wrap a single array or object argument (`event('order.created', [$order])`) rather than accidentally spreading its fields.
+- Higher numeric priorities run first. For string events, `dispatch()` stops when a listener returns `false` or calls `halt()`. Nested dispatches keep separate halt state: an inner event cannot stop or resume its outer event. `until()` returns the first non-null response, including `false`. Inspect `Events.php` and `Foundation/helpers.php` before choosing response aggregation or one-time listeners.
+- Wildcard listeners receive every string event with the event name first: `app()->on('*', fn ($event, ...$payload) => ...);`.
+- Object events use PSR-14. Listeners register by class, parent class, or interface. Dispatch returns the same event, ignores listener return values, and propagates exceptions unchanged in every environment. Only `StoppableEventInterface::isPropagationStopped()` stops object dispatch. Higher priorities run first across all matching types.
+- `Psr\EventDispatcher\EventDispatcherInterface` and `ListenerProviderInterface` both resolve to the application's `Spark\Events` instance.
+- For low-overhead runtime telemetry, use `Spark\Telemetry::emit($event, ...$args)`. Closure arguments (lazy payloads) resolve only when listeners exist or debug mode is enabled.
 
-An event does not establish a durable job or an after-commit boundary. A listener that writes to another service cannot roll back with SQL. Put external effects behind the application's explicit commit/dispatch policy; test listener failure and repeated delivery where relevant.
-
-Object events use PSR-14: register listeners by class, parent class, or interface using `app()->on(OrderPlaced::class, $listener)`, then call `event(new OrderPlaced($order))`. Dispatch returns the same event, ignores listener return values, and propagates exceptions unchanged in every environment. Only `StoppableEventInterface::isPropagationStopped()` stops object dispatch. Higher priorities run first across all matching types. `until()` and response aggregation remain string-event APIs.
-
-Wildcard listeners (`*`) receive all string-based event dispatches with the event name as the first argument: `app()->on('*', fn($event, ...$payload) => ...);`.
-
-For low-overhead runtime telemetry and performance hooks, use `Spark\Telemetry::emit($event, ...$args)`. If arguments contain Closures (lazy payloads), they are only resolved when listeners exist or debug mode is enabled.
-
-`Psr\EventDispatcher\EventDispatcherInterface` and `ListenerProviderInterface` both resolve to the application's `Spark\Events` instance.
+An event is not a durable job or an after-commit boundary, and a listener that writes to another service cannot roll back with SQL. Put external effects behind the application's explicit commit/dispatch policy ([advanced workflows](advanced-workflows.md#commit-dispatch-and-external-effects)), and test listener failure and repeated delivery where relevant.
 
 ## Staged transformations
 
-Use `Spark\Pipeline` for a meaningful sequence of independently testable transformations. A direct method is sufficient for a short operation.
+Use `Spark\Pipeline` for a meaningful sequence of independently testable transformations; a direct method is enough for a short operation.
 
 ```php
 use Spark\Pipeline;
@@ -84,8 +87,9 @@ $result = Pipeline::make($validated)
     ->thenReturn();
 ```
 
-The application pipe implements `Spark\Contracts\PipeInterface::handle($payload, Closure $next): mixed` or another supported callable form. Return `$next($payload)` to continue; returning without calling it deliberately short-circuits. `through()` takes variadic pipes. `withContext()` supplies shared context, and `middleware()` wraps execution.
-
-`onError($handler, stopOnError: true)` receives exception, payload, and context. Define the error response explicitly; do not convert partially completed persistence into success. A pipeline provides neither transactions nor rollback. `async()` returns a Generator, not parallel execution. Inspect `Pipeline.php` before reusing/resetting a configured instance.
+- A pipe implements `Spark\Contracts\PipeInterface::handle($payload, Closure $next): mixed` or another supported callable form. Return `$next($payload)` to continue; returning without calling it deliberately short-circuits.
+- `through()` takes variadic pipes. `withContext()` supplies shared context. `middleware()` wraps execution.
+- `onError($handler, stopOnError: true)` receives the exception, payload, and context. Define the error response explicitly; never convert partially completed persistence into success.
+- A pipeline provides neither transactions nor rollback. `async()` returns a Generator, not parallel execution. Inspect `Pipeline.php` before reusing or resetting a configured instance.
 
 Verify pipe order, normalization, early termination, exceptions, and whether a failed stage leaves persisted effects. Use [concurrency](concurrency.md) for independent fan-out and [queues](queues.md) for durable work.

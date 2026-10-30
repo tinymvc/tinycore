@@ -1,8 +1,10 @@
-# Extensions Errors
+# Extensions and Errors
 
-Read this reference for service providers, events, console commands, error handling. Source paths and command working directories refer to the application root unless explicitly stated otherwise. Check the installed package when versions differ.
+> **Read when:** adding service providers, events, console commands, or custom error handling.
+> **Related:** [Foundation](foundation.md) · [Helpers](helpers.md) · [Advanced workflows](advanced-workflows.md#request-lifecycle-and-extension-boundaries)
+> Paths and command working directories are relative to the application root. Check the installed package when versions differ.
 
-## Service Providers
+## Service providers
 
 Providers extend `Spark\Foundation\Providers\ServiceProvider`.
 
@@ -27,7 +29,9 @@ class AppServiceProvider extends ServiceProvider
 }
 ```
 
-Register providers in `bootstrap/app.php` through `Application::create(... providers: [...])` or `withApp(providers: [...])`.
+Register providers in `bootstrap/app.php` via `Application::create(... providers: [...])` or `withApp(providers: [...])`. Adapter packages (FireLine, Inertia) register theirs in `bootstrap/providers.php`; preserve the existing array when adding one.
+
+Do not store a request/user/tenant in a singleton consumed by repeated requests or workers (see [request lifecycle](advanced-workflows.md#request-lifecycle-and-extension-boundaries)).
 
 ## Events
 
@@ -39,38 +43,43 @@ app()->on('order.created', function ($order) {
 });
 ```
 
-The event dispatcher supports priorities, one-time listeners, dispatch with responses, `until`, and subscriptions.
+The dispatcher supports priorities, one-time listeners, dispatch with responses, `until`, and subscriptions. The `Event` facade exposes `listen()`, `dispatch()`, `dispatchIf()`, `until()`, and `once()` (backend code only, never Blade).
 
-## Console Commands
+## Console commands
 
-Built-in commands use consistent `INFO`, `DONE`, `WARN`, and `ERROR` notices. Migrations and rollbacks print `RUNNING` followed by timed `DONE` / `FAIL` lines. Route and queue listings use tables. ANSI colors are disabled when output is redirected, `NO_COLOR` is nonempty, or `TERM=dumb`; progress uses complete lines for readable logs. Custom commands can use `Spark\Console\Prompt::info()`, `success()`, `warning()`, `error()`, `line()`, `table()`, and `status($message, $status, $duration)`. `status()` accepts an optional elapsed duration in seconds and only renders output; use `line()` when intentional multiline text is needed.
-
-Command routes may be loaded through `withRouting(commands: __DIR__ . '/../routes/console.php')` from `bootstrap/app.php`.
-
-Use the command registry:
+Register commands with the command registry; follow the existing app command style.
 
 ```php
+use App\Console\ReportCommand; // your handler class
+
 command('reports:sync', [ReportCommand::class, 'handle'])
     ->description('Sync reports');
 ```
 
-Follow existing app command style.
+Load command routes through `withRouting(commands: __DIR__ . '/../routes/console.php')` in `bootstrap/app.php`.
 
-## Error Handling
+**Output conventions**
 
-Use:
+- Built-in commands use consistent `INFO`, `DONE`, `WARN`, `ERROR` notices. Migrations/rollbacks print `RUNNING` then timed `DONE` / `FAIL` lines. Route and queue listings use tables.
+- ANSI colors are disabled when output is redirected, `NO_COLOR` is nonempty, or `TERM=dumb`. Progress uses complete lines for readable logs.
+- Custom commands can use `Spark\Console\Prompt`: `info()`, `success()`, `warning()`, `error()`, `line()`, `table()`, `status($message, $status, $duration)`.
+- `status()` takes an optional elapsed duration (seconds) and only renders output; use `line()` for intentional multiline text.
+
+## Error handling
 
 ```php
 abort(\Spark\Http\Response::STATUS_NOT_FOUND, 'Post not found');
 abort(\Spark\Http\Response::STATUS_FORBIDDEN, 'Forbidden');
 ```
 
-Framework mappings:
+Conditional forms: `abort_if()`, `abort_unless()`, `throw_if()`, `throw_unless()` (see [helpers](helpers.md#flow-control-and-diagnostics)).
 
-- route not found -> 404
-- not found/item not found -> 404
-- authorization failure -> 403
-- invalid CSRF -> 419
-- too many requests -> 429
+| Condition | Status |
+| --- | --- |
+| Route not found | 404 |
+| Not found / item not found | 404 |
+| Authorization failure | 403 |
+| Invalid CSRF | 419 |
+| Too many requests | 429 |
 
-Register custom exception handlers with `withExceptions()` if the app uses that style.
+Register custom exception handlers with `withExceptions()` if the app uses that style. Preserve useful HTTP status and the app's JSON/browser contract; keep unexpected errors observable and never catch every throwable and report success.

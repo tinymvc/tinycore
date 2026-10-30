@@ -1,55 +1,47 @@
 # Auth and Gate
 
-Read this reference for authentication, guards, tokens, and authorization gates. Source paths and command working directories refer to the application root unless explicitly stated otherwise. Check the installed package when versions differ.
+Read when: signing users in or out, using named guards, issuing JWTs, or authorizing actions with gates. Paths are relative to the application root; the installed package is authoritative when versions differ.
 
----
+## Authentication
 
-## Auth: Native Authentication Standard
-
-The **`Spark\Facades\Auth`** facade provides full access to the active authentication guard and user session.
+`Spark\Facades\Auth` fronts the active guard and user session.
 
 ```php
 use Spark\Facades\Auth;
 
-// 1. Attempt login with credentials (supports Arrayable directly!)
 $credentials = $request->validated()->only('email', 'password');
-$remember = $request->boolean('remember');
 
-if (Auth::attempt($credentials, remember: $remember)) {
-    $user = Auth::user(); // Returns authenticated Model instance
+if (Auth::attempt($credentials, remember: $request->boolean('remember'))) {
+    $user = Auth::user();
 }
 
-// 2. Authentication State Checks
-Auth::check();    // True if signed in
-Auth::isGuest();  // True if unauthenticated
-Auth::id();       // Primary key ID of authenticated user (int|string|null)
-Auth::user();     // Authenticated User model instance (or null)
+Auth::check();    // true when signed in
+Auth::isGuest();  // true when unauthenticated
+Auth::id();       // int|string|null
+Auth::user();     // User model or null
 
-// 3. Manual Login, Login By ID & Logout
 Auth::login($user, remember: true);
 Auth::loginUsingId($user->id, remember: true);
 Auth::setUser($user);
 Auth::logout();
 ```
 
-> [!TIP]
-> **Arrayable Support in `Auth::attempt`**:
-> Because `Spark\Http\Input` implements `Arrayable`, you can pass `$request->validated()` or `$request->validated()->only('email', 'password')` directly to `Auth::attempt()` without calling `->all()` or `->toArray()`.
+- `Spark\Http\Input` is `Arrayable`, so pass `$request->validated()` or `->only(...)` straight to `Auth::attempt()`; no `->all()` or `->toArray()` needed.
+- In Blade, never call the `Auth` or `Gate` facades. Use `@auth`, `@guest`, `auth()->user()`, `user('email')`, `@can('ability', $model)`, and `@cannot`.
+- Being signed in does not authorize an action. Check abilities and ownership separately (see [Gate](#gate)). Protect routes through [middleware](middleware.md).
 
-> [!IMPORTANT]
-> **Authentication & Gates in Blade Views**:
-> In Blade templates, **never call `\Spark\Facades\Auth` or `\Spark\Facades\Gate`**. Use native Blade helpers and directives: `@auth`, `@guest`, `auth()->user()`, `user('email')`, `@can('ability', $model)`, and `@cannot`.
+## Named and custom guards
 
-### Custom & Named Guards
-
-In Spark 4.0, `config/auth.php` defines the default `guard`, shared `model`, and `guards` map. Named guards resolve lazily:
+`config/auth.php` defines the default `guard`, the shared `model`, and a `guards` map. Named guards resolve lazily.
 
 ```php
-// Switch to a named guard
 $admin = Auth::guard('admin')->user();
 $isAdminLoggedIn = Auth::guard('admin')->check();
+```
 
-// Register a custom guard programmatically in a ServiceProvider
+Register a custom guard in a service provider (see [extensions](extensions-errors.md)):
+
+```php
 \Spark\Http\Auth::register(
     model: \App\Models\Admin::class,
     config: [
@@ -64,72 +56,80 @@ $isAdminLoggedIn = Auth::guard('admin')->check();
 );
 ```
 
-### JWT Token Management
+## JWT tokens
 
-The API guard provides stateless or table-backed JWT token generation:
+The API guard issues stateless or table-backed JWTs. Prefer these helpers for API authentication; they integrate with guards and token revocation.
 
 ```php
-// Issue a token for the current user
-$token = Auth::createToken();
+$token = Auth::createToken();                               // current user
+$token = Auth::createToken(payload: ['role' => 'editor']);  // custom claims
+$token = Auth::createToken($user);                          // specific user
 
-// Issue a token with custom claims
-$token = Auth::createToken(payload: ['role' => 'editor']);
-
-// Issue a token for a specific user
-$token = Auth::createToken($user);
-
-// Revoke current user's token (requires jwt_token_table configured)
-Auth::revokeToken();
+Auth::revokeToken(); // current user's token; requires jwt_token_table
 ```
 
----
+### Low-level utility (`Spark\Utils\JWT`)
 
-## Gate: Authorization Policies and Ability Checks
-
-The **`Spark\Facades\Gate`** facade allows you to define abilities and verify permissions across the application.
-
-### Defining Abilities
-
-Define gates in a service provider or bootstrap file (e.g. `app/Providers/AppServiceProvider.php`):
+Use only when the guard helpers do not fit, such as signing a one-off token for a non-user purpose.
 
 ```php
-use Spark\Facades\Gate;
+use Spark\Utils\JWT;
+
+$jwt = JWT::encode([
+    'sub' => $user->id,
+    'role' => $user->role,
+    'exp' => now()->addHours(2)->timestamp,
+], key: config('app.key'), algo: 'HS256');
+
+try {
+    $decoded = JWT::decode($jwt, key: config('app.key'), verify: true);
+    $userId = $decoded['sub'];
+} catch (\Throwable $e) { // narrow to the decoder's exception type
+    abort(\Spark\Http\Response::STATUS_UNAUTHORIZED, 'Invalid or expired token.');
+}
+```
+
+Inspect `Utils/JWT.php` (see [API discovery](api-discovery.md)) to confirm that `decode()` enforces `exp` and pins the algorithm before relying on either. Keep secrets and sensitive data out of payloads.
+
+## Gate
+
+`Spark\Facades\Gate` defines abilities and checks them. Gate callbacks receive the *Current Authenticated User* automatically as the first parameter.
+
+### Defining abilities
+
+Define abilities in a service provider or bootstrap file such as `app/Providers/AppServiceProvider.php`.
+
+```php
+use App\Models\Post;
 use Spark\Facades\Auth;
-use App\Models\{Post, User};
+use Spark\Facades\Gate;
 
-// Ability with argument
-Gate::define('update-post', function (?User $user, Post $post) {
-    return (int) $post->user_id === $user?->id;
+Gate::define('update-post', function (?User $user, Post $post): bool {
+    return (string) $post->user_id === (string) $user?->id;
 });
 
-// Admin-only ability
-Gate::define('manage-users', function (?User $user) {
-    return $user?->role === 'admin';
-});
+Gate::define('manage-users', fn (?User $user): bool => $user?->role === 'admin');
 ```
 
-### Checking Abilities
+Guard against a guest before comparing ids; a null id must never match a null owner.
+
+### Checking abilities
+
+| Call | Result |
+| --- | --- |
+| `Gate::check($ability, ...$args)` / `Gate::allows(...)` | `bool` |
+| `Gate::denies(...)` | `bool` |
+| `Gate::authorize(...)` | Throws `Spark\Exceptions\Http\AuthorizationException` (HTTP 403) |
 
 ```php
 use Spark\Facades\Gate;
+use Spark\Http\Response;
 
-// 1. Gate::check() / Gate::allows() - Returns boolean
-if (Gate::check('update-post', $post)) {
-    // User is authorized
-}
-
-if (Gate::allows('update-post', $post)) {
-    // Equivalent to check()
-}
-
-// 2. Gate::denies() - Returns boolean
-if (Gate::denies('update-post', $post)) {
-    abort(\Spark\Http\Response::STATUS_FORBIDDEN, 'Unauthorized.');
-}
-
-// 3. Gate::authorize() - Automatically throws Spark\Exceptions\Http\AuthorizationException (HTTP 403)
 Gate::authorize('update-post', $post);
+
+if (Gate::denies('update-post', $post)) {
+    abort(Response::STATUS_FORBIDDEN, 'Unauthorized.');
+}
 ```
 
-> [!NOTE]
-> Gate callbacks receive only the arguments explicitly passed to `Gate::allows('ability', ...$args)`. Read `Auth::user()` inside the callback, or pass the user explicitly.
+Use a FormRequest for request-level authorization ([requests and validation](requests-validation.md)). Route model binding never authorizes access; keep ownership/tenant conditions in queries too ([advanced workflows](advanced-workflows.md#authorization-scopes-and-query-composition)).

@@ -1,21 +1,34 @@
-# Application patterns and architecture
+# Application Patterns and Architecture
 
-Read this reference when structuring routes, controllers, FormRequests, models, services, jobs, or JSON resources. The examples use the installed Spark contracts and are intentionally small; adapt fields and ownership rules to the target app.
+> **Read when:** structuring routes, controllers, FormRequests, models, services, jobs, or JSON resources.
+> **Related:** [FireLine](fireline.md) · [Inertia](inertia.md) · [Advanced workflows](advanced-workflows.md)
+> The examples use the installed Spark contracts and are intentionally small; adapt fields and ownership rules to the target app. They assume the app defines the referenced requests, jobs, resources, scopes, and policies.
 
-## The default request path
+Contents:
 
-For a JSON resource endpoint, keep the path visible and predictable:
+- [Default request path](#default-request-path)
+- [Thin API controller](#thin-api-controller)
+- [Focused service](#focused-service)
+- [Model scopes, casts, relations](#model-scopes-casts-and-relations)
+- [Resource as API boundary](#resource-as-an-api-boundary)
+- [Non-API response modes](#non-api-response-modes)
 
-1. A named route uses `{post}` or `{post:slug}` when ordinary model binding is sufficient.
-2. A FormRequest owns meaningful input validation and authorization.
-3. A controller coordinates the request, bound model, query, service, and resource.
-4. A model owns casts, relations, and reusable scopes.
-5. A service owns a multi-step business workflow or transaction.
-6. A JsonResource owns the public API field list and nested resource shape.
+## Default request path
+
+For a JSON resource endpoint, keep the path visible and predictable. Each layer has one job:
+
+| Layer | Owns |
+| --- | --- |
+| Named route | `{post}` or `{post:slug}` binding when ordinary model binding is enough |
+| FormRequest | Meaningful input validation and authorization |
+| Controller | Coordinates request, bound model, query, service, resource |
+| Model | Casts, relations, reusable scopes |
+| Service | Multi-step business workflow or transaction |
+| JsonResource | Public API field list and nested resource shape |
 
 The same domain service can serve an API controller, a Blade controller, a FireLine action, a job, or a command. The response layer changes with the frontend contract; the domain rules do not.
 
-## A thin API controller
+## Thin API controller
 
 ```php
 <?php
@@ -69,8 +82,7 @@ class PostController extends Controller
         UpdatePostRequest $request,
         Post $post,
         PostService $postService,
-    ): PostResource
-    {
+    ): PostResource {
         $post = $postService->update($post, $request->validated());
 
         return PostResource::make($post);
@@ -87,11 +99,13 @@ class PostController extends Controller
 }
 ```
 
-These examples assume the application defines the referenced requests, jobs, resources, scopes, and access policies. Protect read/delete actions with the appropriate gate or route policy; model binding alone does not enforce ownership.
+Notes:
 
-Do not add a service merely to call `Post::create()` or `PostResource::make()`. Inject a service when the action coordinates a transaction, multiple models, relation synchronization, cache/storage invalidation, external effects, or a reusable domain rule.
+- **Model binding does not enforce ownership.** Protect read/delete actions with the appropriate gate or route policy.
+- **Do not add a service merely to call `Post::create()` or `PostResource::make()`.** Inject one when the action coordinates a transaction, multiple models, relation sync, cache/storage invalidation, external effects, or a reusable domain rule.
+- **Dispatch placement matters.** `store()` dispatches immediately after the write; when a lost job is unacceptable or the write is inside a transaction, follow [Commit, dispatch, and external effects](advanced-workflows.md#commit-dispatch-and-external-effects).
 
-## A focused service
+## Focused service
 
 ```php
 <?php
@@ -99,9 +113,9 @@ Do not add a service merely to call `Post::create()` or `PostResource::make()`. 
 namespace App\Services;
 
 use App\Models\Post;
-use Spark\Http\Input;
 use RuntimeException;
 use Spark\Facades\DB;
+use Spark\Http\Input;
 
 class PostService
 {
@@ -138,7 +152,8 @@ class PostService
 }
 ```
 
-Pass `Spark\Http\Input` or arrays deliberately. Since `Spark\Http\Input` implements `\Spark\Contracts\Support\Arrayable` and `\ArrayAccess`, it passes seamlessly into `$post->fill($data)` or `Post::create($data)` without requiring explicit `->all()` or `->toArray()` conversion. Keep authorization outside the service when it is request-specific, or pass an explicit actor when the rule belongs in the domain workflow.
+- Pass `Spark\Http\Input` or arrays deliberately. `Input` implements `\Spark\Contracts\Support\Arrayable` and `\ArrayAccess`, so it goes straight into `$post->fill($data)` or `Post::create($data)` with no `->all()` / `->toArray()`.
+- Keep request-specific authorization outside the service, or pass an explicit actor when the rule belongs in the domain workflow.
 
 ## Model scopes, casts, and relations
 
@@ -198,9 +213,11 @@ class Post extends Model
 }
 ```
 
-Use `Post::query()`, `Post::where(...)`, `Post::findOrFail(...)`, `Post::with(...)`, or a scope for a model-backed table. Use `with()` on list queries and `load()` on a bound model before a resource needs relations. Define relation names that describe the domain and use `whereHas()`, `whereRelation*()`, `withCount()`, `withExists()`, and aggregates rather than fetching unrelated rows and filtering in PHP.
+- Query with `Post::query()`, `Post::where(...)`, `Post::findOrFail(...)`, `Post::with(...)`, or a scope.
+- Use `with()` on list queries and `load()` on a bound model before a resource needs relations.
+- Name relations for the domain. Use `whereHas()`, `whereRelation*()`, `withCount()`, `withExists()`, and aggregates instead of fetching unrelated rows and filtering in PHP.
 
-## A resource is an API boundary
+## Resource as an API boundary
 
 ```php
 <?php
@@ -235,13 +252,15 @@ class PostResource extends JsonResource
 }
 ```
 
-Do not call `Carbon::parse($this->created_at)` or `$this->created_at->toIsoUtcString()` here. Model timestamps and `datetime`/`date` casts are already `Spark\Carbon` values, and `JsonResource::normalize()` recursively converts them to ISO UTC strings. Format a date manually only when the product contract explicitly asks for a display string, such as a localized Blade label.
+**Do not** call `Carbon::parse($this->created_at)` or `$this->created_at->toIsoUtcString()` here. Model timestamps and `datetime`/`date` casts are already `Spark\Carbon`, and `JsonResource::normalize()` recursively converts them to ISO UTC strings. Format manually only when the product contract explicitly wants a display string (e.g. a localized Blade label).
 
 ## Non-API response modes
 
-- Blade: query through models/services, then `return view('posts.show', ['post' => $post]);`; use redirects for successful writes and normal session validation flow.
-- FireLine: preserve the installed adapter's `fire()`/`Fire::render()` response, message/error envelope, and redirect behavior. Read [FireLine](fireline.md) before changing a FireLine form.
-- Inertia: use `inertia()`/`Inertia::render()` and adapter redirects after writes. Props are public response data; select fields and authorize them explicitly. Read [Inertia](inertia.md) for redirect, flash, and validation contracts.
-- JSON webhooks or scalar endpoints: use `json()` when the external contract is not an entity resource. Keep the documented keys and status codes stable.
+| Mode | Pattern |
+| --- | --- |
+| Blade | Query via models/services, `return view('posts.show', ['post' => $post]);`. Redirect after successful writes; use normal session validation flow. |
+| FireLine | Preserve the installed adapter's `fire()` / `Fire::render()` response, message/error envelope, and redirect behavior. Read [FireLine](fireline.md) first. |
+| Inertia | `inertia()` / `Inertia::render()`, adapter redirects after writes. Props are public response data: select fields and authorize explicitly. Read [Inertia](inertia.md). |
+| JSON webhooks / scalar endpoints | `json()` when the contract is not an entity resource. Keep documented keys and status codes stable. |
 
-The controller may share a service with all four modes. Keep representation-specific work in the controller/resource/adapter layer rather than leaking JSON envelopes into a Blade or Inertia action.
+One controller/service can serve all four modes. Keep representation-specific work in the controller/resource/adapter layer; do not leak JSON envelopes into a Blade or Inertia action.

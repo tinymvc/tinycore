@@ -1,144 +1,104 @@
 # Foundation
 
+> **Read when:** you need to know what TinyMVC / Spark is, where framework source lives, the typical app layout, bootstrap and request lifecycle, `defer()`, or configuration (env, database, cache, queue, session).
+> **Related:** [API discovery](api-discovery.md) · [Feature map](native-feature-map.md) · [Helpers](helpers.md)
+> Paths are relative to the application root unless stated. The installed package is authoritative when versions differ.
+
 Contents:
 
-- [What TinyMVC / Spark Is](#what-tinymvc--spark-is)
-- [Framework Source Lookup Paths](#framework-source-lookup-paths)
-- [Typical Application Layout](#typical-application-layout)
-- [Core Bootstrap](#core-bootstrap)
+- [What TinyMVC / Spark is](#what-tinymvc--spark-is)
+- [Framework source lookup](#framework-source-lookup)
+- [Typical application layout](#typical-application-layout)
+- [Bootstrap and request lifecycle](#bootstrap-and-request-lifecycle)
+- [Post-response work with defer()](#post-response-work-with-defer)
 - [Configuration](#configuration)
-- [Request Lifecycle Summary](#request-lifecycle-summary)
+- [PSR application entry point](#psr-application-entry-point)
 
-Read this reference for what tinymvc is, typical application layout, core bootstrap, configuration, request lifecycle summary. Source paths and command working directories refer to the application root unless explicitly stated otherwise. Check the installed package when versions differ.
+## What TinyMVC / Spark is
 
-## What TinyMVC / Spark Is
+TinyMVC is the vendor; the root framework is **TinyMVC / Spark** (or simply **Spark**). Laravel-like ergonomics, Spark-native APIs.
 
-TinyMVC is the vendor; the root framework is known as **TinyMVC / Spark** (or simply **Spark**).
+| Piece | Package / name | Role |
+| --- | --- | --- |
+| Vendor | `tinymvc` | Vendor namespace for `tinymvc/*` on Packagist and GitHub |
+| Root framework | `tinymvc/spark` | `Spark\` namespace, facades (`Spark\Facades\*`), contracts, `php spark` CLI |
+| Core engine | `tinymvc/tinycore` | Core package installed at `vendor/tinymvc/tinycore` |
+| App boilerplate | `tinymvc/skeleton` | Starter project applications are built from |
 
-- **Vendor**: `tinymvc` (the vendor namespace for packages like `tinymvc/*` on Packagist and GitHub)
-- **Root Framework**: `tinymvc/spark` (Spark) — provides the `Spark\` PHP namespace alias, all Spark facades (`Spark\Facades\*`), Spark contracts, and the `php spark` CLI runner
-- **Core Framework / Engine**: `tinymvc/tinycore` (TinyCore) — the underlying core framework package installed at `vendor/tinymvc/tinycore`
-- **Application Boilerplate**: `tinymvc/skeleton` (Skeleton) — the starter project and repository where applications are built
-- **Core Namespace**: `Spark\`
-- **CLI Runner**: `php spark`
-- **Minimum PHP**: `8.2`
-- **Architecture & Style**: Laravel-like ergonomics with high performance, clean Spark-native APIs
-- **Dependency injection**: `Spark\Foundation\Application` extends `Spark\Container`
-- **Routing**: `Spark\Http\Routing\Router`
-- **HTTP**: `Spark\Http\Request`, `Spark\Http\Response`, `Spark\Http\Middleware`
-- **Database**: PDO wrapper, query builder, active-record-like models, schema/migrations
-- **Storage utilities**: database, file, or Redis cache, locks, sessions, and queues
+Key facts:
 
-Do not assume Laravel classes such as `Illuminate\Http\Request`, `Illuminate\Support\Facades\Route`, `artisan`, Eloquent, or Laravel middleware internals exist. Use the `Spark\` classes and global helpers documented here.
+- Minimum PHP **8.2**; CLI runner is `php spark`.
+- Container: `Spark\Foundation\Application` extends `Spark\Container`.
+- Routing: `Spark\Http\Routing\Router`. HTTP: `Spark\Http\Request`, `Response`, `Middleware`.
+- Database: PDO wrapper, query builder, active-record-style models, schema/migrations.
+- Cache, locks, queues and sessions each support `database`, `file`, or `redis` backends.
 
-## Framework Source Lookup Paths
+> **Do not assume Laravel classes exist** (`Illuminate\Http\Request`, `Illuminate\Support\Facades\Route`, `artisan`, Eloquent, Laravel middleware internals). Use `Spark\` classes and the global helpers in [helpers](helpers.md).
 
-In an application project, TinyCore source is normally installed under:
+## Framework source lookup
 
-```text
-./vendor/tinymvc/tinycore/
-```
+In an application, TinyCore is normally at `vendor/tinymvc/tinycore/`. In the lists below, `src/` means `vendor/tinymvc/tinycore/src/`.
 
-Resolve the application's installed version from `composer.lock` / Composer installed metadata and read the matching implementation. Source code takes precedence over old examples and docblocks. A separate TinyCore source checkout may differ from the installed package. Locate it explicitly for a core task; do not assume a sibling directory exists or proves the installed version.
+Resolve the installed version from `composer.lock` / Composer installed metadata and read the matching implementation. Source beats old examples and docblocks. A separate TinyCore checkout may differ from the installed package: locate it explicitly for core tasks, never assume a sibling directory exists or proves the installed version, and never patch vendor code. For bounded declaration lookup use [API discovery](api-discovery.md); for subsystem locations use the [feature map](native-feature-map.md).
 
-For explicit core work, use the requested checkout. Follow [API discovery](api-discovery.md) for bounded declaration lookup and [the feature map](native-feature-map.md) for subsystem locations; do not patch vendor code or infer the installed version from a sibling checkout.
+**Bootstrap and container**
 
-Core bootstrap and container:
+- `src/Foundation/Application.php`: application lifecycle
+- `src/Contracts/ApplicationContract.php`: application contract
+- `src/Container.php`: service container / DI
+- `src/Foundation/Providers/ServiceProvider.php`: provider base class
+- `src/Foundation/Providers/ConsoleServiceProvider.php`: core console provider
+- `src/Utils/DotEnv.php`: environment loading
+- `src/Utils/Configuration.php`: config discovery and cache
+- `src/Foundation/helpers.php`: global helpers
 
-- Application lifecycle: `./vendor/tinymvc/tinycore/src/Foundation/Application.php`
-- Application contract: `./vendor/tinymvc/tinycore/src/Contracts/ApplicationContract.php`
-- Service container and dependency injection: `./vendor/tinymvc/tinycore/src/Container.php`
-- Service provider base class: `./vendor/tinymvc/tinycore/src/Foundation/Providers/ServiceProvider.php`
-- Core console provider: `./vendor/tinymvc/tinycore/src/Foundation/Providers/ConsoleServiceProvider.php`
-- Environment loading: `./vendor/tinymvc/tinycore/src/Utils/DotEnv.php`
-- Configuration discovery and cache: `./vendor/tinymvc/tinycore/src/Utils/Configuration.php`
-- Global helpers: `./vendor/tinymvc/tinycore/src/Foundation/helpers.php`
+**Routing, request, response**
 
-Routing and request lifecycle:
+- `src/Http/Routing/Router.php`, `Route.php` (builder), `RouteGroup.php`, `RouteResource.php`
+- `src/Facades/Route.php`
+- `src/Http/Request.php`, `Response.php`, `Middleware.php` (pipeline)
 
-- Router: `./vendor/tinymvc/tinycore/src/Http/Routing/Router.php`
-- Route builder: `./vendor/tinymvc/tinycore/src/Http/Routing/Route.php`
-- Route groups: `./vendor/tinymvc/tinycore/src/Http/Routing/RouteGroup.php`
-- Resource routes: `./vendor/tinymvc/tinycore/src/Http/Routing/RouteResource.php`
-- Route facade: `./vendor/tinymvc/tinycore/src/Facades/Route.php`
-- Request: `./vendor/tinymvc/tinycore/src/Http/Request.php`
-- Response: `./vendor/tinymvc/tinycore/src/Http/Response.php`
-- Middleware pipeline: `./vendor/tinymvc/tinycore/src/Http/Middleware.php`
+**Built-in middleware**
 
-Built-in middleware:
+- `src/Foundation/Http/Middlewares/CorsAccessControl.php`, `CsrfProtection.php`, `ThrottleIncomingRequests.php`
+- `src/Contracts/Http/MiddlewareInterface.php`
 
-- CORS base middleware: `./vendor/tinymvc/tinycore/src/Foundation/Http/Middlewares/CorsAccessControl.php`
-- CSRF base middleware: `./vendor/tinymvc/tinycore/src/Foundation/Http/Middlewares/CsrfProtection.php`
-- Throttle base middleware: `./vendor/tinymvc/tinycore/src/Foundation/Http/Middlewares/ThrottleIncomingRequests.php`
-- Middleware contract: `./vendor/tinymvc/tinycore/src/Contracts/Http/MiddlewareInterface.php`
+**Validation, auth, session**
 
-Validation, auth, and session:
+- `src/Foundation/Http/FormRequest.php`
+- `src/Http/Validator.php`, `Input.php` (validated input wrapper), `InputErrors.php`
+- `src/Http/Auth.php`, `Gate.php`, `Session.php`
 
-- Form request base class: `./vendor/tinymvc/tinycore/src/Foundation/Http/FormRequest.php`
-- Validator: `./vendor/tinymvc/tinycore/src/Http/Validator.php`
-- Validated input wrapper: `./vendor/tinymvc/tinycore/src/Http/Input.php`
-- Input errors: `./vendor/tinymvc/tinycore/src/Http/InputErrors.php`
-- Auth manager: `./vendor/tinymvc/tinycore/src/Http/Auth.php`
-- Gate/authorization: `./vendor/tinymvc/tinycore/src/Http/Gate.php`
-- Session: `./vendor/tinymvc/tinycore/src/Http/Session.php`
+**Database, ORM, migrations**
 
-Database, ORM, and migrations:
+- `src/Database/DB.php` (PDO wrapper), `QueryBuilder.php`, `Model.php`, `Events.php` (model callbacks)
+- `src/Database/Query/`: read/write/condition methods
+- `src/Database/Concerns/`: ORM, relation subqueries, pivots; `InteractsWithSoftDeletes.php`; `InteractsWithTracking.php` (change detection)
+- `src/Database/Casts/Castable.php` (casts trait), `Attribute.php` (attribute cast helper)
+- `src/Database/Relation/`: relations
+- `src/Database/Migration.php`; `src/Database/Schema/Schema.php`, `Blueprint.php`, `Column.php`, `Grammar.php`
+- `src/Facades/DB.php`: facade and transactions
 
-- DB/PDO wrapper: `./vendor/tinymvc/tinycore/src/Database/DB.php`
-- Query builder: `./vendor/tinymvc/tinycore/src/Database/QueryBuilder.php`
-- Read/write/condition methods: `./vendor/tinymvc/tinycore/src/Database/Query/`
-- Soft deletes: `./vendor/tinymvc/tinycore/src/Database/Concerns/InteractsWithSoftDeletes.php`
-- Model tracking and change detection: `./vendor/tinymvc/tinycore/src/Database/Concerns/InteractsWithTracking.php`
-- ORM, relation subqueries, and pivots: `./vendor/tinymvc/tinycore/src/Database/Concerns/`
-- Model callbacks: `./vendor/tinymvc/tinycore/src/Database/Events.php`
-- DB facade transactions: `./vendor/tinymvc/tinycore/src/Facades/DB.php`
-- Model base class: `./vendor/tinymvc/tinycore/src/Database/Model.php`
-- Model casts trait: `./vendor/tinymvc/tinycore/src/Database/Casts/Castable.php`
-- Attribute cast helper: `./vendor/tinymvc/tinycore/src/Database/Casts/Attribute.php`
-- Migration runner: `./vendor/tinymvc/tinycore/src/Database/Migration.php`
-- Schema facade/class: `./vendor/tinymvc/tinycore/src/Database/Schema/Schema.php`
-- Blueprint: `./vendor/tinymvc/tinycore/src/Database/Schema/Blueprint.php`
-- Column definitions: `./vendor/tinymvc/tinycore/src/Database/Schema/Column.php`
-- Schema grammar: `./vendor/tinymvc/tinycore/src/Database/Schema/Grammar.php`
-- Relations: `./vendor/tinymvc/tinycore/src/Database/Relation/`
+**Cache, lock, queue, Redis**
 
-Cache, lock, queue, and redis:
+- `src/Cache/Cache.php`, `LockHandle.php`, `Contracts/`, `Storage/` (drivers)
+- `src/Queue/Queue.php`, `Job.php`, `Dispatchable.php` (class-job dispatch trait), `PendingDispatch.php` (fluent dispatch), `Contracts/`, `Storage/` (drivers)
+- `src/Utils/RedisConnector.php`
 
-- Cache: `./vendor/tinymvc/tinycore/src/Cache/Cache.php`
-- Lock handles: `./vendor/tinymvc/tinycore/src/Cache/LockHandle.php`
-- Cache and lock contracts: `./vendor/tinymvc/tinycore/src/Cache/Contracts/`
-- Cache storage drivers: `./vendor/tinymvc/tinycore/src/Cache/Storage/`
-- Queue: `./vendor/tinymvc/tinycore/src/Queue/Queue.php`
-- Queue storage drivers: `./vendor/tinymvc/tinycore/src/Queue/Storage/`
-- Job wrapper: `./vendor/tinymvc/tinycore/src/Queue/Job.php`
-- Class job dispatch trait: `./vendor/tinymvc/tinycore/src/Queue/Dispatchable.php`
-- Fluent pending dispatch: `./vendor/tinymvc/tinycore/src/Queue/PendingDispatch.php`
-- Job contracts: `./vendor/tinymvc/tinycore/src/Queue/Contracts/`
-- Redis connector: `./vendor/tinymvc/tinycore/src/Utils/RedisConnector.php`
+**Views, console, events, utilities, testing**
 
-Views, console, events, facades, utilities, testing:
+- `src/View/Blade.php`, `BladeCompiler.php`, `Attributes.php`
+- `src/Console/Console.php` (runner), `Commands.php` (registry)
+- `src/Foundation/Console/stubs/`; `src/Foundation/Console/MakeStubCommandsHandler.php` (migration/pivot generators)
+- `src/Events.php` (dispatcher); `src/Facades/Facade.php` (base) and `src/Facades/` (all facades)
+- `src/Carbon.php`, `src/Utils/Mail.php`, `src/Http/Client/`
+- `src/Storage/Uploader.php`, `src/Utils/File.php`, `src/Utils/Image.php`
+- `src/Utils/Tracer.php` (debugging), `src/Utils/Vite.php`
+- `src/Testing/ApplicationTestCase.php`, `Assert.php`, `TestCase.php`
 
-- Blade renderer: `./vendor/tinymvc/tinycore/src/View/Blade.php`
-- Blade compiler: `./vendor/tinymvc/tinycore/src/View/BladeCompiler.php`
-- View attributes: `./vendor/tinymvc/tinycore/src/View/Attributes.php`
-- Console runner: `./vendor/tinymvc/tinycore/src/Console/Console.php`
-- Command registry: `./vendor/tinymvc/tinycore/src/Console/Commands.php`
-- Console stubs: `./vendor/tinymvc/tinycore/src/Foundation/Console/stubs/`
-- Migration/pivot generators: `./vendor/tinymvc/tinycore/src/Foundation/Console/MakeStubCommandsHandler.php`
-- Event dispatcher: `./vendor/tinymvc/tinycore/src/Events.php`
-- Facade base class: `./vendor/tinymvc/tinycore/src/Facades/Facade.php`
-- All facades: `./vendor/tinymvc/tinycore/src/Facades/`
-- Carbon-like date utility: `./vendor/tinymvc/tinycore/src/Carbon.php`
-- Mail utility: `./vendor/tinymvc/tinycore/src/Utils/Mail.php`
-- HTTP client: `./vendor/tinymvc/tinycore/src/Http/Client/`
-- Upload/file/image utilities: `./vendor/tinymvc/tinycore/src/Storage/Uploader.php`, `./vendor/tinymvc/tinycore/src/Utils/File.php`, `./vendor/tinymvc/tinycore/src/Utils/Image.php`
-- Tracer/debugging: `./vendor/tinymvc/tinycore/src/Utils/Tracer.php`
-- Vite integration: `./vendor/tinymvc/tinycore/src/Utils/Vite.php`
-- Unit/Feature Testing: `vendor/tinymvc/tinycore/src/Testing/ApplicationTestCase.php`, `vendor/tinymvc/tinycore/src/Testing/Assert.php`, `vendor/tinymvc/tinycore/src/Testing/TestCase.php`
+## Typical application layout
 
-## Typical Application Layout
-
-Actual apps may vary, but common TinyMVC app layout is:
+Apps vary; always verify the actual project before creating files.
 
 ```text
 app/
@@ -157,15 +117,8 @@ bootstrap/
   providers.php
   helpers.php
 config/
-  app.php
-  auth.php
-  cache.php
-  cors.php
-  database.php
-  mail.php
-  queue.php
-  session.php
-  storage.php
+  app.php  auth.php  cache.php  cors.php  database.php
+  mail.php  queue.php  session.php  storage.php
 database/
   migrations/
 public/
@@ -174,10 +127,7 @@ resources/
   views/
   languages/
 routes/
-  web.php
-  api.php
-  webhook.php
-  console.php
+  web.php  api.php  webhook.php  console.php
 storage/
   app/public
   app/private
@@ -187,13 +137,9 @@ storage/
 tests/
 ```
 
-Always verify the actual project before creating files.
+## Bootstrap and request lifecycle
 
-## Core Bootstrap
-
-TinyMVC apps usually bootstrap the framework through `Spark\Foundation\Application`.
-
-Example shape:
+Apps bootstrap through `Spark\Foundation\Application`:
 
 ```php
 <?php
@@ -212,7 +158,22 @@ return Application::create(path: dirname(__DIR__))
     );
 ```
 
-Important lifecycle:
+Request flow:
+
+```text
+public/index.php
+  -> bootstrap/app.php
+  -> Application
+  -> DotEnv and config cache
+  -> providers
+  -> Request
+  -> Router
+  -> Middleware pipeline
+  -> controller/callback
+  -> Response
+```
+
+Detailed order:
 
 1. `Application` sets `Application::$app`.
 2. `.env` is loaded and cached.
@@ -221,12 +182,14 @@ Important lifecycle:
 5. Providers register and boot.
 6. Router dispatches the current `Request`.
 7. Middleware wraps the matched route.
-8. Route callback/controller returns a value.
-9. Router converts it to `Response`.
+8. The route callback/controller returns a value.
+9. Router converts it to a `Response`.
 10. `Response::send()` sends headers and body.
 11. `Application::terminate()` finishes the client response and runs callbacks registered with `defer()`.
 
-Post-response work:
+When unsure, inspect nearby app files and follow the existing pattern.
+
+## Post-response work with defer()
 
 ```php
 defer(function () use ($userId) {
@@ -238,29 +201,24 @@ app()->defer(function (App\Services\AuditLog $audit) use ($order) {
 });
 ```
 
-Use `defer()` for small post-response tasks such as audit logging, analytics, cleanup, or lightweight notifications. Deferred callbacks are invoked through the container, so type-hinted dependencies can be injected. They run after the response is sent, in registration order. A deferred callback may register another deferred callback; it will run in the same termination cycle after the callbacks that were already in the queue.
+Use `defer()` for small post-response tasks: audit logging, analytics, cleanup, lightweight notifications. Callbacks are invoked through the container (type-hinted dependencies are injected) and run after the response is sent, in registration order. A deferred callback may register another; it runs in the same termination cycle after callbacks already queued.
 
-Important defer notes:
-
-- Deferred callbacks are not a replacement for durable queues; use Queue jobs for work that must survive process crashes, timeouts, or worker restarts.
-- `Application::terminate()` calls `fastcgi_finish_request()` or `litespeed_finish_request()` when available, otherwise it flushes output buffers.
-- The application registers one shutdown fallback so termination and deferred callbacks also run after an early exit.
-- Exceptions thrown by deferred callbacks are reported/logged and do not stop later deferred callbacks.
-- In debug mode, `app:terminated` is dispatched during application termination.
+- **Not durable.** Use Queue jobs for work that must survive crashes, timeouts, or worker restarts.
+- `Application::terminate()` calls `fastcgi_finish_request()` or `litespeed_finish_request()` when available; otherwise it flushes output buffers. A host-owned non-removable output buffer does not block deferred callbacks.
+- One shutdown fallback is registered, so termination and deferred callbacks also run after an early exit.
+- Exceptions in deferred callbacks are reported/logged and do not stop later callbacks.
+- In debug mode, `app:terminated` is dispatched during termination.
 
 ## Configuration
 
-Config files return PHP arrays. Use `config('key.path')` and `env('KEY', $default)`.
+Config files return PHP arrays. Read with `config('key.path')` and `env('KEY', $default)`.
 
-`Configuration::discover($folder, $cache, $env, $useCache)` loads configuration files; `DotEnv::discoverConfig()` forwards to it for existing callers.
+- `Configuration::discover($folder, $cache, $env, $useCache)` loads config files; `DotEnv::discoverConfig()` forwards to it for existing callers.
+- Quoted env values stay strings, including when followed by a whitespace-separated comment (`CODE="123" # text`). Hashes inside quotes are preserved. An empty or comment-only `.env` produces a valid empty environment cache.
+- Environment and config caches use atomic file replacement: concurrent readers see a complete old or new cache.
+- URL helpers build values from the current context rather than a process-global root URL.
 
-Quoted environment values stay strings, including when followed by a whitespace-separated comment: `CODE="123" # text`. Hashes inside quotes are preserved. An empty or comment-only `.env` produces a valid empty environment cache.
-
-Environment and configuration caches use atomic file replacement: concurrent readers see a complete old or new cache. During termination, a host-owned non-removable output buffer does not block deferred callbacks. URL helpers construct values from the current context rather than retaining a process-global root URL.
-
-### Database Config
-
-Expected shape:
+### Database config
 
 ```php
 <?php
@@ -291,18 +249,15 @@ return [
 
 `database.default` is a **connection name**, not a driver. Resolution:
 
-- If `connections[<default>]` exists, that entry is used. Its `driver` key wins; when omitted, the connection name is used as the driver if it is a PDO driver name (`mysql`, `pgsql`, `sqlite`, ...), otherwise `mysql`.
-- If no entry has that name but the name is a PDO driver (for example `DB_CONNECTION=mysql` or `pgsql`), `connections.default` is used with that driver. This is how the skeleton's driver-less `default` entry works.
+- If `connections[<default>]` exists, that entry is used. Its `driver` key wins; if omitted, the connection name is used as the driver when it is a PDO driver name (`mysql`, `pgsql`, `sqlite`, ...), otherwise `mysql`.
+- If no entry has that name but the name is a PDO driver (e.g. `DB_CONNECTION=mysql` or `pgsql`), `connections.default` is used with that driver. This is how the skeleton's driver-less `default` entry works.
 - Any other undefined name throws `InvalidDatabaseConfigException` ("Undefined database connection").
 - `DB::connection('name')` reads `database.connections.name` directly. A driver-less entry uses its own name when that is a PDO driver, otherwise the driver of `database.default`.
-
-Older 4.0 config files that still use the top-level `driver` key (or `default_connection`) keep working as a fallback; rename it to `default`.
+- Older 4.0 configs with a top-level `driver` key (or `default_connection`) still work as a fallback; rename to `default`.
 
 ### Cache, lock, queue, and session config
 
-Spark 4.0 uses `database`, `file`, or `redis` for cache/locks and queue storage. The default is `database`; `sqlite` remains a database connection type, not a storage-driver name. Session storage has its own `config/session.php`, defaulting to `database`. Unknown drivers raise an exception.
-
-The default store/connection is selected by name:
+Spark 4.0 uses `database`, `file`, or `redis` for cache/locks and queue storage. The default is `database`; `sqlite` is a database connection type, not a storage-driver name. Unknown drivers raise an exception.
 
 | Config | Key | Env | Skeleton default |
 | --- | --- | --- | --- |
@@ -310,47 +265,38 @@ The default store/connection is selected by name:
 | `config/cache.php` (cache and locks) | `default` | `CACHE_STORE` | `database` |
 | `config/queue.php` | `default` | `QUEUE_CONNECTION` | `database` |
 
-`cache.default` and `queue.default` name an entry in their `connections` array. That entry's `driver` (`database`, `file`, or `redis`) selects the backend; when `driver` is omitted, the entry name is used. A built-in name without an entry uses that driver's defaults; any other undefined name throws `InvalidArgumentException`. Older 4.0 configs with a top-level `driver` key are still read as a fallback; rename it to `default`.
+- `cache.default` and `queue.default` name an entry in their `connections` array. That entry's `driver` (`database`, `file`, `redis`) selects the backend; when omitted, the entry name is used. A built-in name without an entry uses that driver's defaults; any other undefined name throws `InvalidArgumentException`. Older configs with a top-level `driver` key are still read as a fallback; rename to `default`.
+- Database tables come from migrations, not storage constructors: run the framework migration before using database drivers. Default tables: `caches`, `locks`, `jobs`, `failed_jobs`, `sessions` (configurable).
+- Drivers use the application database unless you set `cache.connections.database.connection`, `lock_connection`, `queue.connections.database.connection`, or `session.connections.database.connection`.
 
-Database tables are created by migrations, not by storage constructors. Run the framework migration before using the database drivers. Connections default to the application database; use `cache.connections.database.connection`, `lock_connection`, `queue.connections.database.connection`, and `session.connections.database.connection` for named connections. Configurable table names default to `caches`, `locks`, `jobs`, `failed_jobs`, and `sessions`.
+**Skeleton file paths**
 
-File paths in the skeleton:
+| Purpose | Path |
+| --- | --- |
+| Cache | `storage/framework/temp/cache` |
+| Locks | `storage/framework/temp/locks` |
+| Queue | `storage/framework/queue.d` |
+| Sessions | `storage/framework/sessions` |
+| Private files | `storage/app/private` |
+| Public uploads | `storage/app/public` |
+| Temporary files | `storage/framework/temp` |
 
-- Cache: `storage/framework/temp/cache`; locks: `storage/framework/temp/locks`.
-- Queue: `storage/framework/queue.d`; sessions: `storage/framework/sessions`.
-- Private files: `storage/app/private`; public uploads: `storage/app/public`.
-- Temporary files: `storage/framework/temp`.
+**Redis** connections use the shared connector options: host, port, password, database, prefix, socket, timeout, read_timeout, persistent. Require `ext-redis`, distinct environment prefixes, and a deliberate durability policy.
 
-Redis connections use the shared connector options: host, port, password, database, prefix, socket, timeout, read_timeout, and persistent. Require `ext-redis`, distinct environment prefixes, and a deliberate durability policy. File drivers require a local filesystem with working locks and atomic rename; do not use NFS/SMB. Use database/Redis for shared deployments.
+**File drivers** need a local filesystem with working locks and atomic rename. Do not use NFS/SMB; use database/Redis for shared deployments.
 
-### Session configuration
+### Session config (`config/session.php`)
 
-`session.handler` selects `database`, `file`, or `redis`. `session.lifetime` is idle lifetime in minutes, default 120; `expire_on_close` controls cookie lifetime. `cookie_name` defaults to `spark_session`; `cookie_settings` uses `path`, `domain`, `secure`, `http_only`, and `same_site`. Set `secure=true` behind a TLS-terminating proxy. Unknown IDs are rejected by strict session validation.
-
-The file handler serializes requests for the same session until close. Database and Redis session writes are atomic but do not lock a whole request; avoid concurrent read-modify-write updates to session data or coordinate them explicitly. The testing harness uses in-memory session state; use real HTTP tests when changing native session behavior.
-
-## Request Lifecycle Summary
-
-TinyMVC request flow:
-
-```text
-public/index.php
-  -> bootstrap/app.php
-  -> Application
-  -> DotEnv and config cache
-  -> providers
-  -> Request
-  -> Router
-  -> Middleware pipeline
-  -> controller/callback
-  -> Response
-```
-
-Use `Spark\\` classes, app namespaces, and the helpers in this file. When unsure, inspect nearby app files and follow the existing TinyMVC pattern.
+- `handler`: `database` (default), `file`, or `redis`.
+- `lifetime`: idle lifetime in minutes (default 120). `expire_on_close` controls cookie lifetime.
+- `cookie_name` defaults to `spark_session`. `cookie_settings`: `path`, `domain`, `secure`, `http_only`, `same_site`. Set `secure=true` behind a TLS-terminating proxy.
+- Unknown session IDs are rejected by strict validation.
+- The file handler serializes requests for the same session until close. Database and Redis writes are atomic but do not lock the whole request: avoid concurrent read-modify-write on session data or coordinate explicitly.
+- The testing harness uses in-memory session state; use real HTTP tests when changing native session behavior.
 
 ## PSR application entry point
 
-`Application::handle()` accepts a native `Request` or PSR `ServerRequestInterface` and returns a native response without emitting it. `handlePsr()` returns a PSR response instead. `app(Psr\Http\Server\RequestHandlerInterface::class)` adapts the latter to PSR-15.
+`Application::handle()` accepts a native `Request` or a PSR `ServerRequestInterface` and returns a native response without emitting it. `handlePsr()` returns a PSR response. `app(Psr\Http\Server\RequestHandlerInterface::class)` adapts it to PSR-15.
 
 ```php
 $response = app()->handlePsr($serverRequest);
@@ -358,4 +304,6 @@ $response = app()->handlePsr($serverRequest);
 app()->terminate(); // After emission; safe to call once more during shutdown.
 ```
 
-Incoming PSR requests do not replace PHP globals. The host remains responsible for its transport and session integration. Native `run()` continues to capture, handle, emit, and terminate. Request-dependent `input` and `ServerRequestInterface` bindings resolve the current request lazily.
+- Incoming PSR requests do not replace PHP globals; the host owns transport and session integration.
+- Native `run()` still captures, handles, emits, and terminates.
+- Request-dependent `input` and `ServerRequestInterface` bindings resolve the current request lazily.

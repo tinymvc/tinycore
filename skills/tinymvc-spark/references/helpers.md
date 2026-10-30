@@ -1,140 +1,166 @@
-# Global Helpers, Facades, and Modern Support Primitives
+# Global Helpers, Facades, and Support Primitives
 
-Read this reference for global helpers, static facades, and utility functions in TinyMVC / TinyCore (Spark). Source paths and command working directories refer to the application root.
+> **Read when:** you need a facade, a global helper function, or a support utility (Collection, Str, Arr, Number, Js, Url, InputErrors).
+> **Related:** [Foundation](foundation.md) · [API discovery](api-discovery.md) · [date boundaries](localization-dates.md)
+> Paths are relative to the application root. Verify exact signatures against installed source ([API discovery](api-discovery.md)).
 
----
+Contents:
 
-## Static Facades (`Spark\Facades\*`)
+- [Facades](#facades-sparkfacades)
+- [Global helpers](#global-helpers)
+- [Helpers documented in other references](#helpers-documented-in-other-references)
+- [Support primitives](#support-primitives)
 
-TinyCore provides first-class static facades under `Spark\Facades\*`. They provide clean, testable, static access to underlying services in the application container:
+## Facades (`Spark\Facades\*`)
 
-| Facade | Service / Class | Primary Use Case |
+Static access to services in the application container.
+
+| Facade | Backing class | Typical use |
 | --- | --- | --- |
-| `Spark\Facades\App` | `Spark\Foundation\Application` | Service container binding, resolving, environment checks (`App::isProduction()`, `App::isTesting()`, `App::isDebugMode()`). |
-| `Spark\Facades\Auth` | `Spark\Http\Auth` | User authentication, guards, credentials verification, tokens (`Auth::attempt()`, `Auth::user()`, `Auth::id()`, `Auth::loginUsingId()`, `Auth::createToken()`, `Auth::revokeToken()`). |
-| `Spark\Facades\Blade` | `Spark\View\Blade` | Template compilation, directive registration (`Blade::directive()`), component rendering, variable sharing (`Blade::share()`). |
-| `Spark\Facades\Cache` | `Spark\Cache\CacheManager`, `Spark\Cache\Cache` | Storing, retrieving, atomic operations, and cache invalidation (`Cache::remember()`, `Cache::get()`, `Cache::put()`, `Cache::forget()`, `Cache::erase()`, `Cache::flush()`, `Cache::store('redis')`). |
-| `Spark\Facades\DB` | `Spark\Database\DB` | Database transactions, connection switching, raw queries, table queries (`DB::transaction()`, `DB::table()`, `DB::raw()`, row locking `lockForUpdate()`). |
-| `Spark\Facades\Event` | `Spark\Events` | Event dispatching and listener registration (`Event::listen()`, `Event::dispatch()`, `Event::dispatchIf()`, `Event::until()`, `Event::once()`). |
-| `Spark\Facades\Gate` | `Spark\Http\Gate` | User authorization policies and ability checks (`Gate::define()`, `Gate::allows()`, `Gate::denies()`, `Gate::check()`, `Gate::authorize()`). |
-| `Spark\Facades\Hash` | `Spark\Hash` | Password hashing (`password()`, `bcrypt()`, `argon2id()`) and verification (`verify()`), encryption (`encrypt()`, `decrypt()`), and UUIDs (`uuid()`). `make()` / `check()` are keyed HMAC helpers, not password hashing. |
-| `Spark\Facades\Http` | `Spark\Http\Client\Http` | Fluent outbound HTTP client with JSON handling and authentication (`Http::withToken()`, `Http::timeout()`, `Http::post()`, `Http::get()`, `Http::pool()`). |
-| `Spark\Facades\Log` | `Psr\Log\LoggerInterface` (native `Spark\Logger`) | Application logging (`Log::info()`, `Log::error()`, `Log::warning()`, `Log::debug()`). |
-| `Spark\Facades\Mail` | `Spark\Utils\Mail` | Fluent email sending with Blade view rendering (`Mail::to()`, `Mail::subject()`, `Mail::view()`, `Mail::send()`). |
-| `Spark\Facades\Queue` | `Spark\Queue\QueueManager`, `Spark\Queue\Queue` | Background queue operations, queue size inspection, clearing. |
-| `Spark\Facades\Route` | `Spark\Http\Routing\Router` | Defining routes, route groups, resource routes, model binding, middleware. |
-| `Spark\Facades\Schema` | `Spark\Database\Schema\Schema` | Database migrations and schema building (`Schema::create()`, `Schema::table()`, `Schema::dropIfExists()`). |
-| `Spark\Facades\Session` | `Spark\Http\Session` | Web session manipulation (`Session::get()`, `Session::put()`, `Session::flash()`, `Session::regenerate()`, `Session::invalidate()`). |
-| `Spark\Facades\Storage` | `Spark\Storage\Storage` | Filesystem storage (`Storage::disk('public')->put()`, `Storage::url()`, `Storage::temporaryUrl()`, disk uploaders). |
-| `Spark\Facades\Validator` | `Spark\Http\Validator` | Explicit validator construction (`Validator::make($rules, $data)`). |
+| `App` | `Spark\Foundation\Application` | Container binding/resolving; environment checks (`isProduction()`, `isTesting()`, `isDebugMode()`) |
+| `Auth` | `Spark\Http\Auth` | `attempt()`, `user()`, `id()`, `loginUsingId()`, `createToken()`, `revokeToken()` |
+| `Blade` | `Spark\View\Blade` | `directive()`, component rendering, `share()` |
+| `Cache` | `Spark\Cache\CacheManager`, `Spark\Cache\Cache` | `remember()`, `get()`, `put()`, `forget()`, `erase()`, `flush()`, `store('redis')` |
+| `DB` | `Spark\Database\DB` | `transaction()`, `table()`, `raw()`, `lockForUpdate()` |
+| `Event` | `Spark\Events` | `listen()`, `dispatch()`, `dispatchIf()`, `until()`, `once()` |
+| `Gate` | `Spark\Http\Gate` | `define()`, `allows()`, `denies()`, `check()`, `authorize()` |
+| `Hash` | `Spark\Hash` | Passwords: `password()`, `bcrypt()`, `argon2id()`, `verify()`. Also `encrypt()`, `decrypt()`, `uuid()`. `make()` / `check()` are **keyed HMAC helpers, not password hashing** |
+| `Http` | `Spark\Http\Client\Http` | Outbound client: `withToken()`, `timeout()`, `get()`, `post()`, `pool()` |
+| `Log` | `Psr\Log\LoggerInterface` (native `Spark\Logger`) | `info()`, `error()`, `warning()`, `debug()` |
+| `Mail` | `Spark\Utils\Mail` | `to()`, `subject()`, `view()`, `send()` |
+| `Queue` | `Spark\Queue\QueueManager`, `Spark\Queue\Queue` | Queue operations, size inspection, clearing |
+| `Route` | `Spark\Http\Routing\Router` | Routes, groups, resource routes, model binding, middleware |
+| `Schema` | `Spark\Database\Schema\Schema` | `create()`, `table()`, `dropIfExists()` |
+| `Session` | `Spark\Http\Session` | `get()`, `put()`, `flash()`, `regenerate()`, `invalidate()` |
+| `Storage` | `Spark\Storage\Storage` | `disk('public')->put()`, `url()`, `temporaryUrl()`, uploaders; see [files and storage](files-storage.md) |
+| `Validator` | `Spark\Http\Validator` | `Validator::make($rules, $data)` |
 
 > [!IMPORTANT]
-> **Facades in Backend PHP vs. Global Helpers in Blade Views**:
-> Static facades (`Spark\Facades\*`) are designed for backend PHP classes (controllers, services, jobs, models, commands).
-> **Never use static facades inside Blade templates (`.blade.php`)**. In Blade views, always use Spark's expressive global helpers (`session()`, `auth()`, `user()`, `app()`, `request()`, `route()`, `old()`, `csrf_field()`, `now()`).
+> **Facades are for backend PHP** (controllers, services, jobs, models, commands). **Never use facades inside Blade templates.** In `.blade.php` use global helpers: `session()`, `auth()`, `user()`, `app()`, `request()`, `route()`, `old()`, `csrf_field()`, `now()`.
 
----
+## Global helpers
 
-## Global Application Helpers
+Defined in `Spark\Foundation\helpers.php` and `Spark\Support\helpers.php`.
 
-Spark includes a rich suite of built-in global helper functions defined in `Spark\Foundation\helpers.php` and `Spark\Support\helpers.php`:
+### Application, container, config
 
-### 1. Application, Container & Config
-- `app(?string $abstract = null, array $parameters = [])`: Returns the application container or resolves the given service abstract.
-- `get(string $abstract)`: Resolves an instance from the container.
-- `has(string $abstract)`: Checks if a container binding exists.
-- `bind(string $abstract, $concrete = null)`: Registers a transient container binding.
-- `singleton(string $abstract, $concrete = null)`: Registers a singleton container binding.
-- `call(callable|array $abstract, array $parameters = [])`: Invokes a callable with container dependency injection.
-- `defer(callable $callback)`: Defers a callback to run after the HTTP response has been sent to the client.
-- `config(string $key, mixed $default = null)`: Reads an application configuration key using dot notation.
-- `env(string $key, mixed $default = null)`: Reads an environment variable with optional fallback.
+| Helper | Purpose |
+| --- | --- |
+| `app(?string $abstract = null, array $parameters = [])` | Container, or resolve an abstract |
+| `get(string $abstract)` / `has(string $abstract)` | Resolve from / check binding in the container |
+| `bind(string $abstract, $concrete = null)` | Transient binding |
+| `singleton(string $abstract, $concrete = null)` | Singleton binding |
+| `call(callable\|array $abstract, array $parameters = [])` | Invoke a callable with DI |
+| `defer(callable $callback)` | Run after the response is sent (see [Foundation](foundation.md#post-response-work-with-defer)) |
+| `config(string $key, mixed $default = null)` | Config by dot notation |
+| `env(string $key, mixed $default = null)` | Environment variable with fallback |
 
-### 2. HTTP Requests & Responses
-- `request(?string $key = null, mixed $default = null)`: Returns the current `Spark\Http\Request` instance or reads an input key.
-- `response(mixed $content = '', int $statusCode = \Spark\Http\Response::STATUS_OK, array $headers = [])`: Returns the `Spark\Http\Response` factory or creates a new response instance.
-- `json(array $data, int $statusCode = \Spark\Http\Response::STATUS_OK)`: Creates a JSON HTTP response (ideal for non-resource contracts, messages, or webhooks).
-- `redirect(string $url, int $httpCode = \Spark\Http\Response::STATUS_FOUND)`: Creates a redirect response.
-- `to_route(string $name, mixed $context = null, int $httpCode = \Spark\Http\Response::STATUS_FOUND)`: Redirects to a named route.
-- `back()`: Redirects back to the previous request URL.
+### HTTP
 
-### 3. URLs and Asset Paths
-- `url(?string $path = null, array $parameters = [])`: Generates a `Spark\Url` object with fluent query parameter support.
-- `route(string $name, mixed $context = null)`: Generates a `Spark\Url` object for a named route.
-- `route_url(string $name, mixed $context = null)`: Generates an absolute URL string for a named route.
-- `home_url(string $path = '')`: Generates a URL relative to the application's base URL.
-- `asset(string $path = '')`: Generates a `Spark\Url` object for a public asset.
-- `asset_url(string $path = '')`: Generates an absolute URL string for a public asset.
-- `media(string $path = '')` / `media_url(string $path = '')`: Generates a URL for uploaded media files.
-- `request_url()`: Returns the absolute URL of the current HTTP request.
-- `root_dir(string $path = '/')`: Returns an absolute path within the project root.
-- `storage_dir(string $path = '/')`: Returns an absolute path within the storage directory.
-- `resource_dir(string $path = '/')`: Returns an absolute path within the resources directory.
+| Helper | Purpose |
+| --- | --- |
+| `request(?string $key = null, mixed $default = null)` | Current `Spark\Http\Request`, or an input key |
+| `response(mixed $content = '', int $statusCode = Response::STATUS_OK, array $headers = [])` | Response factory / new response |
+| `json(array $data, int $statusCode = Response::STATUS_OK)` | JSON response; for non-resource contracts, messages, webhooks |
+| `redirect(string $url, int $httpCode = Response::STATUS_FOUND)` | Redirect response |
+| `to_route(string $name, mixed $context = null, int $httpCode = Response::STATUS_FOUND)` | Redirect to a named route |
+| `back()` | Redirect to the previous URL |
 
-### 4. Authentication, Security & Gates
-- `auth()`: Returns the `Spark\Http\Auth` manager.
-- `user(?string $key = null)`: Returns the currently authenticated user model instance, or a specific attribute on that model.
-- `is_logged()`: Returns true if a user is currently authenticated.
-- `is_guest()`: Returns true if the visitor is unauthenticated.
-- `can(string $ability, ...$args)`: Checks if the user is authorized for an ability via Gate.
-- `cannot(string $ability, ...$args)`: Inverted authorization check.
-- `authorize(string $ability, ...$args)`: Authorizes an ability or throws HTTP 403 `AuthorizationException`.
-- `csrf()` / `csrf_token()`: Returns the active CSRF token string.
-- `csrf_field()`: Returns an HTML hidden input containing the CSRF token.
-- `method(string $method)` / `method_field(string $method)`: Returns an HTML hidden input for HTTP method spoofing (`PUT`, `PATCH`, `DELETE`).
+(`Response` is `\Spark\Http\Response`.)
 
-### 5. Session, Cookies & Validation Errors
-- `session(array|string|null $param = null, mixed $default = null)`: Gets/sets session data, or returns the `Spark\Http\Session` instance.
-- `cookie(string $name, mixed $value = null, mixed $options = null)`: Reads or sets an HTTP cookie (use `now()->addDays(...)` for expiration timestamps).
-- `errors()`: Returns the flashed `Spark\Http\InputErrors` validation error bag.
-- `old(string $key, ?string $default = null)`: Retrieves flashed previous input value.
+### URLs and paths
 
-### 6. Views, Templates & Vite
-- `view(?string $template = null, array $context = [])`: Renders a Blade template and returns a `Spark\Http\Response`.
-- `blade(?string $template = null, array $context = [])`: Renders a Blade template and returns the rendered HTML string.
-- `vite(null|string|array $entrypoints = null)`: Configures and renders the `Spark\Utils\Vite` asset loader tags.
+| Helper | Returns |
+| --- | --- |
+| `url(?string $path = null, array $parameters = [])` | `Spark\Url` with fluent query support |
+| `route(string $name, mixed $context = null)` | `Spark\Url` for a named route |
+| `route_url(string $name, mixed $context = null)` | Absolute URL **string** for a named route |
+| `home_url(string $path = '')` | URL relative to the app base URL |
+| `asset(string $path = '')` / `asset_url(string $path = '')` | `Spark\Url` / absolute string for a public asset |
+| `media(string $path = '')` / `media_url(string $path = '')` | URL for uploaded media |
+| `request_url()` | Absolute URL of the current request |
+| `root_dir($path = '/')`, `storage_dir($path = '/')`, `resource_dir($path = '/')` | Absolute paths under project root / storage / resources |
 
-### 7. Dates & Times (`Spark\Carbon`)
-- `now()`: Returns a `Spark\Carbon` instance set to the current time in the configured application timezone (`app.timezone`, default `UTC`).
-- `today()`: Returns a `Spark\Carbon` instance set to today at 00:00:00.
-- `carbon(mixed $date = null)`: Parses a value into a `Spark\Carbon` instance.
+### Authentication, security, gates
 
-Use Carbon for application dates; preserve explicit timezone/output contracts. Performance measurement is separate: `hrtime(true)` is appropriate for elapsed durations. See [date boundaries](localization-dates.md).
+| Helper | Purpose |
+| --- | --- |
+| `auth()` | `Spark\Http\Auth` manager |
+| `user(?string $key = null)` | Authenticated user model, or one attribute |
+| `is_logged()` / `is_guest()` | Authenticated / unauthenticated check |
+| `can($ability, ...$args)` / `cannot($ability, ...$args)` | Gate checks (cannot = inverted) |
+| `authorize($ability, ...$args)` | Authorize or throw HTTP 403 `AuthorizationException` |
+| `csrf()` / `csrf_token()` | Active CSRF token string |
+| `csrf_field()` | Hidden input with the CSRF token |
+| `method($method)` / `method_field($method)` | Hidden input for method spoofing (`PUT`, `PATCH`, `DELETE`) |
 
-### 8. Flow Control and Diagnostics
-- `tap(mixed $value, ?callable $callback = null)`: Taps into a value, executes the callback, and returns the original value.
-- `abort(int $code, string $message = '', array $headers = [])`: Throws an HTTP exception with status code.
-- `abort_if(bool $boolean, int $code, string $message = '')`: Aborts if condition is true.
-- `abort_unless(bool $boolean, int $code, string $message = '')`: Aborts unless condition is true.
-- `throw_if(bool $boolean, string|Throwable $exception, ...$parameters)`: Throws exception conditionally.
-- `throw_unless(bool $boolean, string|Throwable $exception, ...$parameters)`: Throws exception conditionally.
-- `blank(mixed $value)`: Returns true if value is null, empty string, or whitespace.
-- `filled(mixed $value)`: Inverted `blank()` check.
-- `data_get(mixed $target, string|array $key, mixed $default = null)`: Retrieves a value from an array or object using dot notation.
-- `data_set(mixed &$target, string|array $key, mixed $value, bool $overwrite = true)`: Sets a value using dot notation.
+### Session, cookies, validation errors
 
-### 9. Translations & Localization
-- `__(string $key, array|int $replace = [])`: Translates a text string using language files in `resources/languages/`.
-- `_e(string $key, array $replace = [])`: Translates and HTML-escapes the result.
-- `trans(?string $key = null, array $replace = [], ?string $locale = null)`: Named translation, or the translator when no key is supplied.
-- `trans_choice(string $key, int|float|array|Countable $number, array $replace = [], ?string $locale = null)`: Plural selection with `:count`.
+- `session(array|string|null $param = null, mixed $default = null)`: get/set session data, or the `Spark\Http\Session` instance.
+- `cookie(string $name, mixed $value = null, mixed $options = null)`: read or set a cookie (use `now()->addDays(...)` for expiry).
+- `errors()`: flashed `Spark\Http\InputErrors` bag.
+- `old(string $key, ?string $default = null)`: flashed previous input.
 
----
+### Views and Vite
 
-## Modern Support Primitives (Laravel 12 Style)
+- `view(?string $template = null, array $context = [])`: render Blade, returns a `Spark\Http\Response`.
+- `blade(?string $template = null, array $context = [])`: render Blade, returns an HTML **string**.
+- `vite(null|string|array $entrypoints = null)`: configure and render `Spark\Utils\Vite` tags.
 
-### 1. Collections (`collect`) and Higher-Order Proxies
+### Dates and times (`Spark\Carbon`)
+
+- `now()`: current time in `app.timezone` (default `UTC`).
+- `today()`: today at 00:00:00.
+- `carbon(mixed $date = null)`: parse a value.
+
+Use Carbon for application dates and preserve explicit timezone/output contracts. For elapsed-duration measurement use `hrtime(true)`. See [date boundaries](localization-dates.md).
+
+### Flow control and diagnostics
+
+| Helper | Purpose |
+| --- | --- |
+| `tap($value, ?callable $callback = null)` | Run callback, return the original value |
+| `abort(int $code, string $message = '', array $headers = [])` | Throw an HTTP exception |
+| `abort_if(bool $boolean, int $code, string $message = '')` | Abort when true |
+| `abort_unless(bool $boolean, int $code, string $message = '')` | Abort when false |
+| `throw_if(bool $boolean, string\|Throwable $exception, ...$parameters)` | Throw when true |
+| `throw_unless(bool $boolean, string\|Throwable $exception, ...$parameters)` | Throw when false |
+| `blank($value)` / `filled($value)` | Null, empty string, or whitespace / its inverse |
+| `data_get($target, string\|array $key, $default = null)` | Read by dot notation from array/object |
+| `data_set(&$target, string\|array $key, $value, bool $overwrite = true)` | Write by dot notation |
+
+### Translations (`resources/languages/`)
+
+- `__(string $key, array|int $replace = [])`: translate.
+- `_e(string $key, array $replace = [])`: translate and HTML-escape.
+- `trans(?string $key = null, array $replace = [], ?string $locale = null)`: named translation, or the translator when no key is given.
+- `trans_choice(string $key, int|float|array|Countable $number, array $replace = [], ?string $locale = null)`: plural selection with `:count`.
+
+## Helpers documented in other references
+
+| Helper | Where |
+| --- | --- |
+| `event()`, `command()` | [Extensions and errors](extensions-errors.md) |
+| `fm()` (`Spark\Utils\File`), `image()` (`Spark\Utils\Image`), `temp_dir()` | [Files and storage](files-storage.md) |
+| `fire()`, `is_fire_js()`, `is_fire_partial()`, `is_fire_preload()` | [FireLine](fireline.md) (optional adapter package) |
+| `inertia()` | [Inertia](inertia.md) (optional adapter package) |
+
+## Support primitives
+
+Spark-native classes with familiar fluent APIs. They live under `Spark\Support\`; the whole `Support/` directory is hidden from `api-lookup.php` unless you pass `--include-support`.
+
+### Collections and higher-order proxies
 
 ```php
 $posts = Post::published()->latest()->get(); // Spark\Support\Collection<Post>
 
-// Fluent Higher-Order Collection Proxies (no verbose closures needed!)
-$titles = $posts->map->title;             // Maps each model's 'title' attribute
-$activePosts = $posts->filter->is_active; // Filters models by boolean property
-$orders->each->cancel();                  // Calls ->cancel() on each model instance
-$totalAmount = $orders->sum->total;       // Sums a property across collection
+// Higher-order proxies
+$titles = $posts->map->title;
+$activePosts = $posts->filter->is_active;
+$orders->each->cancel();
+$totalAmount = $orders->sum->total;
 
-// Common collection operations
+// Common operations
 $grouped = $posts->groupBy('category_id');
 $keyed = $posts->keyBy('id');
 $plucked = $posts->pluck('title', 'id');
@@ -142,9 +168,11 @@ $chunked = $posts->chunk(50);
 $first = $posts->first(fn ($p) => $p->views > 100);
 ```
 
-### 2. LazyCollection (`Spark\Support\LazyCollection`)
+Collection operations hydrate the whole result set; use SQL pagination for large data (see [advanced workflows](advanced-workflows.md#authorization-scopes-and-query-composition)).
 
-For memory-efficient streaming of large datasets:
+### LazyCollection
+
+Memory-efficient streaming of large datasets:
 
 ```php
 use Spark\Support\LazyCollection;
@@ -160,20 +188,20 @@ $lines = LazyCollection::make(function () {
     ->take(100);
 ```
 
-### 3. Strings & Stringable (`str` and `Spark\Support\Str`)
+### Strings (`str()` and `Spark\Support\Str`)
 
 ```php
 use Spark\Support\Str;
 
-// Fluent Stringable helper via str()
-$slug = str('Building APIs with TinyMVC')->slug();      // 'building-apis-with-tinymvc'
-$headline = str('user_profile_photo')->headline();      // 'User Profile Photo'
-$camel = str('created_at')->camel();                    // 'createdAt'
-$kebab = str('firstName')->kebab();                     // 'first-name'
-$limited = str($body)->limit(150, '...');               // Truncates string
+// Fluent
+$slug = str('Building APIs with TinyMVC')->slug();   // 'building-apis-with-tinymvc'
+$headline = str('user_profile_photo')->headline();   // 'User Profile Photo'
+$camel = str('created_at')->camel();                 // 'createdAt'
+$kebab = str('firstName')->kebab();                  // 'first-name'
+$limited = str($body)->limit(150, '...');
 $excerpt = str($article)->excerpt('framework');
 
-// Static Str utility methods
+// Static
 $uuid = Str::uuid();
 $random = Str::random(32);
 $contains = Str::contains($haystack, 'needle');
@@ -182,7 +210,9 @@ $endsWith = Str::endsWith($email, '@example.com');
 $between = Str::between('<div>Hello</div>', '<div>', '</div>'); // 'Hello'
 ```
 
-### 4. Arrays (`Spark\Support\Arr`)
+`Str::slug()` / ASCII helpers need `voku/portable-ascii`; `Str::uuid()` needs `ramsey/uuid` (see [optional capabilities](api-discovery.md#check-optional-capabilities)).
+
+### Arrays (`Spark\Support\Arr`)
 
 ```php
 use Spark\Support\Arr;
@@ -190,56 +220,54 @@ use Spark\Support\Arr;
 $val = Arr::get($data, 'user.profile.city', default: 'New York');
 $filtered = Arr::only($data, ['id', 'title', 'slug']);
 $without = Arr::except($data, ['password', 'secret_token']);
-$dot = Arr::dot($nestedArray);       // Flattens into 'user.profile.city' => '...'
-$undot = Arr::undot($flattenedArray); // Reconstructs multi-dimensional array
+$dot = Arr::dot($nestedArray);        // 'user.profile.city' => '...'
+$undot = Arr::undot($flattenedArray); // back to nested
 $first = Arr::first($items, fn ($v) => $v > 10);
 $joined = Arr::join(['Apples', 'Bananas', 'Oranges'], ', ', ' and '); // 'Apples, Bananas and Oranges'
 ```
 
-### 5. Numbers (`Spark\Support\Number`)
-
-TinyCore includes modern number and currency formatting utilities:
+### Numbers (`Spark\Support\Number`)
 
 ```php
 use Spark\Support\Number;
 
-$formattedPrice = Number::currency(49.99, in: 'USD');   // '$49.99'
-$humanSize      = Number::fileSize(10485760);           // '10 MB'
-$percent        = Number::percentage(0.854, precision: 1); // '85.4%'
-$abbreviated    = Number::abbreviate(1250000);          // '1.3M'
-$clamped        = Number::clamp($value, min: 1, max: 100);
-$spelled        = Number::spell(42);                    // 'forty-two'
-$ordinal        = Number::ordinal(3);                   // '3rd'
+Number::currency(49.99, in: 'USD');           // '$49.99'
+Number::fileSize(10485760);                   // '10 MB'
+Number::percentage(0.854, precision: 1);      // '85.4%'
+Number::abbreviate(1250000);                  // '1.3M'
+Number::clamp($value, min: 1, max: 100);
+Number::spell(42);                            // 'forty-two'
+Number::ordinal(3);                           // '3rd'
 ```
 
-### 6. JavaScript Encoding (`Spark\Support\Js`)
+### JavaScript encoding (`Spark\Support\Js`)
 
-Safely serialize server variables for inline client JavaScript or Alpine attributes:
+Safely serialize server values for inline JS or Alpine attributes:
 
 ```blade
 <div x-data="{ config: {{ \Spark\Support\Js::from($userConfig) }} }">
-    {{-- Safely escaped JSON string avoiding XSS --}}
+    {{-- Escaped JSON string, XSS-safe --}}
 </div>
 
-{{-- Or use the @json directive: --}}
+{{-- Or the @json directive: --}}
 <script>
     window.AppConfig = @json($appConfig);
 </script>
 ```
 
-### 7. URL Utility (`Spark\Url`)
+### URLs (`Spark\Url`)
 
 ```php
 $url = route('posts.show', ['post' => 'spark-guide'])
     ->withQuery(['ref' => 'email', 'utm_source' => 'newsletter'])
     ->withFragment('comments');
 
-echo $url->getUrl();          // Full absolute URL
-echo $url->getPath();         // '/posts/spark-guide'
-$queryParams = $url->getQueryParams(); // ['ref' => 'email', ...]
+$url->getUrl();         // full absolute URL
+$url->getPath();        // '/posts/spark-guide'
+$url->getQueryParams(); // ['ref' => 'email', ...]
 ```
 
-### 8. Validation Error Bag (`Spark\Http\InputErrors`)
+### Validation error bag (`Spark\Http\InputErrors`)
 
 ```php
 $errors = errors();
@@ -249,7 +277,10 @@ if ($errors->any()) {
     $allMessages = $errors->all();
     $fieldMessages = $errors->get('password');
 }
+```
 
-// In Blade templates:
-// @error('email') <p class="text-red-500">{{ $message }}</p> @enderror
+In Blade:
+
+```blade
+@error('email') <p class="text-red-500">{{ $message }}</p> @enderror
 ```
