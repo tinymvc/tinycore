@@ -9,8 +9,8 @@ Contents:
 - [Default request path](#default-request-path)
 - [Thin API controller](#thin-api-controller)
 - [Focused service](#focused-service)
-- [Model scopes, casts, relations](#model-scopes-casts-and-relations)
-- [Resource as API boundary](#resource-as-an-api-boundary)
+- [Model scopes, casts, and relations](#model-scopes-casts-and-relations)
+- [Resource as an API boundary](#resource-as-an-api-boundary)
 - [Non-API response modes](#non-api-response-modes)
 
 ## Default request path

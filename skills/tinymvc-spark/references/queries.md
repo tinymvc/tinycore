@@ -1,296 +1,133 @@
 # Queries and Database Operations
 
-Read this reference for database queries, model queries, transactions, and locks. All source paths and commands are relative to the application root.
+> **Read when:** querying records, selecting pagination, writing SQL, or coordinating database writes.
+> **Related:** [Models and relations](models-relations.md) · [Responses](responses.md) · [Advanced workflows](advanced-workflows.md) · [Migrations](migrations.md)
+> Prefer model queries for domain entities; use `DB::table()` deliberately for raw rows and bulk operations.
 
-Driver names come from `Spark\Database\Contracts\DatabaseDriver`: `DRIVER_MYSQL`, `DRIVER_PGSQL`, and `DRIVER_SQLITE` are the engines in `SUPPORTED_DRIVERS`. Both `Spark\Database\DB` and `Spark\Facades\DB` expose these constants. Other PDO name constants identify drivers but do not add SQL grammar support. Use `DB::DRIVER_*` in driver comparisons; connection names are application-defined strings. `DB::connection()`, `DB::connection(null)`, and `DB::connection([])` return the shared default connection. `DB::pdo()` aliases `DB::getPdo()`.
+Contents:
+
+- [Connections and result contracts](#connections-and-result-contracts)
+- [Prefixes and raw SQL](#prefixes-and-raw-sql)
+- [Conditions, selection, and relations](#conditions-selection-and-relations)
+- [Simple pagination](#simple-pagination)
+- [Cursor pagination](#cursor-pagination)
+- [Upserts and mass writes](#upserts-and-mass-writes)
+- [Transactions and row locks](#transactions-and-row-locks)
+
+## Connections and result contracts
+
+Use `Spark\Facades\DB` or `Spark\Database\DB`. `DB::DRIVER_MYSQL`, `DRIVER_PGSQL`, and `DRIVER_SQLITE` identify supported SQL engines; other PDO constants do not imply grammar support. Connection names are application-defined strings.
+
+`DB::connection()`, `connection(null)`, and `connection([])` return the shared default connection. `connection('reporting')` selects configured settings; `pdo()` aliases `getPdo()`.
+
+| Read | Result |
+| --- | --- |
+| `get()` | Collection; prefer for collection operations |
+| `all()` | Plain array |
+| `first()`, `find($id)`, `last()` | Row/model or null |
+| `firstOrFail()`, `findOrFail()` | Row/model or not-found exception |
+| `value('email')` | Scalar or null |
+| `pluck('name', 'id')` | Array keyed by id |
+| `exists()`, `doesntExist()` | bool |
+| `sum('credits')` | 0.0 when empty; avg/min/max return null |
+
+Model queries retain scopes, casts, hydration, and archive filtering. `DB::table()` / `query()` bypass these; account for soft deletes and ownership yourself. Model bulk writes also differ from instance saves.
 
 ## Prefixes and raw SQL
 
-Set database `prefix` at the top level or per connection; an explicit `''` disables it. Use logical table names in queries, models, schema, and database-backed storage. Qualified columns receive the table prefix; aliases do not. Raw SQL stays verbatim: use the executing connection's `wrapTable('users')` for a quoted, prefixed identifier. Configuration does not rename existing tables. Hydrated models retain the executing connection and prefix for instance writes, refreshes, and eager/lazy relations (including pivots), while preserving custom model query factories. Use `$model->newQuery()` for a fresh query in that context; static `Model::query()` starts from the default connection. Serialized models reconnect only to a matching configured connection; an unavailable connection throws instead of falling back.
+Set `prefix` globally or per connection (`''` disables it). Use logical table names in models, queries, schema, and database-backed storage. Qualified columns get prefixes; aliases do not. Raw SQL stays verbatim: use the executing connection's `wrapTable('users')` for quoted/prefixed identifiers. Configuration does not rename existing tables.
 
-Set builder `prefix()` / `setDB()` and declare aliases before adding clauses. These methods cannot rewrite already compiled SQL; use connection configuration for application-wide prefixes.
+Hydrated models retain their connection/prefix for writes, refresh, and relations. `$model->newQuery()` retains that context; static `Model::query()` starts from the default. Serialized models require a matching configured connection and throw when unavailable.
 
-`DB::raw('visits + 1')` creates a trusted SQL expression without executing it. Use `DB::run($sql, $bindings)` to execute and fetch associative rows, or `statement()` for success/failure. Bind user input through query conditions or raw-clause bindings. Positional raw bindings follow SQL clause order, independently of chain order; do not mix named and positional placeholders in one query. Give different values distinct named placeholders; conflicts, including expanded `whereIn()` placeholders, throw.
+Set builder `prefix()`/`setDB()` and aliases before clauses; they cannot rewrite compiled SQL. `DB::raw()` creates a trusted expression; `run($sql, $bindings)` executes/fetches associative rows; `statement()` returns success/failure.
 
----
+Bind input values. Positional raw bindings follow SQL clause order independently of method order. Do not mix named/positional placeholders; distinct values need distinct names. Conflicts, including expanded `whereIn()` placeholders, throw.
 
-## Model-First Query Architecture
-
-Prefer model queries for domain entities so scopes, relations, casts, and soft-delete filtering stay visible. Use `DB::table()` or `query()` deliberately for table-level work: these return raw rows and bypass model hydration, casts, timestamps, and lifecycle behavior. Preserve ownership/tenant conditions and account for soft-deleted rows explicitly when bypassing models. Model query bulk writes also differ from saving individual instances; see [mass writes](#upserts-and-mass-writes).
-
-```php
-// Native model queries
-$users = User::where('active', true)->latest()->take(20)->get();
-$post = Post::findOrFail($id);
-$posts = Post::with('author')->paginate(15);
-```
-
-### When are `DB::table()` Appropriate?
-Typical uses for raw query builders include:
-- Low-level table operations without an associated Model (e.g. migration verification, raw pivot table operations).
-- Performance-critical bulk reads that deliberately bypass model hydration.
-- Direct database schema maintenance utilities.
-
----
-
-## Collection-First Querying
-
-Always prefer `->get()` (which returns a `Spark\Support\Collection`) or `->paginate($limit)` (which returns a `Spark\Paginator\Paginator`) over `->all()` (which returns a raw array):
-
-```php
-// Collections (Preferred) vs Raw Arrays
-$posts = Post::where('published', true)->latest()->get(); // Spark\Support\Collection<Post>
-$postsArray = Post::where('published', true)->all();       // plain PHP array<Post>
-
-// Rich Collection Operations
-$titles = $posts->pluck('title');
-$byAuthor = $posts->groupBy('author_id');
-$active = $posts->filter(fn (Post $p) => $p->is_active);
-$keyed = $posts->keyBy('id');
-```
-
----
-
-## Arrayable Support in Queries
-
-Both `QueryBuilder` and `Model` query scopes accept `Arrayable` (including `Spark\Http\Input` and `Spark\Support\Collection`) in conditions and writes:
-
-```php
-// 1. Arrayable in WHERE conditions (converts to multiple equality checks):
-$matchingPosts = Post::where(
-    $request->validated()->only('category_id', 'status')
-)->get();
-
-// 2. Arrayable in UPDATE queries:
-Post::whereKey($id)->update($request->validated());
-
-// 3. Arrayable in INSERT queries:
-DB::table('audit_logs')->insert(
-    $request->validated()->merge(['created_at' => now()])
-);
-```
-
----
-
-## Finding Records & Common Conditions
-
-```php
-// Finding records
-$post = Post::find($id);                     // Returns Post|null
-$post = Post::findOrFail($id);             // Returns Post or throws 404 NotFoundException
-$post = Post::where('slug', $slug)->first(); // First matching record or null
-$post = Post::where('slug', $slug)->firstOrFail();
-
-// Ordering and Pagination
-$posts = Post::latest()->paginate(20);               // Order by created_at DESC, returns Paginator
-$postsByDate = Post::latest('published_at')->get();  // Order by custom column DESC
-$oldest = Post::oldest('created_at')->first();       // Order by created_at ASC
-
-// Scalar Values and Pluck
-$email = User::where('id', $id)->value('email');     // Returns single scalar string|int|null
-$roleMap = User::pluck('name', 'id');                // Returns array [id => name, ...]
-$tagNames = Tag::pluck('name');                      // Returns array ['php', 'spark', ...]
-
-// Aggregates & Existence
-$count = Post::where('published', true)->count();
-$exists = Post::where('slug', $slug)->exists();
-$missing = Post::where('slug', $slug)->doesntExist();
-$totalCredits = User::sum('credits'); // 0.0 when empty; avg/min/max return null when empty.
-
-// Advanced Where Clauses
-$adults = User::whereBetween('age', [18, 65])->get();
-$unverified = User::whereNull('email_verified_at')->get();
-$verified = User::whereNotNull('email_verified_at')->get();
-$recentlyModified = User::whereColumn('updated_at', '>', 'created_at')->get();
-$sameNames = User::whereColumn('first_name', 'last_name')->get(); // Operator defaults to '='
-$darkModeUsers = User::whereJsonContains('preferences', 'theme', 'dark')->get();
-
-// Subqueries and Existence Checks
-$activeCustomers = User::whereExists(function ($query) {
-    $query->table('orders')->whereColumn('orders.user_id', 'users.id');
-})->get();
-
-$usersWithLastOrder = User::select('id', 'name')
-    ->selectSub(function ($query) {
-        $query->table('orders')
-            ->selectRaw('MAX(created_at)')
-            ->whereColumn('orders.user_id', 'users.id');
-    }, 'last_order_at')
-    ->get();
-
-// Conditional Querying (when / unless)
-$posts = Post::query()
-    ->when($request->query('search'), function ($query, $search) {
-        $query->whereContains('title', $search);
-    })
-    ->when($request->query('category_id'), function ($query, $categoryId) {
-        $query->where('category_id', $categoryId);
-    })
-    ->latest()
-    ->paginate(20);
-
-// Grouped Boolean Logic with Closures
-$users = User::where(function ($query) {
-    $query->where('role', 'admin')
-          ->orWhere('role', 'manager');
-})->where('active', true)->get();
-```
-
----
-
-## Simple Pagination
-
-Use `simplePaginate(int $perPage = 15, array|string $columns = ['*'], string $pageName = 'page', ?int $page = null)` when you need next/previous links without a total count. It returns `Spark\Paginator\SimplePaginator`, reads the named page query parameter by default, and fetches `$perPage + 1` rows using LIMIT/OFFSET. Only page items reach eager loading and custom mappers. The source builder remains reusable.
-
-```php
-$posts = Post::with('author')->orderBy('id')->simplePaginate(20);
-return PostResource::collection($posts);
-
-// Explicit page, selected columns, and a separate query parameter:
-$page = Post::orderBy('id')->simplePaginate(20, ['id', 'title'], 'posts_page', 2);
-$page->items();
-$page->currentPage();
-$page->hasMorePages();
-$page->nextPageUrl();
-```
-
-Malformed request pages default to 1; non-positive sizes/pages normalize to 1. Out-of-range pages remain empty at the requested page number because there is no total to clamp against. There are no `total()`, `lastPage()`, or last-page URL methods on simple pagination.
-
-`Paginator`, `SimplePaginator`, and `CursorPaginator` live in `Spark\Paginator` and share `AbstractPaginator` for collections, iteration, array access, transformations, JSON, escaped HTML links, and resource metadata. Numbered `Paginator` reuses `SimplePaginator` page navigation. Existing numbered `through()` still returns a transformed array without mutation; simple/cursor `through()` transforms items and returns the paginator. Use `map()` for in-place transformations on all three. URL paths and filters are captured when a paginator is constructed.
-
-`firstItem()` / `lastItem()` use the actual stored page items, including partially filled pages; resource `from` and `to` are null on empty pages even when a numbered paginator retains a nonzero total. `paginate()` keeps its existing consuming/reset behavior, while simple/cursor pagination leaves the source builder and mappers reusable.
-
-## Cursor Pagination
-
-Use `cursorPaginate(int $perPage = 15, array|string $columns = ['*'], string $cursorName = 'cursor', Cursor|string|null $cursor = null)` for next/previous navigation. It returns `Spark\Paginator\CursorPaginator`, fetches at most `$perPage + 1` rows, and uses ordered comparisons instead of a count query or SQL offset.
+## Conditions, selection, and relations
 
 ```php
 $posts = Post::with('author')
-    ->where('published', true)
-    ->orderBy('created_at', 'DESC')
-    ->orderBy('id', 'DESC')
-    ->cursorPaginate(20);
-
-return PostResource::collection($posts);
-
-// Explicit cursor, selected columns, and an independent URL parameter:
-$page = Post::orderBy('id')->cursorPaginate(
-    perPage: 20,
-    columns: ['id', 'title'],
-    cursorName: 'posts_cursor',
-    cursor: $encodedCursor,
-);
-
-$page->items();             // Hydrated models; eager loading and soft deletes still apply
-$page->nextCursor();        // Cursor|null; ->encode() produces the URL token
-$page->previousPageUrl();   // string|null
-$page->hasMorePages();      // Whether a next page exists
+    ->when($filters->filled('q'), fn($query) => $query->whereContains('title', $filters->string('q')))
+    ->where(function ($query) {
+        $query->where('status', 'published')->orWhere('featured', true);
+    })
+    ->latest()
+    ->get();
 ```
 
-- Explicit ordering is required, including on model queries. The ordered columns must be selected, non-null, and uniquely identify a row together (usually add the primary key as the last order). Index the ordering columns for large lists.
-- Repeated `orderBy()` calls now append ordering columns. `order('id ASC')` replaces an existing order; `orderAsc()` / `orderDesc()` retain their replacement behavior.
-- Plain qualified columns and mixed ASC/DESC directions are supported. Ordering expressions, selected aliases, grouped queries, HAVING, and unions are unsupported and fail explicitly.
-- A null cursor reads the named request query parameter. Malformed URL tokens start at the first page; valid cursors missing a required ordered column throw `InvalidArgumentException`. Cursors are encoded values, not authorization tokens; retain all access filters on every request.
-- Existing selections are preserved with the default `$columns`. Cursor values come from database rows before model casting or custom mapping. Declared model properties are populated before the constructor, matching PDO retrieval. The source builder remains reusable.
-- Links preserve query filters. `items()`, iteration, `count()`, `getCollection()`, `through()`, `links()`, and JSON serialization are supported. `through()` transforms items in place while keeping navigation boundaries. There are no totals, numbered pages, or last-page URL.
+| Intent | Native methods/examples |
+| --- | --- |
+| Select | `select('id', 'title')`, `selectRaw('COUNT(*) AS total')`, `selectSub($query, 'alias')`, `distinct()` |
+| Compare | `where('status', 'active')`, `orWhere()`, `whereNull()`, `whereNotNull()`, `whereColumn('updated_at', '>', 'created_at')` |
+| Lists/ranges | `whereIn()`, `whereNotIn()`, `whereBetween('age', [18, 65])`, `whereNotBetween()`, `between('age', 18, 65)` |
+| Text | `whereContains()`, `whereStartsWith()`, `whereEndsWith()`, `like('name', '%Ada%')` |
+| JSON | `whereJsonContains('settings', 'theme', 'dark')`, `whereJsonNotContains()` |
+| Subqueries | `whereExists(fn($q) => $q->table('orders')->whereColumn('orders.user_id', 'users.id'))`, `whereNotExists()` |
+| Dates | `where('published_at', '<=', now())`, `whereDate('created_at', '=', today()->toDateString())`, `whereYear()`, `whereMonth()` |
+| Relations | `with()`, `withExists()`, `withCount()`, `withSum()`, `withAvg()`, `whereHas()`, `whereDoesntHave()`, `whereRelation()` |
+| Order | `orderBy('id', 'DESC')`, `latest('created_at')`, `oldest()`, `random()` |
+| Bound results | `take(10)`, `skip(20)`, `limit(offset: 0, limit: 10)` |
 
-## Date and Time Conditions with `now()`
+Arrayable values, including validated Input, work in equality conditions and writes. Keep related IDs authorized. `orderBy()` appends columns; `order('id ASC')`, `orderAsc()`, and `orderDesc()` replace ordering.
 
-Use `now()`, `today()`, or `Spark\Carbon` directly in date conditions:
+## Simple pagination
+
+`simplePaginate(int $perPage = 15, array|string $columns = ['*'], string $pageName = 'page', ?int $page = null)` returns `Spark\Paginator\SimplePaginator`. It reads the named query parameter and fetches perPage + 1 rows with LIMIT/OFFSET, without COUNT.
 
 ```php
-// Compare against current timestamp
-$activeEvents = Event::where('starts_at', '<=', now())
-    ->where('ends_at', '>=', now())
-    ->get();
-
-// Specific date parts
-$todayPosts = Post::whereDate('created_at', '=', today()->toDateString())->get();
-$currentYearPosts = Post::whereYear('created_at', '=', now()->year)->get();
-$currentMonthPosts = Post::whereMonth('created_at', '=', now()->month)->get();
+return PostResource::collection(Post::with('author')->orderBy('id')->simplePaginate(20));
+$page = Post::orderBy('id')->simplePaginate(20, ['id', 'title'], 'posts_page', 2);
 ```
 
----
+Only page items reach eager loading/mappers. The source builder remains reusable. Malformed request pages default to 1; non-positive sizes/pages normalize to 1. Out-of-range pages stay empty at the requested number. There are no totals, last-page values, or last-page URLs.
 
-## Builder Methods Reference
+## Cursor pagination
 
-Common QueryBuilder / Model methods:
+`cursorPaginate(int $perPage = 15, array|string $columns = ['*'], string $cursorName = 'cursor', Cursor|string|null $cursor = null)` returns `Spark\Paginator\CursorPaginator`. It uses ordered comparisons and at most perPage + 1 rows, without COUNT/OFFSET.
 
-- **Selection**: `select('id', 'title')`, `selectRaw('COUNT(*) as total')`, `selectSub($subquery, 'alias')`, `distinct()`, `column('title')`
-- **Conditions**: `where('status', 'active')`, `orWhere('role', 'admin')`, `whereNull('deleted_at')`, `whereNotNull('published_at')`, `whereColumn('updated_at', '>', 'created_at')`
-- **Lists & Ranges**: `whereIn('id', [1, 2, 3])`, `whereNotIn('status', ['archived'])`, `whereBetween('age', [18, 65])`, `whereNotBetween('score', [1, 5])`, `between('age', 18, 65)`
-- **Strings**: `whereContains('bio', 'engineer')`, `whereStartsWith('sku', 'SPARK-')`, `whereEndsWith('email', '@example.com')`, `like('name', '%John%')`
-- **JSON**: `whereJsonContains('settings', 'theme', 'dark')`, `whereJsonNotContains('settings', 'beta', true)`
-- **Existence**: `whereExists(Closure $callback)`, `whereNotExists(Closure $callback)`, `exists()`, `doesntExist()`
-- **Dates**: `whereDate('created_at', '=', today()->toDateString())`, `whereYear('created_at', '=', now()->year)`, `whereMonth('created_at', '=', now()->month)`
-- **Relations**: `with()`, `withExists()`, `withCount()`, `withSum()`, `withAvg()`, `whereHas()`, `whereDoesntHave()`, `whereRelation()`
-- **Ordering**: `orderBy('id', 'DESC')`, `orderDesc('id')`, `orderAsc('name')`, `latest('created_at')`, `oldest('created_at')`, `random()`
-- **Limiting**: `take(10)`, `skip(20)`, `limit(offset: 0, limit: 10)`
-- **Terminal Execution**: `first()`, `firstOrFail()`, `get()`, `all()`, `paginate(limit: 20)`, `simplePaginate(perPage: 20)`, `cursorPaginate(perPage: 20)`, `pluck('name', 'id')`, `value('title')`
-- **Mutations & Writes**: `create([...])`, `firstOrCreate([...], [...])`, `firstOrNew([...], [...])`, `createOrUpdate([...])`, `upsert(...)`, `update([...])`, `delete()`, `destroy($id)`, `increment('views')`, `decrement('stock')`
+```php
+return PostResource::collection(
+    Post::with('author')->where('published', true)
+        ->orderBy('created_at', 'DESC')->orderBy('id', 'DESC')->cursorPaginate(20)
+);
+```
 
----
+- Require explicit, selected, non-null ordering columns that uniquely identify rows together; add the primary key as a tiebreaker. Index them for large lists.
+- Plain qualified columns and mixed directions work. Expressions, selected aliases, GROUP BY/HAVING, and unions fail explicitly.
+- Null cursor reads the named request parameter. Malformed URL tokens start at page one; valid cursors missing required columns throw. Cursor encoding is not authorization: retain access filters on every request.
+- Default columns preserve existing selections. Boundaries use raw row values before casts/mappers; declared model properties are populated before construction. Source queries remain reusable.
+- `nextCursor()`/`previousCursor()` return Cursor or null; `encode()` gives the token. `nextPageUrl()`, `previousPageUrl()`, and `hasMorePages()` provide navigation. No totals, numbered pages, or last-page URL.
 
-## Upserts and Mass Writes
+All three paginator types live in `Spark\Paginator` and share AbstractPaginator's collection/iteration/array/JSON/link/resource behavior. Paths and filters are captured at construction. `map()` transforms items in place; numbered `through()` returns a transformed array, while simple/cursor `through()` transforms and returns the paginator. Numbered `paginate()` consumes/resets its builder; simple/cursor retain it. Page ranges use actual items, with null resource ranges on empty pages.
 
-`update()`, `delete()` / `forceDelete()`, `restore()`, `increment()`, and `decrement()` reject joins, grouping/HAVING, unions, ordering, limits/offsets, and bindings outside WHERE. Select the intended primary keys first, then write through a fresh `whereIn()` query; use a transaction when selection and mutation must be coordinated. Unsupported clauses are never silently dropped. Relationship aggregate callbacks likewise reject GROUP BY, HAVING, and UNION; row conditions and joins remain supported, ordering is discarded with its bindings, and limits/offsets are retained.
-
-Self-relation aggregates automatically alias the inner table. Use unqualified columns in model query scopes and aggregate column arguments, or `$query->getAlias()` in callbacks; qualifying the original table is rejected because it can filter the outer row instead.
+## Upserts and mass writes
 
 ```php
 Product::upsert(
-    [
-        ['sku' => 'SPARK-01', 'name' => 'Starter', 'price' => 25],
-        ['sku' => 'SPARK-02', 'name' => 'Team', 'price' => 50],
-    ],
+    [['sku' => 'SPARK-01', 'price' => 25], ['sku' => 'SPARK-02', 'price' => 50]],
     conflict: ['sku'],
-    update: ['name', 'price'],
+    update: ['price'],
 );
 ```
 
-- Signature: `upsert(array|Arrayable $data, ?array $conflict = null, ?array $update = null)`.
-- `conflict` specifies the unique constraint columns (defaults to `['id']`).
-- `update` specifies the columns to update on conflict (omitted/null updates all non-conflict columns).
+Signature: `upsert(array|Arrayable $data, ?array $conflict = null, ?array $update = null)`. Conflict defaults to `['id']`; null update selects all non-conflict columns. Back conflict columns with the appropriate unique constraint.
 
----
+`update()`, `delete()`/`forceDelete()`, `restore()`, `increment()`, and `decrement()` reject joins, grouping/HAVING, unions, ordering, limits/offsets, and bindings outside WHERE. Select intended IDs first, then write through a fresh constrained query; unsupported clauses are not silently dropped.
 
-## Database Transactions and Row Locks
+Relationship aggregate callbacks reject GROUP BY/HAVING/UNION, support row conditions/joins, discard ordering and its bindings, and retain limits/offsets. Self-relations alias their inner table: use unqualified scope/aggregate columns or `$query->getAlias()`. Hard-coded original-table qualifications can target the outer row and are rejected.
 
-Use `Spark\Facades\DB::transaction()` to execute multi-step database writes atomically:
+## Transactions and row locks
 
 ```php
 use Spark\Facades\DB;
-use App\Models\Order;
-use App\Models\OrderItem;
-use App\Models\Product;
 
-$order = DB::transaction(function () use ($userId, $items): Order {
-    $order = Order::create([
-        'user_id' => $userId,
-        'status' => 'pending',
-        'ordered_at' => now(),
-    ]);
-
-    foreach ($items as $item) {
-        // Lock product row for atomic inventory update
-        $product = Product::whereKey($item['product_id'])
-            ->lockForUpdate()
-            ->firstOrFail();
-
-        abort_if($product->stock < $item['quantity'], \Spark\Http\Response::STATUS_UNPROCESSABLE_ENTITY, 'Insufficient stock.');
-
-        $product->decrement('stock', $item['quantity']);
-
-        $order->items()->create([
-            'product_id' => $product->id,
-            'quantity' => $item['quantity'],
-            'unit_price' => $product->price,
-        ]);
-    }
-
-    return $order;
+DB::transaction(function () use ($productId, $quantity) {
+    $product = Product::whereKey($productId)->lockForUpdate()->firstOrFail();
+    abort_if($product->stock < $quantity, \Spark\Http\Response::STATUS_UNPROCESSABLE_ENTITY, 'Insufficient stock.');
+    $product->decrement('stock', $quantity);
 });
 ```
 
-- `lockForUpdate()` requests an exclusive SELECT lock (`FOR UPDATE`).
-- SQLite uses database-level locks rather than row-level locks; design transactions accordingly when targeting SQLite.
+`lockForUpdate()` requests an exclusive SELECT lock; SQLite uses database-level locking. Use the same connection for coordinated writes. Follow [advanced workflows](advanced-workflows.md) for nesting, failure handling, retries, and external effects; there is no assumed after-commit API.
+
+Verify query results, bindings/prefixes, affected rows, ordering/pagination boundaries, relation query counts, rollback, and target-driver behavior.

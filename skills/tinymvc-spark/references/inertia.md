@@ -9,7 +9,7 @@ Contents:
 - [Check the installed protocol first](#check-the-installed-protocol-first)
 - [Register and mount](#register-and-mount)
 - [Page and write actions](#page-and-write-actions)
-- [Redirects, validation, flash](#redirects-validation-and-flash)
+- [Redirects, validation, and flash](#redirects-validation-and-flash)
 - [Choose props deliberately](#choose-props-deliberately)
 - [Assets and verification](#assets-and-verification)
 

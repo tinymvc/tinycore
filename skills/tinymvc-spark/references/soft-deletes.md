@@ -1,10 +1,17 @@
 # Soft Deletes
 
-Read this reference for soft deletes. Source paths and command working directories refer to the application root unless explicitly stated otherwise. Check the installed package when versions differ.
+> **Read when:** archiving, restoring, or permanently removing model records and relations.
+> **Related:** [Models and relations](models-relations.md) · [Queries](queries.md) · [Migrations](migrations.md)
+> Archive scopes control selection, not ownership authorization.
 
-## Soft Deletes
+Contents:
 
-### Model and schema setup
+- [Model and schema setup](#model-and-schema-setup)
+- [Select, archive, restore, and purge](#select-archive-restore-and-purge)
+- [Relationship and database boundaries](#relationship-and-database-boundaries)
+- [Regression cases for a trash feature](#regression-cases-for-a-trash-feature)
+
+## Model and schema setup
 
 Add a nullable deletion column and enable the model constant:
 
@@ -32,11 +39,11 @@ class Post extends Model
 }
 ```
 
-`softDeletes()` takes no arguments and returns void; do not chain modifiers. The current Model already includes the soft-delete trait, attaches itself to queries, and composes scoped WHERE clauses. No application compatibility override or Laravel trait is needed. For an older installed package, verify these capabilities before generating code that relies on them.
+`softDeletes()` takes no arguments and returns void; do not chain modifiers. Model already includes the trait and composes scoped queries; do not add a Laravel trait or compatibility override.
 
 Apply the column migration before enabling the model. A rollback uses `$table->dropColumn('deleted_at')`; remove the model behavior before dropping the column. For a custom column, set `SOFT_DELETE_COLUMN = 'archived_at'`, cast it if needed, and create `$table->timestamp('archived_at')->nullable()`.
 
-### Select, archive, restore, and purge
+## Select, archive, restore, and purge
 
 ```php
 $active = Post::latest()->get();
@@ -74,7 +81,7 @@ The last trash-scope call wins and keeps existing WHERE conditions. An explicit 
 
 `remove()` and both restore entry points return bool; builder delete/forceDelete return affected-row counts. Call bulk restore on a builder, since `Post::restore()` collides with the non-static model method. A loaded `$post->forceDelete()` is constrained by its primary key. Deletion does not update a previously loaded object's deletion timestamp: re-fetch with `onlyTrashed()` / `withTrashed()` before `trashed()`. Ordinary `refresh()` cannot fetch archived records.
 
-### Relationship and database boundaries
+## Relationship and database boundaries
 
 - Enable soft deletes independently on each related model. `$user->posts()->onlyTrashed()->forceDelete()` and `restore()` retain the parent foreign-key condition.
 - Eager loading, relationship existence checks, and aggregates all use the related model's prepared scope. `User::has('posts')` ignores archived posts; `doesntHave('posts')` includes users whose posts are all archived. `withCount('posts')` counts active posts; `withCount('posts as all_posts', fn($q) => $q->withTrashed())` includes archives. Custom deletion-column names work too.
@@ -88,6 +95,6 @@ The last trash-scope call wins and keeps existing WHERE conditions. An explicit 
 - Soft deletion is an update, so it does not trigger foreign-key delete cascades or release a normal unique constraint. Decide explicitly whether a conflicting archived record should be restored.
 - Bulk writes do not fire callbacks once per row or cascade archive/restore operations. There are no dedicated restoring/restored callbacks in the current model event set.
 
-### Regression cases for a trash feature
+## Regression cases for a trash feature
 
 Use an isolated database with active and archived rows belonging to at least two owners. Verify ordinary reads hide archived rows, trash reads hide active rows, restore clears the timestamp, and permanent deletion removes only the selected rows. Check wrong-owner IDs, repeated operations, custom columns if used, relationship boundaries, and explicit scope switching. Use actual affected-row/state assertions, not just a successful HTTP status.

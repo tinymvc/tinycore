@@ -1,6 +1,16 @@
 # Queues
 
-Use class jobs implementing `Spark\Queue\Contracts\JobInterface` with `Spark\Queue\Dispatchable`. Queue configuration is independent of cache.
+> **Read when:** dispatching jobs, configuring queues, retries, recurring work, or worker restarts.
+> **Related:** [Mail and HTTP](mail-http.md#queued-mail) · [Advanced workflows](advanced-workflows.md) · [Operations](operations.md)
+> Use JobInterface and Dispatchable class jobs. Queue configuration is independent of cache.
+
+Contents:
+
+- [Connections and storage](#connections-and-storage)
+- [Class jobs and dispatch](#class-jobs-and-dispatch)
+- [Repeating jobs](#repeating-jobs)
+- [Workers, retries, and restarts](#workers-retries-and-restarts)
+- [Transactions and delivery](#transactions-and-delivery)
 
 ## Connections and storage
 
@@ -54,7 +64,7 @@ SendWelcomeEmail::dispatchSync($userId);
 
 Constructor arguments should be small and serializable; handler dependencies are container-injected. Pending dispatches send when they leave scope, or explicitly through `send()` / `dispatch()`. An explicit send failure is not retried by the destructor; deliberate producer retries need deduplication or idempotency.
 
-`delay()` uses seconds; `schedule()` accepts a date string or `Spark\Carbon`. Drivers persist schedules in UTC; strings without offsets use the application timezone. The low-level `job()` helper accepts class/function strings or callable arrays, not closures. Prefer static dispatch for application jobs; see [queued mail](mail-http.md#3-smart-standard-queued-mail-in-jobs) for a complete handler.
+`delay()` uses seconds; `schedule()` accepts a date string or `Spark\Carbon`. Drivers persist schedules in UTC; strings without offsets use the application timezone. The low-level `job()` helper accepts class/function strings or callable arrays, not closures. Prefer static dispatch for application jobs; see [queued mail](mail-http.md#queued-mail) for a complete handler.
 
 ## Repeating jobs
 
@@ -82,7 +92,7 @@ Without `--once`, workers poll until their lifetime expires. `--timeout` is chec
 
 Public `$tries` and `$backoff` override worker defaults. Backoff accepts seconds or an array indexed by failed attempt; later attempts reuse its last entry. `failed()` runs only after exhaustion and accepts either `Throwable $exception` or `JobContract $job, Throwable $exception`. Constructor/retry-policy failures follow the retry path using worker defaults when necessary. Logs report completed jobs and failed attempts; `--ansi` / `--no-ansi` control color.
 
-`queue:restart` signals workers on all connections to finish and acknowledge the current job, then exit; idle workers exit on their next poll. new workers ignore old markers. Restart existing cache-based workers through the supervisor once when upgrading.
+`queue:restart` signals workers on all connections to finish and acknowledge the current job, then exit; idle workers exit on their next poll. New workers ignore old markers. Restart existing cache-based workers through the supervisor once when upgrading.
 
 Stale reservations older than 3600 seconds are recovered at worker startup. An indefinitely running worker needs restarting to repeat recovery; keep job execution below that window.
 
@@ -91,3 +101,5 @@ Stale reservations older than 3600 seconds are recovered at worker startup. An i
 Default-connection database dispatch participates in the business transaction. Named database connections, file, and Redis do not join it. MySQL `pushOnce()` / `dispatchOnce()` rejects active transactions; dispatch after commit so deduplication does not outlive its advisory lock. There is no automatic `afterCommit()` API; use an outbox or explicit retry record when enqueueing after commit must be recoverable.
 
 Delivery is at least once: handlers must be idempotent. Stop workers/producers before clearing queues or changing drivers. `queue:clear` / `queue:clearFailed` delete work; purging a connection does not.
+
+Telemetry observes enqueue calls and worker attempts; `job.failed` means a failed attempt, not necessarily exhaustion. `pushOnce()` emits an enqueue observation even when storage deduplicates it. Synchronous dispatch bypasses the worker lifecycle. See [runtime telemetry](container-pipelines.md#runtime-telemetry).

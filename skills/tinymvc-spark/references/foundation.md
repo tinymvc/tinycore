@@ -179,7 +179,7 @@ Detailed order:
 2. `.env` is loaded and cached.
 3. Core services are registered.
 4. Config is discovered and cached.
-5. Providers register and boot.
+5. Providers register; `Application::boot()` sets the app timezone and boots providers once (also used by CLI).
 6. Router dispatches the current `Request`.
 7. Middleware wraps the matched route.
 8. The route callback/controller returns a value.
@@ -187,7 +187,7 @@ Detailed order:
 10. `Response::send()` sends headers and body.
 11. `Application::terminate()` finishes the client response and runs callbacks registered with `defer()`.
 
-When unsure, inspect nearby app files and follow the existing pattern.
+Framework activity is observable through [runtime telemetry](container-pipelines.md#runtime-telemetry), including outside debug mode when a listener matches. When unsure, inspect nearby app files and follow the existing pattern.
 
 ## Post-response work with defer()
 

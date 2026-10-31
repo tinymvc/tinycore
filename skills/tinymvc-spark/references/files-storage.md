@@ -1,7 +1,7 @@
 # Files, Storage, and Image Utilities
 
 > **Read when:** working with filesystem storage, S3, disk uploaders, or the native `File`, `Image`, and `JWT` utilities.
-> **Related:** [Foundation](foundation.md#cache-lock-queue-and-session-config) (storage paths) · [Helpers](helpers.md) · [API discovery](api-discovery.md#check-optional-capabilities) (required extensions)
+> **Related:** [Foundation](foundation.md#cache-lock-queue-and-session-config) (storage paths) · [Helpers](helpers.md) · [API discovery](api-discovery.md#4-check-optional-capabilities) (required extensions)
 > Paths are relative to the application root. Config lives in `config/storage.php`; `FILESYSTEM_DISK` selects the default disk.
 
 Contents:

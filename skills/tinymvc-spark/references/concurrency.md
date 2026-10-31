@@ -1,6 +1,15 @@
 # Concurrency and execution boundaries
 
-Read when: choosing between inline work, HTTP fan-out, concurrent tasks, subprocesses, deferred callbacks, and jobs. Source: `Concurrency.php`, `Console/Process.php`, `Http/Client/HttpPool.php`, and `Queue/` under the installed TinyCore `src`.
+> **Read when:** choosing inline work, HTTP fan-out, concurrent tasks, subprocesses, defer, or jobs.
+> **Related:** [Mail and HTTP](mail-http.md) · [Queues](queues.md) · [Advanced workflows](advanced-workflows.md)
+> Source: installed `Concurrency.php`, `Console/Process.php`, `Http/Client/HttpPool.php`, and `Queue/`.
+
+Contents:
+
+- [Choose an execution model](#choose-an-execution-model)
+- [Callable tasks](#callable-tasks)
+- [Subprocesses](#subprocesses)
+- [Verification](#verification)
 
 ## Choose an execution model
 

@@ -1,27 +1,47 @@
-# Realtime broadcasting with Relay
+# Realtime Broadcasting with Relay
 
-Relay and the Pusher SDK are optional packages, not TinyCore APIs. Inspect the application's installed `vendor/tinymvc/relay` and `vendor/shahinmoyshan/pusher-php-server` sources and READMEs before assuming a feature or limit. A sibling checkout may contain unreleased changes.
+> **Read when:** publishing broadcasts, authorizing channels, or operating a Relay daemon.
+> **Related:** [Mail and HTTP](mail-http.md) · [Queues](queues.md) · [Auth and gate](auth-gate.md) · [Operations](operations.md)
+> Relay and the Pusher SDK are optional. Verify installed `tinymvc/relay` and `shahinmoyshan/pusher-php-server` sources/READMEs; sibling checkouts can be unreleased.
 
-Register `Spark\Relay\RelayServiceProvider` in the existing `bootstrap/providers.php` list and configure `config/relay.php`. The provider binds `Spark\Relay\Relay` and its `relay` alias and registers `php spark relay:start` and `php spark relay:restart`. The facade is `Spark\Relay\Facades\Relay`.
+Contents:
 
-Use `Relay::trigger($channels, $event, $data, $socketId)` to publish. The default service uses the first configured app. Select other apps by constructing `Spark\Relay\Relay` with an explicit `Spark\Relay\App` and client configuration. Keep credentials out of request-controlled input and frontend bundles.
+- [Register and publish](#register-and-publish)
+- [Authorize private and presence channels](#authorize-private-and-presence-channels)
+- [Client protocol and cache channels](#client-protocol-and-cache-channels)
+- [Deployment, monitoring, and restart](#deployment-monitoring-and-restart)
+- [Verify package changes](#verify-package-changes)
 
-Authorize private/presence subscriptions in an application POST route protected by the application's authentication and CSRF middleware. Define `Spark\Relay\ChannelAuth` rules in a provider or explicitly loaded channel file. A pattern such as `private-orders.{id}` matches a channel; return true only after checking the user's access. Presence rules return `['id' => (string) $user->id, 'info' => [...]]`. Expose only intended presence fields. Unknown patterns deny authorization.
+## Register and publish
 
-Validate `socket_id` and `channel_name` as strings before calling the authorizer. `Relay::authorize($channel, $socketId, $presence)` returns a JSON string; return it with `response($json, \Spark\Http\Response::STATUS_OK, [\Spark\Http\Header::CONTENT_TYPE => 'application/json'])`, not `json($json)`. Signing alone does not authorize a user. Presence requires a non-empty string/integer ID (zero is valid); authorization is checked on subscription, not on each later event.
+Add `Spark\Relay\RelayServiceProvider` to the existing `bootstrap/providers.php`; configure `config/relay.php`. It binds `Spark\Relay\Relay`/`relay` and registers `relay:start`/`relay:restart`. Facade: `Spark\Relay\Facades\Relay`.
 
-The SDK uses `Spark\Http\Client\HttpRequest` and `HttpPool`. Its `*Async()` methods prepare requests without sending them. `execute()` and `pool()` wait for completion; they are not ReactPHP promises and must not block Relay's event loop. Dispatch a normal Spark job for asynchronous application broadcasts.
+`Relay::trigger($channels, $event, $data, $socketId)` publishes through the first configured app. For another app, construct the service with an explicit `Spark\Relay\App` and client configuration. Keep credentials out of request input/frontend bundles.
 
-Reviewed SDK versions disable automatic retries for signed requests because a lost response can cause duplicate publishing. Inspect installed behavior; explicit retries and job retries still need application-level duplicate handling. Do not assume durable delivery, replay or transactions across broadcasts.
+The SDK's `*Async()` methods prepare TinyCore HttpRequests; `execute()`/`pool()` block. Do not call them on Relay's event loop; use a Spark job for background application broadcasts. Reviewed SDK versions disable retries for signed requests; verify installed behavior. Explicit/job retries still need duplicate handling. Delivery, replay, and cross-broadcast transactions are not guaranteed.
 
-Relay keeps channel state in one daemon. Run one instance for a given app's traffic unless the installed version explicitly implements distributed fan-out. Put TLS and connection throttling at the reverse proxy, expose `/app/` for WebSockets, and keep `/apps/` on the backend network. Restrict origins and configure finite connection/memory limits appropriate for the event-loop backend. Reconnect clients should reload authoritative application state.
+## Authorize private and presence channels
 
-Relay supports a subset of Pusher Channels: public/private/presence subscriptions, event and batch publishing, channel/user queries, client events, heartbeats and bounded cache channels. Use `pusher-js` directly; Echo is not required. Do not assume Pusher cloud user sign-in/termination, webhooks, HTTP fallback or Laravel Reverb compatibility beyond the installed implementation.
+Use an authenticated, CSRF-protected POST route and `Spark\Relay\ChannelAuth` rules loaded by the app. Patterns such as `private-orders.{id}` must check that user's access; unknown patterns deny. Presence rules return `['id' => (string) $user->id, 'info' => [...]]` with only public fields.
 
-Cache channels use `cache-`, `private-cache-`, `presence-cache-` or `private-encrypted-cache-`. Authorize private/presence variants normally. Backend events replace the last retained snapshot, including while there are no subscribers. After subscription success, the daemon sends that snapshot or `pusher:cache_miss`; bind both application state and cache-miss handlers immediately. Use full snapshots with versions when HTTP fallback can race realtime updates. Client events never populate this cache. App `cache_ttl`, `max_cached_channels` and `max_cache_size` bound retention; cache state is ephemeral and clears on restart. This is not durable replay or an application cache API.
+Validate socket_id/channel_name as strings. `Relay::authorize($channel, $socketId, $presence)` returns a **JSON string**: return it through `response($json, Response::STATUS_OK, [Header::CONTENT_TYPE => 'application/json'])`, not `json($json)`. Signing is not authorization. Presence requires a nonempty string/integer ID (zero is valid); authorization occurs at subscription, not on every later event.
 
-`Relay::stats()` uses the signed, Relay-specific `/apps/{id}/stats` API through TinyCore HTTP. It reports app-isolated connections, subscriptions, channels, cache usage and process-lifetime WebSocket message/byte counters. Sent counts mean queued output, not delivery acknowledgement. `/health` is a minimal unauthenticated event-loop/HTTP health check. Keep monitoring on the backend network; retain history externally.
+## Client protocol and cache channels
 
-`relay:restart` writes a local marker and asks existing daemons to close clients with reconnect code 4200 and exit. A supervisor with restart enabled must start the replacement. Run deployment commands as the daemon's OS user. Default marker: `storage_dir() . 'relay.restart'`; for release directories use a stable absolute `relay.server.restart_file` outside the public root on shared local storage. New workers ignore the existing marker until it changes. Restart does not coordinate multiple independent channel registries or add Redis scaling.
+Use `pusher-js`; Echo is optional. Relay supports a subset of Pusher Channels: public/private/presence subscriptions, event/batch publishing, channel/user queries, client events, heartbeats, and bounded cache channels. Do not assume cloud sign-in/termination, webhooks, HTTP fallback, or Reverb compatibility.
 
-For package work, use each repository's `php tests/run.php`. Relay also supplies `npm test` and `npm run test:load`; `RELAY_PUSHER_SOURCE=../pusher-php-server` selects a sibling SDK checkout for joint verification. These run temporary localhost servers. Preserve separate package dependency boundaries and release coordinated changes before expecting Composer users to receive them.
+Cache prefixes: `cache-`, `private-cache-`, `presence-cache-`, `private-encrypted-cache-`. Authorize private/presence variants normally. Backend events replace the last retained snapshot even without subscribers; subscription sends it or `pusher:cache_miss`. Bind both handlers immediately. Full snapshots with versions handle HTTP/realtime races. Client events do not populate the cache.
+
+`cache_ttl`, `max_cached_channels`, and `max_cache_size` bound retention. Cache clears on restart; it is neither durable replay nor the application cache API. Reconnecting clients should reload authoritative state.
+
+## Deployment, monitoring, and restart
+
+- One daemon owns channel state. Use one instance per app's traffic unless the installed version explicitly supports distributed fan-out.
+- Terminate TLS/throttle connections at the proxy. Expose `/app/` for WebSockets; keep `/apps/` backend-only. Restrict origins and set finite connection/memory limits.
+- `Relay::stats()` calls the signed app-specific stats endpoint. It reports app-isolated connections, subscriptions, channels/cache, and process-lifetime message/byte counters. Sent means queued output, not acknowledged delivery. `/health` is a minimal unauthenticated loop/HTTP health check; store history externally.
+- `relay:restart` writes a local marker; daemons close clients with code 4200 and exit. A supervisor starts replacements. Run commands as the daemon OS user. New daemons ignore the existing marker until changed.
+- Default marker: `storage_dir() . 'relay.restart'`. Release directories need stable absolute `relay.server.restart_file` outside the public root on shared local storage. Restart does not add Redis scaling or coordinate independent registries.
+
+## Verify package changes
+
+Use each package's `php tests/run.php`; Relay also has `npm test` and `npm run test:load` with temporary localhost servers. `RELAY_PUSHER_SOURCE=../pusher-php-server` selects a sibling SDK for coordinated tests. Preserve package boundaries and release dependencies before expecting Composer consumers to receive joint changes.

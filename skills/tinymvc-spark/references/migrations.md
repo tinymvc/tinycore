@@ -1,18 +1,20 @@
 # Migrations and Schema
 
-Read this reference for database migrations, schema definitions, and table alterations. Source paths and command working directories refer to the application root unless explicitly stated otherwise. Check the installed package when versions differ.
+> **Read when:** creating or altering tables, indexes, foreign keys, or migration history.
+> **Related:** [Queries](queries.md#prefixes-and-raw-sql) · [Models and relations](models-relations.md) · [Soft deletes](soft-deletes.md) · [Operations](operations.md)
+> Use the target database driver and application migration directory; schema changes affect persisted data.
 
-Schema and the migration ledger use the default connection's prefix. Pass logical table names, including foreign-key targets. Generated index/constraint names include the prefix; explicit names stay unchanged. See [prefixes and raw SQL](queries.md#prefixes-and-raw-sql).
+Contents:
 
----
+- [Define migrations](#define-migrations)
+- [Columns, constraints, and alterations](#columns-constraints-and-alterations)
+- [Commands and verification](#commands-and-verification)
 
-## Defining Migrations
+## Define migrations
 
-Migration files return an anonymous class with `up()` and `down()`. Always use `Spark\Facades\Schema` (or `Spark\Database\Schema\Schema`) and `Spark\Database\Schema\Blueprint`.
+Files return an anonymous class with `up()` and `down()`:
 
 ```php
-<?php
-
 use Spark\Database\Schema\Blueprint;
 use Spark\Facades\Schema;
 
@@ -40,73 +42,34 @@ return new class {
 };
 ```
 
----
+Schema and the ledger use the default connection's prefix. Pass logical table names, including foreign-key targets. Generated index/constraint names include the prefix; explicit names stay unchanged.
 
-## Blueprint Column Types and Modifiers
+## Columns, constraints, and alterations
 
-### Common Column Types
+| Type | Examples |
+| --- | --- |
+| Keys | `id()`, `increments('id')`, `bigIncrements('id')` |
+| Text | `string('title', 255)`, `char('code', 4)`, `text('body')`, `longText('payload')` |
+| Numbers | `integer('votes')`, `tinyInteger('status')`, `bigInteger('views')`, `decimal('amount', 10, 2)`, `float('rating')` |
+| Flags | `boolean('active')->default(true)`, `enum('status', ['draft', 'published'])` |
+| Dates | `date('due_date')`, `dateTime('starts_at')`, `timestamp('published_at')` |
+| Helpers | `timestamps()`, `nullableTimestamps()`, `softDeletes()`, `rememberToken()` |
 
-- **Primary Keys**: `$table->id()`, `$table->increments('id')`, `$table->bigIncrements('id')`
-- **Strings**: `$table->string('title', 255)`, `$table->char('code', 4)`, `$table->text('body')`, `$table->longText('payload')`
-- **Numbers**: `$table->integer('votes')`, `$table->tinyInteger('status')`, `$table->bigInteger('views')`, `$table->decimal('amount', 10, 2)`, `$table->float('rating')`
-- **Booleans & Enums**: `$table->boolean('is_active')->default(true)`, `$table->enum('status', ['draft', 'published', 'archived'])`
-- **Dates & Times**: `$table->date('due_date')`, `$table->dateTime('starts_at')`, `$table->timestamp('published_at')`
-- **Standard Helpers**: `$table->timestamps()`, `$table->nullableTimestamps()`, `$table->softDeletes()`, `$table->rememberToken()`
+Column modifiers include `nullable()`, `default()`, `unique()`, and `index()`. `softDeletes()` returns void; do not chain modifiers onto it.
 
-### Fluent Foreign Key Constraints
+`foreignId()->constrained('users')` supports `cascadeOnDelete/Update()`, `restrictOnDelete/Update()`, `setNullOnDelete/Update()`, and `noActionOnDelete/Update()`. Choose one action for each operation; SET NULL requires a nullable column.
 
-TinyCore provides fluent foreign key constraint methods:
+Use `Schema::table()` for alterations. Verify the installed Blueprint/compiler supports the intended operation on the target engine. Preserve applied migration files; add a migration for a new change. Check existing data before adding unique/foreign-key constraints and define a rollback suited to that data.
 
-```php
-// Cascade on delete:
-$table->foreignId('user_id')->constrained()->cascadeOnDelete();
+## Commands and verification
 
-// Set null on delete (note: column must be nullable):
-$table->foreignId('category_id')->nullable()->constrained()->setNullOnDelete();
-
-// Restrict on delete:
-$table->foreignId('author_id')->constrained('users')->restrictOnDelete();
-
-// Full constraint methods available on foreignId:
-$table->foreignId('order_id')
-    ->constrained('orders')
-    ->cascadeOnDelete()
-    ->cascadeOnUpdate()
-    ->restrictOnDelete()
-    ->restrictOnUpdate()
-    ->setNullOnDelete()
-    ->setNullOnUpdate()
-    ->noActionOnDelete()
-    ->noActionOnUpdate();
-```
-
-### Modifiers and Indexes
-
-```php
-$table->string('email')->unique();
-$table->string('slug')->index();
-$table->text('notes')->nullable();
-$table->boolean('active')->default(true);
-$table->timestamp('verified_at')->nullable();
-```
-
----
-
-## Migration Commands
-
-```bash
-# Create a new migration file
+```sh
 php spark make:migration create_posts_table
-
-# Create a pivot table migration (prompts for the 2 table names)
 php spark make:migration --pivot
-
-# Run pending migrations
 php spark migrate
-
-# Rollback last migration batch
 php spark migrate:rollback --step=1
-
-# Reset and re-run all migrations with seeders
-php spark migrate:fresh --seed
 ```
+
+`make:migration --pivot` prompts for table names. `migrate:fresh --seed` rebuilds tables and is destructive; use it only against an intended disposable database.
+
+Verify forward migration, expected columns/indexes/constraints, rollback where supported, and the next forward run on an isolated instance of the production database engine. SQLite passing does not prove MySQL/PostgreSQL DDL compatibility.

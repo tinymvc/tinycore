@@ -1,6 +1,15 @@
 # Auth and Gate
 
-Read when: signing users in or out, using named guards, issuing JWTs, or authorizing actions with gates. Paths are relative to the application root; the installed package is authoritative when versions differ.
+> **Read when:** signing users in/out, selecting guards, issuing JWTs, or checking abilities.
+> **Related:** [Middleware](middleware.md) · [Sessions](sessions.md) · [Requests and validation](requests-validation.md)
+> Paths are relative to the application root; verify the installed auth configuration.
+
+Contents:
+
+- [Authentication](#authentication)
+- [Named and custom guards](#named-and-custom-guards)
+- [JWT tokens](#jwt-tokens)
+- [Gate](#gate)
 
 ## Authentication
 
@@ -93,7 +102,7 @@ Inspect `Utils/JWT.php` (see [API discovery](api-discovery.md)) to confirm that 
 
 ## Gate
 
-`Spark\Facades\Gate` defines abilities and checks them. Gate callbacks receive the *Current Authenticated User* automatically as the first parameter.
+`Spark\Facades\Gate` defines abilities and checks them. Gate injects the current authenticated user into a parameter named `$user` (null for guests). Other positional/named ability arguments still work; before hooks may short-circuit and the first non-null after-hook result wins.
 
 ### Defining abilities
 

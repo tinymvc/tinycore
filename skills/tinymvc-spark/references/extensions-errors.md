@@ -4,6 +4,13 @@
 > **Related:** [Foundation](foundation.md) · [Helpers](helpers.md) · [Advanced workflows](advanced-workflows.md#request-lifecycle-and-extension-boundaries)
 > Paths and command working directories are relative to the application root. Check the installed package when versions differ.
 
+Contents:
+
+- [Service providers](#service-providers)
+- [Events](#events)
+- [Console commands](#console-commands)
+- [Error handling](#error-handling)
+
 ## Service providers
 
 Providers extend `Spark\Foundation\Providers\ServiceProvider`.

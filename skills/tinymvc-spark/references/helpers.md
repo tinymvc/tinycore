@@ -6,7 +6,7 @@
 
 Contents:
 
-- [Facades](#facades-sparkfacades)
+- [Facades (`Spark\Facades\*`)](#facades-sparkfacades)
 - [Global helpers](#global-helpers)
 - [Helpers documented in other references](#helpers-documented-in-other-references)
 - [Support primitives](#support-primitives)
@@ -33,6 +33,7 @@ Static access to services in the application container.
 | `Schema` | `Spark\Database\Schema\Schema` | `create()`, `table()`, `dropIfExists()` |
 | `Session` | `Spark\Http\Session` | `get()`, `put()`, `flash()`, `regenerate()`, `invalidate()` |
 | `Storage` | `Spark\Storage\Storage` | `disk('public')->put()`, `url()`, `temporaryUrl()`, uploaders; see [files and storage](files-storage.md) |
+| `Telemetry` | `Spark\Telemetry` | Lazy runtime events and wildcard observers; [telemetry contracts](container-pipelines.md#runtime-telemetry) |
 | `Validator` | `Spark\Http\Validator` | `Validator::make($rules, $data)` |
 
 > [!IMPORTANT]
@@ -210,7 +211,7 @@ $endsWith = Str::endsWith($email, '@example.com');
 $between = Str::between('<div>Hello</div>', '<div>', '</div>'); // 'Hello'
 ```
 
-`Str::slug()` / ASCII helpers need `voku/portable-ascii`; `Str::uuid()` needs `ramsey/uuid` (see [optional capabilities](api-discovery.md#check-optional-capabilities)).
+`Str::slug()` / ASCII helpers need `voku/portable-ascii`; `Str::uuid()` needs `ramsey/uuid` (see [optional capabilities](api-discovery.md#4-check-optional-capabilities)).
 
 ### Arrays (`Spark\Support\Arr`)
 

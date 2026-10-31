@@ -66,7 +66,7 @@ Read the selected response/adapter reference before implementing. Keep domain se
 
 **Blade** uses native helpers and anonymous components only. Never assume Laravel-only features:
 - No `\Spark\Facades\*` in views; use helpers (`user()`, `auth()`, `session()`, `route()`, `old()`, `errors()`, `config()`, `now()`).
-- No `$loop` (use `$index => $item`), no `@forelse` (use `@if(!empty($items)) @foreach ... @else ... @endif`).
+- No `$loop` (use `$index => $item`), no `@forelse` (use `@if` + `@foreach` + `@else`). Check arrays with `!empty($items)` and Collections with `$items->isNotEmpty()`.
 - No `@push`, `@stack`, `@once`, `@inject`, `<x-slot:name>`, or class components. Components are anonymous templates in `resources/views/components/` that render `{{ $slot }}`.
 - On `<x-...>` tags, use `::disabled` or `x-bind:disabled` for Alpine bindings.
 - Full directive list, escaping, and component syntax: [views and frontend](references/views-frontend.md).
@@ -106,7 +106,7 @@ Load one primary topic first; use the feature map to find related ones. Paths ar
 | Relay broadcasting, Pusher clients, channel auth | [Realtime and Relay](references/realtime-relay.md) |
 | Helpers, strings, collections, numbers, hashing, URLs | [Helpers](references/helpers.md) |
 | Dates, timezones, translations | [Localization and dates](references/localization-dates.md) |
-| Providers, DI, events, pipelines | [Container and pipelines](references/container-pipelines.md) |
+| Providers, DI, events, telemetry, pipelines | [Container and pipelines](references/container-pipelines.md) |
 | Extensions and exception handling | [Extensions and errors](references/extensions-errors.md) |
 | Bootstrap and configuration | [Foundation](references/foundation.md) |
 | Schema and migrations | [Migrations](references/migrations.md) |

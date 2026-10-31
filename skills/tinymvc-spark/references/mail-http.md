@@ -1,187 +1,89 @@
 # Mail and HTTP Client
 
-Read this reference for outbound HTTP requests and email sending. Source paths and command working directories refer to the application root.
+> **Read when:** calling external APIs, executing prepared/pool requests, or sending mail.
+> **Related:** [Queues](queues.md) · [Advanced workflows](advanced-workflows.md) (side effects) · [Realtime and Relay](realtime-relay.md) · [Telemetry](container-pipelines.md#runtime-telemetry)
+> Outbound HTTP requires cURL; mail requires PHPMailer. Check the installed dependencies.
 
----
+Contents:
 
-## HTTP Client: Modern Fluent Requests
+- [Fluent HTTP requests](#fluent-http-requests)
+- [Responses and concurrent requests](#responses-and-concurrent-requests)
+- [Sending mail](#sending-mail)
+- [Queued mail](#queued-mail)
 
-For Pusher publishing, channel authorization and the optional Relay daemon, see [Realtime and Relay](realtime-relay.md). SDK prepared requests are not background jobs or ReactPHP promises.
+## Fluent HTTP requests
 
-TinyCore includes a modern HTTP client accessible through the **`Spark\Facades\Http`** facade (backed by `Spark\Http\Client\Http`). It mirrors modern Laravel ergonomics.
-
-### 1. Basic Requests
+`Spark\Facades\Http` creates clients backed by `Spark\Http\Client\Http`:
 
 ```php
 use Spark\Facades\Http;
 
-// GET Request with query parameters
-$response = Http::get('https://api.example.com/users', [
-    'page' => 1,
-    'per_page' => 25,
-]);
-
-// POST Request with JSON payload
-$response = Http::post('https://api.example.com/posts', [
-    'title' => 'Building with Spark',
-    'published' => true,
-]);
-
-// PUT, PATCH, DELETE
-$response = Http::put("https://api.example.com/posts/{$id}", ['title' => 'Updated']);
-$response = Http::delete("https://api.example.com/posts/{$id}");
-```
-
-### 2. Request Configuration
-
-```php
 $response = Http::withToken($apiToken)
-    ->withHeaders([
-        'X-Custom-Header' => 'CustomValue',
-    ])
-    ->timeout(15) // seconds
-    ->post('https://api.example.com/orders', [
-        'item_id' => 101,
-        'quantity' => 2,
-    ]);
-```
+    ->timeout(15)
+    ->withRetry(0)
+    ->post('https://api.example.com/orders', ['item_id' => 101, 'quantity' => 2]);
 
-Supported request chain methods:
-- `withToken(string $token)`: Adds Bearer authentication header.
-- `withBasicAuth(string $username, string $password)`: Adds Basic authentication.
-- `withHeaders(array $headers)`: Adds custom HTTP headers.
-- `timeout(int $seconds)`: Sets connection and request timeout.
-- `withContentType(string $type)`: Sets request `Content-Type`.
-- `withAccept(string $type)`: Sets request `Accept` header.
-- `withoutVerifying()`: Disables SSL certificate verification (use only in local testing).
-- `attach(string $name, mixed $contents, ?string $filename = null)`: Multipart file attachment.
-- `download(string $path, bool $force = false)`: Saves the next response to disk. `force: true` atomically replaces an existing file after transport success; transport failure preserves it. Without force, an existing target is never replaced.
-
-### 3. Inspecting the Response
-
-`$response` implements `Spark\Http\Client\Contracts\HttpResponseContract`:
-
-```php
-// Status checks
-if ($response->successful()) { // Status 2xx (alias: $response->ok())
-    // Parse JSON directly or grab nested keys with dot notation
-    $data = $response->json();
-    $userId = $response->json('data.user.id', default: null);
-} elseif ($response->failed()) { // Status 4xx or 5xx
-    $statusCode = $response->status();
-    $errorMessage = $response->json('message') ?? $response->body();
+if (!$response->successful()) {
+    throw new RuntimeException('Order API failed with status ' . $response->status());
 }
+$id = $response->json('data.id');
 ```
 
-Response inspection methods:
-- `$response->successful()` / `$response->ok()`: True for 2xx status codes.
-- `$response->failed()` / `$response->isClientError()`: True for 4xx/5xx status codes.
-- `$response->status()`: Returns HTTP status code integer (e.g. 200, 404).
-- `$response->json(?string $key = null, mixed $default = null)`: Decodes JSON body; supports dot notation.
-- `$response->body()` / `$response->text()`: Returns raw response body string.
-- `$response->header(string $key)`: Returns specific response header.
-- `$response->headers()`: Returns all response headers array.
+- `get($url, $params)` sends query parameters; `post()`/`put()`/`patch()`/`delete()` take array or string bodies. Array bodies default to JSON unless configured otherwise.
+- Configure `withHeaders()`, `withContentType()`, `withAccept()`, `withToken()`, `withBasicAuth()`, or `withOptions()`. `timeout()` / `withTimeout()` sets the overall cURL timeout in seconds; configure connection timeout separately through options if needed.
+- `withRetry($times, $delayMs = 200)` counts retries after the initial attempt (default two). Retries concern transport failures, not HTTP 4xx/5xx. After exhaustion, single requests return status **0**. Retrying writes can duplicate effects after a lost response; use idempotency keys or disable retries.
+- `attach($name, $contents, $filename)` supplies multipart files. `download($path, force: true)` atomically replaces a file after transport success; transport failure preserves the old file. Without force, existing targets are never replaced. Download configuration applies to the next send only.
+- Keep TLS verification enabled. Treat destination URLs and redirects as part of the application's trust boundary.
 
-### 4. Concurrent Requests (Pool)
+## Responses and concurrent requests
+
+| Inspection | Contract |
+| --- | --- |
+| `successful()` / `ok()` | Any 2xx |
+| `failed()` | Any non-2xx, including status 0 and redirects |
+| `isClientError()` / `isServerError()` | 4xx / 5xx respectively |
+| `status()` | Integer HTTP status, or 0 after single-request transport failure |
+| `json($key = null, $default = null)` | Decoded JSON with optional dot lookup |
+| `body()` / `text()` | Raw response body |
+| `header($name)` / `headers()` | Parsed response headers |
 
 ```php
-use Spark\Facades\Http;
-
-$responses = Http::pool(fn ($pool) => [
-    $pool->get('https://api.service-a.com/data'),
-    $pool->get('https://api.service-b.com/data'),
+$responses = Http::pool(fn($pool) => [
+    $pool->as('users')->get('https://api.example.com/users'),
+    $pool->as('posts')->get('https://api.example.com/posts'),
 ]);
+$users = $responses['users']->json();
 ```
 
----
+`HttpRequest::make($method, $url, $params, $data)->execute()` runs a prepared request. `HttpPool` uses curl_multi and preserves request keys; duplicate keys are rejected. Pools throw on transport failure and do not apply the single-request retry loop. Prepared requests and pools block until completion; they are not promises or background jobs.
 
-## Mail: Fluent Email Sending
+`app:http.request` covers fluent sends, downloads, direct `execute()`, and each completed pool transfer, including failed transfers. Single requests emit once after retries. Its positional payload is `(url, payload, response, duration_ms, error)`; status 0 denotes transport failure, and `error` is present for thrown failures. Payload describes configured request fields, not a wire capture. Filter sensitive URLs, headers, bodies, and responses before exporting telemetry.
 
-Mail functionality is provided by the **`Spark\Facades\Mail`** facade (backed by `Spark\Utils\Mail`, extending PHPMailer).
+## Sending mail
 
-### 1. Sending View-Based Emails
-
-Render email templates defined in `resources/views/emails`:
+Use `Spark\Facades\Mail` (`Spark\Utils\Mail`, extending PHPMailer):
 
 ```php
 use Spark\Facades\Mail;
 
-Mail::to($user->email, $user->name)
-    ->subject('Welcome to TinyMVC!')
+$sent = Mail::to($user->email, $user->name)
+    ->subject('Welcome')
     ->view('emails.welcome', ['user' => $user])
     ->send();
-```
 
-### 2. Direct Body and Attachments
-
-```php
-Mail::to('client@example.com', 'Client Name')
-    ->cc('billing@example.com')
-    ->bcc('audit@example.com')
-    ->subject('Your Monthly Invoice')
-    ->view('emails.invoice', ['invoice' => $invoice])
-    ->attachFile(storage_dir('invoices/inv-1001.pdf'), 'Invoice-1001.pdf')
-    ->send();
-```
-
-Supported Mail chain methods:
-- `to($address, $name = null)`
-- `cc($address, $name = null)`
-- `bcc($address, $name = null)`
-- `reply($address, $name = null)`
-- `subject(string $subject)`
-- `view(string $template, array $context = [])`: Renders a Blade template as email body.
-- `body(string $body, bool $isHtml = false)`: Sets raw string body.
-- `attachFile(string $path, ?string $name = null)`: Attaches a local file.
-- `send(): bool`: Sends the email; returns `true` on success, `false` on failure.
-
-### 3. Smart Standard: Queued Mail in Jobs
-
-Never send emails synchronously in web request controllers if the transport is SMTP, as it introduces latency. Wrap emails in a queued job using `JobInterface` and `Dispatchable`:
-
-```php
-<?php
-
-namespace App\Jobs;
-
-use App\Models\User;
-use Spark\Facades\Mail;
-use Spark\Queue\Contracts\JobContract;
-use Spark\Queue\Contracts\JobInterface;
-use Spark\Queue\Dispatchable;
-use Throwable;
-
-class SendAccountMail implements JobInterface
-{
-    use Dispatchable;
-
-    public int $tries = 3;
-
-    public array $backoff = [60, 300];
-
-    public function __construct(private int $userId)
-    {
-    }
-
-    public function handle(): void
-    {
-        $user = User::findOrFail($this->userId);
-
-        Mail::to($user->email, $user->name)
-            ->subject('Welcome to TinyMVC!')
-            ->view('emails.welcome', ['user' => $user])
-            ->send();
-    }
-
-    public function failed(JobContract $job, Throwable $exception): void
-    {
-        // Log final failure after retries exhausted
-    }
+if (!$sent) {
+    throw new RuntimeException('Welcome email could not be sent.');
 }
 ```
 
-In your controller or model event:
+Supported chains include `cc()`, `bcc()`, `reply()`, `body($text, isHtml: false)`, and `attachFile($path, $name)`. Templates live under `resources/views/`. `send()` returns bool; exceptions are logged and converted to false. Telemetry emits `mail.sent` or `mail.failed`.
+
+## Queued mail
+
+Use a [class job](queues.md#class-jobs-and-dispatch) for mail that need not delay the response. Pass a user/record ID, load fresh state in `handle()`, and **throw when `send()` returns false** so worker retries run. Configure `$tries` and `$backoff`; report exhausted attempts in `failed()`.
 
 ```php
 SendAccountMail::dispatch($user->id)->onQueue('emails');
 ```
+
+Dispatch after the required database state commits. Mail delivery can succeed even when acknowledgement is lost; retries need an application-level delivery/deduplication policy. Verify response parsing, status 0, HTTP errors, timeouts/retries, download preservation, and mail success/failure paths.

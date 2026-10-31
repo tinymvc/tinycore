@@ -1,6 +1,16 @@
 # Operations and release verification
 
-Read when diagnosing environment-dependent failures, preparing a release, or upgrading an application. Use [upgrades](upgrades.md) for version-specific changes and [foundation](foundation.md) for configuration and boot order.
+> **Read when:** diagnosing environment failures, preparing a release, or operating workers.
+> **Related:** [Upgrades](upgrades.md) · [Foundation](foundation.md) · [Workflow and testing](workflow-testing.md)
+> Use the target deployment procedure; loading this reference does not authorize production mutations.
+
+Contents:
+
+- [Establish the runtime](#establish-the-runtime)
+- [CLI colors](#cli-colors)
+- [Prepare an application release](#prepare-an-application-release)
+- [Diagnose shared state and slow requests](#diagnose-shared-state-and-slow-requests)
+- [Handoff evidence](#handoff-evidence)
 
 ## Establish the runtime
 

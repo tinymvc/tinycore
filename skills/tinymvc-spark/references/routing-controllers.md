@@ -1,10 +1,17 @@
 # Routing and Controllers
 
-Read this reference for routing, route model binding, and controller patterns. All source paths and command working directories refer to the application root.
+> **Read when:** defining routes/groups, binding models, or implementing controller actions.
+> **Related:** [Requests and validation](requests-validation.md) · [Auth and gate](auth-gate.md) · [Middleware](middleware.md) · [Application patterns](application-patterns.md)
+> Routes belong to the application's configured files; use `Spark\Facades\Route` in backend PHP.
 
-## Routing
+Contents:
 
-Routes are defined in `routes/web.php`, `routes/api.php`, or `routes/webhook.php`.
+- [Routes and model binding](#routes-and-model-binding)
+- [Groups and resource routes](#groups-and-resource-routes)
+- [Controller actions](#controller-actions)
+- [Dispatch and verification](#dispatch-and-verification)
+
+## Routes and model binding
 
 ```php
 use Spark\Facades\Route;
@@ -12,187 +19,73 @@ use App\Http\Controllers\Api\PostController;
 
 Route::get('/posts', [PostController::class, 'index'])->name('posts.index');
 Route::post('/posts', [PostController::class, 'store'])->name('posts.store');
-Route::get('/posts/{post}', [PostController::class, 'show'])->name('posts.show');
+Route::get('/posts/{post:slug}', [PostController::class, 'show'])->name('posts.show');
 Route::put('/posts/{post}', [PostController::class, 'update'])->name('posts.update');
 Route::delete('/posts/{post}', [PostController::class, 'destroy'])->name('posts.destroy');
 ```
 
-### HTTP dispatch behavior
+A route argument matching a type-hinted Model parameter resolves through `firstOrFail()`. `{post}` uses the primary key; `{post:slug}` uses that column. Missing rows become 404. Binding does not authorize access: retain explicit tenant/ownership filtering or an ability check.
 
-- Missing paths produce 404 (or the configured fallback); an existing path with an unsupported method produces 405 with `Allow`.
-- `Route::head()` registers an explicit HEAD route. HEAD otherwise uses GET, retaining its headers without sending a body.
-- Explicit OPTIONS routes take precedence over the preflight fallback to the requested method; CORS middleware still validates preflight policy.
-- Global middleware runs for normal routes, fallbacks, 404s, and 405s, once per request. Route exclusions retain their existing behavior.
-- Route parameters are decoded once after matching encoded path segments. Pass unencoded values to named-route generation: each value is encoded as one segment. Missing required values throw `InvalidNamedRouteException`; unresolved optional segments are removed.
-- Controllers and fallbacks can return native responses or PSR `ResponseInterface` objects directly.
+Pass unencoded values to `route('posts.show', ['post' => $post->slug])`; each value becomes one encoded segment. Missing required values throw InvalidNamedRouteException; unresolved optional segments are removed. Routing decodes parameters once after matching encoded path segments.
 
-### Route Model Binding
-
-TinyMVC features native route model binding. When a route parameter matches the name of a type-hinted `Model` in the controller action or closure, Spark automatically retrieves the model via `firstOrFail()`, returning a 404 response if not found.
-
-#### 1. Default Primary Key Binding (`id`)
+## Groups and resource routes
 
 ```php
-// Route parameter {post} matches controller argument Post $post
-Route::get('/posts/{post}', [PostController::class, 'show']);
-```
-
-In the controller, type-hint the model parameter:
-
-```php
-public function show(Post $post): PostResource
-{
-    return PostResource::make($post);
-}
-```
-
-#### 2. Custom Column Binding (`{param:column}`)
-
-You can specify a custom column for lookup directly in the route parameter definition using `{param:column}`:
-
-```php
-// Binds by 'slug' instead of 'id'
-Route::get('/posts/{post:slug}', [PostController::class, 'show']);
-```
-
-In the controller, the model is resolved automatically via `Post::where('slug', $value)->firstOrFail()`:
-
-```php
-public function show(Post $post): PostResource
-{
-    return PostResource::make($post);
-}
-```
-
----
-
-## Route Groups and Resource Routes
-
-### Route Groups
-
-```php
-use App\Http\Controllers\Api\PostController;
-
 Route::group(function () {
     Route::get('/posts', [PostController::class, 'index']);
     Route::post('/posts', [PostController::class, 'store']);
-})
-    ->prefix('api/v1')
-    ->middleware(['cors', 'auth:api']);
-```
-
-### Resource Routes
-
-```php
-Route::resource('/posts', PostController::class, name: 'posts')
-    ->except(['show', 'edit']); // ->only([]) ...
+})->prefix('api/v1')->middleware(['cors', 'auth:api']);
 
 Route::prefix('api')->middleware('auth:api')
-    ->resource('/posts', PostController::class)
+    ->resource('/posts', PostController::class, name: 'posts')
     ->only(['index', 'show']);
 ```
 
-Fluent attributes before `resource()` apply to every resource action and compose with surrounding groups without leaking to subsequent routes.
+`resource()` also supports `except()`. Fluent attributes apply to all generated actions, compose with surrounding groups, and do not leak to later routes.
 
-Mapped resource actions:
-- `GET /posts` -> `index`
-- `GET /posts/create` -> `create`
-- `POST /posts` -> `store`
-- `GET /posts/{id}` -> `show`
-- `GET /posts/{id}/edit` -> `edit`
-- `PUT/PATCH /posts/{id}` -> `update`
-- `DELETE /posts/{id}` -> `destroy`
+| Method/path | Action |
+| --- | --- |
+| GET `/posts` | index |
+| GET `/posts/create` | create |
+| POST `/posts` | store |
+| GET `/posts/{id}` | show |
+| GET `/posts/{id}/edit` | edit |
+| PUT/PATCH `/posts/{id}` | update |
+| DELETE `/posts/{id}` | destroy |
 
-Resource routes currently use `{id}`. For controller arguments named `$post`, register explicit `{post}` routes as shown above so implicit model binding matches the argument name.
+Resource routes use **`{id}`**. For a controller argument `Post $post`, register explicit `{post}` routes so names match.
 
----
+## Controller actions
 
-## Idiomatic API Controller Standard
-
-For entity APIs, combine **Route Model Binding**, **FormRequest**, and **JsonResource** where they fit the endpoint:
+Extend the application's `App\Http\Controllers\Controller`. Keep actions focused on request validation, authorization, workflow invocation, and the [response contract](responses.md).
 
 ```php
-<?php
-
-namespace App\Http\Controllers\Api;
-
-use App\Http\Controllers\Controller;
-use App\Http\Requests\StorePostRequest;
-use App\Http\Requests\UpdatePostRequest;
-use App\Http\Resources\PostResource;
-use App\Models\Post;
-use Spark\Http\Resources\ResourceCollection;
-use Spark\Http\Response;
-
-class PostController extends Controller
+public function index(): \Spark\Http\Resources\ResourceCollection
 {
-    /**
-     * List posts with eager-loaded relations and pagination.
-     */
-    public function index(): ResourceCollection
-    {
-        $posts = Post::with(['author', 'category'])
-            ->withCount('comments')
-            ->latest()
-            ->paginate(20);
+    $posts = Post::with('author')->withCount('comments')->latest()->paginate(20);
 
-        return PostResource::collection($posts);
+    return PostResource::collection($posts);
+}
+
+public function update(UpdatePostRequest $request, Post $post): PostResource
+{
+    // The FormRequest must authorize this post for the current user.
+    if (!$post->fill($request->validated())->save()) {
+        abort(\Spark\Http\Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to save the post.');
     }
 
-    /**
-     * Store a newly created post.
-     * FormRequest handles authorization and validation before this action runs.
-     */
-    public function store(StorePostRequest $request): Response
-    {
-        $post = Post::create($request->validated());
-
-        return PostResource::make($post)->response(Response::STATUS_CREATED);
-    }
-
-    /**
-     * Display a specific post via Route Model Binding.
-     */
-    public function show(Post $post): PostResource
-    {
-        // Eager load relations for the loaded instance if needed
-        $post->load(['author', 'comments.author']);
-
-        return PostResource::make($post);
-    }
-
-    /**
-     * Update an existing post.
-     */
-    public function update(UpdatePostRequest $request, Post $post): PostResource
-    {
-        $post->fill($request->validated());
-
-        if (!$post->save()) {
-            abort(Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to save the post.');
-        }
-
-        return PostResource::make($post);
-    }
-
-    /**
-     * Remove the specified post.
-     */
-    public function destroy(Post $post): Response
-    {
-        if (!$post->remove()) {
-            abort(Response::STATUS_INTERNAL_SERVER_ERROR, 'Unable to remove the post.');
-        }
-
-        return response()->noContent();
-    }
+    return PostResource::make($post);
 }
 ```
 
-### Key Controller Rules
+Use FormRequests for substantial writes, resource classes for public entities, and model `remove()` for instance deletion. Check failed writes. Browser writes redirect; FireLine/Inertia use their adapters. A service is useful for coordinated workflows, not as a mandatory wrapper around every model call.
 
-1. **Use resources for entity payloads**: Return `PostResource::make($post)` or `PostResource::collection(...)`; reserve `json()` for intentional message/scalar/webhook contracts.
-2. **Use FormRequest for substantial writes**: Keep validation and authorization together; small endpoints may use inline validation.
-3. **Use Route Model Binding when it fits**: Type-hint `Post $post`; keep explicit scoped lookups when ownership/tenant rules require them.
-4. **Use `$model->remove()` to delete**: Do not call `$model->delete()` on model instances.
-5. **Match deletion responses to the consumer**: `response()->noContent()` suits an API contract with no body. Browser forms need redirects; FireLine/Inertia actions need their adapter contracts.
+## Dispatch and verification
+
+- Missing paths return 404 or a configured fallback; unsupported methods on an existing path return 405 with Allow.
+- Explicit `Route::head()` takes precedence; otherwise HEAD uses GET headers without a body.
+- Explicit OPTIONS routes take precedence over the preflight fallback to the requested method; CORS still validates policy.
+- Global middleware wraps normal routes, fallbacks, 404s, and 405s once per request. Route exclusions still apply.
+- Controllers/fallbacks can return native or PSR responses. Changing the URI in route middleware does not reroute the matched request.
+
+Verify route generation, required/optional parameters, encoded values, binding failures, wrong-owner access, method negotiation, middleware order, and returned public fields.

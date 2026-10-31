@@ -1,6 +1,18 @@
 # Cache and locks
 
-Read when: caching values, choosing a store or namespace, or taking locks. Use `Spark\Facades\Cache` or the `cache()` / `lock()` helpers. Drivers: `database`, `file`, `redis`. Migrate the framework cache/lock tables before using the database driver, and keep configured table names logical and unprefixed; each selected database connection applies its prefix.
+> **Read when:** caching values, choosing stores/namespaces, or taking locks.
+> **Related:** [Advanced workflows](advanced-workflows.md) · [Queues](queues.md) · [Foundation](foundation.md)
+> Use `Spark\Facades\Cache` or `cache()`/`lock()`. Drivers: database, file, redis.
+
+Contents:
+
+- [Stores and namespaces](#stores-and-namespaces)
+- [Values and expiry](#values-and-expiry)
+- [Lifecycle and key semantics](#lifecycle-and-key-semantics)
+- [PSR-16](#psr-16)
+- [Locks](#locks)
+
+Migrate framework cache/lock tables before selecting database storage. Keep table names logical; the connection applies its prefix.
 
 ## Stores and namespaces
 

@@ -1,68 +1,45 @@
 # Sessions and Cookies
 
-Read this reference for web session state, cookies, flash messages, and session storage handlers. All source paths refer to the application root.
+> **Read when:** handling session values, flash messages, cookies, or session drivers.
+> **Related:** [Auth and gate](auth-gate.md) · [Middleware](middleware.md) (CSRF) · [Foundation](foundation.md) · [Views and frontend](views-frontend.md)
+> Session state and cookies are request-specific; avoid capturing them in long-lived services.
 
----
+Contents:
 
-## Session Management with `Spark\Facades\Session`
+- [Values and flash](#values-and-flash)
+- [Cookies](#cookies)
+- [Drivers and verification](#drivers-and-verification)
 
-TinyCore provides the **`Spark\Facades\Session`** facade as well as the global `session()` helper:
+## Values and flash
+
+Use `Spark\Facades\Session` in backend code and `session()` in views:
 
 ```php
-use Spark\Facades\Session;
-
-// 1. Reading Session Values
+Session::put('theme', 'dark'); // set() is also supported
 $theme = Session::get('theme', default: 'light');
-$cartCount = session('cart_count', 0);
-
-// 2. Writing Session Values
-Session::put('theme', 'dark');
-Session::set('locale', 'en');
 session(['cart_count' => 3]);
-
-// 3. Checking Existence
-if (Session::has('user_id')) {
-    // Key exists and is not null
-}
-
-// 4. Removing Values
+$count = session('cart_count', 0);
 Session::forget('cart_count');
-$token = Session::pull('csrf_token'); // Reads and immediately deletes
-Session::flush(); // Clears all session data
-
-// 5. Flash Messages (available until retrieved)
-Session::flash('status', 'Your profile was updated successfully!');
-$status = Session::getFlash('status'); // Retrieves and clears
+$value = Session::pull('one_time_value'); // read and delete
+Session::flash('status', 'Profile updated.');
+$message = Session::getFlash('status'); // retrieve and clear
 ```
 
-### Session Access in Blade Views
-
-In Blade templates, **never use `\Spark\Facades\Session`**. Always use the `session()` helper or `@session` directive:
+`has()` checks existence/non-null; `flush()` clears all data. Flash persists until retrieved, rather than assuming Laravel's exact flash lifecycle.
 
 ```blade
-{{-- Flash message alert --}}
 @session('status')
     <x-alert :message="session('status')" type="success" />
 @endsession
-
-{{-- Reading session values --}}
-<p>Selected theme: {{ session('theme', 'light') }}</p>
 ```
 
----
+`regenerate()` changes the session ID after login; `invalidate()` clears state and changes it on logout. Preserve authentication's existing regeneration behavior.
 
-## Cookies with `now()`
-
-Use the `cookie()` helper for managing HTTP cookies:
+## Cookies
 
 ```php
-// Read a cookie
-$displayMode = cookie('display_mode');
-
-// Set a simple cookie (name, value, seconds)
-cookie('display_mode', 'compact', 60 * 60 * 24 * 30);
-
-// Set a cookie with options array (using now()->addDays(...) for expiration timestamp)
+$mode = cookie('display_mode');
+cookie('display_mode', 'compact', 3600); // lifetime in seconds
 cookie('display_mode', 'compact', [
     'expires' => now()->addDays(30)->timestamp,
     'path' => '/',
@@ -72,23 +49,18 @@ cookie('display_mode', 'compact', [
 ]);
 ```
 
-> [!IMPORTANT]
-> **Use `now()` for Cookie Expiration**:
-> Never use `time() + 86400`. Always write `now()->addDay()->timestamp` or `now()->addDays(30)->timestamp`.
+Choose cookie options for the consumer and HTTPS deployment. `now()` gives application-aware calendar expiry; use explicit seconds when elapsed duration is intended.
 
----
+## Drivers and verification
 
-## Session Configuration
+Configure `config/session.php`:
 
-Spark supports `database`, `file`, and `redis` session handlers in `config/session.php`:
+| Driver | Configuration/storage |
+| --- | --- |
+| database | `connection`, `table` (default sessions); id, base64 payload, last_activity |
+| file | Private `path`, normally storage/framework/sessions |
+| redis | Connector options, app prefix, TTL |
 
-| Handler | Connection settings | Storage |
-| --- | --- | --- |
-| `database` | `connection`, `table` (default `sessions`) | `id`, base64 `payload`, `last_activity` |
-| `file` | `path` | `storage/framework/sessions` |
-| `redis` | Shared Redis connector options | Application-prefixed keys with TTL |
+`lifetime` is idle **minutes** (default 120). Null `session.cookie_settings.secure` follows trusted request HTTPS detection; explicit booleans win. Untrusted forwarding headers cannot enable it. Use shared storage when multiple hosts must share sessions; PSR hosts own transport/session integration.
 
-- **`lifetime`**: Session idle lifetime in **minutes** (default 120).
-- **Regeneration**: Call `Session::regenerate()` after login to prevent session fixation.
-- **Invalidation**: Call `Session::invalidate()` on logout to flush data and change session ID.
-- **Secure cookies**: A null `session.cookie_settings.secure` follows the current request's HTTPS detection, including configured trusted proxies. Explicit true/false settings take precedence; untrusted forwarding headers cannot enable this detection.
+Verify flash consumption, login ID rotation, logout invalidation, cookie flags behind trusted/untrusted proxies, and isolation between sequential users.

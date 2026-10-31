@@ -1,20 +1,22 @@
-# Requests, Validation, Input, and InputErrors
+# Requests, Validation, and Input
 
-Read this reference for HTTP requests, form validation, FormRequest classes, and the native `Spark\Http\Input` and `Spark\Http\InputErrors` utilities in TinyMVC / TinyCore (Spark). All source paths and commands refer to the application root.
+> **Read when:** validating requests, defining FormRequests, handling errors/uploads, or importing PSR requests.
+> **Related:** [Routing and controllers](routing-controllers.md) · [Responses](responses.md) · [Files and storage](files-storage.md) · [Auth and gate](auth-gate.md)
+> `validated()` returns `Spark\Http\Input`, not a plain array. Validator factories take rules before data.
 
----
+Contents:
 
-## FormRequest: The Primary Validation Standard
+- [FormRequests](#formrequests)
+- [Input shaping and extraction](#input-shaping-and-extraction)
+- [Rules and constrained validation](#rules-and-constrained-validation)
+- [Errors and uploads](#errors-and-uploads)
+- [PSR requests, bodies, and routing boundaries](#psr-requests-bodies-and-routing-boundaries)
 
-Always use dedicated **`Spark\Foundation\Http\FormRequest`** classes for resource creation, update, deletions, and complex state changes. Form requests encapsulate authorization and validation outside of the controller, keeping controller actions remarkably thin, clean, and expressive.
+## FormRequests
 
-### Defining a Form Request
-
-Create form requests in `app/Http/Requests` (or generate via `php spark make:request StorePostRequest`):
+Use `Spark\Foundation\Http\FormRequest` for substantial writes and authorization. Generate with `php spark make:request StorePostRequest`; inject it into the controller action.
 
 ```php
-<?php
-
 namespace App\Http\Requests;
 
 use Spark\Foundation\Http\FormRequest;
@@ -22,323 +24,134 @@ use Spark\Facades\Auth;
 
 class StorePostRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     * Returning false automatically aborts with a 403 Forbidden response.
-     */
     public function authorize(): bool
     {
-        return Auth::check();
+        return Auth::check(); // Add the operation's ownership/ability check.
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     */
     public function rules(): array
     {
         return [
             'title' => 'required|string|max:255',
-            'slug' => ['required', 'string', 'alpha_dash', 'max:255', ['unique' => ['posts', 'slug']]],
-            'content' => 'required|string',
+            'slug' => ['required', 'alpha_dash', ['unique' => ['posts', 'slug']]],
             'category_id' => ['required', 'integer', ['exists' => ['categories', 'id']]],
             'tags' => 'nullable|array',
             'tags.*' => 'integer',
-            'published' => 'nullable|boolean',
         ];
     }
 
-    /**
-     * Custom error messages (optional).
-     */
     public function messages(): array
     {
-        return [
-            'title.required' => 'A post title is required.',
-            'category_id.exists' => 'The selected category does not exist.',
-        ];
+        return ['title.required' => 'A title is required.'];
     }
 
-    /**
-     * Custom attribute names for error messages (optional).
-     */
     public function attributes(): array
     {
-        return [
-            'category_id' => 'category',
-        ];
-    }
-
-    /**
-     * Handle actions after successful validation (optional).
-     * Ideal for normalizations or derived fields before reaching the controller.
-     */
-    public function passedValidation(): void
-    {
-        if (!$this->has('slug') && $this->has('title')) {
-            $this->merge(['slug' => \Spark\Support\Str::slug($this->title)]);
-        }
+        return ['category_id' => 'category'];
     }
 }
 ```
 
-### FormRequest Lifecycle and Controller Injection
+Authorization and validation run before the action. False authorization yields 403; validation follows the request consumer: JSON 422, browser redirect/flash, or the installed [FireLine](fireline.md)/[Inertia](inertia.md) protocol. Do not assume every validation failure is JSON.
 
-Type-hint the `FormRequest` in your controller action parameter:
+`passedValidation()` runs after success; do not rely on it to supply a missing required field. Verify the installed lifecycle before adding normalization hooks.
 
 ```php
-use App\Http\Requests\StorePostRequest;
-use App\Http\Resources\PostResource;
-use App\Models\Post;
-use Spark\Http\Response;
-
-public function store(StorePostRequest $request): Response
+public function store(StorePostRequest $request): \Spark\Http\Response
 {
-    // The request is ALREADY authorized and validated!
-    // - If authorize() returned false -> 403 Forbidden was thrown before reaching here.
-    // - If rules failed -> 422 Unprocessable Entity was thrown before reaching here.
+    $post = Post::create($request->validated()->merge(['user_id' => auth()->id()]));
 
-    // Pass $request->validated() directly to Model::create() - it implements Arrayable!
-    $post = Post::create($request->validated());
-
-    return PostResource::make($post)->response(Response::STATUS_CREATED);
+    return PostResource::make($post)->response(\Spark\Http\Response::STATUS_CREATED);
 }
 ```
 
----
+Reserve inline `$request->validate($rules)` for small endpoints such as search filters. It also returns Input. `Validator::make($rules, $data)` is **rules first**.
 
-## The `Spark\Http\Input` Class: Smart, Fluent, and Arrayable
+## Input shaping and extraction
 
-When you call `$request->validated()` on a `FormRequest` or `$request->validate([...])` on a `Request`, Spark returns an instance of **`Spark\Http\Input`**.
-
-### Implemented Interfaces & Native Capabilities
-
-`Spark\Http\Input` implements:
-- **`Spark\Contracts\Support\Arrayable`**: Directly accepted by any Spark framework API expecting array-like data.
-- **`\ArrayAccess`**: Access values like an array: `$validated['title']`, `isset($validated['slug'])`.
-- **`\IteratorAggregate`**: Can be looped over directly with `foreach ($validated as $key => $value)`.
-- **`Spark\Contracts\Support\Jsonable`**: Can be serialized directly to JSON via `toJson()`.
-- **`\Stringable`**: Can be string cast.
-- **Magic Property Access**: Access fields as properties: `$validated->title`, `$validated->email`.
-
-### Arrayable Interoperability Across TinyCore
-
-Because `Input` implements `Arrayable`, **you do not need to call `->all()` or `->toArray()`** when passing validated data to native TinyCore components. All of the following accept `array|Arrayable`:
-
-1. **Model Persistence**:
-   - `Post::create($request->validated())`
-   - `Post::createOrUpdate($request->validated(), uniqueBy: ['slug'])`
-   - `Post::firstOrCreate($request->validated()->only('slug'), $request->validated()->except('slug'))`
-   - `Post::firstOrNew($request->validated()->only('slug'))`
-   - `$post->fill($request->validated())->save()`
-   - `$author->posts()->create($request->validated())`
-2. **QueryBuilder Operations**:
-   - `DB::table('logs')->insert($request->validated())`
-   - `Post::whereKey($id)->update($request->validated())`
-   - `Post::where($request->validated()->only(['category_id', 'status']))->get()`
-   - `Product::upsert($request->validated(), conflict: ['sku'], update: ['price', 'stock'])`
-3. **Authentication**:
-   - `Auth::attempt($request->validated()->only('email', 'password'), $request->boolean('remember'))`
+Input supports Arrayable, ArrayAccess, iteration, JSON, string conversion, and property reads. Pass it directly to compatible model/query/auth APIs; convert to an array only for an API that needs one.
 
 ```php
-// BAD / NON-SMART - Redundant ->all() calls:
-$post = Post::create($request->validated()->all());
-Auth::attempt($request->validated()->only(['email', 'password'])->all());
-
-// GOOD / SMART & ELEGANT - Direct Arrayable passing:
-$post = Post::create($request->validated());
-Auth::attempt($request->validated()->only('email', 'password'), $request->boolean('remember'));
+$input = $request->validated();
+$post = Post::create($input->except('tags')->merge(['user_id' => auth()->id()]));
+$credentials = $input->only('email', 'password');
+Auth::attempt($credentials, $request->boolean('remember'));
 ```
 
-### Fluent Chaining on `Input`
+`only()`/`except()` accept an array or variadic keys; `merge()`, `mergeRecursive()`, `map()`, and `filter()` return new Input values. Server-owned fields should override client values. Validation is not authorization of related IDs.
 
-`Spark\Http\Input` provides powerful methods for data shaping that return a new `Input` instance (preserving `Arrayable` capability):
+| Accessor | Result/use |
+| --- | --- |
+| `string('title')`, `number('quantity')`, `float('price')` | Typed value or null |
+| `boolean('active')` | Boolean conversion |
+| `email('email')`, `url('website')` | Sanitized value; still validate input |
+| `date('due_date')` | Date string |
+| `collect('tags')`, `str('title')` | Collection / Stringable |
+| `slug('title')` | Slug conversion |
+| `password('password', hash: true)` | Password hash |
+| `text()`, `escapeHtml()` | Preserve integer/string zero as `'0'` |
 
-```php
-// 1. only() - Filter keys (accepts array or variadic arguments)
-$credentials = $request->validated()->only('email', 'password');
-$subset = $request->validated()->only(['title', 'content']);
+`Request::filled()` accepts `0`, `'0'`, and `false`; missing/null/blank strings/empty arrays are unfilled. `validated()` requires successful validation; failed revalidation or request replacement clears previous results.
 
-// 2. except() - Exclude keys (accepts array or variadic arguments)
-$postData = $request->validated()->except('tags', 'send_notification');
+## Rules and constrained validation
 
-// 3. merge() and mergeRecursive() - Combine data
-$postData = $request->validated()->merge([
-    'user_id' => Auth::id(),
-    'published_at' => now(),
-]);
-
-// 4. map() and filter() - Transform values fluently
-$cleaned = $request->validated()
-    ->filter(fn ($v) => !is_null($v))
-    ->map(fn ($v) => is_string($v) ? trim($v) : $v);
-
-// Chaining it all together cleanly:
-$post = Post::create(
-    $request->validated()
-        ->merge(['user_id' => Auth::id()])
-        ->except('tags')
-);
-```
-
-### Typed and Sanitized Value Accessors
-
-`Input` includes typed extraction helpers:
-
-`text()` and `escapeHtml()` preserve both integer `0` and string `'0'` as `'0'`; missing values still return `null`.
-
-```php
-$title     = $request->validated()->string('title');          // string or null
-$isActive  = $request->validated()->boolean('is_active');      // bool (handles '1', 'true', 'on', etc.)
-$count     = $request->validated()->number('quantity');       // int or null
-$price     = $request->validated()->float('price');           // float or null
-$email     = $request->validated()->email('contact_email');   // sanitized email string or null
-$url       = $request->validated()->url('website');           // sanitized URL string or null
-$date      = $request->validated()->date('due_date');         // 'Y-m-d' date string
-$tags      = $request->validated()->collect('tags');          // Spark\Support\Collection
-$slug      = $request->validated()->slug('title');            // auto-slugified string
-$strObj    = $request->validated()->str('title');             // Spark\Support\Stringable
-$password  = $request->validated()->password('password', hash: true); // automatically bcrypt/argon2 hashed
-```
-
----
-
-## Validation Errors: The `Spark\Http\InputErrors` Class
-
-`addMessage($field, $message)` appends to an existing string or list of messages. Casting the error bag to a string returns its first error or `''` when no first message exists.
-
-When validation fails on a web request, TinyCore flashes errors to the session inside an instance of **`Spark\Http\InputErrors`**, accessible via the global `errors()` helper:
-
-```php
-$errors = errors();
-
-if ($errors->any()) {
-    $first = $errors->first('email');      // First error message string for field
-    $allMessages = $errors->all();          // Flat array of all error messages
-    $fieldErrors = $errors->get('tags');    // Array of messages for specific field
-    $hasTitle = $errors->has('title');      // bool
-}
-```
-
-In Blade views, errors are automatically exposed via directives:
-
-```blade
-{{-- Single field error --}}
-@error('email')
-    <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
-@enderror
-
-{{-- Multiple errors for field --}}
-@errors('tags')
-    <p class="text-sm text-red-600">{{ $message }}</p>
-@enderrors
-```
-
----
-
-## Inline Request Validation
-
-Reserve inline `$request->validate([...])` **strictly** for lightweight search filters or simple single-field GET endpoints where a dedicated FormRequest would be excessive:
-
-```php
-use App\Http\Resources\PostResource;
-use App\Models\Post;
-use Spark\Http\Request;
-use Spark\Http\Resources\ResourceCollection;
-
-public function index(Request $request): ResourceCollection
-{
-    // Returns Spark\Http\Input instance
-    $filters = $request->validate([
-        'q' => 'nullable|string|max:100',
-        'status' => ['nullable', 'string', ['in' => ['draft', 'published']]],
-    ]);
-
-    $query = Post::query()
-        ->when($filters->filled('q'), function ($query) use ($filters) {
-            $query->whereContains('title', $filters->string('q'));
-        })
-        ->when($filters->filled('status'), function ($query) use ($filters) {
-            $query->where('status', $filters->string('status'));
-        });
-
-    return PostResource::collection($query->latest()->paginate(20));
-}
-```
-
----
-
-## Common Validation Rules
-
-Spark includes a rich set of built-in validation rules:
-
-- **Presence**: `required`, `required_if:field,val`, `required_unless:field,val`, `present`, `filled`, `nullable`, `sometimes`, `prohibited`
-- **Strings**: `string`, `text`, `char`, `alpha`, `alpha_num`, `alpha_dash`, `ascii`, `starts_with`, `ends_with`, `contains`, `not_contains`, `lowercase`, `uppercase`, `regex`
-- **Numbers**: `numeric`, `integer`, `int`, `float`, `decimal`, `digits`, `digits_between:min,max`, `min_digits`, `max_digits`
-- **Comparisons**: `min:value`, `max:value`, `size:value`, `between:min,max`, `same:field`, `confirmed`, `gt:field`, `gte:field`, `lt:field`, `lte:field`
-- **Database**:
-  - `unique`: `['unique' => ['table', 'column', 'ignore_id']]`
-  - `exists`: `['exists' => ['table', 'column']]`
-  - `not_exists`: `['not_exists' => ['table', 'column']]`
-- **Arrays & Lists**: `array`, `list`, `items.*.name`
-- **Enums & Sets**: `in`: `['in' => ['draft', 'published', 'archived']]`, `not_in`
-- **Web & Format**: `email`, `url`, `ip`, `ipv4`, `ipv6`, `mac_address`, `uuid`, `json`
-- **Dates**: `date`, `date_format:format`, `before:date`, `after:date`
-- **Files**: `file`, `image`, `mimes:jpg,png,pdf`
-- **Booleans**: `boolean`, `accepted`, `declined`
-- **Security**: `password`
-
-### Fluent Rules, Closures, and Parameter Arrays
-
-Use `Spark\Http\Validation\Rule` with `Spark\Facades\Validator` or `Spark\Http\Validation\Validator`; the old `Spark\Http\Validator` class remains compatible. Keep database rule objects intact when adding `where()` constraints, and pass only a trusted model ID to `ignore()`. `letters()` requires any letter; `mixedCase()` requires both uppercase and lowercase.
-
-Rules can be pipe strings (`'required|string|max:255'`), fluent `Rule` builders, custom `Spark\Contracts\Http\RuleContract` classes, closures, or legacy parameter arrays (`['unique' => ['table', 'col']]`, `['in' => ['a', 'b']]`):
+Rules accept pipe strings, `Spark\Http\Validation\Rule` builders, closures, `Spark\Contracts\Http\RuleContract` implementations, and parameter arrays such as `['in' => ['draft', 'published']]`.
 
 ```php
 use Spark\Http\Validation\Rule;
 
 $rules = [
-    'role' => ['required', Rule::in(['admin', 'editor', 'author'])],
-    'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($userId)],
+    'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($trustedUserId)],
     'category_id' => ['required', Rule::exists('categories', 'id')],
+    'role' => ['required', Rule::in(['editor', 'author'])],
     'password' => ['required', Rule::password(8)->letters()->numbers()->symbols()],
     'company' => [Rule::requiredIf(fn() => request('is_business'))],
     'custom' => [function (string $attribute, mixed $value, \Closure $fail) {
-        if ($value === 'forbidden') $fail('The :attribute cannot be forbidden.');
+        if ($value === 'forbidden') {
+            $fail('The :attribute cannot be forbidden.');
+        }
     }],
 ];
 ```
 
----
+Keep database rule objects intact when adding `where()` constraints; `ignore()` takes a trusted ID. `letters()` needs any letter; `mixedCase()` requires both cases. The facade and `Spark\Http\Validation\Validator` are native; `Spark\Http\Validator` remains compatible.
 
-## File Uploads via Request / Input
+| Family | Common rules |
+| --- | --- |
+| Presence | `required`, `required_if`, `required_unless`, `present`, `filled`, `nullable`, `sometimes`, `prohibited` |
+| Text | `string`, `text`, `char`, `alpha`, `alpha_num`, `alpha_dash`, `ascii`, `starts_with`, `ends_with`, `contains`, `not_contains`, `lowercase`, `uppercase`, `regex` |
+| Numbers/comparison | `numeric`, `integer`, `int`, `float`, `decimal`, `digits`, `digits_between`, `min_digits`, `max_digits`, `min`, `max`, `size`, `between`, `same`, `confirmed`, `gt`, `gte`, `lt`, `lte` |
+| Database | `['unique' => ['table', 'column', 'ignore_id']]`, `['exists' => ['table', 'column']]`, `not_exists` |
+| Collections | `array`, `list`, wildcard fields (`items.*.name`), `in`, `not_in` |
+| Formats | `email`, `url`, `ip`, `ipv4`, `ipv6`, `mac_address`, `uuid`, `json`, `date`, `date_format`, `before`, `after` |
+| Files/flags | `file`, `image`, `mimes`, `boolean`, `accepted`, `declined`, `password` |
 
-File rules accept genuine PHP uploads and PSR `UploadedFileInterface` values; arbitrary local-path arrays fail `file`, `image`, and `mimes`. Size rules use actual bytes in KB (1024 bytes), with exact `size` matching; ordinary arrays use element counts even when they contain a `size` key. PSR content checks preserve the stream position and require a seekable stream.
+Use [API discovery](api-discovery.md) for uncertain parameters; Laravel rule syntax is not proof of compatibility. Precognition field lists accept comma-separated names, whitespace, and repeated header values.
 
-Check and process uploaded files:
+## Errors and uploads
 
-```php
-// Check for file
-if ($request->hasFile('avatar')) {
-    // Direct move with automatic thumbnail/optimization options
-    $path = $request->moveFile('avatar', disk: 'public', options: [
-        'uploadTo' => 'avatars',
-        'maxSize' => 2048,
-        'compress' => 90,
-        'resize' => [500 => 500],
-    ]);
-}
+`errors()` returns `Spark\Http\InputErrors`: `any()`, `has($field)`, `first($field)`, `get($field)`, `all()`. `addMessage()` appends to a string/list; string conversion yields the first message or `''`.
+
+```blade
+@error('email')
+    <p>{{ $message }}</p>
+@enderror
+@errors('tags')
+    <p>{{ $message }}</p>
+@enderrors
 ```
 
-## PSR-7 requests and raw bodies
+File rules accept genuine PHP uploads and PSR `UploadedFileInterface`, not arbitrary local-path arrays. Size rules use actual bytes in KB (1024 bytes); ordinary arrays use item counts. PSR content checks preserve the stream position and require seekable streams.
 
-`$request->toPsrRequest()` exports a PSR-7 snapshot using the bound server-request factory. It preserves the body stream, headers/query/body fields, cookies/server values, protocol, request target, and nested uploads. Matched route parameters are exported as attributes. PSR `with*()` methods return new messages; they do not mutate the native request. Streams themselves are shared and mutable.
+Use `hasFile()`, `file()`, and `moveFile()`; read [storage](files-storage.md) for disk paths and upload options. Verify invalid types, sparse/nested uploads, and authorization before storage writes.
 
-`Request::fromPsrRequest($message)` hydrates a base native request without reading globals or invoking a subclass constructor. Nullable/object parsed bodies survive export while unchanged; native input edits export an array. General PSR attributes live in `$request->attributes`, separately from route parameters. `file()`, `hasFile()`, and `moveFile()` support imported PSR uploads. FormRequest validation still runs when the container resolves the FormRequest from the current native request.
+## PSR requests, bodies, and routing boundaries
 
-`getBody()` returns the stream. `getRawBody()` explicitly reads bytes, preserving the cursor on seekable streams; a non-seekable stream is consumed. Native capture parses JSON and `+json` media types and URL-encoded POST/PUT/PATCH/DELETE requests according to `Content-Type`. JSON integers outside PHP's integer range become strings to preserve their digits. Invalid/scalar JSON still produces an empty input array; validate required fields explicitly. Multipart parsing remains PHP's responsibility. Imported PSR requests use their supplied parsed body without automatically consuming or decoding the stream.
+- `toPsrRequest()` exports a snapshot through the bound factory, preserving streams, headers, query/body fields, cookies/server values, protocol, request target, and nested uploads. PSR `with*()` methods return new messages; shared streams remain mutable.
+- `Request::fromPsrRequest()` avoids globals/subclass constructors. Parsed null/object bodies survive unchanged export; native edits export arrays. General attributes are separate from matched route parameters. FormRequest validation still runs through container resolution.
+- `getBody()` returns the stream. `getRawBody()` preserves a seekable cursor; non-seekable streams are consumed. Native capture parses JSON/`+json` and URL-encoded POST/PUT/PATCH/DELETE by Content-Type. Large JSON integers remain strings; invalid/scalar JSON produces empty input. PHP owns multipart parsing. PSR imports use the supplied parsed body without decoding the stream.
+- Header names are case-insensitive; CGI server keys normalize on reads/writes. `is('account/*')` ignores surrounding slashes.
+- `getUri()` retains the request target/query; `getPath()` is its encoded path. Routing decodes captured parameters once, preserving literal `+` and encoded slash boundaries. Raw URI query text and parsed query parameters remain separate.
+- Forwarded HTTPS is trusted only for configured `app.trusted_proxies`; IPv6 hosts and non-default ports are supported.
 
-Header names are case-insensitive; internal `HTTP` segments remain intact (for example, `X-Http-Method-Override`). Server parameter setters and merges normalize CGI names such as `REMOTE_ADDR` consistently with reads. `is('account/*')` ignores surrounding slashes just like exact path matching.
-
-`Request::filled()` accepts `0`, `'0'`, and `false`; missing/null values, blank strings, and empty arrays are unfilled. `validated()` is available only after successful validation; a failed revalidation or replacement with an unvalidated request clears the previous result. Precognition field lists accept comma-separated names with optional whitespace and repeated header values.
-
-Request paths remain percent-encoded until routing captures and decodes individual parameters. Literal `+` stays `+`, and encoded slashes do not create extra route segments. `getUri()` returns the captured request target (including its query string), independently of server parameters; `getPath()` returns only the URI path. URI query text and parsed query parameters remain separate. Forwarded HTTPS information is honored only when the immediate peer matches `app.trusted_proxies`; IPv6 hosts and non-default ports are supported.
+Verify permitted fields, invalid input, wrong-owner access, failed revalidation, and the real client's headers/response contract.

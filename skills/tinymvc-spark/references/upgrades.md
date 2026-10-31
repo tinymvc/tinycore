@@ -1,6 +1,16 @@
-# Spark 4.0 upgrade
+# Spark Upgrade Notes
 
-Check the installed source and back up data before upgrading. Paths below refer to the application root.
+> **Read when:** upgrading Spark 4.x or migrating older application contracts.
+> **Related:** [Operations](operations.md) · [Foundation](foundation.md) · [Workflow and testing](workflow-testing.md)
+> Verify installed versions and preserve recoverable data before changing schemas/storage formats.
+
+Contents:
+
+- [Storage and deployment](#storage-and-deployment)
+- [Cache, locks, and queues](#cache-locks-and-queues)
+- [Database and pagination](#database-and-pagination)
+- [HTTP and adapters](#http-and-adapters)
+- [Telemetry and utility migration](#telemetry-and-utility-migration)
 
 ## Storage and deployment
 
@@ -27,3 +37,11 @@ Check the installed source and back up data before upgrading. Paths below refer 
 - Pass unencoded named-route values and supply required parameters. `getPath()` retains encoding; route arguments decode once. Forwarded schemes require trusted proxies.
 - JSON parsing requires a JSON `Content-Type`; URL-encoded PUT/PATCH/DELETE bodies parse as forms. Headers/statuses use Nyholm validation; PSR imports preserve streams and do not infer media types.
 - Replace removed `fireline()`, `Router::fireline()`, and `Request::isFirelineRequest()` through the optional [FireLine adapter](fireline.md). Localization uses `app.locale`, `app.locale_dir`, and `locale_dir()`.
+
+## Telemetry and utility migration
+
+- Update imports to `Spark\Utils\Tracer`, `Spark\Utils\DotEnv`, `Spark\Utils\Configuration`, and `Spark\Utils\Tinker`. The former `Spark\*` classes and compatibility aliases are removed.
+- Gate supplies the authenticated user to a parameter named `$user`; positional/named operation arguments still work. Before hooks can short-circuit, and the first non-null after hook wins. Do not pass a different user through the ability arguments.
+- Telemetry observes production activity when listeners match; patterns such as `app:*` and `app:http.*` work for string Events. Wildcards receive the event name first, then the original arguments. Existing DB/Blade/HTTP positional payloads are retained; newer hooks use one metadata array. See [runtime telemetry](container-pipelines.md#runtime-telemetry).
+- Observer failures are logged without changing application outcomes. Telemetry emitted from an active telemetry observer is suppressed to avoid recursive exports. Ordinary application events retain their own failure/propagation rules.
+- Application `boot()` sets the timezone and boots providers once for HTTP and CLI. Thrown route/model/item not-found exceptions now use `Not found`; an unmatched route still has its router-specific 404 message. Blade `@js()` aliases `@json()`.

@@ -4,6 +4,13 @@
 > **Related:** [Blade](views-frontend.md) · [FireLine](fireline.md) · [Inertia](inertia.md)
 > Preserve the target app's stack and package manager. Before changing setup, read its lockfiles, Vite config, asset entry, root Blade view, and providers.
 
+Contents:
+
+- [Choose by existing stack](#choose-by-existing-stack)
+- [Keep the asset contract aligned](#keep-the-asset-contract-aligned)
+- [Development and deployment](#development-and-deployment)
+- [Verify](#verify)
+
 ## Choose by existing stack
 
 | Existing stack | Page contract | Continue with |

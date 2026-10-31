@@ -7,10 +7,10 @@
 Contents:
 
 - [Registration and client startup](#registration-and-client-startup)
-- [Full document vs page fragment](#full-document-versus-page-fragment)
+- [Full document versus page fragment](#full-document-versus-page-fragment)
 - [Forms and write responses](#forms-and-write-responses)
-- [Partials, preloads, polling, state](#partials-preloads-polling-and-state)
-- [Headers, deployment, verification](#headers-deployment-and-verification)
+- [Partials, preloads, polling, and state](#partials-preloads-polling-and-state)
+- [Headers, deployment, and verification](#headers-deployment-and-verification)
 
 ## Registration and client startup
 
