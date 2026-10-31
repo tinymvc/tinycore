@@ -11,32 +11,34 @@ Contents:
 
 ## Framework feature directory
 
+Use the linked API lists for supported names; inspect installed source for uncertain signatures. Keep each list in its topic reference.
+
 | Feature | Main classes | Reference |
 | --- | --- | --- |
 | REST APIs | `Spark\Http\Resources\JsonResource`, `ResourceCollection` | [responses.md](responses.md) |
-| Blade Templates | `Spark\View\Blade`, `Spark\View\BladeCompiler`, `Spark\View\Attributes` | [views-frontend.md](views-frontend.md) |
+| Blade Templates | `Spark\View\Blade`, `Spark\View\BladeCompiler`, `Spark\View\Attributes` | [Native directives](views-frontend.md#native-directives) |
 | FireLine v2 | `Spark\Fire\FireService`, `Spark\Fire\FireMiddleware` (optional `tinymvc/fireline-php`) | [fireline.md](fireline.md) |
 | Inertia + Vite | `Inertia\Inertia`, `Spark\Http\Response` (optional `tinymvc/inertia-php`) | [inertia.md](inertia.md) |
 | Cache | `Spark\Cache\CacheManager`, `Cache`, `SimpleCache`, `Storage\*` | [cache-locks.md](cache-locks.md) |
 | Distributed Lock | `Spark\Cache\LockHandle`, `Spark\Cache\Storage\*` | [cache-locks.md](cache-locks.md) |
 | Database: DB | `Spark\Database\DB`, PDO wrapper | [queries.md](queries.md) |
-| Database: Schema | `Spark\Database\Schema\Schema`, `Blueprint`, `Column` | [migrations.md](migrations.md) |
-| Database: Model | `Spark\Database\Model`, `Spark\Database\Concerns\InteractsWithTracking`, `Spark\Database\Casts\Attribute` | [models-relations.md](models-relations.md) |
+| Database: Schema | `Spark\Database\Schema\Schema`, `Blueprint`, `Column` | [Columns and constraints](migrations.md#columns-constraints-and-alterations) |
+| Database: Model | `Spark\Database\Model`, `Spark\Database\Concerns\InteractsWithTracking`, `Spark\Database\Casts\Attribute` | [Casts](models-relations.md#casts-accessors-and-mutators) · [Write APIs](models-relations.md#writes-and-state) |
 | Database: ORM | `Spark\Database\Relation\*` (`HasOne`, `HasMany`, `BelongsTo`, `BelongsToMany`, `HasManyThrough`) | [models-relations.md](models-relations.md) |
 | Database: SoftDeletes | `Spark\Database\Concerns\InteractsWithSoftDeletes` | [soft-deletes.md](soft-deletes.md) |
 | Facades | `Spark\Facades\*` | [helpers.md](helpers.md) |
-| Global Helpers | `vendor/tinymvc/tinycore/src/Foundation/helpers.php` | [helpers.md](helpers.md) |
-| Http: Client | `Spark\Http\Client\Http`, `HttpResponseContract` | [mail-http.md](mail-http.md) |
+| Global Helpers | `vendor/tinymvc/tinycore/src/Foundation/helpers.php` | [Helper lists](helpers.md#global-helpers) |
+| Http: Client | `Spark\Http\Client\Http`, `HttpResponseContract` | [Request options](mail-http.md#fluent-http-requests) · [Response methods](mail-http.md#responses-and-concurrent-requests) |
 | Http: Routing | `Spark\Http\Routing\Router`, `Route`, `RouteGroup` | [routing-controllers.md](routing-controllers.md) |
 | Http: Session | `Spark\Http\Session`, session drivers | [sessions.md](sessions.md) |
 | Http: Auth | `Spark\Http\Auth`, auth guards | [auth-gate.md](auth-gate.md) |
 | Http: Gate | `Spark\Http\Gate` | [auth-gate.md](auth-gate.md) |
-| Http: Input | `Spark\Http\Input` | [requests-validation.md](requests-validation.md) |
+| Http: Input | `Spark\Http\Input` | [Typed accessors](requests-validation.md#input-shaping-and-extraction) |
 | Http: InputErrors | `Spark\Http\InputErrors` | [requests-validation.md](requests-validation.md) |
 | Http: Middleware | `Spark\Http\Middleware`, `MiddlewareInterface` | [middleware.md](middleware.md) |
 | Http: Request | `Spark\Http\Request`, `Spark\Foundation\Http\FormRequest` | [requests-validation.md](requests-validation.md) |
 | Http: Response | `Spark\Http\Response` | [responses.md](responses.md) |
-| Http: Validator | `Spark\Http\Validator` | [requests-validation.md](requests-validation.md) |
+| Http: Validator | `Spark\Http\Validation\Validator`, `Rule` | [Rules and builders](requests-validation.md#rules-and-constrained-validation) |
 | Queue | `Spark\Queue\QueueManager`, `Queue`, `JobInterface`, `Dispatchable` | [queues.md](queues.md) |
 | Storage | `Spark\Storage\Storage`, `LocalStorage`, `S3Storage` | [files-storage.md](files-storage.md) |
 | Supports: Collection | `Spark\Support\Collection` | [helpers.md](helpers.md) |

@@ -44,17 +44,12 @@ class StorePostRequest extends FormRequest
     {
         return ['title.required' => 'A title is required.'];
     }
-
-    public function attributes(): array
-    {
-        return ['category_id' => 'category'];
-    }
 }
 ```
 
 Authorization and validation run before the action. False authorization yields 403; validation follows the request consumer: JSON 422, browser redirect/flash, or the installed [FireLine](fireline.md)/[Inertia](inertia.md) protocol. Do not assume every validation failure is JSON.
 
-`passedValidation()` runs after success; do not rely on it to supply a missing required field. Verify the installed lifecycle before adding normalization hooks.
+`attributes()` supplies input data (default: `all()`), not friendly labels. `passedValidation()` runs after non-precognitive success; do not rely on it to supply a missing required field.
 
 ```php
 public function store(StorePostRequest $request): \Spark\Http\Response
@@ -116,15 +111,22 @@ $rules = [
 
 Keep database rule objects intact when adding `where()` constraints; `ignore()` takes a trusted ID. `letters()` needs any letter; `mixedCase()` requires both cases. The facade and `Spark\Http\Validation\Validator` are native; `Spark\Http\Validator` remains compatible.
 
-| Family | Common rules |
+All built-in string rules and aliases (`Http/Validation/Validator.php`):
+
+| Family | Supported rules |
 | --- | --- |
 | Presence | `required`, `required_if`, `required_unless`, `present`, `filled`, `nullable`, `sometimes`, `prohibited` |
-| Text | `string`, `text`, `char`, `alpha`, `alpha_num`, `alpha_dash`, `ascii`, `starts_with`, `ends_with`, `contains`, `not_contains`, `lowercase`, `uppercase`, `regex` |
-| Numbers/comparison | `numeric`, `integer`, `int`, `float`, `decimal`, `digits`, `digits_between`, `min_digits`, `max_digits`, `min`, `max`, `size`, `between`, `same`, `confirmed`, `gt`, `gte`, `lt`, `lte` |
+| Text | `string` / `text` / `char`, `alpha`, `alpha_num` / `alphanumeric`, `alpha_dash`, `ascii`, `starts_with`, `ends_with`, `contains`, `not_contains`, `lowercase`, `uppercase`, `regex` |
+| Numbers | `numeric` / `number`, `integer` / `int`, `float`, `decimal`, `digits`, `digits_between`, `min_digits`, `max_digits`, `min_value`, `max_value` |
+| Size/comparison | `min` / `minimum`, `max` / `maximum`, `size` / `length`, `between`, `same` / `equal` / `same_as`, `confirmed`, `gt`, `gte`, `lt` / `ls`, `lte` |
 | Database | `['unique' => ['table', 'column', 'ignore_id']]`, `['exists' => ['table', 'column']]`, `not_exists` |
-| Collections | `array`, `list`, wildcard fields (`items.*.name`), `in`, `not_in` |
-| Formats | `email`, `url`, `ip`, `ipv4`, `ipv6`, `mac_address`, `uuid`, `json`, `date`, `date_format`, `before`, `after` |
-| Files/flags | `file`, `image`, `mimes`, `boolean`, `accepted`, `declined`, `password` |
+| Collections | `array` / `list`, `distinct` (`strict`, `ignore_case` options), `in`, `not_in`; wildcard fields (`items.*.name`) |
+| Formats | `email` / `mail`, `url` / `link`, `ip`, `ipv4`, `ipv6`, `mac_address`, `uuid`, `json`, `date`, `date_format`, `before`, `after` |
+| Files/flags | `file`, `image`, `mimes`, `boolean` / `bool`, `accepted`, `declined`, `password` |
+
+Fluent `Rule` factories: `in()`, `notIn()`, `unique()`, `exists()`, `notExists()`, `requiredIf()`, `requiredUnless()`, `prohibitedIf()`, `password()`.
+
+`list` only checks for an array; `decimal` checks numeric input, not decimal places. Unknown string rules pass without validation. Use a supported/custom rule rather than assuming Laravel rules such as `bail`, `enum`, or `required_with` exist.
 
 Use [API discovery](api-discovery.md) for uncertain parameters; Laravel rule syntax is not proof of compatibility. Precognition field lists accept comma-separated names, whitespace, and repeated header values.
 

@@ -44,12 +44,28 @@ Defaults: snake-case plural table, primary key `id`, automatic `created_at`/`upd
 
 ## Casts, accessors, and mutators
 
-Built-in casts: `int`/`integer`, `float`, `bool`/`boolean`, `string`, `array`, `json`, `datetime`, `date`, `timestamp`, `encrypted`. Date casts return `Spark\Carbon`; pass them directly to resources.
+All built-in casts (`Database/Casts/Castable.php`):
+
+| Cast | Behavior |
+| --- | --- |
+| `int`, `integer` | Integer |
+| `real`, `float`, `double` | Float |
+| `decimal`, `decimal:N` | Decimal string; default precision 2 |
+| `string` | String |
+| `bool`, `boolean` | Boolean; stored as 0/1 |
+| `array`, `json` | JSON decoded to associative arrays |
+| `object` | JSON decoded to objects |
+| `collection` | `Spark\Support\Collection` |
+| `date`, `datetime`, `timestamp` | `Spark\Carbon`, not a Unix integer; stored as a date/time string |
+| `encrypted` | Encrypt for storage, decrypt on hydration; failed decryption returns null |
+| `hashed` | One-way password hash on storage; recognized hashes remain intact |
+
+Null bypasses casts. Structured casts store JSON; supplied strings are treated as already encoded. Pass Carbon directly to resources. Unknown cast names pass through unchanged; use a custom cast for unsupported types.
 
 ```php
 use Spark\Database\Casts\Attribute;
 
-protected function title(): Attribute
+protected function titleAttribute(): Attribute
 {
     return Attribute::make(
         get: fn($value) => ucfirst($value),
@@ -58,7 +74,7 @@ protected function title(): Attribute
 }
 ```
 
-Classic `getFullNameAttribute()` / `setPasswordAttribute($value)` methods are also supported. A password mutator uses `$this->set('password', Hash::password($value))`, with `Spark\Facades\Hash`; `Hash::make()` is HMAC, not password hashing. Avoid hashing an already-hashed value twice.
+Classic `get<Name>Attribute($value)` / `set<Name>Attribute($value)` methods return the transformed value; storage mutators run when saving and take precedence over casts. Attribute-object methods use the `<name>Attribute` suffix and require both closures. Prefer the `hashed` cast for passwords; `Hash::make()` is HMAC, not password hashing.
 
 Custom cast classes implement `Spark\Database\Contracts\CastsAttributes::get($value)` and `set($value)` and appear by class name in `$casts`. Inspect that contract before adding signatures.
 

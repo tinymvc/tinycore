@@ -17,7 +17,7 @@ Use Spark's native APIs and the application's conventions. Laravel is a style re
 ## 2. Work from evidence
 
 1. Inspect the nearest implementation and tests, `composer.json`, and the lockfile. For frontend work, also inspect the package lock, asset entrypoint, and adapter versions. Read only the bootstrap/provider files the task needs.
-2. Load one primary reference (section 6). Trace route → request → action → model/service → response. Preserve the user's frontend and public response contract.
+2. Load one primary reference (section 6). Check its supported casts, rules, methods, or directives before choosing an API; [feature map](references/native-feature-map.md) links these lists. Trace route → request → action → model/service → response. Preserve the user's frontend and public response contract.
 3. Verify uncertain APIs against installed source:
 
    ```bash

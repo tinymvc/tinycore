@@ -4,7 +4,7 @@ TinyCore (`tinymvc/tinycore`) is the PHP runtime for **TinyMVC / Spark**, provid
 
 [![PHP](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1365%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1384%20passed-brightgreen.svg)](tests/)
 
 Start an application with [Skeleton](https://github.com/tinymvc/skeleton):
 
@@ -39,14 +39,14 @@ php tests/database.php                   # Requires MySQL and PostgreSQL
 SPARK_TEST_TABLE_PREFIX=app_ php tests/database.php
 ```
 
-Verified **2026-10-28**, PHP **8.4.27**:
+Verified **2026-10-31**, PHP **8.4.27**:
 
 | Checks | Passed | Skipped | Assertions |
 | --- | ---: | ---: | ---: |
-| Full suite | 1,365 | 0 | 7,232 |
-| Database scenarios, per engine/prefix | 472 | 0 | 1,323 |
+| Full suite | 1,384 | 0 | 7,378 |
+| Database scenarios, per engine/prefix | 474 | 0 | 1,335 |
 
-All **1,365 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP integration checks. The shared database scenarios also passed on SQLite, MySQL, and PostgreSQL with both empty and `app_` prefixes; these are repeated scenarios, not additional distinct tests.
+All **1,384 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP integration checks. The shared database scenarios also passed on SQLite, MySQL, and PostgreSQL with both empty and `app_` prefixes; these are repeated scenarios, not additional distinct tests.
 
 ### Coverage
 
@@ -58,4 +58,5 @@ All **1,365 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP in
 | HTTP and validation | Routing, request lifecycle, PSR integration, proxies, middleware, responses/resources, validation boundaries, uploads, and real HTTP client/session transport |
 | Authentication | Guards, gates, password/encryption helpers, JWT tokens, revocation, and CSRF |
 | Storage | Local filesystem boundaries, upload handling, S3 signing, pagination, and failed/partial transfers through local fixtures |
-| Core services | Blade, container/providers, events, configuration, dates/localization, URLs, subprocesses, and concurrency |
+| Events and telemetry | Wildcard payloads, priorities, one-time listeners, nested dispatch, lazy payloads, observer failure/recursion isolation, HTTP sends/downloads/prepared requests/pools, and service/lifecycle hooks |
+| Core services | Blade, container/providers, CLI boot, configuration/environment caching, Tracer logging/error handling, Tinker, dates/localization, URLs, subprocesses, and concurrency |
