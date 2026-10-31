@@ -195,6 +195,9 @@ interface ApplicationContract
      */
     public function run(): void;
 
+    /** Boot providers and set the application timezone once. */
+    public function boot(): self;
+
     /** Dispatch a request and return its response. */
     public function handle(Request|ServerRequestInterface $request): Response;
 

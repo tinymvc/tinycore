@@ -872,17 +872,28 @@ class HttpRequest implements HttpRequestContract
      */
     public function execute(): HttpResponseContract
     {
-        $data = $this->retry(function (): array {
-            $curl = $this->buildCurlHandle();
+        $startedAt = microtime(true);
+        $data = null;
+        $error = null;
 
-            try {
-                return $this->executeCurlHandle($curl);
-            } finally {
-                $this->closeCurlHandle($curl);
-            }
-        });
+        try {
+            $data = $this->retry(function (): array {
+                $curl = $this->buildCurlHandle();
 
-        return new HttpResponse(...$data);
+                try {
+                    return $this->executeCurlHandle($curl);
+                } finally {
+                    $this->closeCurlHandle($curl);
+                }
+            });
+
+            return new HttpResponse(...$data);
+        } catch (\Throwable $exception) {
+            $error = $exception;
+            throw $exception;
+        } finally {
+            HttpTelemetry::record($this, $data, $startedAt, $error);
+        }
     }
 
     /**

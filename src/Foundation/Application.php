@@ -283,6 +283,8 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function boot(): self
     {
+        self::$app = $this;
+
         if (!$this->booted) {
             Telemetry::emit('booting');
 
@@ -880,7 +882,7 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function handleCommand(): void
     {
-        $this->bootServiceProviders();
+        $this->boot();
 
         $console = $this->get(Console::class);
         $console->run();

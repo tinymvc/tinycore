@@ -7,6 +7,18 @@ use Spark\Exceptions\Http\AuthorizationException;
 
 final class GateTest extends FrameworkTestCase
 {
+    public function test_current_user_named_injection_preserves_extra_arguments_and_cannot_be_overridden(): void
+    {
+        $user = $this->tokenUser();
+        $this->actingAs($user);
+        $gate = new Gate();
+        $gate->define('edit', fn($user, int $id, ...$tags) => $user->id === $id && $tags === ['tag']);
+        $this->assertTrue($gate->allows('edit', $user->id, 'tag'));
+        $this->assertTrue($gate->allows('edit', id: $user->id, tags: ['tag'], user: null));
+        $gate->after(fn($ability, $result, $user, int $id) => $ability === 'edit' && $result && $id === $user->id);
+        $this->assertTrue($gate->allows('edit', $user->id, 'tag'));
+    }
+
     public function test_unknown_ability_denies_and_authorization_throws(): void
     {
         $gate = new Gate();

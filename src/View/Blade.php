@@ -572,12 +572,13 @@ class Blade implements BladeContract
             }
         }
 
-        \Spark\Telemetry::emit('bladeTemplateRendered', fn() => [
-            'path' => $compiledPath,
-            'time' => round((microtime(true) - $started) * 1000, 6),
-            'memory_before' => $startedMemory,
-            'data_keys' => array_keys($context),
-        ]);
+        \Spark\Telemetry::emit(
+            'bladeTemplateRendered',
+            $compiledPath,
+            fn() => round((microtime(true) - $started) * 1000, 6),
+            $startedMemory,
+            fn() => array_keys($context),
+        );
 
         return $content;
     }

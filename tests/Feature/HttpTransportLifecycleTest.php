@@ -10,6 +10,44 @@ use Spark\Http\{Header, Request, Response};
 /** Exercise the real SAPI, php://input, run(), send(), and shutdown termination. */
 final class HttpTransportLifecycleTest extends LifecycleTestCase
 {
+    public function test_http_telemetry_covers_prepared_fluent_download_and_pool_once_each(): void
+    {
+        $seen = [];
+        \Spark\Telemetry::listen('http.*', function ($event, $url, $payload, $response, $duration) use (&$seen) {
+            $seen[] = compact('event', 'url', 'payload', 'response', 'duration');
+        });
+        $url = 'http://' . $this->address . '/psr-response';
+        $request = new \Spark\Http\Client\HttpRequest('GET', $url);
+        $this->assertSame(200, $request->execute()->status());
+        $client = new \Spark\Http\Client\Http();
+        $client->get($url);
+        $client->download($this->storagePath . '/metric.txt')->get($url);
+        \Spark\Http\Client\Http::pool(fn($pool) => [$pool->get($url), $pool->as('second')->get($url)]);
+        $this->assertCount(5, $seen);
+        foreach ($seen as $entry) {
+            $this->assertSame('app:http.request', $entry['event']);
+            $this->assertSame($url, $entry['url']);
+            $this->assertSame('GET', $entry['payload']['method']);
+            $this->assertSame(200, $entry['response']['status']);
+            $this->assertTrue($entry['duration'] >= 0);
+        }
+    }
+
+    public function test_http_telemetry_reports_final_retry_and_all_pool_outcomes(): void
+    {
+        $statuses = [];
+        \Spark\Telemetry::listen('http.request', function ($url, $payload, $response) use (&$statuses) {
+            $statuses[] = $response['status'];
+        });
+        $request = new \Spark\Http\Client\HttpRequest('GET', 'http://127.0.0.1:1');
+        $this->assertSame(0, $request->withRetry(2, 0)->execute()->status());
+        $this->assertSame([0], $statuses);
+        $this->assertThrows(\Spark\Http\Client\Exceptions\HttpException::class, fn() => \Spark\Http\Client\Http::pool(
+            fn($pool) => [$pool->get('http://127.0.0.1:1'), $pool->get('http://' . $this->address . '/psr-response')],
+        ));
+        $this->assertSame([0, 0, 200], $statuses);
+    }
+
     private mixed $process = null;
     private string $address;
 

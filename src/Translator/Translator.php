@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use Spark\Support\Arr;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use Spark\Translator\Contracts\TranslatorContract;
 use UnexpectedValueException;
 use function array_key_exists;
@@ -340,9 +341,9 @@ class Translator implements TranslatorContract
         if (array_key_exists($file, $this->loadedFiles)) {
             return $this->loadedFiles[$file];
         }
-        $debug = is_debug_mode();
-        $started = $debug ? hrtime(true) : 0;
-        $memory = $debug ? memory_get_usage(true) : 0;
+        $listening = Telemetry::isListening('translator.loadedLanguageFile');
+        $started = $listening ? hrtime(true) : 0;
+        $memory = $listening ? memory_get_usage(true) : 0;
 
         // Static closure: the language file cannot see or clobber $this / local variables.
         $lines = (static fn() => require $file)();
@@ -353,13 +354,13 @@ class Translator implements TranslatorContract
 
         $this->loadedFiles[$file] = $lines;
 
-        if ($debug) {
-            event('app:translator.loadedLanguageFile', [
-                'file' => $file,
-                'load_time' => round((hrtime(true) - $started) / 1e6, 6),
-                'memory_before' => $memory,
-            ]);
-        }
+        Telemetry::emitIf(
+            $listening,
+            'translator.loadedLanguageFile',
+            $file,
+            round((hrtime(true) - $started) / 1e6, 6),
+            $memory,
+        );
 
         return $lines;
     }

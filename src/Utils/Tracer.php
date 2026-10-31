@@ -10,6 +10,7 @@ use Spark\Http\Request;
 use Spark\Http\Response;
 use Spark\Support\Traits\Macroable;
 use Spark\Facades\Blade;
+use Spark\Telemetry;
 use Throwable;
 use function in_array;
 use function sprintf;

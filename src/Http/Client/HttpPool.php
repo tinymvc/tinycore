@@ -205,6 +205,7 @@ class HttpPool implements HttpPoolContract
         $handles = [];
         $requestMap = [];
         $keys = [];
+        $startedAt = microtime(true);
 
         try {
             foreach ($requests as $request) {
@@ -242,32 +243,42 @@ class HttpPool implements HttpPoolContract
                 }
             } while ($running > 0);
 
+            $failures = [];
             while ($completed = curl_multi_info_read($multiHandle)) {
                 if ($completed['result'] !== CURLE_OK) {
-                    throw new HttpException('cURL Error: ' . curl_strerror($completed['result']));
+                    $handleId = is_object($completed['handle']) ? spl_object_id($completed['handle']) : (int) $completed['handle'];
+                    $failures[$handleId] = new HttpException('cURL Error: ' . curl_strerror($completed['result']));
                 }
             }
 
             $responses = [];
             foreach ($handles as $handleId => $curl) {
                 if (curl_errno($curl)) {
-                    throw new HttpException('cURL Error: ' . curl_error($curl));
+                    $failures[$handleId] ??= new HttpException('cURL Error: ' . curl_error($curl));
                 }
 
-                $body = curl_multi_getcontent($curl);
-                if ($body === false) {
-                    $body = '';
-                }
+                $data = [
+                    'body' => (string) curl_multi_getcontent($curl),
+                    'status' => isset($failures[$handleId]) ? 0 : (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
+                    'lastUrl' => (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
+                    'length' => (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
+                    'headers' => method_exists($requestMap[$handleId], 'getResponseHeaders')
+                        ? $requestMap[$handleId]->getResponseHeaders() : [],
+                ];
 
-                $responses[$keys[$handleId]] = new HttpResponse(
-                    body: (string) $body,
-                    status: (int) curl_getinfo($curl, CURLINFO_HTTP_CODE),
-                    lastUrl: (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL),
-                    length: (int) curl_getinfo($curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD),
-                    headers: (method_exists($requestMap[$handleId], 'getResponseHeaders')
-                        ? $requestMap[$handleId]->getResponseHeaders()
-                        : []),
+                HttpTelemetry::record(
+                    $requestMap[$handleId],
+                    $data,
+                    $startedAt,
+                    $failures[$handleId] ?? null,
+                    round(curl_getinfo($curl, CURLINFO_TOTAL_TIME) * 1000, 2),
                 );
+
+                $responses[$keys[$handleId]] = new HttpResponse(...$data);
+            }
+
+            if ($failures !== []) {
+                throw reset($failures);
             }
 
             return $responses;

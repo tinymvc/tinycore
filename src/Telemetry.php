@@ -6,7 +6,7 @@ use Closure;
 use Spark\Foundation\Application;
 
 /**
- * Lightweight, zero-overhead telemetry dispatcher for Spark framework events.
+ * Lightweight telemetry dispatcher for Spark framework events.
  *
  * Telemetry allows the framework engine and application to record runtime metrics,
  * execution traces, database queries, and lifecycle activities only when
@@ -20,6 +20,9 @@ class Telemetry
     /** @var bool Global telemetry enable/disable switch */
     private static bool $enabled = true;
 
+    /** Observer work must not recursively instrument its own exports or logging. */
+    private static bool $emitting = false;
+
     /**
      * Determine if telemetry is active and listening for the specified event.
      *
@@ -30,12 +33,8 @@ class Telemetry
      */
     public static function isListening(string $event): bool
     {
-        if (!self::$enabled) {
+        if (!self::$enabled || self::$emitting) {
             return false;
-        }
-
-        if (is_debug_mode()) {
-            return true;
         }
 
         $app = Application::$app;
@@ -48,15 +47,14 @@ class Telemetry
         /** @var Events $events */
         $events = $app->get(Events::class);
 
-        return $events->hasListeners($eventName);
+        return $app->isDebugMode() || $events->hasListeners($eventName);
     }
 
     /**
-     * Emit a telemetry event with zero overhead.
+     * Emit a telemetry event, resolving lazy arguments only when active.
      *
      * If any argument is a Closure, it will ONLY be invoked when someone is actively listening,
-     * ensuring zero performance impact (no microtime, no backtrace, no array allocation)
-     * when telemetry is inactive.
+     * Avoid expensive payload construction outside these closures.
      *
      * @param string $event Event name (e.g. 'db.queryExecuted', 'request.handled')
      * @param mixed ...$args Payloads or lazy Closures returning payloads
@@ -75,13 +73,24 @@ class Telemetry
 
         $eventName = str_starts_with($event, 'app:') ? $event : "app:$event";
 
-        // Resolve lazy closures
-        $resolvedArgs = [];
-        foreach ($args as $arg) {
-            $resolvedArgs[] = $arg instanceof Closure ? $arg() : $arg;
-        }
+        self::$emitting = true;
+        try {
+            $resolvedArgs = [];
+            foreach ($args as $arg) {
+                $resolvedArgs[] = $arg instanceof Closure ? $arg() : $arg;
+            }
 
-        $app->get(Events::class)->dispatch($eventName, ...$resolvedArgs);
+            $app->get(Events::class)->dispatch($eventName, ...$resolvedArgs);
+        } catch (\Throwable $exception) {
+            // Observation must never turn a completed write into a retry or hide an error.
+            try {
+                tracer_log("Telemetry listener failed for [$eventName]: " . $exception->getMessage());
+            } catch (\Throwable) {
+                // Error reporting can itself be unavailable during bootstrap/shutdown.
+            }
+        } finally {
+            self::$emitting = false;
+        }
     }
 
     /**
@@ -94,6 +103,10 @@ class Telemetry
      */
     public static function emitIf(bool|Closure $condition, string $event, mixed ...$args): void
     {
+        if (!self::isListening($event)) {
+            return;
+        }
+
         $shouldEmit = $condition instanceof Closure ? $condition() : $condition;
         if ($shouldEmit) {
             self::emit($event, ...$args);

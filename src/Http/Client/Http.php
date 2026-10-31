@@ -110,6 +110,8 @@ class Http extends HttpRequest implements HttpContract
         $downloadMode = is_string($downloadPath) && $downloadPath !== '';
 
         $temporaryDownload = null;
+        $data = null;
+        $error = null;
 
         try {
             if ($downloadMode) {
@@ -152,21 +154,12 @@ class Http extends HttpRequest implements HttpContract
                 }
             }
 
-            $this->triggerHttpRequestEvent(
-                $this->getFullUrl(),
-                [
-                    'method' => $this->getMethod(),
-                    'url' => $url,
-                    'params' => $this->getParams(),
-                    'body' => $this->getData(),
-                    'headers' => $this->getHeaders(),
-                ],
-                $data,
-                $startedAt
-            );
-
             return new HttpResponse(...$data);
+        } catch (\Throwable $exception) {
+            $error = $exception;
+            throw $exception;
         } finally {
+            HttpTelemetry::record($this, $data, $startedAt, $error);
             if (is_string($temporaryDownload) && is_file($temporaryDownload)) {
                 @unlink($temporaryDownload);
             }
@@ -502,23 +495,5 @@ class Http extends HttpRequest implements HttpContract
         $this->setData($data);
 
         return $this->send($url);
-    }
-
-    /**
-     * Logs the HTTP request details.
-     *
-     * @param string $url The request URL.
-     * @param array $payload The cURL options used for the request.
-     * @param array $response The response data from the request.
-     * @param float $startedAt The timestamp when the request started.
-     */
-    private function triggerHttpRequestEvent(string $url, array $payload, array $response, float $startedAt): void
-    {
-        \Spark\Telemetry::emit('http.request', fn() => [
-            'url' => $url,
-            'payload' => $payload,
-            'response' => $response,
-            'duration_ms' => round((microtime(true) - $startedAt) * 1000, 2),
-        ]);
     }
 }

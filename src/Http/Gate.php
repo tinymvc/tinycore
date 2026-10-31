@@ -53,7 +53,7 @@ class Gate implements GateContract
      *
      * @param string   $ability  The ability name.
      * @param string|array|callable $callback A closure to determine authorization. 
-     *                           The closure should accept at least the user (can be optional) as the first parameter.
+     *                           A parameter named $user receives the authenticated user (or null).
      */
     public function define(string $ability, string|array|callable $callback): void
     {
@@ -92,10 +92,7 @@ class Gate implements GateContract
      */
     public function allows(string $ability, mixed ...$arguments): bool
     {
-        $arguments = [
-            'user' => app(Auth::class)->getUser(),
-            ...$arguments
-        ];
+        $arguments['user'] = app(Auth::class)->getUser();
 
         // Run "before" callbacks; if any return a non-null result, use that.
         foreach ($this->beforeCallbacks as $callback) {
@@ -125,6 +122,7 @@ class Gate implements GateContract
             $afterResult = Application::$app->call($callback, [$ability, $result, ...$arguments]);
             if ($afterResult !== null) {
                 $result = (bool) $afterResult;
+                break;
             }
         }
 

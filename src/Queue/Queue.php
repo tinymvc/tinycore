@@ -208,13 +208,6 @@ class Queue implements QueueContract
 
                 $job->handle();
 
-                Telemetry::emit('job.processed', fn() => [
-                    'job' => $job,
-                    'queue' => is_array($queue) ? ($job->getMetadata('queue', 'default')) : $queue,
-                    'id' => $jobId,
-                    'duration_ms' => round((microtime(true) - $jobStartedAt) * 1000, 2),
-                ]);
-
                 if ($job->isRepeated()) {
                     $nextRun = now()->modify('+' . $job->getRepeat());
                     $this->storage->rescheduleJob($jobId, $nextRun);
@@ -225,6 +218,13 @@ class Queue implements QueueContract
                     $this->removeJobById($jobId);
                     $this->message($label, 'DONE', microtime(true) - $jobStartedAt);
                 }
+
+                Telemetry::emit('job.processed', fn() => [
+                    'job' => $job,
+                    'queue' => is_array($queue) ? ($job->getMetadata('queue', 'default')) : $queue,
+                    'id' => $jobId,
+                    'duration_ms' => round((microtime(true) - $jobStartedAt) * 1000, 2),
+                ]);
 
                 $ranJobs++;
             } catch (\Throwable $e) {

@@ -6,6 +6,7 @@ interface EventDispatcherContract extends \Psr\EventDispatcher\EventDispatcherIn
 {
     /**
      * Registers a listener for a specific event.
+     * String patterns support *; wildcard callbacks receive the event name before its arguments.
      *
      * @param string   $eventName The name of the event.
      * @param string|array|callable $listener  The listener callback.

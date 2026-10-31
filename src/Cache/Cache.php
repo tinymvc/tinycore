@@ -15,6 +15,7 @@ use Spark\Foundation\Application;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\Telemetry;
+use function array_key_exists;
 use function func_get_args;
 use function is_array;
 use function strtolower;
@@ -145,6 +146,11 @@ class Cache implements CacheContract, \ArrayAccess
     public function load(string $key, callable $callback, int|string|DateTimeInterface|Carbon|DateInterval|null $expire = null): mixed
     {
         if (!$this->has($key, $expire !== null)) {
+            Telemetry::emit(
+                'cache.miss',
+                fn() => ['key' => $key, 'store' => $this->name, 'value' => null]
+            );
+
             $data = $callback($this);
             $this->store($key, $data, $expire);
             return $data;
@@ -164,11 +170,21 @@ class Cache implements CacheContract, \ArrayAccess
     {
         $result = $this->storage->retrieve($keys, $eraseExpired);
 
-        Telemetry::emit($result !== null ? 'cache.hit' : 'cache.miss', fn() => [
-            'key' => is_array($keys) ? implode(',', $keys) : $keys,
-            'store' => $this->name,
-            'value' => $result,
-        ]);
+        if (
+            Telemetry::isListening('cache.hit') ||
+            Telemetry::isListening('cache.miss')
+        ) {
+            foreach (is_array($keys) ? $keys : [$keys] as $key) {
+                $hit = is_array($keys) ? array_key_exists($key, $result)
+                    : ($result !== null || $this->storage->has($key, $eraseExpired));
+
+                Telemetry::emit($hit ? 'cache.hit' : 'cache.miss', fn() => [
+                    'key' => $key,
+                    'store' => $this->name,
+                    'value' => is_array($keys) ? ($result[$key] ?? null) : $result,
+                ]);
+            }
+        }
 
         return $result;
     }
@@ -307,6 +323,11 @@ class Cache implements CacheContract, \ArrayAccess
         if ($this->has($key, $expire !== null)) {
             return $this->retrieve($key);
         }
+
+        Telemetry::emit(
+            'cache.miss',
+            fn() => ['key' => $key, 'store' => $this->name, 'value' => null]
+        );
 
         $value = $callback($this);
         $this->store($key, $value, $expire);

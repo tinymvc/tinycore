@@ -12,6 +12,7 @@ use Spark\Http\Routing\Contracts\RouterContract;
 use Spark\Http\Routing\Exceptions\InvalidNamedRouteException;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use function count;
 use function in_array;
 use function is_array;
@@ -654,8 +655,12 @@ class Router implements RouterContract
                 }
             }
         }
-        if ($matched !== null) {
-            is_debug_mode() && event('app:routeMatched', $matched);
+        if ($matched !== null && Telemetry::isListening('routeMatched')) {
+            // Route callbacks are payload values, not lazy telemetry factories.
+            Telemetry::emit('routeMatched', ...array_map(
+                static fn($value) => static fn() => $value,
+                array_values($matched),
+            ));
         }
 
         $middleware = Application::$app->get(Middleware::class);
@@ -669,9 +674,9 @@ class Router implements RouterContract
                         return Response::error(Response::STATUS_METHOD_NOT_ALLOWED, 'Method not allowed')->setHeader(Header::ALLOW, implode(', ', $allowed));
                     }
                     if ($this->fallback !== null) {
-                        is_debug_mode() && event('app:routeFallback');
+                        Telemetry::emit('routeFallback');
                         $response = Application::$app->call($this->fallback, $request->getRouteParams());
-                        is_debug_mode() && event('app:routeDispatched');
+                        Telemetry::emit('routeDispatched');
                         return Response::from($response);
                     }
                     return Response::error(Response::STATUS_NOT_FOUND, 'Route not found');
@@ -690,12 +695,17 @@ class Router implements RouterContract
                 $callback = isset($matched['template']) ? fn() => view($matched['template']) : $matched['callback'];
                 $response = Application::$app->call($callback, $request->getRouteParams(), $bindingFields);
 
-                is_debug_mode() && event('app:routeDispatched');
+                Telemetry::emit('routeDispatched');
                 return Response::from($response);
             },
         );
 
-        is_debug_mode() && event('app:middlewaresHandled', $middleware->getStack());
+        if (Telemetry::isListening('middlewaresHandled')) {
+            Telemetry::emit('middlewaresHandled', ...array_map(
+                static fn($value) => static fn() => $value,
+                array_values($middleware->getStack()),
+            ));
+        }
         return Response::from($response);
     }
 

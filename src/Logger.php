@@ -5,6 +5,7 @@ namespace Spark;
 use Psr\Log\AbstractLogger;
 use Psr\Log\InvalidArgumentException;
 use Spark\Contracts\LoggerInterface;
+use Spark\Utils\Tracer;
 use Stringable;
 use function in_array;
 use function is_scalar;

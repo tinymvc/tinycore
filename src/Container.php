@@ -342,7 +342,7 @@ class Container implements ContainerContract, \ArrayAccess
     {
         $methodParams = $reflector->getParameters();
         $dependencies = [];
-        $isAssociative = !array_is_list($parameters);
+        $positional = array_values(array_filter($parameters, is_int(...), ARRAY_FILTER_USE_KEY));
         $positionalIndex = 0;
 
         foreach ($methodParams as $param) {
@@ -350,9 +350,9 @@ class Container implements ContainerContract, \ArrayAccess
             $type = $param->getType();
 
             if ($param->isVariadic()) {
-                $values = $isAssociative
-                    ? (array) ($parameters[$paramName] ?? [])
-                    : array_slice($parameters, $positionalIndex);
+                $values = array_key_exists($paramName, $parameters)
+                    ? (array) $parameters[$paramName]
+                    : array_slice($positional, $positionalIndex);
                 array_push($dependencies, ...array_values($values));
                 break;
             }
@@ -369,18 +369,12 @@ class Container implements ContainerContract, \ArrayAccess
                 }
             }
 
-            if ($isAssociative) {
-                // For associative arrays, check by parameter name first
-                if (array_key_exists($paramName, $parameters)) {
-                    $dependencies[] = $this->resolveModelBinding($param, $parameters[$paramName], $bindingFields[$paramName] ?? null);
-                } else {
-                    // Try to resolve with default value or throw exception
-                    $dependencies[] = $this->resolveParameter($param);
-                }
+            if (array_key_exists($paramName, $parameters)) {
+                $dependencies[] = $this->resolveModelBinding($param, $parameters[$paramName], $bindingFields[$paramName] ?? null);
             } else {
                 // For indexed arrays, handle positional mapping intelligently
-                if ($isDependency && array_key_exists($positionalIndex, $parameters)) {
-                    $value = $parameters[$positionalIndex];
+                if ($isDependency && array_key_exists($positionalIndex, $positional)) {
+                    $value = $positional[$positionalIndex];
                     $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
 
                     foreach ($types as $candidate) {
@@ -401,8 +395,8 @@ class Container implements ContainerContract, \ArrayAccess
                     $dependencies[] = $this->resolveParameter($param);
                 } else {
                     // This is a regular parameter, try to get from positional array
-                    if ($positionalIndex < count($parameters)) {
-                        $dependencies[] = $parameters[$positionalIndex];
+                    if ($positionalIndex < count($positional)) {
+                        $dependencies[] = $positional[$positionalIndex];
                         $positionalIndex++;
                     } else {
                         // No more positional parameters, try default or throw exception

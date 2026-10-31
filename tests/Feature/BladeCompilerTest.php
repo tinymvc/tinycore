@@ -356,10 +356,11 @@ BLADE,
     public function test_class_style_and_json_directives(): void
     {
         $blade = $this->views([
-            'page' => '<div @class(["base", "active" => true, "hidden" => false]) @style(["color" => "red"])></div>|@json($value)',
+            'page' => '<div @class(["base", "active" => true, "hidden" => false]) @style(["color" => "red"])></div>|@json($value)|@js($value)',
         ]);
 
-        $this->assertRenders($blade, '<div class="base active" style="color: red"></div>|' . \Spark\Support\Js::from('</script>'), ['value' => '</script>']);
+        $encoded = \Spark\Support\Js::from('</script>');
+        $this->assertRenders($blade, '<div class="base active" style="color: red"></div>|' . $encoded . '|' . $encoded, ['value' => '</script>']);
     }
 
     public function test_invalid_directives_and_component_tags_fail_at_compile_time(): void

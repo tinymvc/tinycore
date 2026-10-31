@@ -382,7 +382,7 @@ class Mail extends PHPMailer implements MailContract
             // If the transport method is 'log', log the email instead of sending it
             if ($this->transport === 'log') {
                 if (!$this->preSend()) {
-                    return false;
+                    throw new \RuntimeException($this->ErrorInfo ?: 'Unable to prepare email.');
                 }
 
                 Log::info('Email logged instead of sent.', [
@@ -394,6 +394,10 @@ class Mail extends PHPMailer implements MailContract
                 $sent = true;
             } else {
                 $sent = parent::send(); // Call the parent send method for other transport methods
+            }
+
+            if (!$sent) {
+                throw new \RuntimeException($this->ErrorInfo ?: 'Unable to send email.');
             }
 
             if ($sent) {

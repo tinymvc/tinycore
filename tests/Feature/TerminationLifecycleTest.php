@@ -13,7 +13,8 @@ final class TerminationLifecycleTest extends LifecycleTestCase
     public function testNonRemovableOutputBufferDoesNotBlockShutdown(): void
     {
         $process = \Spark\Console\Process::run([
-            PHP_BINARY, dirname(__DIR__) . '/Fixtures/non-removable-buffer.php',
+            PHP_BINARY,
+            dirname(__DIR__) . '/Fixtures/non-removable-buffer.php',
         ], timeout: 2);
         $this->assertTrue($process->successful(), $process->errorOutput());
         $this->assertSame('buffered:finished', $process->output());
@@ -25,7 +26,8 @@ final class TerminationLifecycleTest extends LifecycleTestCase
         $trace = [];
         foreach (['booting', 'booted', 'routeMatched', 'routeDispatched', 'middlewaresHandled', 'terminated'] as $event) {
             $this->app->on('app:' . $event, function () use ($event, &$trace) {
-                $trace[] = $event; });
+                $trace[] = $event;
+            });
         }
         Route::get('/events', fn() => 'done');
         $this->get('/events')->assertOk();
@@ -51,15 +53,20 @@ final class TerminationLifecycleTest extends LifecycleTestCase
         $this->app->setConfig('app.debug', true);
         $trace = [];
         $this->app->on('app:terminated', fn() => throw new \DomainException('listener failed'));
-        $this->app->withExceptions([\DomainException::class => function ($e) use (&$trace) {
-            $trace[] = $e->getMessage(); }]);
+        $this->app->withExceptions([
+            \DomainException::class => function ($e) use (&$trace) {
+                $trace[] = $e->getMessage();
+            }
+        ]);
         Route::get('/events', function () use (&$trace) {
             $this->app->defer(function () use (&$trace) {
-                $trace[] = 'deferred'; });
+                $trace[] = 'deferred';
+            });
             return 'done';
         });
         $this->get('/events')->assertContent('done');
-        $this->assertSame(['listener failed', 'deferred'], $trace);
+        $this->assertSame(['deferred'], $trace);
+        $this->assertStringContainsString('listener failed', file_get_contents($this->storagePath . '/logs/spark.log'));
     }
 
     public function testNewWorkQueuedAfterTerminationCanStillBeDrained(): void
@@ -68,7 +75,8 @@ final class TerminationLifecycleTest extends LifecycleTestCase
         Route::get('/done', fn() => 'done');
         $this->get('/done')->assertOk();
         $this->app->defer(function () use (&$calls) {
-            $calls[] = 'later'; });
+            $calls[] = 'later';
+        });
         $this->app->terminate();
         $this->app->terminate();
         $this->assertSame(['later'], $calls);
@@ -98,11 +106,13 @@ final class TerminationLifecycleTest extends LifecycleTestCase
             $this->app->defer(function () use (&$calls) {
                 $calls[] = 'one';
                 $this->app->defer(function () use (&$calls) {
-                    $calls[] = 'three'; });
+                    $calls[] = 'three';
+                });
                 $this->app->terminate();
             });
             $this->app->defer(function () use (&$calls) {
-                $calls[] = 'two'; });
+                $calls[] = 'two';
+            });
             return 'done';
         });
         $this->get('/nested')->assertOk();
@@ -112,12 +122,16 @@ final class TerminationLifecycleTest extends LifecycleTestCase
     public function testDeferredFailureIsReportedAndLaterCallbacksStillRun(): void
     {
         $calls = [];
-        $this->app->withExceptions([\DomainException::class => function ($e) use (&$calls) {
-            $calls[] = $e->getMessage(); }]);
+        $this->app->withExceptions([
+            \DomainException::class => function ($e) use (&$calls) {
+                $calls[] = $e->getMessage();
+            }
+        ]);
         Route::get('/deferred-error', function () use (&$calls) {
             $this->app->defer(fn() => throw new \DomainException('reported'));
             $this->app->defer(function () use (&$calls) {
-                $calls[] = 'continued'; });
+                $calls[] = 'continued';
+            });
             return 'response unchanged';
         });
         $this->get('/deferred-error')->assertOk()->assertContent('response unchanged');
@@ -129,7 +143,8 @@ final class TerminationLifecycleTest extends LifecycleTestCase
         $requests = [];
         Route::get('/defer/{id}', function () use (&$requests) {
             $this->app->defer(function (Request $request) use (&$requests) {
-                $requests[] = $request; });
+                $requests[] = $request;
+            });
             return 'done';
         });
         $this->get('/defer/first')->assertOk();

@@ -145,6 +145,7 @@ class DB implements DBContract, DatabaseDriver
                     : (new self($databaseConfig))->getDriver();
             }
             $config['prefix'] ??= $databaseConfig['prefix'] ?? '';
+            $config['connection'] = $name;
         }
 
         return new self($config);
@@ -309,6 +310,7 @@ class DB implements DBContract, DatabaseDriver
             $config = [...$base, ...$connection];
             $config['driver'] = $connection['driver'] ?? self::guessDriver($name, (string) ($base['driver'] ?? ''));
             $config['prefix'] = $connection['prefix'] ?? $base['prefix'] ?? '';
+            $config['connection'] = $name;
         }
 
         $config['driver'] ??= self::DEFAULT_DRIVER; // Set default driver if not provided.
@@ -654,11 +656,12 @@ class DB implements DBContract, DatabaseDriver
      */
     private function log(float $started, string $sql, int $startedMemory): void
     {
-        \Spark\Telemetry::emit('db.queryExecuted', fn() => [
-            'query' => $sql,
-            'time' => round((microtime(true) - $started) * 1000, 6),
-            'memory_before' => $startedMemory,
-            'connection' => $this->config['connection'] ?? $this->config['default'] ?? null,
-        ]);
+        \Spark\Telemetry::emit(
+            'db.queryExecuted',
+            $sql,
+            fn() => round((microtime(true) - $started) * 1000, 6),
+            $startedMemory,
+            $this->config['connection'] ?? 'default',
+        );
     }
 }

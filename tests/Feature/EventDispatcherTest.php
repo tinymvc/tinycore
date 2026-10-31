@@ -6,6 +6,48 @@ use Spark\Events;
 
 final class EventDispatcherTest extends FrameworkTestCase
 {
+    public function test_patterns_share_priority_order_payloads_and_until(): void
+    {
+        $events = new Events();
+        $events->listen('app:*.done', fn($name, $value) => "$name:$value", 10);
+        $events->listen('app:job.done', fn($value) => $value);
+        $events->listen('*', fn() => 'last', -10);
+        $this->assertSame(['app:job.done:7', 7, 'last'], $events->dispatchWithResponse('app:job.done', 7));
+        $this->assertSame('app:job.done:8', $events->until('app:job.done', 8));
+        $events->clearListeners('*');
+        $this->assertFalse($events->hasListeners('other:job.done'));
+        $this->assertFalse($events->hasListeners('app:job.done.extra'));
+        $events->listen('literal[?].*', fn() => 'literal');
+        $this->assertTrue($events->hasListeners('literal[?].event'));
+        $this->assertFalse($events->hasListeners('literalx.event'));
+    }
+
+    public function test_nested_events_reach_wildcards_and_once_is_removed(): void
+    {
+        $events = new Events();
+        $seen = [];
+        $events->once('order.*', function ($name) use ($events, &$seen) {
+            $seen[] = $name;
+            $events->dispatch('order.inner');
+        }, 10);
+        $events->listen('*', function ($name) use (&$seen) {
+            $seen[] = $name; });
+        $events->dispatch('order.outer');
+        $this->assertSame(['order.outer', 'order.inner', 'order.outer'], $seen);
+        $this->assertSame(0, $events->countListeners('order.*'));
+    }
+
+    public function test_wildcard_halt_and_false_restore_nested_state(): void
+    {
+        $events = new Events();
+        $events->listen('inner.*', fn() => $events->halt());
+        $events->listen('outer.*', fn() => $events->until('inner.one'), 10);
+        $events->listen('outer.*', fn() => false);
+        $events->listen('outer.*', fn() => $this->fail('Must halt'), -1);
+        $this->assertSame([null, false], $events->dispatchWithResponse('outer.one'));
+        $this->assertFalse($events->until('outer.two'));
+    }
+
     public function test_priority_and_response_order(): void
     {
         $events = new Events();

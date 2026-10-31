@@ -50,6 +50,7 @@ use Spark\Foundation\Application;
  * @method static \Spark\Http\Response prepareResponse(\Spark\Http\Response $response)
  * @method static Application addServiceProvider(string $provider)
  * @method static void bootServiceProviders()
+ * @method static \Spark\Foundation\Application boot()
  * @method static Application singleton(string $abstract, $concrete = null)
  * @method static Application bind(string $abstract, $concrete = null)
  * @method static Application reset(string $abstract, callable|string|null $concrete = null)

@@ -11,6 +11,7 @@ use Spark\Database\Concerns\InteractsWithRelation;
 use Spark\Support\Collection;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
+use Spark\Telemetry;
 use function array_key_exists;
 use function func_get_args;
 use function is_array;
@@ -716,27 +717,28 @@ class QueryBuilder implements QueryBuilderContract
      */
     private function log(float $started, int $startedMemory, string $sql, array $bindings = []): void
     {
-        \Spark\Telemetry::emit('db.queryExecuted', function () use ($started, $startedMemory, $sql, $bindings) {
-            $ended = microtime(true);
-            $time = round(($ended - $started) * 1000, 6);
+        if (!Telemetry::isListening('db.queryExecuted')) {
+            return;
+        }
 
-            if ($this->hasWhere()) {
-                $parameters = $this->getBindings() ?: $this->getParameters();
-                if (!empty($bindings)) {
-                    $bindings['where'] = $parameters;
-                } else {
-                    $bindings = $parameters;
-                }
+        $time = round((microtime(true) - $started) * 1000, 6);
+        if ($this->hasWhere()) {
+            $parameters = $this->getBindings() ?: $this->getParameters();
+            if (!empty($bindings)) {
+                $bindings['where'] = $parameters;
+            } else {
+                $bindings = $parameters;
             }
+        }
 
-            return [
-                'query' => $sql,
-                'time' => $time,
-                'bindings' => $bindings,
-                'memory_before' => $startedMemory,
-                'connection' => $this->connectionName ?? 'default',
-            ];
-        });
+        Telemetry::emit(
+            'db.queryExecuted',
+            $sql,
+            $time,
+            $bindings,
+            $startedMemory,
+            $this->database->getConfig('connection', 'default'),
+        );
     }
 
     /** Import bindings without allowing independently built queries to overwrite each other. */

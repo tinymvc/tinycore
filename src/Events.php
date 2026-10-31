@@ -32,13 +32,6 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
     private bool $shouldHalt = false;
 
     /**
-     * Guard against recursive wildcard event handling.
-     *
-     * @var bool
-     */
-    private bool $dispatchingWildcard = false;
-
-    /**
      * Constructor for the EventDispatcher class.
      *
      * Initializes the EventDispatcher with an optional array of listeners.
@@ -95,7 +88,13 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
      */
     public function hasListeners(string $eventName): bool
     {
-        return (!empty($this->listeners[$eventName])) || ($eventName !== '*' && !empty($this->listeners['*']));
+        foreach ($this->listeners as $pattern => $listeners) {
+            if ($listeners !== [] && $this->matchesEvent($pattern, $eventName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -191,42 +190,18 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
      */
     public function dispatchWithResponse(string $eventName, ...$args): array
     {
-        $hasDirect = isset($this->listeners[$eventName]) && !empty($this->listeners[$eventName]);
-        $hasWildcard = !$this->dispatchingWildcard && $eventName !== '*' && isset($this->listeners['*']) && !empty($this->listeners['*']);
-
-        if (!$hasDirect && !$hasWildcard) {
-            return [];
-        }
-
         $previousHalt = $this->shouldHalt;
         $this->shouldHalt = false;
         $responses = [];
 
         try {
-            if ($hasDirect) {
-                foreach ($this->getSortedEventListeners($eventName) as $listener) {
-                    $result = $this->callListener($listener['callback'], $args, $eventName);
-                    $responses[] = $result;
+            foreach ($this->getSortedEventListeners($eventName) as $listener) {
+                $payload = $listener['wildcard'] ? [$eventName, ...$args] : $args;
+                $result = $this->callListener($listener['callback'], $payload, $eventName);
+                $responses[] = $result;
 
-                    if ($result === false || $this->shouldHalt) {
-                        return $responses;
-                    }
-                }
-            }
-
-            if ($hasWildcard) {
-                $this->dispatchingWildcard = true;
-                try {
-                    foreach ($this->getSortedEventListeners('*') as $listener) {
-                        $result = $this->callListener($listener['callback'], [$eventName, ...$args], $eventName);
-                        $responses[] = $result;
-
-                        if ($result === false || $this->shouldHalt) {
-                            break;
-                        }
-                    }
-                } finally {
-                    $this->dispatchingWildcard = false;
+                if ($result === false || $this->shouldHalt) {
+                    break;
                 }
             }
         } finally {
@@ -324,16 +299,20 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
      */
     public function until(string $eventName, ...$args): mixed
     {
-        if (!isset($this->listeners[$eventName])) {
-            return null;
-        }
+        $previousHalt = $this->shouldHalt;
+        $this->shouldHalt = false;
 
-        foreach ($this->getSortedEventListeners($eventName) as $listener) {
-            $result = $this->callListener($listener['callback'], $args, $eventName);
+        try {
+            foreach ($this->getSortedEventListeners($eventName) as $listener) {
+                $payload = $listener['wildcard'] ? [$eventName, ...$args] : $args;
+                $result = $this->callListener($listener['callback'], $payload, $eventName);
 
-            if ($result !== null) {
-                return $result;
+                if ($result !== null || $this->shouldHalt) {
+                    return $result;
+                }
             }
+        } finally {
+            $this->shouldHalt = $previousHalt;
         }
 
         return null;
@@ -413,13 +392,31 @@ class Events implements EventDispatcherContract, ListenerProviderInterface
      * Resolve event listeners ordered by descending priority.
      *
      * @param string $eventName
-     * @return array<int, array{callback: string|array|callable, priority: int}>
+     * @return array<int, array{callback: string|array|callable, priority: int, wildcard: bool}>
      */
     protected function getSortedEventListeners(string $eventName): array
     {
-        return collect($this->listeners[$eventName] ?? [])
-            ->sortByDesc('priority')
-            ->all();
+        $listeners = [];
+        foreach ($this->listeners as $pattern => $registered) {
+            if (!$this->matchesEvent($pattern, $eventName)) {
+                continue;
+            }
+
+            foreach ($registered as $listener) {
+                $listeners[] = [...$listener, 'wildcard' => str_contains($pattern, '*')];
+            }
+        }
+
+        usort($listeners, fn(array $a, array $b) => $b['priority'] <=> $a['priority']);
+
+        return $listeners;
+    }
+
+    /** Match the whole string; only * is special, including across dot/colon separators. */
+    private function matchesEvent(string $pattern, string $eventName): bool
+    {
+        return $pattern === $eventName || (str_contains($pattern, '*')
+            && preg_match('~\\A' . str_replace('\\*', '.*', preg_quote($pattern, '~')) . '\\z~s', $eventName) === 1);
     }
 
     /**

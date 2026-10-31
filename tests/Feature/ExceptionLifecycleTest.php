@@ -19,7 +19,7 @@ final class ExceptionLifecycleTest extends LifecycleTestCase
         $terminated = [];
         $cases = [
             [NotFoundException::class, 404, 'Not found'],
-            [ItemNotFoundException::class, 404, 'Item not found'],
+            [ItemNotFoundException::class, 404, 'Not found'],
             [AuthorizationException::class, 403, 'Forbidden'],
             [InvalidCsrfTokenException::class, 419, 'Page Expired'],
             [ThrottleException::class, 429, 'Too many requests'],
