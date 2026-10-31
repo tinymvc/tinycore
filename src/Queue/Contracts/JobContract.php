@@ -132,6 +132,13 @@ interface JobContract
     /* Dispatches the job only if it is not already scheduled or dispatched. */
     public function dispatchOnce(string $name = 'default'): void;
 
+
+    /** Set the queue for the job */
+    public function onQueue(?string $queue = null): JobContract;
+
+    /** Set the connection for the job */
+    public function onConnection(?string $connection = null): JobContract;
+
     /* Checks if the job is set to be repeated. */
     public function isRepeated(): bool;
 

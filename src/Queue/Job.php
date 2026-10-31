@@ -64,6 +64,11 @@ class Job implements JobContract
     private ?string $connection = null;
 
     /**
+     * @var string|null The queue name for the job, if applicable.
+     */
+    private ?string $queue = null;
+
+    /**
      * Constructor.
      *
      * Creates a new Job instance.
@@ -500,6 +505,22 @@ class Job implements JobContract
     }
 
     /**
+     * Sets the queue name for the job.
+     *
+     * This method sets the queue name that should be used when dispatching
+     * the job to the queue. It allows you to specify which queue should be
+     * used for this particular job.
+     *
+     * @param string|null $queue The name of the queue to use for this job.
+     * @return JobContract Returns the current Job instance for method chaining.
+     */
+    public function onQueue(?string $queue = null): JobContract
+    {
+        $this->queue = $queue;
+        return $this;
+    }
+
+    /**
      * Dispatches the job to the queue.
      *
      * This method will add the job to the queue. It is typically used
@@ -510,7 +531,7 @@ class Job implements JobContract
      */
     public function dispatch(string $queue = 'default'): void
     {
-        $this->queueInstance()->push($this, $queue);
+        $this->queueInstance()->push($this, $this->queue ?? $queue);
     }
 
     /**
@@ -525,7 +546,7 @@ class Job implements JobContract
      */
     public function dispatchOnce(string $queue = 'default'): void
     {
-        $this->queueInstance()->pushOnce($this, $queue);
+        $this->queueInstance()->pushOnce($this, $this->queue ?? $queue);
     }
 
     /** get the queue instance */
