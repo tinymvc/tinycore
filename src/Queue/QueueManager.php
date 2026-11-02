@@ -11,8 +11,8 @@ use function is_array;
 /**
  * Resolves queue connections independently of queue names such as emails or reports.
  * 
- * @method void push(JobContract $job, string $queue = 'default')
- * @method void pushOnce(JobContract $job, string $queue = 'default')
+ * @method bool push(JobContract $job, string $queue = 'default')
+ * @method bool pushOnce(JobContract $job, string $queue = 'default')
  * @method void work(bool $once = false, int $timeout = 3600, int $sleep = 3, int $delay = 5, int $tries = 3, array|string $queue = 'default')
  */
 class QueueManager

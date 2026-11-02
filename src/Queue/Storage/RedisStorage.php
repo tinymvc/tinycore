@@ -51,14 +51,14 @@ class RedisStorage implements QueueStorageContract
         $this->redisPrefix = sprintf('%s:queue:%s', $prefix, md5('redis'));
     }
 
-    public function push(JobContract $job, string $queue = 'default'): void
+    public function push(JobContract $job, string $queue = 'default'): bool
     {
-        $this->pushRedis($job, $queue);
+        return $this->pushRedis($job, $queue);
     }
 
-    public function pushOnce(JobContract $job, string $queue = 'default'): void
+    public function pushOnce(JobContract $job, string $queue = 'default'): bool
     {
-        $this->pushRedis($job, $queue, once: true);
+        return $this->pushRedis($job, $queue, once: true);
     }
 
     public function clearAllJobs(): void
@@ -374,7 +374,7 @@ LUA;
         }
     }
 
-    private function pushRedis(JobContract $job, string $queue, ?int $jobId = null, bool $once = false): void
+    private function pushRedis(JobContract $job, string $queue, ?int $jobId = null, bool $once = false): bool
     {
         $payload = $this->serializeJob($job);
         $jobId = $jobId ?? $this->nextRedisId();
@@ -417,7 +417,7 @@ redis.call('SADD', KEYS[6], ARGV[1])
 return 1
 LUA;
 
-        $this->redis->eval($script, [
+        return $this->redis->eval($script, [
             $this->redisJobsSetKey(),
             $this->redisQueueJobsSetKey($queue),
             $this->redisQueuesSetKey(),
@@ -432,7 +432,7 @@ LUA;
             (string) $this->redisToTimestamp((string) $payload['scheduledTime']),
             $once ? '1' : '0',
             ...$pairs,
-        ], 6);
+        ], 6) === 1;
     }
 
     /** Atomically update a job and all indexes; never recreate a removed job. */

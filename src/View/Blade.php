@@ -14,6 +14,7 @@ use Spark\View\Contracts\BladeContract;
 use Spark\View\Exceptions\UndefinedViewDirectoryPathException;
 use Spark\View\Exceptions\ViewException;
 use function array_key_exists;
+use function count;
 use function is_array;
 
 /**

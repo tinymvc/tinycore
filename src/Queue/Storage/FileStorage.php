@@ -134,29 +134,31 @@ class FileStorage implements QueueStorageContract
      | Producing
      | ------------------------------------------------------------------ */
 
-    public function push(JobContract $job, string $queue = 'default'): void
+    public function push(JobContract $job, string $queue = 'default'): bool
     {
         try {
             $payload = $this->encodePayload($job);
             $this->guarded(fn() => $this->insert($job, $queue, $payload));
+
+            return true;
         } catch (RuntimeException | JsonException $e) {
             throw new FailedToSaveJobsException('Failed to add job to the queue: ' . $e->getMessage(), previous: $e);
         }
     }
 
-    public function pushOnce(JobContract $job, string $queue = 'default'): void
+    public function pushOnce(JobContract $job, string $queue = 'default'): bool
     {
         try {
             $payload = $this->encodePayload($job);
             $repeat = $job->isRepeated() ? $job->getRepeat() : null;
             $fingerprint = $this->fingerprint($queue, $payload, $repeat);
 
-            $this->guarded(function () use ($job, $queue, $payload, $fingerprint) {
+            return (bool) $this->guarded(function () use ($job, $queue, $payload, $fingerprint) {
                 $existing = $this->readFingerprint($fingerprint);
 
                 // A fingerprint of a job that no longer exists is stale and ignored.
                 if ($existing !== null && $this->locate($existing) !== null) {
-                    return;
+                    return false;
                 }
 
                 // Ordinary push() permits duplicates; removing the indexed one may leave others.
@@ -164,11 +166,13 @@ class FileStorage implements QueueStorageContract
                     if ($row !== null && $this->fingerprint($row['queue'], $row['payload'], $row['repeat'] ?? null) === $fingerprint) {
                         $this->writeFingerprint($fingerprint, (int) $row['id']);
 
-                        return;
+                        return false;
                     }
                 }
 
                 $this->insert($job, $queue, $payload);
+
+                return true;
             });
         } catch (RuntimeException | JsonException $e) {
             throw new FailedToSaveJobsException('Failed to add job to the queue: ' . $e->getMessage(), previous: $e);

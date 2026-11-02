@@ -4,6 +4,7 @@ namespace Spark\Http\Validation\Rules;
 
 use Closure;
 use Spark\Contracts\Http\RuleContract;
+use Spark\Database\DB;
 use Stringable;
 use Throwable;
 
@@ -57,7 +58,7 @@ class Exists implements RuleContract, Stringable
         $column = $this->column ?: $attribute;
 
         try {
-            $query = query($this->table)->where($column, $value);
+            $query = DB::table($this->table)->where($column, $value);
 
             foreach ($this->wheres as [$col, $val]) {
                 $query->where($col, $val);

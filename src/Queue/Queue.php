@@ -47,10 +47,12 @@ class Queue implements QueueContract
      * @param JobContract $job The job to push onto the queue.
      * @param string $queue The name of the queue to push the job onto.
      */
-    public function push(JobContract $job, string $queue = 'default'): void
+    public function push(JobContract $job, string $queue = 'default'): bool
     {
-        $this->storage->push($job, $queue);
-        Telemetry::emit('job.pushed', fn() => ['job' => $job, 'queue' => $queue]);
+        $result = $this->storage->push($job, $queue);
+        Telemetry::emitIf($result, 'job.pushed', fn() => ['job' => $job, 'queue' => $queue]);
+
+        return $result;
     }
 
     /**
@@ -59,10 +61,13 @@ class Queue implements QueueContract
      * @param JobContract $job The job to push onto the queue.
      * @param string $queue The name of the queue to push the job onto.
      */
-    public function pushOnce(JobContract $job, string $queue = 'default'): void
+    public function pushOnce(JobContract $job, string $queue = 'default'): bool
     {
-        $this->storage->pushOnce($job, $queue);
-        Telemetry::emit('job.pushed', fn() => ['job' => $job, 'queue' => $queue]);
+        $result = $this->storage->pushOnce($job, $queue);
+
+        Telemetry::emitIf($result, 'job.pushed', fn() => ['job' => $job, 'queue' => $queue]);
+
+        return $result;
     }
 
     /**

@@ -61,11 +61,7 @@ use const FILTER_VALIDATE_URL;
  */
 class Validator implements ValidatorContract
 {
-    use Macroable;
-    use ExpandsFields;
-    use FormatsMessages;
-    use ValidatesFiles;
-    use ValidatesAttributes;
+    use Macroable, ExpandsFields, FormatsMessages, ValidatesFiles, ValidatesAttributes;
 
     /** @var Input Validated clean data. */
     protected Input $cleanData;

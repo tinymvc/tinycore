@@ -12,18 +12,18 @@ interface QueueContract
      *
      * @param JobContract $job The job to be added.
      * @param string $queue The name of the queue to add the job to.
-     * @return void
+     * @return bool True if the job was successfully added, false otherwise.
      */
-    public function push(JobContract $job, string $queue = 'default'): void;
+    public function push(JobContract $job, string $queue = 'default'): bool;
 
     /**
      * Adds a job to the queue only if it does not already exist.
      *
      * @param JobContract $job The job to be added.
      * @param string $queue The name of the queue to add the job to.
-     * @return void
+     * @return bool True if the job was successfully added, false otherwise.
      */
-    public function pushOnce(JobContract $job, string $queue = 'default'): void;
+    public function pushOnce(JobContract $job, string $queue = 'default'): bool;
 
     /** Signal running workers to exit after their current job finishes. */
     public function restart(): void;

@@ -7,9 +7,9 @@ use Spark\Queue\Contracts\JobContract;
 
 interface QueueStorageContract
 {
-    public function push(JobContract $job, string $queue = 'default'): void;
+    public function push(JobContract $job, string $queue = 'default'): bool;
 
-    public function pushOnce(JobContract $job, string $queue = 'default'): void;
+    public function pushOnce(JobContract $job, string $queue = 'default'): bool;
 
     public function clearAllJobs(): void;
 

@@ -6,6 +6,7 @@ use Closure;
 use Psr\Http\Message\UploadedFileInterface;
 use Spark\Contracts\Http\RuleContract;
 use function count;
+use function is_array;
 use function is_callable;
 use function is_countable;
 use function is_string;

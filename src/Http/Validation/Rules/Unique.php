@@ -4,6 +4,7 @@ namespace Spark\Http\Validation\Rules;
 
 use Closure;
 use Spark\Contracts\Http\RuleContract;
+use Spark\Database\DB;
 use Stringable;
 use Throwable;
 
@@ -77,7 +78,7 @@ class Unique implements RuleContract, Stringable
         $column = $this->column ?: $attribute;
 
         try {
-            $query = query($this->table)->where($column, $value);
+            $query = DB::table($this->table)->where($column, $value);
 
             if ($this->ignoreId !== null) {
                 $query->where($this->idColumn, '!=', $this->ignoreId);

@@ -5,6 +5,7 @@ namespace Spark\Http\Validation\Concerns;
 use DateTime;
 use DateTimeInterface;
 use Psr\Http\Message\UploadedFileInterface;
+use Spark\Database\DB;
 use Spark\Support\Str;
 use function array_column;
 use function array_intersect;
@@ -30,6 +31,7 @@ use function json_last_error;
 use function mb_strlen;
 use function mb_strtolower;
 use function preg_match;
+use function strlen;
 use function strtotime;
 use function strtolower;
 use function trigger_error;
@@ -293,7 +295,7 @@ trait ValidatesAttributes
 
         try {
             $column = empty($params[1]) || $params[1] === 'NULL' ? $field : $params[1];
-            $query = query($params[0])->where($column, $value);
+            $query = DB::table($params[0])->where($column, $value);
 
             if (isset($params[2]) && $params[2] !== '' && $params[2] !== 'NULL') {
                 $query->where($params[3] ?? 'id', '!=', $params[2]);
@@ -321,7 +323,7 @@ trait ValidatesAttributes
 
         try {
             $column = empty($params[1]) || $params[1] === 'NULL' ? $field : $params[1];
-            return query($params[0])->where($column, $value)->exists();
+            return DB::table($params[0])->where($column, $value)->exists();
         } catch (\Throwable $e) {
             return false;
         }
@@ -343,7 +345,7 @@ trait ValidatesAttributes
 
         try {
             $column = empty($params[1]) || $params[1] === 'NULL' ? $field : $params[1];
-            return query($params[0])->where($column, $value)->doesntExist();
+            return DB::table($params[0])->where($column, $value)->doesntExist();
         } catch (\Throwable $e) {
             return false;
         }

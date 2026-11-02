@@ -128,27 +128,33 @@ class DatabaseStorage implements QueueStorageContract
      | Producing
      | ------------------------------------------------------------------ */
 
-    public function push(JobContract $job, string $queue = 'default'): void
+    public function push(JobContract $job, string $queue = 'default'): bool
     {
         try {
             $this->insertJob($job, $queue);
+
+            return true;
         } catch (PDOException | JsonException $e) {
             throw new FailedToSaveJobsException('Failed to add job to the queue: ' . $e->getMessage(), previous: $e);
         }
     }
 
-    public function pushOnce(JobContract $job, string $queue = 'default'): void
+    public function pushOnce(JobContract $job, string $queue = 'default'): bool
     {
         try {
             $payload = $this->encodePayload($job);
             $repeat = $job->isRepeated() ? $job->getRepeat() : null;
             $fingerprint = sha1($queue . "\0" . $payload . "\0" . ($repeat ?? ''));
 
-            $this->retrying(function () use ($job, $queue, $payload, $repeat, $fingerprint) {
-                $this->withDedupeLock($fingerprint, function () use ($job, $queue, $payload, $repeat) {
+            return (bool) $this->retrying(function () use ($job, $queue, $payload, $repeat, $fingerprint) {
+                return $this->withDedupeLock($fingerprint, function () use ($job, $queue, $payload, $repeat) {
                     if (!$this->jobExists($payload, $queue, $repeat)) {
                         $this->insertJob($job, $queue);
+
+                        return true;
                     }
+
+                    return false;
                 });
             });
         } catch (PDOException | JsonException $e) {

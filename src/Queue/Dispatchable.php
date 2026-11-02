@@ -15,11 +15,19 @@ use Spark\Queue\Contracts\JobContract;
 trait Dispatchable
 {
     /**
+     * Create a new job instance for the given arguments.
+     */
+    public static function make(array $arguments): JobContract
+    {
+        return Job::make(static::class, $arguments);
+    }
+
+    /**
      * Create a pending dispatch for the job.
      */
     public static function dispatch(mixed ...$arguments): PendingDispatch
     {
-        return new PendingDispatch(static::makeQueuedJob($arguments));
+        return new PendingDispatch(static::make($arguments));
     }
 
     /**
@@ -27,7 +35,7 @@ trait Dispatchable
      */
     public static function dispatchOnce(mixed ...$arguments): PendingDispatch
     {
-        return new PendingDispatch(static::makeQueuedJob($arguments), once: true);
+        return new PendingDispatch(static::make($arguments), once: true);
     }
 
     /**
@@ -55,7 +63,7 @@ trait Dispatchable
      */
     public static function dispatchSync(mixed ...$arguments): void
     {
-        static::makeQueuedJob($arguments)->handle();
+        static::make($arguments)->handle();
     }
 
     /**
@@ -64,14 +72,6 @@ trait Dispatchable
     public static function dispatchNow(mixed ...$arguments): void
     {
         static::dispatchSync(...$arguments);
-    }
-
-    /**
-     * Build the framework queue job wrapper for this application job.
-     */
-    protected static function makeQueuedJob(array $arguments): JobContract
-    {
-        return Job::make(static::class, $arguments);
     }
 
     /**
