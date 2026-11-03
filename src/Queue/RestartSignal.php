@@ -21,7 +21,7 @@ class RestartSignal
 
     public static function configuredPath(): string
     {
-        return (string) config('queue.restart_file', storage_dir('queue.restart'));
+        return (string) config('queue.restart_file', storage_dir('framework/queue.restart'));
     }
 
     public function requested(): bool
