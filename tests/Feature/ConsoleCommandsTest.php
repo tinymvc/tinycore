@@ -19,6 +19,45 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         parent::tearDown();
     }
 
+    public function test_vendor_publish_lists_and_selects_resources_and_preserves_local_edits(): void
+    {
+        $source = $this->storagePath . '/package';
+        mkdir("$source/views/parts", 0755, true);
+        file_put_contents("$source/views/parts/header.php", 'package header');
+        file_put_contents("$source/settings.php", 'package settings');
+        $this->app->addServiceProvider(new ConsoleAssetFixtureProvider());
+        $this->app->addServiceProvider(new \Spark\Foundation\Providers\ConsoleServiceProvider());
+        $this->app->boot();
+
+        $run = function (string ...$args): string {
+            $GLOBALS['argv'] = ['spark', 'vendor:publish', ...$args];
+            ob_start();
+            try {
+                $this->app->get(\Spark\Console\Console::class)->run();
+                return ob_get_contents();
+            } finally {
+                ob_end_clean();
+            }
+        };
+        $header = root_dir('views/parts/header.php');
+        $settings = root_dir('config/fixture.php');
+        $this->assertStringContainsString('fixture-views', $run());
+        $this->assertFalse(is_file($header));
+        $run('--tag=fixture-views');
+        $this->assertSame('package header', file_get_contents($header));
+        $this->assertFalse(is_file($settings));
+
+        file_put_contents($header, 'my header');
+        $run('--provider', ConsoleAssetFixtureProvider::class);
+        $this->assertSame('package settings', file_get_contents($settings));
+        $this->assertSame('my header', file_get_contents($header));
+        $this->assertThrows(RuntimeException::class, fn() => $run('--provider=Unknown', '--tag=fixture-views', '--force'));
+        $this->assertThrows(InvalidArgumentException::class, fn() => $run('--tag', '--force'));
+        $this->assertSame('my header', file_get_contents($header));
+        $run('--all', '--force');
+        $this->assertSame('package header', file_get_contents($header));
+    }
+
     public function test_named_connection_resolution_and_resource_generator(): void
     {
         config([
@@ -194,5 +233,18 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         $this->assertTrue(str_contains($output, 'ERROR  Migration failed:'));
         $this->assertFalse(str_contains($output, 'DONE'));
         $this->assertSame(0, (int) app(\Spark\Database\DB::class)->query('SELECT COUNT(*) FROM migrations')->fetchColumn());
+    }
+}
+
+final class ConsoleAssetFixtureProvider extends \Spark\Foundation\Providers\ServiceProvider
+{
+    public function register(): void
+    {
+    }
+
+    public function boot(): void
+    {
+        $this->publishes([root_dir('package/views') => root_dir('views')], 'fixture-views');
+        $this->publishes([root_dir('package/settings.php') => root_dir('config/fixture.php')], 'fixture-config');
     }
 }

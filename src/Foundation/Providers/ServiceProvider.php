@@ -4,6 +4,7 @@ namespace Spark\Foundation\Providers;
 
 use Spark\Contracts\ServiceProviderContract;
 use Spark\Foundation\Application;
+use Spark\Foundation\Console\VendorPublisher;
 
 /**
  * Base service provider class.
@@ -34,6 +35,23 @@ abstract class ServiceProvider implements ServiceProviderContract
      * @return void
      */
     abstract public function register(): void;
+
+    /**
+     * Register source => destination paths during boot for the vendor:publish command.
+     *
+     * This method allows service providers to define assets or configuration
+     * files that can be published to the application's directory structure.
+     *
+     * @param array $paths An associative array of source and destination paths.
+     * @param string $tag A tag to group the published assets (default: 'default').
+     * @return void
+     */
+    protected function publishes(array $paths, string $tag = 'default'): void
+    {
+        if ($this->app->bound(VendorPublisher::class)) {
+            $this->app->get(VendorPublisher::class)->register(static::class, $tag, $paths);
+        }
+    }
 
     /**
      * Boots the service provider.

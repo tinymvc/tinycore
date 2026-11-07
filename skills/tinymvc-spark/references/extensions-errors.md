@@ -40,6 +40,18 @@ Register providers in `bootstrap/app.php` via `Application::create(... providers
 
 Do not store a request/user/tenant in a singleton consumed by repeated requests or workers (see [request lifecycle](advanced-workflows.md#request-lifecycle-and-extension-boundaries)).
 
+### Publishing package files
+
+In a package provider's `boot()` method, map absolute source files or directories to their application destinations. A tag groups related resources.
+
+```php
+$this->publishes([
+    dirname(__DIR__) . '/resources/views' => views_dir('vendor/example'),
+], 'example-views');
+```
+
+Run `php spark vendor:publish` to list registered providers and tags. Select `--tag=example-views`, `--provider='Vendor\Package\ExampleServiceProvider'`, or both. Use `--all` to publish every group. Re-running the command adds missing files and preserves application edits. Pass `--force` to replace existing files in the selection.
+
 ## Events
 
 ```php

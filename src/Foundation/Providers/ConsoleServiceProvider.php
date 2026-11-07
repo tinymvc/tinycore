@@ -7,6 +7,7 @@ use Spark\Console\Console;
 use Spark\Database\Migration;
 use Spark\Foundation\Console\PrimaryCommandsHandler;
 use Spark\Foundation\Console\MakeStubCommandsHandler;
+use Spark\Foundation\Console\VendorPublisher;
 use Spark\Utils\Tinker;
 
 /**
@@ -29,6 +30,7 @@ class ConsoleServiceProvider extends ServiceProvider
     {
         // Register the migration singleton
         $this->app->singleton(Migration::class);
+        $this->app->singleton(VendorPublisher::class);
 
         $this->app->alias('console', Console::class);
         $this->app->alias('commands', Commands::class);
@@ -133,6 +135,10 @@ class ConsoleServiceProvider extends ServiceProvider
         // Make a Service Provider
         $commands->addCommand('make:provider', [MakeStubCommandsHandler::class, 'makeProvider'])
             ->description('Create a new service provider class');
+
+        $commands->addCommand('vendor:publish', [MakeStubCommandsHandler::class, 'vendorPublish'])
+            ->description('Publish registered package resources')
+            ->help('Run without options to list resources. Select --tag=name, --provider=class, or --all. Use --force to replace existing files.');
 
         // Make a Migration file
         $commands->addCommand('make:migration', [MakeStubCommandsHandler::class, 'makeMigration'])
