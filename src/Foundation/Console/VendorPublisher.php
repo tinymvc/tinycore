@@ -3,8 +3,36 @@
 namespace Spark\Foundation\Console;
 
 use FilesystemIterator;
+use ReflectionClass;
 use RuntimeException;
 use Spark\Console\Prompt;
+use Spark\Contracts\ServiceProviderContract;
+use Spark\Foundation\Application;
+use Throwable;
+use function array_keys;
+use function array_map;
+use function array_replace;
+use function bin2hex;
+use function class_exists;
+use function copy;
+use function dirname;
+use function is_dir;
+use function is_file;
+use function is_link;
+use function ltrim;
+use function method_exists;
+use function mkdir;
+use function preg_replace;
+use function random_bytes;
+use function realpath;
+use function rename;
+use function str_ends_with;
+use function str_replace;
+use function str_starts_with;
+use function strcasecmp;
+use function strtolower;
+use function trim;
+use function unlink;
 
 /** Package resources declared by the providers booted in this application. */
 final class VendorPublisher
@@ -15,7 +43,9 @@ final class VendorPublisher
     /** @param array<string, string> $paths Absolute source paths mapped to application destinations. */
     public function register(string $provider, string $tag, array $paths): void
     {
-        $this->groups[$provider][$tag] = array_replace($this->groups[$provider][$tag] ?? [], $paths);
+        $normalizedProvider = $this->normalizeProvider($provider);
+        $normalizedTag = trim($tag, " \t\n\r\0\x0B\"'");
+        $this->groups[$normalizedProvider][$normalizedTag] = array_replace($this->groups[$normalizedProvider][$normalizedTag] ?? [], $paths);
     }
 
     /** @return array<class-string, list<string>> */
@@ -24,15 +54,34 @@ final class VendorPublisher
         return array_map('array_keys', $this->groups);
     }
 
+    public function hasProvider(string $provider): bool
+    {
+        $target = $this->normalizeProvider($provider);
+        foreach (array_keys($this->groups) as $class) {
+            if ($this->matchesProvider($class, $target)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function publish(?string $provider = null, ?string $tag = null, bool $force = false): void
     {
+        $targetProvider = $provider !== null ? $this->normalizeProvider($provider) : null;
+        $targetTag = $tag !== null ? trim($tag, " \t\n\r\0\x0B\"'") : null;
+
+        if ($targetProvider !== null && !$this->hasProvider($targetProvider)) {
+            $this->bootProviderIfPossible($targetProvider);
+        }
+
         $matched = false;
         foreach ($this->groups as $class => $groups) {
-            if ($provider !== null && $provider !== $class) {
+            if ($targetProvider !== null && !$this->matchesProvider($class, $targetProvider)) {
                 continue;
             }
             foreach ($groups as $name => $paths) {
-                if ($tag !== null && $tag !== $name) {
+                if ($targetTag !== null && $targetTag !== $name) {
                     continue;
                 }
                 $matched = true;
@@ -44,6 +93,60 @@ final class VendorPublisher
 
         if (!$matched) {
             throw new RuntimeException('No publishable resources match the selected provider or tag.');
+        }
+    }
+
+    public function normalizeProvider(string $provider): string
+    {
+        $trimmed = trim($provider, " \t\n\r\0\x0B\"'");
+        $slashed = str_replace('/', '\\', $trimmed);
+        $collapsed = preg_replace('#\\\\+#', '\\', $slashed) ?? $slashed;
+
+        return ltrim($collapsed, '\\');
+    }
+
+    public function matchesProvider(string $registeredClass, string $targetProvider): bool
+    {
+        $registered = $this->normalizeProvider($registeredClass);
+        $target = $this->normalizeProvider($targetProvider);
+
+        if (strcasecmp($registered, $target) === 0) {
+            return true;
+        }
+
+        if (str_ends_with(strtolower($registered), '\\' . strtolower($target))) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function bootProviderIfPossible(string $providerClass): void
+    {
+        $app = Application::$app;
+        if ($app === null || !class_exists($providerClass)) {
+            return;
+        }
+
+        try {
+            $ref = new ReflectionClass($providerClass);
+            if ($ref->isAbstract() || !$ref->isInstantiable()) {
+                return;
+            }
+
+            $constructor = $ref->getConstructor();
+            $instance = ($constructor && $constructor->getNumberOfRequiredParameters() > 0)
+                ? $app->make($providerClass)
+                : new $providerClass();
+
+            if ($instance instanceof ServiceProviderContract || method_exists($instance, 'register')) {
+                $app->addServiceProvider($instance);
+                if (method_exists($instance, 'boot')) {
+                    $app->call([$instance, 'boot']);
+                }
+            }
+        } catch (Throwable) {
+            // Uninstantiable or failing provider falls through to the normal unmatched exception.
         }
     }
 

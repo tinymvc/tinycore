@@ -25,46 +25,7 @@ class MakeStubCommandsHandler
      */
     public function vendorPublish(array $args, VendorPublisher $publisher): void
     {
-        $provider = $args['provider'] ?? null;
-        $tag = $args['tag'] ?? null;
-        if (
-            ($provider !== null && (!is_string($provider) || $provider === ''))
-            || ($tag !== null && (!is_string($tag) || $tag === ''))
-        ) {
-            throw new \InvalidArgumentException('--provider and --tag require a value.');
-        }
-
-        if (!empty($args['_args']) || array_diff(array_keys($args), ['_args', 'provider', 'tag', 'force', 'all'])) {
-            throw new \InvalidArgumentException('Use --tag=name, --provider=class, or --all to select resources.');
-        }
-
-        foreach (['all', 'force'] as $flag) {
-            if (isset($args[$flag]) && $args[$flag] !== true) {
-                throw new \InvalidArgumentException("--$flag does not take a value.");
-            }
-        }
-
-        if (isset($args['all']) && ($provider !== null || $tag !== null)) {
-            throw new \InvalidArgumentException('Use --all alone or select resources by provider and tag.');
-        }
-
-        if ($provider === null && $tag === null && !isset($args['all'])) {
-            $rows = [];
-            foreach ($publisher->groups() as $class => $tags) {
-                $rows[] = [$class, implode(', ', $tags)];
-            }
-
-            if ($rows === []) {
-                Prompt::info('No publishable resources are registered.');
-                return;
-            }
-
-            Prompt::table(['Provider', 'Tags'], $rows);
-            Prompt::info('Select --tag=name, --provider=class, or --all to publish.');
-            return;
-        }
-
-        $publisher->publish($provider, $tag, isset($args['force']));
+        PrimaryCommandsHandler::vendorPublish($args, $publisher);
     }
 
     /**

@@ -51,8 +51,38 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         $run('--provider', ConsoleAssetFixtureProvider::class);
         $this->assertSame('package settings', file_get_contents($settings));
         $this->assertSame('my header', file_get_contents($header));
+
+        // Test single quotes, double quotes, leading slash, and short class name
+        unlink($settings);
+        $this->assertFalse(is_file($settings));
+        $run("--provider='" . ConsoleAssetFixtureProvider::class . "'");
+        $this->assertSame('package settings', file_get_contents($settings));
+
+        unlink($settings);
+        $this->assertFalse(is_file($settings));
+        $run('--provider="' . ConsoleAssetFixtureProvider::class . '"');
+        $this->assertSame('package settings', file_get_contents($settings));
+
+        unlink($settings);
+        $this->assertFalse(is_file($settings));
+        $run('--provider=\\' . ConsoleAssetFixtureProvider::class);
+        $this->assertSame('package settings', file_get_contents($settings));
+
+        unlink($settings);
+        $this->assertFalse(is_file($settings));
+        $run('--provider=ConsoleAssetFixtureProvider');
+        $this->assertSame('package settings', file_get_contents($settings));
+
+        // Test unbooted provider discovered and booted on-demand via --provider='Class'
+        $unbooted = root_dir('config/unbooted.php');
+        $this->assertFalse(is_file($unbooted));
+        $run("--provider='" . UnbootedFixtureProvider::class . "'");
+        $this->assertSame('package settings', file_get_contents($unbooted));
+
         $this->assertThrows(RuntimeException::class, fn() => $run('--provider=Unknown', '--tag=fixture-views', '--force'));
         $this->assertThrows(InvalidArgumentException::class, fn() => $run('--tag', '--force'));
+        $this->assertThrows(InvalidArgumentException::class, fn() => $run('--provider=""'));
+        $this->assertThrows(InvalidArgumentException::class, fn() => $run("--provider='   '"));
         $this->assertSame('my header', file_get_contents($header));
         $run('--all', '--force');
         $this->assertSame('package header', file_get_contents($header));
@@ -233,6 +263,18 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         $this->assertTrue(str_contains($output, 'ERROR  Migration failed:'));
         $this->assertFalse(str_contains($output, 'DONE'));
         $this->assertSame(0, (int) app(\Spark\Database\DB::class)->query('SELECT COUNT(*) FROM migrations')->fetchColumn());
+    }
+}
+
+final class UnbootedFixtureProvider extends \Spark\Foundation\Providers\ServiceProvider
+{
+    public function register(): void
+    {
+    }
+
+    public function boot(): void
+    {
+        $this->publishes([root_dir('package/settings.php') => root_dir('config/unbooted.php')], 'unbooted-config');
     }
 }
 

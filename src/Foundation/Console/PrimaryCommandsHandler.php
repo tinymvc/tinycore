@@ -454,4 +454,64 @@ class PrimaryCommandsHandler
 
         Prompt::success("The [{$publicUploadsDir}] link has been connected to [{$storageUploadsDir}].");
     }
+
+    /**
+     * Handles the "vendor:publish" command.
+     *
+     * @param array $args The arguments passed to the command.
+     * @param VendorPublisher $publisher The vendor publisher instance.
+     * @return void
+     * @throws \InvalidArgumentException
+     */
+    public static function vendorPublish(array $args, VendorPublisher $publisher): void
+    {
+        $rawProvider = $args['provider'] ?? null;
+        $rawTag = $args['tag'] ?? null;
+
+        if (
+            ($rawProvider !== null && (!is_string($rawProvider) || trim($rawProvider) === ''))
+            || ($rawTag !== null && (!is_string($rawTag) || trim($rawTag) === ''))
+        ) {
+            throw new \InvalidArgumentException('--provider and --tag require a value.');
+        }
+
+        $provider = $rawProvider !== null ? $publisher->normalizeProvider($rawProvider) : null;
+        $tag = $rawTag !== null ? trim($rawTag, " \t\n\r\0\x0B\"'") : null;
+
+        if ($provider === '' || $tag === '') {
+            throw new \InvalidArgumentException('--provider and --tag require a value.');
+        }
+
+        if (!empty($args['_args']) || array_diff(array_keys($args), ['_args', 'provider', 'tag', 'force', 'all'])) {
+            throw new \InvalidArgumentException('Use --tag=name, --provider=class, or --all to select resources.');
+        }
+
+        foreach (['all', 'force'] as $flag) {
+            if (isset($args[$flag]) && $args[$flag] !== true) {
+                throw new \InvalidArgumentException("--$flag does not take a value.");
+            }
+        }
+
+        if (isset($args['all']) && ($provider !== null || $tag !== null)) {
+            throw new \InvalidArgumentException('Use --all alone or select resources by provider and tag.');
+        }
+
+        if ($provider === null && $tag === null && !isset($args['all'])) {
+            $rows = [];
+            foreach ($publisher->groups() as $class => $tags) {
+                $rows[] = [$class, implode(', ', $tags)];
+            }
+
+            if ($rows === []) {
+                Prompt::info('No publishable resources are registered.');
+                return;
+            }
+
+            Prompt::table(['Provider', 'Tags'], $rows);
+            Prompt::info('Select --tag=name, --provider=class, or --all to publish.');
+            return;
+        }
+
+        $publisher->publish($provider, $tag, isset($args['force']));
+    }
 }

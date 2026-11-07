@@ -136,7 +136,7 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('make:provider', [MakeStubCommandsHandler::class, 'makeProvider'])
             ->description('Create a new service provider class');
 
-        $commands->addCommand('vendor:publish', [MakeStubCommandsHandler::class, 'vendorPublish'])
+        $commands->addCommand('vendor:publish', [PrimaryCommandsHandler::class, 'vendorPublish'])
             ->description('Publish registered package resources')
             ->help('Run without options to list resources. Select --tag=name, --provider=class, or --all. Use --force to replace existing files.');
 
