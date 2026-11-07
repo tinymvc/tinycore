@@ -504,10 +504,6 @@ if (!function_exists('home_url')) {
      */
     function home_url(string $path = ''): string
     {
-        if ($path === '' || $path === null) {
-            $path = '';
-        }
-
         if (str_contains($path, '://') || str_starts_with($path, '//')) {
             return $path;
         }
@@ -714,12 +710,14 @@ if (!function_exists('remove_root_dir')) {
      * directory separators from the resulting path.
      *
      * @param string $path The full file path from which to remove the root directory.
-     * @param string $root The root directory to remove. If null, the default root directory is used.
+     * @param ?string $root Optional. The root directory to remove. If not provided, 
+     *          the application's root directory will be used.
      * @return string The relative path with the root directory removed.
      */
-    function remove_root_dir(string $path, string $root): string
+    function remove_root_dir(string $path, ?string $root = null): string
     {
-        return trim(str_replace(dirname($root), '', $path), DIRECTORY_SEPARATOR);
+        $root ??= root_dir();
+        return trim(str_replace(dirname(dir_path($root)), '', dir_path($path)), DIRECTORY_SEPARATOR);
     }
 }
 
@@ -1806,27 +1804,12 @@ if (!function_exists('command')) {
     }
 }
 
-if (!function_exists('hashing')) {
+if (!function_exists('hasher')) {
     /**
      * Retrieves the Hash instance.
      *
      * This function returns the Hash instance, which provides methods
      * for hashing, validating, encrypting, and decrypting strings.
-     *
-     * @return Hash The Hash instance.
-     */
-    function hashing(): Hash
-    {
-        return get(Hash::class);
-    }
-}
-
-if (!function_exists('hasher')) {
-    /**
-     * Alias for the hashing() function.
-     *
-     * This function is an alias for the hashing() function, providing
-     * the same functionality of retrieving the Hash instance.
      *
      * @return Hash The Hash instance.
      */
@@ -1852,7 +1835,7 @@ if (!function_exists('passcode')) {
      */
     function passcode(string $password, null|string $hash = null): bool|string
     {
-        return hashing()->password($password, $hash);
+        return hasher()->password($password, $hash);
     }
 }
 
@@ -1872,10 +1855,10 @@ if (!function_exists('bcrypt')) {
     function bcrypt(string $password, null|string $hash = null): bool|string
     {
         if ($hash !== null) {
-            return hashing()->validatePassword($password, $hash);
+            return hasher()->validatePassword($password, $hash);
         }
 
-        return hashing()->bcrypt($password);
+        return hasher()->bcrypt($password);
     }
 }
 
@@ -1892,7 +1875,7 @@ if (!function_exists('encrypt')) {
             $value = json_encode($value instanceof Arrayable ? $value->toArray() : $value);
         }
 
-        return hashing()->encrypt($value);
+        return hasher()->encrypt($value);
     }
 }
 
@@ -1905,7 +1888,7 @@ if (!function_exists('decrypt')) {
      */
     function decrypt(string $value): string|array
     {
-        $decrypted = hashing()->decrypt($value);
+        $decrypted = hasher()->decrypt($value);
 
         // Attempt to decode the decrypted value as JSON
         $jsonDecoded = json_decode($decrypted, true);

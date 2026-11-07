@@ -8,6 +8,7 @@ use Spark\Exceptions\Utils\ImageException;
 use Spark\Support\Traits\Macroable;
 use function in_array;
 use function sprintf;
+use function strlen;
 
 /**
  * Class Image
@@ -50,6 +51,10 @@ class Image implements ImageContract
      */
     public static function from(string $imageSource): static
     {
+        if (preg_match('/^data:(image\/[a-z]+);base64,/', $imageSource)) {
+            return static::fromBase64($imageSource);
+        }
+
         return new static($imageSource);
     }
 
@@ -635,6 +640,63 @@ class Image implements ImageContract
         $encoded = base64_encode($contents);
 
         return $dataUri ? "data:{$this->getInfo('mime')};base64,{$encoded}" : $encoded;
+    }
+
+    /**
+     * Creates an Image instance from a base64 string.
+     *
+     * @param string $base64 The base64-encoded image data.
+     * @param string|null $destination Optional destination path to save the image.
+     * @return static An instance of the Image class with the specified image source set.
+     *
+     * @throws ImageException If the base64 data is invalid or cannot be decoded.
+     */
+    public static function fromBase64(string $base64, ?string $destination = null): static
+    {
+        if (preg_match('/^data:(image\/[a-z]+);base64,/', $base64, $matches)) {
+            $base64 = substr($base64, strlen($matches[0]));
+            $mime = $matches[1];
+        } else {
+            throw new ImageException('Invalid base64 image data.');
+        }
+
+        $data = base64_decode($base64);
+
+        if ($data === false) {
+            throw new ImageException('Failed to decode base64 image data.');
+        }
+
+        if ($destination === null) {
+            $extension = match ($mime) {
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/gif' => 'gif',
+                'image/webp' => 'webp',
+                default => throw new ImageException("Unsupported MIME type: $mime"),
+            };
+
+            $destination = sys_get_temp_dir() . '/image_' . uniqid() . '.' . $extension;
+        }
+
+        if (@file_put_contents($destination, $data) === false) {
+            throw new ImageException("Failed to write image to: {$destination}");
+        }
+
+        return new static($destination);
+    }
+
+    /**
+     * Saves the image to a file.
+     *
+     * @param string $destination The file path to save the image.
+     * @param string|null $format The desired image format (jpg, png, gif, webp).
+     * @param int $quality The quality of the saved image (0-100).
+     *
+     * @return bool Returns true on success.
+     */
+    public function saveAs(string $destination, ?string $format = null, int $quality = 90): bool
+    {
+        return $this->save($this->getImage(), $destination, $format, $quality);
     }
 
     /**
