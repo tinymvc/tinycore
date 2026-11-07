@@ -79,6 +79,27 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         $run("--provider='" . UnbootedFixtureProvider::class . "'");
         $this->assertSame('package settings', file_get_contents($unbooted));
 
+        // Test Laravel-standard array of tags and tagless publishing
+        $multi = root_dir('config/multi.php');
+        $untagged = root_dir('config/untagged.php');
+        is_file($multi) && unlink($multi);
+        is_file($untagged) && unlink($untagged);
+        $this->assertFalse(is_file($multi));
+        $this->assertFalse(is_file($untagged));
+
+        $run('--tag=multi-one');
+        $this->assertSame('package settings', file_get_contents($multi));
+        $this->assertFalse(is_file($untagged));
+
+        unlink($multi);
+        $run('--tag=multi-two');
+        $this->assertSame('package settings', file_get_contents($multi));
+        $this->assertFalse(is_file($untagged));
+
+        // Publishing by provider includes untagged resources
+        $run('--provider=' . ConsoleAssetFixtureProvider::class);
+        $this->assertSame('package settings', file_get_contents($untagged));
+
         $this->assertThrows(RuntimeException::class, fn() => $run('--provider=Unknown', '--tag=fixture-views', '--force'));
         $this->assertThrows(InvalidArgumentException::class, fn() => $run('--tag', '--force'));
         $this->assertThrows(InvalidArgumentException::class, fn() => $run('--provider=""'));
@@ -288,5 +309,7 @@ final class ConsoleAssetFixtureProvider extends \Spark\Foundation\Providers\Serv
     {
         $this->publishes([root_dir('package/views') => root_dir('views')], 'fixture-views');
         $this->publishes([root_dir('package/settings.php') => root_dir('config/fixture.php')], 'fixture-config');
+        $this->publishes([root_dir('package/settings.php') => root_dir('config/multi.php')], ['multi-one', 'multi-two']);
+        $this->publishes([root_dir('package/settings.php') => root_dir('config/untagged.php')]);
     }
 }

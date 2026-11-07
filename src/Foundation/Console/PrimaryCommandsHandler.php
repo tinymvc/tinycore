@@ -463,7 +463,7 @@ class PrimaryCommandsHandler
      * @return void
      * @throws \InvalidArgumentException
      */
-    public static function vendorPublish(array $args, VendorPublisher $publisher): void
+    public function vendorPublish(array $args, VendorPublisher $publisher): void
     {
         $rawProvider = $args['provider'] ?? null;
         $rawTag = $args['tag'] ?? null;

@@ -12,23 +12,6 @@ use function is_string;
 class MakeStubCommandsHandler
 {
     /**
-     * Handle the vendor:publish command.
-     *
-     * @param array $args
-     *   The arguments passed to the command.
-     * @param VendorPublisher $publisher
-     *   The VendorPublisher instance.
-     *
-     * @return void
-     *
-     * @throws \InvalidArgumentException
-     */
-    public function vendorPublish(array $args, VendorPublisher $publisher): void
-    {
-        PrimaryCommandsHandler::vendorPublish($args, $publisher);
-    }
-
-    /**
      * Create a provider stub.
      *
      * @param array $args

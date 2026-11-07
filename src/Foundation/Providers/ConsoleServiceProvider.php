@@ -136,10 +136,6 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('make:provider', [MakeStubCommandsHandler::class, 'makeProvider'])
             ->description('Create a new service provider class');
 
-        $commands->addCommand('vendor:publish', [PrimaryCommandsHandler::class, 'vendorPublish'])
-            ->description('Publish registered package resources')
-            ->help('Run without options to list resources. Select --tag=name, --provider=class, or --all. Use --force to replace existing files.');
-
         // Make a Migration file
         $commands->addCommand('make:migration', [MakeStubCommandsHandler::class, 'makeMigration'])
             ->description('Create a new database migration file');
@@ -183,6 +179,13 @@ class ConsoleServiceProvider extends ServiceProvider
         // Make a view component file
         $commands->addCommand('make:component', [MakeStubCommandsHandler::class, 'makeViewComponent'])
             ->description('Create a new view component file');
+
+
+        // Add the vendor:publish command
+        $commands->addCommand('vendor:publish', [PrimaryCommandsHandler::class, 'vendorPublish'])
+            ->description('Publish registered package resources')
+            ->help('Run without options to list resources. Select --tag=name, --provider=class, or --all. Use --force to replace existing files.');
+
 
         // Add the tinker command
         $commands->addCommand('tinker', Tinker::start(...))

@@ -9,9 +9,10 @@ use Spark\Console\Prompt;
 use Spark\Contracts\ServiceProviderContract;
 use Spark\Foundation\Application;
 use Throwable;
+use function array_filter;
 use function array_keys;
-use function array_map;
 use function array_replace;
+use function array_values;
 use function bin2hex;
 use function class_exists;
 use function copy;
@@ -40,18 +41,33 @@ final class VendorPublisher
     /** @var array<class-string, array<string, array<string, string>>> */
     private array $groups = [];
 
-    /** @param array<string, string> $paths Absolute source paths mapped to application destinations. */
-    public function register(string $provider, string $tag, array $paths): void
+    /**
+     * @param array<string, string> $paths Absolute source paths mapped to application destinations.
+     * @param array<string>|string|null $groups One or more tags, or null for untagged package resources.
+     */
+    public function register(string $provider, array|string|null $groups, array $paths): void
     {
         $normalizedProvider = $this->normalizeProvider($provider);
-        $normalizedTag = trim($tag, " \t\n\r\0\x0B\"'");
-        $this->groups[$normalizedProvider][$normalizedTag] = array_replace($this->groups[$normalizedProvider][$normalizedTag] ?? [], $paths);
+        $tags = $groups !== null ? (array) $groups : [null];
+
+        foreach ($tags as $tag) {
+            $normalizedTag = $tag !== null ? trim($tag, " \t\n\r\0\x0B\"'") : '';
+            $this->groups[$normalizedProvider][$normalizedTag] = array_replace(
+                $this->groups[$normalizedProvider][$normalizedTag] ?? [],
+                $paths
+            );
+        }
     }
 
     /** @return array<class-string, list<string>> */
     public function groups(): array
     {
-        return array_map('array_keys', $this->groups);
+        $result = [];
+        foreach ($this->groups as $provider => $tags) {
+            $result[$provider] = array_values(array_filter(array_keys($tags), fn($tag) => $tag !== ''));
+        }
+
+        return $result;
     }
 
     public function hasProvider(string $provider): bool
@@ -81,6 +97,7 @@ final class VendorPublisher
                 continue;
             }
             foreach ($groups as $name => $paths) {
+                // When a tag is specified, only match groups with that tag (skip untagged resources)
                 if ($targetTag !== null && $targetTag !== $name) {
                     continue;
                 }

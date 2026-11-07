@@ -66,7 +66,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.2.17';
+    public const VERSION = '4.2.18';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
