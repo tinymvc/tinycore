@@ -6,9 +6,7 @@ use FilesystemIterator;
 use ReflectionClass;
 use RuntimeException;
 use Spark\Console\Prompt;
-use Spark\Contracts\ServiceProviderContract;
 use Spark\Foundation\Application;
-use Throwable;
 use function array_filter;
 use function array_keys;
 use function array_replace;
@@ -21,7 +19,6 @@ use function is_dir;
 use function is_file;
 use function is_link;
 use function ltrim;
-use function method_exists;
 use function mkdir;
 use function preg_replace;
 use function random_bytes;
@@ -36,7 +33,7 @@ use function trim;
 use function unlink;
 
 /** Package resources declared by the providers booted in this application. */
-final class VendorPublisher
+class PublishManager
 {
     /** @var array<class-string, array<string, array<string, string>>> */
     private array $groups = [];
@@ -151,15 +148,12 @@ final class VendorPublisher
                 return;
             }
 
-            $constructor = $ref->getConstructor();
-            $instance = ($constructor && $constructor->getNumberOfRequiredParameters() > 0)
-                ? $app->make($providerClass)
-                : new $providerClass();
+            $instance = new $providerClass();
 
             if ($instance instanceof ServiceProviderContract || method_exists($instance, 'register')) {
                 $app->addServiceProvider($instance);
                 if (method_exists($instance, 'boot')) {
-                    $app->call([$instance, 'boot']);
+                    $app->boot();
                 }
             }
         } catch (Throwable) {

@@ -6,7 +6,6 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Psr\Container\ContainerInterface;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\EventDispatcher\ListenerProviderInterface;
 use Psr\Log\LoggerInterface;
@@ -66,7 +65,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.2.18';
+    public const VERSION = '4.2.19';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -126,6 +125,9 @@ class Application extends \Spark\Container implements ApplicationContract
             DotEnv::bootstrap($this->path);
         }
 
+        // Register the application instance in the container for dependency injection.
+        $this->instance(Application::class, $this);
+
         // Register core services for global use
         $this->singleton(DB::class);
         $this->singleton(Hash::class);
@@ -138,7 +140,6 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->singleton(LoggerInterface::class, Logger::class);
         $this->singleton(ClockInterface::class, fn() => new Clock());
         $this->singleton(Psr17Factory::class);
-        $this->instance(ContainerInterface::class, $this);
 
         $this->singleton(QueueManager::class, fn() => new QueueManager($this));
         $this->bind(
@@ -201,12 +202,6 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->alias('gate', Gate::class);
         $this->alias('auth', Auth::class);
         $this->alias('vite', Vite::class);
-
-        $this->instance(ApplicationContract::class, $this);
-        $this->instance(\Spark\Contracts\ContainerContract::class, $this);
-
-        $this->singleton(Session::class);
-        $this->alias(\Spark\Http\Session::class, Session::class);
 
         // Contracts resolve the current service, including request replacements.
         $this->bind(\Spark\Translator\Contracts\TranslatorContract::class, fn() => $this->get(Translator::class));

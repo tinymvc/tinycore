@@ -7,7 +7,7 @@ use Spark\Console\Console;
 use Spark\Database\Migration;
 use Spark\Foundation\Console\PrimaryCommandsHandler;
 use Spark\Foundation\Console\MakeStubCommandsHandler;
-use Spark\Foundation\Console\VendorPublisher;
+use Spark\Foundation\Console\PublishManager;
 use Spark\Utils\Tinker;
 
 /**
@@ -30,7 +30,7 @@ class ConsoleServiceProvider extends ServiceProvider
     {
         // Register the migration singleton
         $this->app->singleton(Migration::class);
-        $this->app->singleton(VendorPublisher::class);
+        $this->app->singleton(PublishManager::class);
 
         $this->app->alias('console', Console::class);
         $this->app->alias('commands', Commands::class);

@@ -459,11 +459,11 @@ class PrimaryCommandsHandler
      * Handles the "vendor:publish" command.
      *
      * @param array $args The arguments passed to the command.
-     * @param VendorPublisher $publisher The vendor publisher instance.
+     * @param PublishManager $publisher The vendor publisher instance.
      * @return void
      * @throws \InvalidArgumentException
      */
-    public function vendorPublish(array $args, VendorPublisher $publisher): void
+    public function vendorPublish(array $args, PublishManager $publisher): void
     {
         $rawProvider = $args['provider'] ?? null;
         $rawTag = $args['tag'] ?? null;

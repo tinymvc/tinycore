@@ -4,7 +4,7 @@ namespace Spark\Foundation\Providers;
 
 use Spark\Contracts\ServiceProviderContract;
 use Spark\Foundation\Application;
-use Spark\Foundation\Console\VendorPublisher;
+use Spark\Foundation\Console\PublishManager;
 
 /**
  * Base service provider class.
@@ -38,9 +38,11 @@ abstract class ServiceProvider implements ServiceProviderContract
      */
     protected function publishes(array $paths, array|string|null $groups = null): void
     {
-        if ($this->app->bound(VendorPublisher::class)) {
-            $this->app->get(VendorPublisher::class)->register(static::class, $groups, $paths);
+        if (!$this->app->bound(PublishManager::class)) {
+            return;
         }
+
+        $this->app->get(PublishManager::class)->register(static::class, $groups, $paths);
     }
 
     /**

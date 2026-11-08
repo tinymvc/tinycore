@@ -70,7 +70,7 @@ interface ContainerContract extends ContainerInterface
      *
      * @param object $provider The service provider to register.
      */
-    public function addServiceProvider($provider): void;
+    public function addServiceProvider(object $provider): void;
 
     /**
      * Boots all registered service providers.

@@ -2,6 +2,7 @@
 
 namespace Spark;
 
+use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionNamedType;
@@ -48,7 +49,7 @@ class Container implements ContainerContract, \ArrayAccess
     /**
      * Registered service providers.
      *
-     * @var array<string, callable>
+     * @var list<object>
      */
     private array $providers = [];
 
@@ -94,6 +95,9 @@ class Container implements ContainerContract, \ArrayAccess
      */
     private array $buildStack = [];
 
+    /** @var array<string, true> Service IDs currently being resolved. */
+    private array $resolving = [];
+
     /**
      * Bind a class or interface to a concrete implementation.
      *
@@ -106,7 +110,7 @@ class Container implements ContainerContract, \ArrayAccess
     public function bind(string $abstract, callable|string|null $concrete = null): void
     {
         $this->bindings[$abstract] = $concrete ?? $abstract;
-        unset($this->singletons[$abstract], $this->instances[$abstract]);
+        unset($this->aliases[$abstract], $this->singletons[$abstract], $this->instances[$abstract]);
     }
 
     /**
@@ -178,10 +182,10 @@ class Container implements ContainerContract, \ArrayAccess
      *
      * @param object $provider The service provider to register.
      */
-    public function addServiceProvider($provider): void
+    public function addServiceProvider(object $provider): void
     {
-        $provider->register($this); // Register bindings
-        $this->providers[] = $provider; // Track the provider
+        $this->callProviderMethod($provider, 'register');
+        $this->providers[] = $provider;
     }
 
     /**
@@ -205,21 +209,7 @@ class Container implements ContainerContract, \ArrayAccess
         }
 
         try {
-            if (isset($this->singletons[$abstract])) {
-                if (!array_key_exists($abstract, $this->instances)) {
-                    $this->instances[$abstract] = $this->build(
-                        $this->bindings[$abstract] ?? $abstract
-                    );
-                }
-                return $this->instances[$abstract];
-            }
-
-            // If not a singleton, resolve dynamically
-            if (!isset($this->bindings[$abstract])) {
-                return $this->build($abstract);
-            }
-
-            return $this->build($this->bindings[$abstract]);
+            return $this->resolve($abstract);
         } catch (\Psr\Container\NotFoundExceptionInterface $exception) {
             // This entry exists; a missing dependency is a construction failure.
             throw new BuildServiceException("Unable to resolve [$abstract].", previous: $exception);
@@ -235,26 +225,52 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function make(string $abstract, array $parameters = []): mixed
     {
-        $abstract = $this->resolveAlias($abstract);
+        return $parameters === []
+            ? $this->get($abstract)
+            : $this->resolve($this->resolveAlias($abstract), $parameters);
+    }
 
-        if ($parameters !== []) {
-            $isSingleton = isset($this->singletons[$abstract]);
+    /**
+     * Resolve a binding with optional parameters.
+     *
+     * This method is responsible for resolving a binding from the container,
+     * taking into account any parameters that may be provided for construction.
+     *
+     * @param string $abstract The abstract name of the class or interface.
+     * @param array $parameters Additional parameters for construction (optional).
+     *
+     * @return mixed The resolved instance.
+     *
+     * @throws BuildServiceException If a circular dependency is detected.
+     */
+    public function resolve(string $abstract, array $parameters = []): mixed
+    {
+        if (array_key_exists($abstract, $this->instances)) {
+            return $this->instances[$abstract];
+        }
 
-            if ($isSingleton && array_key_exists($abstract, $this->instances)) {
-                return $this->instances[$abstract];
+        if (isset($this->resolving[$abstract])) {
+            throw new BuildServiceException("Circular dependency detected while resolving [$abstract].");
+        }
+
+        $this->resolving[$abstract] = true;
+        try {
+            $concrete = $this->bindings[$abstract] ?? $abstract;
+            // A concrete class aliased back to this ID is the implementation to construct.
+            if (is_string($concrete) && !is_callable($concrete) && $this->resolveAlias($concrete) !== $abstract) {
+                $instance = $this->make($concrete, $parameters);
+            } else {
+                $instance = $this->build($concrete, $parameters);
             }
 
-            $concrete = $this->bindings[$abstract] ?? $abstract;
-            $instance = $this->build($concrete, $parameters);
-
-            if ($isSingleton) {
+            if (isset($this->singletons[$abstract])) {
                 $this->instances[$abstract] = $instance;
             }
 
             return $instance;
+        } finally {
+            unset($this->resolving[$abstract]);
         }
-
-        return $this->get($abstract);
     }
 
     /**
@@ -429,10 +445,10 @@ class Container implements ContainerContract, \ArrayAccess
 
             // Follow the same first-class-type resolution used by resolveParameter().
             if (is_a($type->getName(), Model::class, true)) {
-                $model = $this->resolveParameter($param);
+                $model = $this->resolveParameter($param, useDefault: false);
 
                 if ($model instanceof Model) {
-                    return $model::where($field ?? $model->getPrimaryKey(), $value)->firstOrFail();
+                    return $model->newQuery()->where($field ?? $model->getPrimaryKey(), $value)->firstOrFail();
                 }
             }
 
@@ -628,10 +644,27 @@ class Container implements ContainerContract, \ArrayAccess
     public function bootServiceProviders(): void
     {
         foreach ($this->providers as $provider) {
-            if (method_exists($provider, 'boot')) {
-                $provider->boot($this); // Call the boot method
-            }
+            $this->bootServiceProvider($provider);
         }
+    }
+
+    public function bootServiceProvider(object $provider): void
+    {
+        if (method_exists($provider, 'boot')) {
+            $this->callProviderMethod($provider, 'boot');
+        }
+    }
+
+    private function callProviderMethod(object $provider, string $method): void
+    {
+        $reflector = new ReflectionMethod($provider, $method);
+        $first = $reflector->getParameters()[0] ?? null;
+        // Older providers receive the container as their first untyped argument.
+        $parameters = $first && in_array((string) $first->getType(), ['', 'mixed', 'object', '?object'], true)
+            ? [$this]
+            : [];
+
+        $provider->$method(...$this->getReflectorDependencies($reflector, $parameters));
     }
 
     /**
@@ -663,6 +696,7 @@ class Container implements ContainerContract, \ArrayAccess
     {
         $this->bindings = [];
         $this->instances = [];
+        $this->singletons = [];
         $this->reflectionCache = [];
         $this->providers = [];
         $this->aliases = [];
@@ -783,47 +817,40 @@ class Container implements ContainerContract, \ArrayAccess
      *
      * @throws FailedToResolveParameterException If the parameter could not be resolved.
      */
-    private function resolveParameter(ReflectionParameter $param): mixed
+    private function resolveParameter(ReflectionParameter $param, bool $useDefault = true): mixed
     {
         $type = $param->getType();
 
-        if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-            $typeName = $type->getName();
+        $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
 
-            if (is_a($this, $typeName, true)) {
-                return $this;
+        foreach ($types as $candidate) {
+            if (!$candidate instanceof ReflectionNamedType || $candidate->isBuiltin()) {
+                continue;
             }
 
-            // Check for contextual binding
-            $concrete = $this->getContextualConcrete($typeName);
+            $name = $candidate->getName();
+            $concrete = $this->getContextualConcrete($name);
+
             if ($concrete !== null) {
-                return $this->build($concrete);
+                return is_string($concrete) && !is_callable($concrete)
+                    ? $this->get($concrete)
+                    : $this->build($concrete);
             }
 
-            return $this->get($typeName);
-        }
+            if (!$this->bound($name)) {
+                if ($this instanceof $name) {
+                    return $this;
+                }
 
-        if ($type instanceof ReflectionUnionType) {
-            // Handle union types (e.g., int|string)
-            foreach ($type->getTypes() as $unionType) {
-                if ($unionType instanceof ReflectionNamedType && !$unionType->isBuiltin()) {
-                    $typeName = $unionType->getName();
-                    if (is_a($this, $typeName, true)) {
-                        return $this;
-                    }
-
-                    // Check for contextual binding
-                    $concrete = $this->getContextualConcrete($typeName);
-                    if ($concrete !== null) {
-                        return $this->build($concrete);
-                    }
-
-                    return $this->get($typeName);
+                if ($useDefault && $param->isDefaultValueAvailable()) {
+                    continue;
                 }
             }
+
+            return $this->get($name);
         }
 
-        if ($param->isDefaultValueAvailable()) {
+        if ($useDefault && $param->isDefaultValueAvailable()) {
             return $param->getDefaultValue();
         }
 
