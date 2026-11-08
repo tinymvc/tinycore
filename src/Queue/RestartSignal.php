@@ -33,7 +33,8 @@ class RestartSignal
     public function request(): void
     {
         $directory = dirname($this->file);
-        if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
+
+        if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
             throw new RuntimeException('Cannot create Queue restart directory.');
         }
 
@@ -43,7 +44,12 @@ class RestartSignal
         }
         try {
             $token = bin2hex(random_bytes(16));
-            if (file_put_contents($temporary, $token) !== strlen($token) || !@rename($temporary, $this->file)) {
+
+            if (
+                file_put_contents($temporary, $token) !== strlen($token)
+                || !chmod($temporary, 0644)
+                || !@rename($temporary, $this->file)
+            ) {
                 throw new RuntimeException('Cannot write Queue restart marker.');
             }
         } finally {
