@@ -679,6 +679,7 @@ class Container implements ContainerContract, \ArrayAccess
         $this->aliases = [];
         $this->contextualBindings = [];
         $this->buildStack = [];
+        $this->resolving = [];
     }
 
     /**
