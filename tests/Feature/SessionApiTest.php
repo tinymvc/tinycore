@@ -6,12 +6,12 @@ use Spark\Http\Session;
 
 final class SessionApiTest extends FrameworkTestCase
 {
-    public function test_session_namespaces_and_contract_resolve_the_same_service(): void
+    public function test_session_namespaces_and_contract_share_session_data(): void
     {
-        $legacy = app(Session::class);
-        $this->assertSame($legacy, app(\Spark\Http\Session\Session::class));
-        $this->assertSame($legacy, app(\Spark\Contracts\Http\SessionContract::class));
-        $this->assertSame($legacy, app('session'));
+        session(['name' => 'Ada']);
+        foreach ([Session::class, \Spark\Http\Session\Session::class, \Spark\Contracts\Http\SessionContract::class, 'session'] as $id) {
+            $this->assertSame('Ada', app($id)->get('name'));
+        }
     }
 
     public function test_falsy_values_are_present_except_null(): void

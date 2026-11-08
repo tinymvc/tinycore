@@ -2,8 +2,16 @@
 
 require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
+use Spark\Foundation\Application;
+
 final class ApplicationBindingsTest extends FrameworkTestCase
 {
+    public function test_application_dependency_uses_the_current_instance(): void
+    {
+        $this->assertSame($this->app, app(Application::class));
+        $this->assertSame($this->app, $this->app->make(BindingTestConsumer::class)->app);
+    }
+
     public function test_contracts_share_lazy_services_and_follow_replacements(): void
     {
         $this->app->setConfig('queue.default', 'file');
@@ -21,8 +29,6 @@ final class ApplicationBindingsTest extends FrameworkTestCase
             $this->assertFalse($this->app->resolved($service));
             $this->assertSame($this->app->get($service), $this->app->get($contract));
         }
-        $this->assertSame($this->app, $this->app->get(Spark\Contracts\ApplicationContract::class));
-        $this->assertSame($this->app, $this->app->get(Spark\Contracts\ContainerContract::class));
 
         $incoming = Spark\Http\Request::fromPsrRequest(new Nyholm\Psr7\ServerRequest('GET', '/current'));
         $this->app->instance(Spark\Http\Request::class, $incoming);
@@ -31,5 +37,12 @@ final class ApplicationBindingsTest extends FrameworkTestCase
         $translator = new Spark\Translator\Translator();
         $this->app->bind(Spark\Translator\Contracts\TranslatorContract::class, fn() => $translator);
         $this->assertSame($translator, $this->app->get(Spark\Translator\Contracts\TranslatorContract::class));
+    }
+}
+
+final class BindingTestConsumer
+{
+    public function __construct(public Application $app)
+    {
     }
 }

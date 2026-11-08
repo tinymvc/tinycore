@@ -25,7 +25,9 @@ class CircularFixture
 
 class StaticCallbackFixture
 {
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     public static function value(DependencyFixture $dependency): string
     {
@@ -66,7 +68,7 @@ final class ContainerTest extends TestCase
         $container = new Container;
         $dependency = new DependencyFixture;
         $this->assertSame([$dependency, 'value'], $container->call(
-            fn (DependencyFixture $provided, string $label) => [$provided, $label],
+            fn(DependencyFixture $provided, string $label) => [$provided, $label],
             [$dependency, 'value'],
         ));
     }
@@ -74,7 +76,7 @@ final class ContainerTest extends TestCase
     public function test_variadic_arguments_expand_and_allow_an_empty_list(): void
     {
         $container = new Container;
-        $callback = fn (DependencyFixture $dependency, string ...$values) => $values;
+        $callback = fn(DependencyFixture $dependency, string ...$values) => $values;
         $this->assertSame([], $container->call($callback));
         $this->assertSame(['a', 'b'], $container->call($callback, ['a', 'b']));
         $this->assertSame(['a', 'b'], $container->call($callback, ['values' => ['a', 'b']]));
@@ -86,19 +88,25 @@ final class ContainerTest extends TestCase
         $container->singleton(DependencyFixture::class);
         $container->alias('dependency', DependencyFixture::class);
         $consumer = $container->get(ConsumerFixture::class);
+        $this->assertSame($consumer->dependency, $container->resolve('dependency'));
         $this->assertSame('default', $consumer->label);
         $this->assertSame($consumer->dependency, $container->get('dependency'));
         $container->forgetInstance(DependencyFixture::class);
         $this->assertNotSame($consumer->dependency, $container->get(DependencyFixture::class));
-        $container->bind('transient', fn () => new \stdClass);
+        $container->bind('transient', fn() => new \stdClass);
         $this->assertNotSame($container->get('transient'), $container->get('transient'));
-        $this->assertSame('injected', $container->call(fn (DependencyFixture $dependency, string $name) => $name, ['name' => 'injected']));
+        $this->assertSame('injected', $container->call(fn(DependencyFixture $dependency, string $name) => $name, ['name' => 'injected']));
     }
 
     public function test_circular_resolution_does_not_poison_later_resolutions(): void
     {
         $container = new Container;
-        $this->assertThrows(\Spark\Exceptions\Container\BuildServiceException::class, fn () => $container->get(CircularFixture::class));
+        $this->assertThrows(\Spark\Exceptions\Container\BuildServiceException::class, fn() => $container->get(CircularFixture::class));
+        $container->bind('one', 'two');
+        $container->bind('two', 'one');
+        $this->assertThrows(\Spark\Exceptions\Container\BuildServiceException::class, fn() => $container->get('one'));
+        $container->instance('two', 'recovered');
+        $this->assertSame('recovered', $container->get('one'));
         $this->assertTrue($container->get(DependencyFixture::class) instanceof DependencyFixture);
     }
 }

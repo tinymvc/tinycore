@@ -108,7 +108,7 @@ final class QueueManagerTest extends FrameworkTestCase
         // Restart signaling requires neither a working queue nor a cache transport.
         $this->app->setConfig('cache.default', 'missing');
         Queue::restart();
-        $this->assertSame(32, strlen(file_get_contents(storage_dir('queue.restart'))));
+        $this->assertSame(32, strlen(file_get_contents(storage_dir('framework/queue.restart'))));
         $this->app->setConfig('queue.connections.broken', false);
         $this->assertThrows(InvalidArgumentException::class, fn() => Queue::connection('broken'));
     }

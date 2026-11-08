@@ -59,10 +59,10 @@ These are application-defined types; the factory must match the actual construct
 
 ## Standard service interfaces
 
-- Native contracts for Queue, Translator, DB, Blade, Hash, Events, Router, Middleware, and the registered HTTP services resolve their existing shared instances. `ApplicationContract` and `ContainerContract` resolve the application.
+- Inject `Spark\Foundation\Application` for the current application. Service providers use `$this->app` in their parameterless `register()` and `boot()` methods.
 - Contract bindings are lazy and follow replacement request/service instances; they do not create a second singleton. Rebind a concrete service to replace its helper/facade access too, or bind only its contract to replace that interface's consumers.
 - HTTP service registrations and short aliases (`request`, `response`, `session`, `auth`, `gate`, `inputErrors`, `vite`) exist in CLI as well as web. Registration neither captures a request nor starts a session; services are built only when resolved. Native session startup remains SAPI-dependent, and PSR hosts own session/transport integration.
-- `ContainerContract` extends PSR-11. `has()` follows aliases; resolving a missing entry throws `Psr\Container\NotFoundExceptionInterface`, and container resolution exceptions implement the matching PSR-11 interfaces. `app(Psr\Container\ContainerInterface::class)` returns the current application.
+- `ContainerContract` extends PSR-11. `has()` follows aliases; resolving a missing entry throws `Psr\Container\NotFoundExceptionInterface`, and container resolution exceptions implement the matching PSR-11 interfaces.
 - **Logging:** inject `Psr\Log\LoggerInterface`. The default `Spark\Logger` writes through Tracer, supports `{name}` placeholders, and rejects unknown levels. `Spark\Facades\Log` forwards to that binding, so replacing the PSR logger also replaces facade logging. `Spark\Contracts\LoggerInterface` is an instance interface extending PSR-3; call the facade for static logging.
 - **Clock:** inject `Psr\Clock\ClockInterface` or resolve `app('clock')` for a `DateTimeImmutable` in the configured application timezone. Use `new Spark\Support\Clock('UTC')` for an explicit timezone. Carbon exports independent dates through `toDateTime()` and `toDateTimeImmutable()`.
 

@@ -56,7 +56,7 @@ final class PsrStandardsTest extends \FrameworkTestCase
         $container->singleton('shared', fn() => new \stdClass());
         $this->assertTrue($container->has('shared'));
         $this->assertSame($container->get('shared'), $container->get('shared'));
-        $this->assertSame(app(), app(ContainerInterface::class));
+        $this->assertInstanceOf(ContainerInterface::class, app());
         $this->assertSame(app('events'), app(EventDispatcherInterface::class));
         $this->assertInstanceOf(CacheInterface::class, app(CacheInterface::class));
         $this->assertSame(app(ClockInterface::class), app(Clock::class));

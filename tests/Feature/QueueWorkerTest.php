@@ -89,10 +89,10 @@ final class QueueWorkerTest extends FrameworkTestCase
         ob_start();
         try {
             (new $handler())->$method(app(Spark\Queue\QueueManager::class));
-            $first = file_get_contents(storage_dir('queue.restart'));
+            $first = file_get_contents(storage_dir('framework/queue.restart'));
             (new $handler())->$method(app(Spark\Queue\QueueManager::class));
             $this->assertTrue(is_string($first));
-            $this->assertTrue($first !== file_get_contents(storage_dir('queue.restart')));
+            $this->assertTrue($first !== file_get_contents(storage_dir('framework/queue.restart')));
             $path = $this->storagePath . '/fresh-worker';
             $queue->push(new Job('file_put_contents', [$path, 'done']));
             $queue->work(once: true, sleep: 0);

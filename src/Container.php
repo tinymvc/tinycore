@@ -2,7 +2,7 @@
 
 namespace Spark;
 
-use Psr\Container\ContainerInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use ReflectionClass;
 use ReflectionFunction;
 use ReflectionNamedType;
@@ -184,7 +184,7 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function addServiceProvider(object $provider): void
     {
-        $this->callProviderMethod($provider, 'register');
+        $provider->register();
         $this->providers[] = $provider;
     }
 
@@ -201,19 +201,7 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function get(string $abstract): mixed
     {
-        // Resolve aliases
-        $abstract = $this->resolveAlias($abstract);
-
-        if (!$this->has($abstract)) {
-            throw new ClassDoesNotExistsException("Entry [$abstract] does not exist.");
-        }
-
-        try {
-            return $this->resolve($abstract);
-        } catch (\Psr\Container\NotFoundExceptionInterface $exception) {
-            // This entry exists; a missing dependency is a construction failure.
-            throw new BuildServiceException("Unable to resolve [$abstract].", previous: $exception);
-        }
+        return $this->resolve($abstract);
     }
 
     /**
@@ -225,9 +213,7 @@ class Container implements ContainerContract, \ArrayAccess
      */
     public function make(string $abstract, array $parameters = []): mixed
     {
-        return $parameters === []
-            ? $this->get($abstract)
-            : $this->resolve($this->resolveAlias($abstract), $parameters);
+        return $this->resolve($abstract, $parameters);
     }
 
     /**
@@ -243,10 +229,16 @@ class Container implements ContainerContract, \ArrayAccess
      *
      * @throws BuildServiceException If a circular dependency is detected.
      */
-    public function resolve(string $abstract, array $parameters = []): mixed
+    protected function resolve(string $abstract, array $parameters = []): mixed
     {
+        $abstract = $this->resolveAlias($abstract);
+
         if (array_key_exists($abstract, $this->instances)) {
             return $this->instances[$abstract];
+        }
+
+        if (!$this->has($abstract)) {
+            throw new ClassDoesNotExistsException("Entry [$abstract] does not exist.");
         }
 
         if (isset($this->resolving[$abstract])) {
@@ -258,7 +250,7 @@ class Container implements ContainerContract, \ArrayAccess
             $concrete = $this->bindings[$abstract] ?? $abstract;
             // A concrete class aliased back to this ID is the implementation to construct.
             if (is_string($concrete) && !is_callable($concrete) && $this->resolveAlias($concrete) !== $abstract) {
-                $instance = $this->make($concrete, $parameters);
+                $instance = $this->resolve($concrete, $parameters);
             } else {
                 $instance = $this->build($concrete, $parameters);
             }
@@ -268,6 +260,8 @@ class Container implements ContainerContract, \ArrayAccess
             }
 
             return $instance;
+        } catch (NotFoundExceptionInterface $exception) {
+            throw new BuildServiceException("Unable to resolve [$abstract].", previous: $exception);
         } finally {
             unset($this->resolving[$abstract]);
         }
@@ -644,27 +638,10 @@ class Container implements ContainerContract, \ArrayAccess
     public function bootServiceProviders(): void
     {
         foreach ($this->providers as $provider) {
-            $this->bootServiceProvider($provider);
+            if (method_exists($provider, 'boot')) {
+                $provider->boot();
+            }
         }
-    }
-
-    public function bootServiceProvider(object $provider): void
-    {
-        if (method_exists($provider, 'boot')) {
-            $this->callProviderMethod($provider, 'boot');
-        }
-    }
-
-    private function callProviderMethod(object $provider, string $method): void
-    {
-        $reflector = new ReflectionMethod($provider, $method);
-        $first = $reflector->getParameters()[0] ?? null;
-        // Older providers receive the container as their first untyped argument.
-        $parameters = $first && in_array((string) $first->getType(), ['', 'mixed', 'object', '?object'], true)
-            ? [$this]
-            : [];
-
-        $provider->$method(...$this->getReflectorDependencies($reflector, $parameters));
     }
 
     /**
@@ -837,14 +814,8 @@ class Container implements ContainerContract, \ArrayAccess
                     : $this->build($concrete);
             }
 
-            if (!$this->bound($name)) {
-                if ($this instanceof $name) {
-                    return $this;
-                }
-
-                if ($useDefault && $param->isDefaultValueAvailable()) {
-                    continue;
-                }
+            if ($useDefault && $param->isDefaultValueAvailable() && !$this->bound($name)) {
+                continue;
             }
 
             return $this->get($name);

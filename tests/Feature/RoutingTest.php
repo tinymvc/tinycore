@@ -15,6 +15,24 @@ final class RoutingTest extends FrameworkTestCase
         $this->get('/items/7/')->assertExactJson(['id' => '7']);
     }
 
+    public function test_model_binding_uses_the_resolved_models_table_prefix(): void
+    {
+        $db = $this->app->get(\Spark\Database\DB::class);
+        foreach (['resource_models', 'tenant_resource_models'] as $table) {
+            $db->query("CREATE TABLE $table (id INTEGER PRIMARY KEY, slug TEXT, name TEXT)");
+            $db->query("INSERT INTO $table VALUES (1, 'example', '$table')");
+        }
+
+        $model = (new CoreFixtureResourceModel())->setQueryContext(new \Spark\Database\ModelContext($db, 'tenant_'));
+        $this->app->instance(CoreFixtureResourceModel::class, $model);
+        Route::get('/models/{model:slug}', fn(?CoreFixtureResourceModel $model = null) => $model?->name);
+
+        $this->get('/models/example')->assertOk()->assertContent('tenant_resource_models');
+        $this->get('/models/missing')->assertNotFound();
+        $this->app->forget(CoreFixtureResourceModel::class);
+        $this->get('/models/example')->assertOk()->assertContent('resource_models');
+    }
+
     public function test_static_route_characters_are_literal(): void
     {
         Route::get('/file.json', fn() => 'literal');

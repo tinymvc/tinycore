@@ -3,7 +3,6 @@
 namespace Spark\Foundation\Console;
 
 use FilesystemIterator;
-use ReflectionClass;
 use RuntimeException;
 use Spark\Console\Prompt;
 use Spark\Foundation\Application;
@@ -12,7 +11,6 @@ use function array_keys;
 use function array_replace;
 use function array_values;
 use function bin2hex;
-use function class_exists;
 use function copy;
 use function dirname;
 use function is_dir;
@@ -138,26 +136,19 @@ class PublishManager
     private function bootProviderIfPossible(string $providerClass): void
     {
         $app = Application::$app;
-        if ($app === null || !class_exists($providerClass)) {
+        if ($app === null || !method_exists($providerClass, 'register')) {
             return;
         }
 
         try {
-            $ref = new ReflectionClass($providerClass);
-            if ($ref->isAbstract() || !$ref->isInstantiable()) {
-                return;
-            }
+            $provider = new $providerClass();
+            $app->addServiceProvider($provider);
 
-            $instance = new $providerClass();
-
-            if ($instance instanceof ServiceProviderContract || method_exists($instance, 'register')) {
-                $app->addServiceProvider($instance);
-                if (method_exists($instance, 'boot')) {
-                    $app->boot();
-                }
+            if (method_exists($provider, 'boot')) {
+                $provider->boot();
             }
-        } catch (Throwable) {
-            // Uninstantiable or failing provider falls through to the normal unmatched exception.
+        } catch (\Throwable) {
+            // Let publish() report that no matching resources were found.
         }
     }
 
