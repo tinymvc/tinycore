@@ -11,6 +11,7 @@ use Spark\Http\Routing\Router;
 use Spark\Utils\File;
 use function count;
 use function is_string;
+use function sprintf;
 use function strlen;
 
 /**
@@ -47,11 +48,13 @@ class PrimaryCommandsHandler
         }
 
         Prompt::info("Server running on [http://$host:$port].");
-        Prompt::comment('  Press Ctrl+C to stop the server.');
+        Prompt::comment(
+            sprintf('  Press %s+C to stop the server.', PHP_OS_FAMILY === 'Windows' ? 'Ctrl' : '⌘'),
+        );
         Prompt::newline();
 
         // Use the current PHP binary to avoid shell wrapper quirks on Windows.
-        Process::command([PHP_BINARY, '-S', "localhost:$port", '-t', 'public'])
+        Process::command([PHP_BINARY, '-S', "$host:$port", '-t', 'public'])
             ->path(root_dir())
             ->forever()
             ->tty()
