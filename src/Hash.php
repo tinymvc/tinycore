@@ -177,7 +177,7 @@ class Hash implements HashContract
      * @param string $userString The user-provided string to compare.
      * @return bool True if the hashes match, false otherwise.
      */
-    public function equals(string $knownHash, string $userString): bool
+    public static function equals(string $knownHash, string $userString): bool
     {
         return hash_equals($knownHash, $userString);
     }
@@ -253,7 +253,7 @@ class Hash implements HashContract
      * @param string $value The string to check.
      * @return bool True if the string appears to be a hashed password, false otherwise.
      */
-    public function isHashed(string $value): bool
+    public static function isHashed(string $value): bool
     {
         // Check if the string is empty or too short to be a valid hash
         if (empty($value) || strlen($value) < 60) {
@@ -283,7 +283,7 @@ class Hash implements HashContract
      * @param string $hashedPassword The hashed password to get information about.
      * @return array An associative array containing information about the hashed password.
      */
-    public function passwordInfo(string $hashedPassword): array
+    public static function passwordInfo(string $hashedPassword): array
     {
         return password_get_info($hashedPassword);
     }
@@ -412,7 +412,7 @@ class Hash implements HashContract
      * @param int $length The number of bytes to generate (result will be $length * 2 characters).
      * @return string The generated random hex string.
      */
-    public function random(int $length = 32): string
+    public static function random(int $length = 32): string
     {
         return bin2hex(random_bytes($length));
     }
@@ -423,7 +423,7 @@ class Hash implements HashContract
      * @param int $length The number of bytes to generate.
      * @return string The generated random bytes.
      */
-    public function randomBytes(int $length = 32): string
+    public static function randomBytes(int $length = 32): string
     {
         return random_bytes($length);
     }
@@ -436,7 +436,7 @@ class Hash implements HashContract
      * @param string $algo The hashing algorithm (default: sha256).
      * @return string The hash value.
      */
-    public function hash(string $value, string $algo = 'sha256'): string
+    public static function hash(string $value, string $algo = 'sha256'): string
     {
         return hash($algo, $value);
     }
@@ -577,7 +577,7 @@ class Hash implements HashContract
      *
      * @return string The generated UUID.
      */
-    public function uuid(): string
+    public static function uuid(): string
     {
         $data = random_bytes(16);
 
@@ -586,7 +586,69 @@ class Hash implements HashContract
         // Set bits 6-7 to 10
         $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
 
-        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+        return self::formatUuid($data);
+    }
+
+    /**
+     * Generate a version 7 UUID.
+     *
+     * @return string The generated UUID.
+     */
+    public static function uuid7(): string
+    {
+        // 48-bit big-endian unix ms timestamp + 80 random bits (needs 64-bit PHP)
+        $data = substr(pack('J', (int) (microtime(true) * 1000)), 2) . random_bytes(10);
+
+        $data[6] = chr(ord($data[6]) & 0x0f | 0x70); // version 7
+        $data[8] = chr(ord($data[8]) & 0x3f | 0x80); // variant 10
+
+        return self::formatUuid($data);
+    }
+
+    /**
+     * Generate a version 5 UUID based on a namespace and name.
+     *
+     * @param string $namespace The namespace UUID (must be valid).
+     * @param string $name The name from which to generate the UUID.
+     * @return string The generated UUID.
+     * @throws \InvalidArgumentException If the namespace is not a valid UUID.
+     */
+    public static function uuid5(string $namespace, string $name): string
+    {
+        if (!self::isUuid($namespace)) {
+            throw new \InvalidArgumentException("Invalid namespace UUID: $namespace");
+        }
+
+        $hash = sha1(hex2bin(str_replace('-', '', $namespace)) . $name, true);
+        $data = substr($hash, 0, 16);
+
+        $data[6] = chr(ord($data[6]) & 0x0f | 0x50); // version 5
+        $data[8] = chr(ord($data[8]) & 0x3f | 0x80); // variant 10
+
+        return self::formatUuid($data);
+    }
+
+    /**
+     * Validate if a string is a valid UUID.
+     *
+     * @param string $value The string to validate.
+     * @param int|null $version Optional UUID version to validate against (1-8).
+     * @return bool True if valid UUID, false otherwise.
+     */
+    public static function isUuid(string $value, ?int $version = null): bool
+    {
+        $v = $version !== null ? (string) $version : '[1-8]';
+
+        return (bool) preg_match(
+            "/^[0-9a-f]{8}-[0-9a-f]{4}-{$v}[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iD",
+            $value
+        );
+    }
+
+    /** Format a binary string as a UUID. */
+    private static function formatUuid(string $bytes): string
+    {
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
     }
 
     /**

@@ -164,7 +164,7 @@ class FileStorage implements QueueStorageContract
                 // Ordinary push() permits duplicates; removing the indexed one may leave others.
                 foreach ($this->eachRow(self::STATES, [$queue]) as [, , $row]) {
                     if ($row !== null && $this->fingerprint($row['queue'], $row['payload'], $row['repeat'] ?? null) === $fingerprint) {
-                        $this->writeFingerprint($fingerprint, (int) $row['id']);
+                        $this->writeFingerprint($fingerprint, (string) $row['id']);
 
                         return false;
                     }
@@ -218,7 +218,7 @@ class FileStorage implements QueueStorageContract
         });
     }
 
-    public function removeJobById(int $id): bool
+    public function removeJobById(string $id): bool
     {
         return (bool) $this->guarded(function () use ($id) {
             $path = $this->locate($id);
@@ -312,7 +312,7 @@ class FileStorage implements QueueStorageContract
         });
     }
 
-    public function updateJobStatus(int $jobId, string $status, int $attempts): void
+    public function updateJobStatus(string $jobId, string $status, int $attempts): void
     {
         $this->guarded(function () use ($jobId, $status, $attempts) {
             $path = $this->locate($jobId);
@@ -343,17 +343,17 @@ class FileStorage implements QueueStorageContract
         });
     }
 
-    public function rescheduleJob(int $jobId, Carbon $nextRun): void
+    public function rescheduleJob(string $jobId, Carbon $nextRun): void
     {
         $this->reschedule($jobId, $nextRun, 0);
     }
 
-    public function retryJob(int $jobId, Carbon $retryTime, int $attempts): void
+    public function retryJob(string $jobId, Carbon $retryTime, int $attempts): void
     {
         $this->reschedule($jobId, $retryTime, $attempts);
     }
 
-    public function markJobAsFailed(int $jobId, Throwable $exception, int $attempts): void
+    public function markJobAsFailed(string $jobId, Throwable $exception, int $attempts): void
     {
         $stackTrace = $exception->getPrevious()?->getTraceAsString() ?? $exception->getTraceAsString();
         $text = sprintf("%s: %s\nStack trace:\n%s", get_class($exception), $exception->getMessage(), $stackTrace);
@@ -446,7 +446,7 @@ class FileStorage implements QueueStorageContract
                         continue;
                     }
 
-                    $collected[] = [(int) ($row['scheduled_ts'] ?? 0), (int) $row['id'], $jobRow];
+                    $collected[] = [(int) ($row['scheduled_ts'] ?? 0), (string) $row['id'], $jobRow];
                 }
 
                 return $collected;
@@ -471,7 +471,7 @@ class FileStorage implements QueueStorageContract
 
                 foreach ($this->eachRow(['failed'], null) as [, , $row]) {
                     if ($row !== null) {
-                        $collected[] = [(int) ($row['failed_ts'] ?? 0), (int) $row['id'], $this->jobRow('failed', $row)];
+                        $collected[] = [(int) ($row['failed_ts'] ?? 0), (string) $row['id'], $this->jobRow('failed', $row)];
                     }
                 }
 
@@ -490,12 +490,16 @@ class FileStorage implements QueueStorageContract
         }
     }
 
-    public function retryFailedJobs(): void
+    public function retryFailedJobs(?string $id = null): void
     {
-        $this->guarded(function () {
+        $this->guarded(function () use ($id) {
             foreach ($this->eachRow(['failed'], null) as [, $path, $row]) {
                 if ($row === null) {
                     $this->quarantine($path);
+                    continue;
+                }
+
+                if ($id !== null && (string) $row['id'] !== (string) $id) {
                     continue;
                 }
 
@@ -516,9 +520,10 @@ class FileStorage implements QueueStorageContract
      | Internals: state changes (call only while the guard is held)
      | ------------------------------------------------------------------ */
 
-    private function insert(JobContract $job, string $queue, string $payload): int
+    private function insert(JobContract $job, string $queue, string $payload): string
     {
-        $id = $this->nextId();
+        $id = \Spark\Hash::uuid7();
+        $job->setId($id);
         $scheduled = $job->getScheduledTime();
         $repeat = $job->isRepeated() ? $job->getRepeat() : null;
 
@@ -548,7 +553,7 @@ class FileStorage implements QueueStorageContract
         return $id;
     }
 
-    private function reschedule(int $jobId, Carbon $time, int $attempts): void
+    private function reschedule(string $jobId, Carbon $time, int $attempts): void
     {
         $this->guarded(function () use ($jobId, $time, $attempts) {
             $path = $this->locate($jobId);
@@ -578,7 +583,7 @@ class FileStorage implements QueueStorageContract
         $this->writeRow($path, $row);
 
         $target = $this->dir($state, (string) $row['queue']) . DIRECTORY_SEPARATOR
-            . $this->fileName((int) $row['scheduled_ts'], (int) $row['id']);
+            . $this->fileName((int) $row['scheduled_ts'], (string) $row['id']);
 
         if ($target !== $path) {
             $this->ensureDirectory(dirname($target));
@@ -588,7 +593,7 @@ class FileStorage implements QueueStorageContract
             }
         }
 
-        $this->paths[(int) $row['id']] = $target;
+        $this->paths[(string) $row['id']] = $target;
 
         return $target;
     }
@@ -603,7 +608,7 @@ class FileStorage implements QueueStorageContract
             return;
         }
 
-        unset($this->paths[(int) $row['id']]);
+        unset($this->paths[(string) $row['id']]);
 
         $fingerprint = $this->fingerprint(
             (string) $row['queue'],
@@ -612,7 +617,7 @@ class FileStorage implements QueueStorageContract
         );
 
         // Only drop the fingerprint if it still points at this job.
-        if ($this->readFingerprint($fingerprint) === (int) $row['id']) {
+        if ($this->readFingerprint($fingerprint) === (string) $row['id']) {
             @unlink($this->root . DIRECTORY_SEPARATOR . 'fp' . DIRECTORY_SEPARATOR . $fingerprint);
         }
     }
@@ -647,7 +652,9 @@ class FileStorage implements QueueStorageContract
 
         foreach ($this->eachFile(self::STATES, null) as [, $path]) {
             $key = $this->parseName(basename($path));
-            $key !== null && $highest = max($highest, $key[1]);
+            if ($key !== null && ctype_digit($key[1])) {
+                $highest = max($highest, (int) $key[1]);
+            }
         }
 
         return $highest;
@@ -657,7 +664,7 @@ class FileStorage implements QueueStorageContract
      | Internals: lookups
      | ------------------------------------------------------------------ */
 
-    private function locate(int $id): ?string
+    private function locate(string $id): ?string
     {
         $cached = $this->paths[$id] ?? null;
         if ($cached !== null && is_file($cached)) {
@@ -665,10 +672,11 @@ class FileStorage implements QueueStorageContract
         }
 
         unset($this->paths[$id]);
-        $suffix = sprintf('-%012d%s', $id, self::JOB_EXT);
+        $suffix = '-' . $id . self::JOB_EXT;
+        $legacySuffix = ctype_digit($id) ? sprintf('-%012d%s', (int) $id, self::JOB_EXT) : null;
 
         foreach ($this->eachFile(['active', 'pending', 'failed'], null) as [, $path]) {
-            if (str_ends_with($path, $suffix)) {
+            if (str_ends_with($path, $suffix) || ($legacySuffix !== null && str_ends_with($path, $legacySuffix))) {
                 return $this->paths[$id] = $path;
             }
         }
@@ -723,7 +731,7 @@ class FileStorage implements QueueStorageContract
         };
 
         return [
-            'id' => (int) $row['id'],
+            'id' => (string) $row['id'],
             'payload' => $row['payload'] ?? '{}',
             'queue' => $row['queue'] ?? 'default',
             'scheduled_time' => $row['scheduled_time'] ?? null,
@@ -734,7 +742,7 @@ class FileStorage implements QueueStorageContract
             'reserved_at' => $row['reserved_at'] ?? null,
             'failed_at' => $row['failed_at'] ?? null,
             'exception' => $row['exception'] ?? null,
-            'failed_job_id' => $state === 'failed' ? (int) $row['id'] : null,
+            'failed_job_id' => $state === 'failed' ? (string) $row['id'] : null,
         ];
     }
 
@@ -747,14 +755,14 @@ class FileStorage implements QueueStorageContract
         return sha1($queue . "\0" . $payload . "\0" . ($repeat ?? ''));
     }
 
-    private function readFingerprint(string $fingerprint): ?int
+    private function readFingerprint(string $fingerprint): ?string
     {
         $raw = @file_get_contents($this->root . DIRECTORY_SEPARATOR . 'fp' . DIRECTORY_SEPARATOR . $fingerprint);
 
-        return is_string($raw) && ctype_digit(trim($raw)) ? (int) trim($raw) : null;
+        return is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
     }
 
-    private function writeFingerprint(string $fingerprint, int $id): void
+    private function writeFingerprint(string $fingerprint, string $id): void
     {
         $this->writeAtomic($this->root . DIRECTORY_SEPARATOR . 'fp' . DIRECTORY_SEPARATOR . $fingerprint, (string) $id);
     }
@@ -913,21 +921,21 @@ class FileStorage implements QueueStorageContract
         return basename(dirname(dirname($path)));
     }
 
-    private function fileName(int $scheduledTs, int $id): string
+    private function fileName(int $scheduledTs, string $id): string
     {
-        return sprintf('%012d-%012d%s', max(0, $scheduledTs), $id, self::JOB_EXT);
+        return sprintf('%012d-%s%s', max(0, $scheduledTs), $id, self::JOB_EXT);
     }
 
     /**
-     * @return null|array{0: int, 1: int} [scheduled timestamp, id]
+     * @return null|array{0: int, 1: string} [scheduled timestamp, id]
      */
     private function parseName(string $file): ?array
     {
-        if (preg_match('/^(\d{12})-(\d{12})\.job$/', $file, $m) !== 1) {
+        if (preg_match('/^(\d{12})-([a-zA-Z0-9_\-]+)\.job$/', $file, $m) !== 1) {
             return null;
         }
 
-        return [(int) $m[1], (int) $m[2]];
+        return [(int) $m[1], (string) $m[2]];
     }
 
     /**

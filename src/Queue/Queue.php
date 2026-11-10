@@ -8,6 +8,7 @@ use Spark\Queue\Contracts\QueueContract;
 use Spark\Queue\Storage\{RedisStorage, DatabaseStorage, FileStorage};
 use Spark\Support\Traits\Macroable;
 use Spark\Telemetry;
+use function count;
 use function implode;
 use function in_array;
 use function is_array;
@@ -97,10 +98,10 @@ class Queue implements QueueContract
     /**
      * Remove a job from the queue by its ID.
      *
-     * @param int $id The ID of the job to remove.
+     * @param string $id The ID of the job to remove.
      * @return bool True if the job was removed, false otherwise.
      */
-    public function removeJobById(int $id): bool
+    public function removeJobById(string $id): bool
     {
         return $this->storage->removeJobById($id);
     }
@@ -179,28 +180,22 @@ class Queue implements QueueContract
                 continue;
             }
 
-            $jobId = (int) $job->getId();
+            $jobId = (string) $job->getId();
             $attempts = (int) $job->getMetadata('attempts', 0);
             $maxTries = $tries;
             $retryDelay = $delay;
 
             $jobStartedAt = microtime(true);
             $label = $job->getDisplayName();
+            if (is_array($queue) && count($queue) > 1) {
+                $label .= ' · ' . $job->getMetadata('queue', 'default');
+            }
 
             try {
                 // Resolving retry properties may construct the application job and throw.
                 $maxTries = $job->getTries($tries);
                 $retryDelay = $job->getBackoff($delay, $attempts + 1);
-                $label = sprintf(
-                    '%s  #%d · %d/%d',
-                    $label,
-                    $jobId,
-                    $attempts + 1,
-                    $maxTries,
-                );
-                if (is_array($queue) && count($queue) > 1) {
-                    $label .= ' · ' . $job->getMetadata('queue', 'default');
-                }
+
                 $this->message($label, 'RUNNING');
                 $this->storage->updateJobStatus($jobId, 'processing', $attempts + 1);
 
@@ -251,7 +246,7 @@ class Queue implements QueueContract
                     $this->storage->markJobAsFailed($jobId, $e, $newAttempts);
                     $this->callFailedHandler($job, $e->getPrevious() ?? $e);
 
-                    $this->message(sprintf('Job #%d exhausted %d attempts.', $jobId, $newAttempts), 'ERROR');
+                    $this->message(sprintf('Job [%s] exhausted %d attempts.', $jobId, $newAttempts), 'ERROR');
                 } else {
                     $retryTime = now()->addSeconds($retryDelay);
                     $this->storage->retryJob($jobId, $retryTime, $newAttempts);
@@ -308,11 +303,13 @@ class Queue implements QueueContract
     }
 
     /**
-     * Retry all failed jobs in the queue.
+     * Retry failed jobs in the queue.
+     *
+     * @param string|null $id The ID of a specific job to retry, or null for all.
      */
-    public function retryFailedJobs(): void
+    public function retryFailedJobs(?string $id = null): void
     {
-        $this->storage->retryFailedJobs();
+        $this->storage->retryFailedJobs($id);
     }
 
     private function recoverStaleJobs(int $timeout = 3600): int
@@ -336,7 +333,7 @@ class Queue implements QueueContract
         } catch (\Throwable $failedException) {
             $this->message(
                 sprintf(
-                    'Failed handler for job #%s threw an exception: %s',
+                    'Failed handler for job [%s] threw an exception: %s',
                     $job->getId() ?? 'unknown',
                     $failedException->getMessage()
                 ),

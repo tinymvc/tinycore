@@ -84,7 +84,7 @@ final class QueueDriversTest extends DriverTestCase
             $this->assertCount(2, $queue->getJobs());
             $reserved = $queue->getNextJob('emails');
             $this->assertSame(['one'], $reserved->getParameters());
-            $id = (int) $reserved->getMetadata()['id'];
+            $id = (string) $reserved->getMetadata()['id'];
             $this->assertFalse($queue->getNextJob('emails'));
             $queue->updateJobStatus($id, 'processing', 1);
             $queue->retryJob($id, now()->subSeconds(1), 1);
@@ -94,7 +94,7 @@ final class QueueDriversTest extends DriverTestCase
             $this->assertCount(1, $queue->getFailedJobs());
             $queue->retryFailedJobs();
             $this->assertCount(0, $queue->getFailedJobs());
-            $this->assertSame($id, (int) $queue->getNextJob('emails')->getMetadata()['id']);
+            $this->assertSame($id, (string) $queue->getNextJob('emails')->getMetadata()['id']);
             $queue->rescheduleJob($id, now()->addHours(1));
             $this->assertFalse($queue->getNextJob('emails'));
             $this->assertTrue($queue->removeJobById($id));
@@ -104,7 +104,7 @@ final class QueueDriversTest extends DriverTestCase
             $queue->push($job);
             $queue->push($job);
             $duplicates = $queue->getJobs();
-            $queue->removeJobById((int) end($duplicates)->getMetadata()['id']);
+            $queue->removeJobById((string) end($duplicates)->getMetadata()['id']);
             $queue->pushOnce($job);
             $this->assertCount(1, $queue->getJobs());
             $queue->clearAllJobs();
@@ -126,7 +126,7 @@ final class QueueDriversTest extends DriverTestCase
         $queue->push(new \Spark\Queue\Job('strlen', ['value']));
         $pdo = \Spark\Database\DB::connection('queue_test')->getPdo();
         $pdo->exec("CREATE TRIGGER reject_failure BEFORE INSERT ON failed_jobs BEGIN SELECT RAISE(ABORT, 'injected failure'); END");
-        $id = (int) $queue->getJobs()[0]->getMetadata()['id'];
+        $id = (string) $queue->getJobs()[0]->getMetadata()['id'];
 
         try {
             $queue->markJobAsFailed($id, new \RuntimeException('test'), 1);

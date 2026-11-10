@@ -64,7 +64,7 @@ interface HashContract
      * @param string $value
      * @return bool
      */
-    public function isHashed(string $value): bool;
+    public static function isHashed(string $value): bool;
 
     /**
      * Generate a cryptographically secure pseudo-random string.
@@ -72,7 +72,7 @@ interface HashContract
      * @param int $length
      * @return string
      */
-    public function random(int $length = 32): string;
+    public static function random(int $length = 32): string;
 
     /**
      * Generate raw cryptographically secure pseudo-random bytes.
@@ -80,7 +80,7 @@ interface HashContract
      * @param int $length
      * @return string
      */
-    public function randomBytes(int $length = 32): string;
+    public static function randomBytes(int $length = 32): string;
 
     /**
      * Encrypt a string value.
@@ -129,4 +129,36 @@ interface HashContract
      * @return array
      */
     public function decryptArray(string $encrypted): array;
+
+    /**
+     * Generate a version 4 UUID.
+     *
+     * @return string The generated UUID.
+     */
+    public static function uuid(): string;
+
+    /**
+     * Generate a version 7 UUID.
+     *
+     * @return string The generated UUID.
+     */
+    public static function uuid7(): string;
+
+    /**
+     * Generate a version 5 UUID based on a namespace and name.
+     *
+     * @param string $namespace The namespace UUID (must be valid).
+     * @param string $name The name from which to generate the UUID.
+     * @return string The generated UUID.
+     */
+    public static function uuid5(string $namespace, string $name): string;
+
+    /**
+     * Check if a given string is a valid UUID.
+     *
+     * @param string $value The string to check.
+     * @param int|null $version Optional UUID version to validate against (1-8).
+     * @return bool True if the string is a valid UUID, false otherwise.
+     */
+    public static function isUuid(string $value, ?int $version = null): bool;
 }

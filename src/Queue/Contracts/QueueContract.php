@@ -74,10 +74,10 @@ interface QueueContract
     /**
      * Removes a job from the queue by its ID.
      *
-     * @param int $id The ID of the job to be removed.
+     * @param string $id The ID of the job to be removed.
      * @return bool True if the job was successfully removed, false otherwise.
      */
-    public function removeJobById(int $id): bool;
+    public function removeJobById(string $id): bool;
 
     /**
      * Removes a queue by its name.
@@ -113,8 +113,10 @@ interface QueueContract
     public function getFailedJobs(int $from = 0, int $to = 500): array;
 
     /**
-     * Retries all failed jobs in the queue.
+     * Retries failed jobs in the queue.
+     *
+     * @param string|null $id The ID of a specific job to retry, or null for all.
      * @return void
      */
-    public function retryFailedJobs(): void;
+    public function retryFailedJobs(?string $id = null): void;
 }

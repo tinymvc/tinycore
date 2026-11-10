@@ -187,9 +187,10 @@ class DatabaseStorage implements QueueStorageContract
         });
     }
 
-    public function removeJobById(int $id): bool
+    public function removeJobById(string $id): bool
     {
-        // failed_jobs rows are removed by the ON DELETE CASCADE foreign key.
+        $this->run('DELETE FROM {failed} WHERE {job_id} = ?', [$id]);
+
         return $this->run('DELETE FROM {jobs} WHERE {id} = ?', [$id])->rowCount() > 0;
     }
 
@@ -227,7 +228,7 @@ class DatabaseStorage implements QueueStorageContract
                         // Compare-and-set: only one worker can flip pending -> reserved.
                         $claimed = $this->run(
                             "UPDATE {jobs} SET {status} = 'reserved', {reserved_at} = ? WHERE {id} = ? AND {status} = 'pending' AND {scheduled_time} = ? AND {scheduled_time} <= ?",
-                            [$now, (int) $row['id'], $row['scheduled_time'], $now]
+                            [$now, (string) $row['id'], $row['scheduled_time'], $now]
                         )->rowCount();
 
                         if ($claimed === 1) {
@@ -251,7 +252,7 @@ class DatabaseStorage implements QueueStorageContract
         }
     }
 
-    public function updateJobStatus(int $jobId, string $status, int $attempts): void
+    public function updateJobStatus(string $jobId, string $status, int $attempts): void
     {
         $this->run(
             'UPDATE {jobs} SET {status} = ?, {attempts} = ?, {reserved_at} = ? WHERE {id} = ?',
@@ -264,7 +265,7 @@ class DatabaseStorage implements QueueStorageContract
         );
     }
 
-    public function rescheduleJob(int $jobId, Carbon $nextRun): void
+    public function rescheduleJob(string $jobId, Carbon $nextRun): void
     {
         $this->run(
             "UPDATE {jobs} SET {scheduled_time} = ?, {status} = 'pending', {attempts} = 0, {reserved_at} = NULL WHERE {id} = ?",
@@ -272,7 +273,7 @@ class DatabaseStorage implements QueueStorageContract
         );
     }
 
-    public function markJobAsFailed(int $jobId, Throwable $exception, int $attempts): void
+    public function markJobAsFailed(string $jobId, Throwable $exception, int $attempts): void
     {
         $stackTrace = $exception->getPrevious()?->getTraceAsString() ?? $exception->getTraceAsString();
         $text = $this->limitText(
@@ -305,7 +306,7 @@ class DatabaseStorage implements QueueStorageContract
         }
     }
 
-    public function retryJob(int $jobId, Carbon $retryTime, int $attempts): void
+    public function retryJob(string $jobId, Carbon $retryTime, int $attempts): void
     {
         $this->run(
             "UPDATE {jobs} SET {scheduled_time} = ?, {status} = 'pending', {attempts} = ?, {reserved_at} = NULL WHERE {id} = ?",
@@ -366,11 +367,11 @@ class DatabaseStorage implements QueueStorageContract
     {
         try {
             $rows = $this->run(
-                'SELECT fj.{id} AS failed_job_id, fj.{job_id} AS {id}, fj.{failed_at} AS {failed_at}, '
+                'SELECT fj.{job_id} AS {id}, fj.{failed_at} AS {failed_at}, '
                 . 'fj.{exception} AS {exception}, fj.{attempts} AS {attempts}, j.{payload} AS {payload}, '
                 . 'j.{queue} AS {queue}, j.{scheduled_time} AS {scheduled_time}, j.{repeat} AS {repeat}, j.{status} AS {status} '
                 . 'FROM {failed} fj JOIN {jobs} j ON fj.{job_id} = j.{id} '
-                . 'ORDER BY fj.{failed_at} DESC, fj.{id} DESC LIMIT ? OFFSET ?',
+                . 'ORDER BY fj.{failed_at} DESC, fj.{job_id} DESC LIMIT ? OFFSET ?',
                 [max(0, $to), max(0, $from)]
             )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -380,16 +381,25 @@ class DatabaseStorage implements QueueStorageContract
         }
     }
 
-    public function retryFailedJobs(): void
+    public function retryFailedJobs(?string $id = null): void
     {
         try {
-            $this->retrying(function () {
-                $this->db->transaction(function () {
-                    $this->run(
-                        "UPDATE {jobs} SET {status} = 'pending', {attempts} = 0, {reserved_at} = NULL "
-                        . 'WHERE {id} IN (SELECT {job_id} FROM {failed})'
-                    );
-                    $this->run('DELETE FROM {failed}');
+            $this->retrying(function () use ($id) {
+                $this->db->transaction(function () use ($id) {
+                    if ($id !== null) {
+                        $this->run(
+                            "UPDATE {jobs} SET {status} = 'pending', {attempts} = 0, {reserved_at} = NULL "
+                            . 'WHERE {id} IN (SELECT {job_id} FROM {failed} WHERE {job_id} = ?)',
+                            [$id]
+                        );
+                        $this->run('DELETE FROM {failed} WHERE {job_id} = ?', [$id]);
+                    } else {
+                        $this->run(
+                            "UPDATE {jobs} SET {status} = 'pending', {attempts} = 0, {reserved_at} = NULL "
+                            . 'WHERE {id} IN (SELECT {job_id} FROM {failed})'
+                        );
+                        $this->run('DELETE FROM {failed}');
+                    }
                 });
             });
         } catch (PDOException $e) {
@@ -408,9 +418,13 @@ class DatabaseStorage implements QueueStorageContract
      */
     private function insertJob(JobContract $job, string $queue): void
     {
+        $id = \Spark\Hash::uuid7();
+        $job->setId($id);
+
         $this->run(
-            'INSERT INTO {jobs} ({payload}, {queue}, {scheduled_time}, {repeat}, {status}, {attempts}) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO {jobs} ({id}, {payload}, {queue}, {scheduled_time}, {repeat}, {status}, {attempts}) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [
+                $id,
                 $this->encodePayload($job),
                 $queue,
                 $this->timestamp($job->getScheduledTime()),

@@ -66,7 +66,7 @@ class RedisStorage implements QueueStorageContract
         $allIds = $this->redis->sMembers($this->redisJobsSetKey()) ?: [];
         if (is_array($allIds)) {
             foreach ($allIds as $id) {
-                $this->removeJobById((int) $id);
+                $this->removeJobById((string) $id);
             }
         }
 
@@ -83,7 +83,7 @@ class RedisStorage implements QueueStorageContract
         $this->clearJobsByFilter(fn(array $job): bool => (string) ($job['status'] ?? '') === 'failed');
     }
 
-    public function removeJobById(int $id): bool
+    public function removeJobById(string $id): bool
     {
         $row = $this->getRedisJob($id);
         if (!$row) {
@@ -124,7 +124,7 @@ LUA;
 
         if (is_array($ids)) {
             foreach ($ids as $id) {
-                $removed = $this->removeJobById((int) $id) || $removed;
+                $removed = $this->removeJobById((string) $id) || $removed;
             }
         }
 
@@ -165,7 +165,7 @@ LUA;
                 continue;
             }
 
-            $jobId = (int) array_key_first($jobs);
+            $jobId = (string) array_key_first($jobs);
             $score = (int) (array_values($jobs)[0] ?? 0);
 
             if ($bestScore === null || $score < $bestScore) {
@@ -209,7 +209,7 @@ LUA;
         ]);
     }
 
-    public function updateJobStatus(int $jobId, string $status, int $attempts): void
+    public function updateJobStatus(string $jobId, string $status, int $attempts): void
     {
         $this->transitionJob($jobId, [
             'status' => $status,
@@ -218,12 +218,12 @@ LUA;
         ]);
     }
 
-    public function rescheduleJob(int $jobId, Carbon $nextRun): void
+    public function rescheduleJob(string $jobId, Carbon $nextRun): void
     {
         $this->retryJob($jobId, $nextRun, 0);
     }
 
-    public function markJobAsFailed(int $jobId, \Throwable $exception, int $attempts): void
+    public function markJobAsFailed(string $jobId, \Throwable $exception, int $attempts): void
     {
         $stack = $exception->getPrevious()?->getTraceAsString() ?? $exception->getTraceAsString();
         $exceptionText = sprintf("%s: %s\nStack trace:\n%s", get_class($exception), $exception->getMessage(), $stack);
@@ -237,7 +237,7 @@ LUA;
         ]);
     }
 
-    public function retryJob(int $jobId, Carbon $retryTime, int $attempts): void
+    public function retryJob(string $jobId, Carbon $retryTime, int $attempts): void
     {
         $this->transitionJob($jobId, [
             'scheduled_time' => $retryTime->utc()->format('Y-m-d H:i:s'),
@@ -264,7 +264,7 @@ LUA;
             }
 
             foreach (array_keys($reserved) as $id) {
-                $row = $this->getRedisJob((int) $id);
+                $row = $this->getRedisJob((string) $id);
                 if (!$row) {
                     $this->redis->zRem($this->redisReservedSetKey((string) $queue), (string) $id);
                     continue;
@@ -276,7 +276,7 @@ LUA;
                     continue;
                 }
 
-                $recovered += (int) $this->transitionJob((int) $id, [
+                $recovered += (int) $this->transitionJob((string) $id, [
                     'status' => 'pending',
                     'reserved_at' => self::REDIS_NULL,
                 ], expectedStatus: $status, staleBefore: $staleBefore);
@@ -302,7 +302,7 @@ LUA;
                     $ids = array_merge($ids, $queueIds);
                 }
             }
-            $ids = array_unique(array_map('intval', $ids));
+            $ids = array_unique($ids);
         }
 
         if (!is_array($ids)) {
@@ -313,7 +313,7 @@ LUA;
         $jobs = [];
 
         foreach ($ids as $id) {
-            $row = $this->getRedisJob((int) $id);
+            $row = $this->getRedisJob((string) $id);
             if (!$row) {
                 continue;
             }
@@ -323,7 +323,7 @@ LUA;
                 continue;
             }
 
-            $jobs[] = $this->unserializeJob($this->normalizeRedisRow((int) $id, $row));
+            $jobs[] = $this->unserializeJob($this->normalizeRedisRow((string) $id, $row));
         }
 
         usort($jobs, static fn(JobContract $a, JobContract $b) => $a->getScheduledTime()->timestamp <=> $b->getScheduledTime()->timestamp);
@@ -340,31 +340,31 @@ LUA;
 
         $jobs = [];
         foreach ($ids as $id) {
-            $row = $this->getRedisJob((int) $id);
+            $row = $this->getRedisJob((string) $id);
             if (!$row) {
                 continue;
             }
 
-            $jobs[] = $this->unserializeJob($this->normalizeRedisRow((int) $id, $row));
+            $jobs[] = $this->unserializeJob($this->normalizeRedisRow((string) $id, $row));
         }
 
         return $jobs;
     }
 
-    public function retryFailedJobs(): void
+    public function retryFailedJobs(?string $id = null): void
     {
-        $ids = $this->redis->zRevRange($this->redisFailedSetKey(), 0, -1) ?: [];
+        $ids = $id !== null ? [$id] : ($this->redis->zRevRange($this->redisFailedSetKey(), 0, -1) ?: []);
         if (!is_array($ids)) {
             return;
         }
 
-        foreach ($ids as $id) {
-            $job = $this->getRedisJob((int) $id);
+        foreach ($ids as $failedId) {
+            $job = $this->getRedisJob((string) $failedId);
             if (!$job) {
                 continue;
             }
 
-            $this->transitionJob((int) $id, [
+            $this->transitionJob((string) $failedId, [
                 'status' => 'pending',
                 'attempts' => '0',
                 'reserved_at' => self::REDIS_NULL,
@@ -374,10 +374,11 @@ LUA;
         }
     }
 
-    private function pushRedis(JobContract $job, string $queue, ?int $jobId = null, bool $once = false): bool
+    private function pushRedis(JobContract $job, string $queue, ?string $jobId = null, bool $once = false): bool
     {
         $payload = $this->serializeJob($job);
-        $jobId = $jobId ?? $this->nextRedisId();
+        $jobId = $jobId ?? \Spark\Hash::uuid7();
+        $job->setId($jobId);
         $payloadData = json_encode([
             'callback' => $payload['callback'],
             'parameters' => $payload['parameters'],
@@ -437,7 +438,7 @@ LUA;
 
     /** Atomically update a job and all indexes; never recreate a removed job. */
     private function transitionJob(
-        int $id,
+        string $id,
         array $updates,
         ?int $scheduled = null,
         ?string $expectedStatus = null,
@@ -501,18 +502,18 @@ LUA;
         }
 
         foreach ($allIds as $id) {
-            $row = $this->getRedisJob((int) $id);
+            $row = $this->getRedisJob((string) $id);
             if (!$row) {
                 continue;
             }
 
-            if ($filter($this->normalizeRedisRow((int) $id, $row))) {
-                $this->removeJobById((int) $id);
+            if ($filter($this->normalizeRedisRow((string) $id, $row))) {
+                $this->removeJobById((string) $id);
             }
         }
     }
 
-    private function normalizeRedisRow(int $id, array $row): array
+    private function normalizeRedisRow(string $id, array $row): array
     {
         return [
             'id' => $id,
@@ -529,16 +530,16 @@ LUA;
         ];
     }
 
-    private function getRedisJob(int $id): ?array
+    private function getRedisJob(string $id): ?array
     {
         $row = $this->redis->hGetAll($this->redisJobHashKey($id));
 
         return $row === [] ? null : $row;
     }
 
-    private function nextRedisId(): int
+    private function nextRedisId(): string
     {
-        return (int) $this->redis->incr($this->redisNextIdKey());
+        return \Spark\Hash::uuid7();
     }
 
     private function redisKey(string $key): string
@@ -571,7 +572,7 @@ LUA;
         return $this->redisKey("reserved:$queue");
     }
 
-    private function redisJobHashKey(int $id): string
+    private function redisJobHashKey(string $id): string
     {
         return $this->redisKey("job:$id");
     }
@@ -579,11 +580,6 @@ LUA;
     private function redisFailedSetKey(): string
     {
         return $this->redisKey('failed');
-    }
-
-    private function redisNextIdKey(): string
-    {
-        return $this->redisKey('next_id');
     }
 
     private function redisFingerprintKey(string $queue, array $payload, ?string $repeat): string
@@ -599,11 +595,6 @@ LUA;
             is_bool($value) => $value ? '1' : '0',
             default => (string) $value,
         };
-    }
-
-    private function redisToValue(string $value): ?string
-    {
-        return $value === self::REDIS_NULL ? null : $value;
     }
 
     private function redisToIntValue(string $value): int

@@ -184,6 +184,9 @@ interface JobContract
     /* Gets the unique identifier for the job. */
     public function getId(): null|string;
 
+    /* Sets the unique identifier for the job. */
+    public function setId(string $id): JobContract;
+
     /** Get the number of times the job has been attempted. */
     public function attempts(): int;
 

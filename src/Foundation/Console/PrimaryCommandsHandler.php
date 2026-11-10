@@ -10,6 +10,7 @@ use Spark\Queue\QueueManager;
 use Spark\Http\Routing\Router;
 use Spark\Utils\File;
 use function count;
+use function in_array;
 use function is_string;
 use function sprintf;
 use function strlen;
@@ -288,26 +289,17 @@ class PrimaryCommandsHandler
      */
     public function clearQueueJobs(QueueManager $queue, array $args = [])
     {
-        $queue->connection($args['connection'] ?? null)->clearAllJobs();
+        $failed = isset($args['failed']) && in_array($args['failed'], [true, 'true', 1, '1', 'yes'], true);
+        if ($failed) {
+            $queue->connection($args['connection'] ?? null)->clearFailedJobs();
+        } else {
+            $queue->connection($args['connection'] ?? null)->clearAllJobs();
+        }
         Prompt::message("Queue jobs cleared.", "success");
     }
 
     /**
-     * Lists all failed queue jobs.
-     *
-     * @param QueueManager $queue
-     *   The queue connection manager for managing queue jobs.
-     * 
-     * @return void
-     */
-    public function clearFailedQueueJobs(QueueManager $queue, array $args = [])
-    {
-        $queue->connection($args['connection'] ?? null)->clearFailedJobs();
-        Prompt::message("Failed queue jobs cleared.", "success");
-    }
-
-    /**
-     * Retries all failed queue jobs.
+     * Retries failed queue jobs.
      *
      * @param QueueManager $queue
      *   The queue connection manager for managing queue jobs.
@@ -316,8 +308,18 @@ class PrimaryCommandsHandler
      */
     public function retryFailedQueueJobs(QueueManager $queue, array $args = [])
     {
-        $queue->connection($args['connection'] ?? null)->retryFailedJobs();
-        Prompt::message("Failed queue jobs retried.", "success");
+        $id = $args['id'] ?? $args['_args'][0] ?? null;
+        if ($id === 'all') {
+            $id = null;
+        }
+
+        $queue->connection($args['connection'] ?? null)->retryFailedJobs($id);
+
+        if ($id !== null) {
+            Prompt::message("Failed queue job [$id] retried.", "success");
+        } else {
+            Prompt::message("Failed queue jobs retried.", "success");
+        }
     }
 
     /**

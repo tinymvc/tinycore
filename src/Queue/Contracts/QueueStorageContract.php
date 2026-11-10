@@ -17,19 +17,19 @@ interface QueueStorageContract
 
     public function clearFailedJobs(): void;
 
-    public function removeJobById(int $id): bool;
+    public function removeJobById(string $id): bool;
 
     public function removeQueue(string $name): bool;
 
     public function getNextJob(array|string $queue = 'default'): false|JobContract;
 
-    public function updateJobStatus(int $jobId, string $status, int $attempts): void;
+    public function updateJobStatus(string $jobId, string $status, int $attempts): void;
 
-    public function rescheduleJob(int $jobId, Carbon $nextRun): void;
+    public function rescheduleJob(string $jobId, Carbon $nextRun): void;
 
-    public function markJobAsFailed(int $jobId, \Throwable $exception, int $attempts): void;
+    public function markJobAsFailed(string $jobId, \Throwable $exception, int $attempts): void;
 
-    public function retryJob(int $jobId, Carbon $retryTime, int $attempts): void;
+    public function retryJob(string $jobId, Carbon $retryTime, int $attempts): void;
 
     public function recoverStaleJobs(int $timeout = 3600): int;
 
@@ -42,5 +42,5 @@ interface QueueStorageContract
 
     public function getFailedJobs(int $from = 0, int $to = 500): array;
 
-    public function retryFailedJobs(): void;
+    public function retryFailedJobs(?string $id = null): void;
 }

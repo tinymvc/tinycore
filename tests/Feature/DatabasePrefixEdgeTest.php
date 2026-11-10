@@ -99,7 +99,8 @@ final class DatabasePrefixEdgeTest extends FrameworkTestCase
         $this->assertThrows(\InvalidArgumentException::class, fn() => app(DB::class)->reset(['driver' => 'sqlite', 'prefix' => 'bad.prefix']));
         $this->assertSame(7, (int) query('retained')->value('id'));
         $this->assertSame('base_', (new DB([
-            'default' => 'main', 'prefix' => 'base_',
+            'default' => 'main',
+            'prefix' => 'base_',
             'connections' => ['main' => ['driver' => 'sqlite', 'prefix' => null]],
         ]))->getTablePrefix());
     }
@@ -140,13 +141,15 @@ final class DatabasePrefixEdgeTest extends FrameworkTestCase
     public function test_named_storage_connections_keep_their_own_prefixes(): void
     {
         $file = $this->storagePath . '/named-prefix.sqlite';
-        config(['database' => [
-            'default' => 'primary',
-            'connections' => [
-                'primary' => ['driver' => 'sqlite', 'database' => $file, 'prefix' => 'app_'],
-                'audit' => ['driver' => 'sqlite', 'database' => $file, 'prefix' => 'audit_'],
-            ],
-        ]]);
+        config([
+            'database' => [
+                'default' => 'primary',
+                'connections' => [
+                    'primary' => ['driver' => 'sqlite', 'database' => $file, 'prefix' => 'app_'],
+                    'audit' => ['driver' => 'sqlite', 'database' => $file, 'prefix' => 'audit_'],
+                ],
+            ]
+        ]);
         $primary = app(DB::class)->reset();
         Schema::create('caches', function (Blueprint $table) {
             $table->string('key');
@@ -179,10 +182,11 @@ final class DatabasePrefixEdgeTest extends FrameworkTestCase
         $queue = new \Spark\Queue\Storage\DatabaseStorage(['connection' => 'audit']);
         $queue->push(new \Spark\Queue\Job('strlen', ['job'], now()->subSeconds(10)));
         $this->assertSame(1, $audit->table('jobs')->count());
-        $this->assertTrue($queue->getNextJob() !== false);
-        $queue->markJobAsFailed(1, new \RuntimeException('expected'), 1);
+        $job = $queue->getNextJob();
+        $this->assertTrue($job !== false);
+        $queue->markJobAsFailed($job->getId(), new \RuntimeException('expected'), 1);
         $this->assertSame(1, $audit->table('failed_jobs')->count());
-        $queue->removeJobById(1);
+        $queue->removeJobById($job->getId());
         $this->assertSame(0, $audit->table('failed_jobs')->count());
     }
 

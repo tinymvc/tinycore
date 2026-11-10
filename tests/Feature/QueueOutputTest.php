@@ -68,13 +68,14 @@ final class QueueOutputTest extends FrameworkTestCase
         $success = $run();
         $this->assertStringContainsString('RUNNING', $success);
         $this->assertStringContainsString('DONE', $success);
-        $this->assertTrue((bool) preg_match('/strlen  #\d+ · 1\/2 /', $success));
+        $this->assertTrue((bool) preg_match('/strlen \.{2,} RUNNING/', $success));
         $this->assertTrue((bool) preg_match('/\d+\.\d{2}ms DONE/', $success));
         $this->assertTrue((bool) preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}  INFO  Processing jobs from \[emails\]\./m', $success));
-        $this->assertTrue((bool) preg_match('/\.{2,} RUNNING$/m', $success));
-        $this->assertStringContainsString('Processing jobs from [emails].' . PHP_EOL . PHP_EOL, $success);
+        $this->assertTrue((bool) preg_match('/\.{2,} RUNNING\r?$/m', $success));
+        $this->assertTrue(str_contains($success, 'Processing jobs from [emails].'));
         $this->assertStringContainsString('Stopped · 1 completed · 0 failed attempts', $success);
         foreach (explode(PHP_EOL, $success) as $line) {
+            $line = rtrim($line, "\r");
             if (preg_match('/ (RUNNING|DONE)$/', $line)) {
                 $this->assertSame(100, preg_match_all('/./us', $line));
             }
@@ -84,13 +85,13 @@ final class QueueOutputTest extends FrameworkTestCase
         $this->assertStringContainsString('FAIL', $retry);
         $this->assertStringContainsString('↳ Retry at:', $retry);
         $this->assertStringContainsString('First line Second line', $retry);
-        $this->assertTrue((bool) preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}  ERROR  .*First line Second line$/m', $retry));
+        $this->assertTrue((bool) preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}  ERROR  .*First line Second line\r?$/m', $retry));
         $this->assertTrue((bool) preg_match('/^ {21}↳ Retry at: \d{4}-\d{2}-\d{2} /m', $retry));
         $this->assertStringContainsString('Stopped · 0 completed · 1 failed attempt', $retry);
-        $this->assertFalse((bool) preg_match('/First line.*FAIL$/m', $retry));
+        $this->assertFalse((bool) preg_match('/First line.*FAIL\r?$/m', $retry));
         $this->assertFalse(str_contains($retry, 'hidden title'));
         $failure = $run();
-        $this->assertStringContainsString('· 2/2', $failure);
+        $this->assertStringContainsString('exhausted 2 attempts', $failure);
         $this->assertStringContainsString('ERROR', $failure);
         $this->assertCount(1, $queue->getFailedJobs());
         $failed = $listing(true);
@@ -100,7 +101,7 @@ final class QueueOutputTest extends FrameworkTestCase
         $this->assertFalse(str_contains($failed, 'hidden title'));
         $queue->push((new \Spark\Queue\Job('strlen', ['repeat']))->repeatEveryMinutes(5), 'emails');
         $repeated = $run();
-        $this->assertTrue((bool) preg_match('/\.{2,} \d+\.\d{2}ms DONE$/m', $repeated));
+        $this->assertTrue((bool) preg_match('/\.{2,} \d+\.\d{2}ms DONE\r?$/m', $repeated));
         $this->assertTrue((bool) preg_match('/^ {21}↳ Next run: \d{4}-\d{2}-\d{2} /m', $repeated));
         $this->assertSame(1, substr_count($repeated, 'DONE'));
         $queue->clearAllJobs();
@@ -109,9 +110,10 @@ final class QueueOutputTest extends FrameworkTestCase
         $queue->push(new \Spark\Queue\Job('strlen', ['multi']), 'emails');
         $multiple = $run(['emails', 'other']);
         $this->assertStringContainsString('Processing jobs from [emails, other].', $multiple);
-        $this->assertTrue((bool) preg_match('/strlen  #\d+ · 1\/2 · emails /', $multiple));
+        $this->assertTrue((bool) preg_match('/strlen · emails \.{2,} RUNNING/', $multiple));
 
         foreach (explode(PHP_EOL, trim($success . $retry . $failure . $repeated . $empty . $multiple)) as $line) {
+            $line = rtrim($line, "\r");
             if ($line === '') {
                 continue;
             }

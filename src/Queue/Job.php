@@ -102,6 +102,9 @@ class Job implements JobContract
 
         // If the scheduled time is not provided, set it to the current time.
         $this->scheduledTime ??= new Carbon();
+
+        // Ensure every job receives a standard time-ordered UUID if none was provided.
+        $this->metadata['id'] ??= \Spark\Hash::uuid7();
     }
 
     /**
@@ -621,7 +624,20 @@ class Job implements JobContract
      */
     public function getId(): null|string
     {
-        return $this->metadata['id'] ?? null;
+        return isset($this->metadata['id']) ? (string) $this->metadata['id'] : null;
+    }
+
+    /**
+     * Set the unique identifier of the job.
+     *
+     * @param string $id The unique identifier for the job.
+     * @return JobContract The job instance.
+     */
+    public function setId(string $id): JobContract
+    {
+        $this->metadata['id'] = $id;
+
+        return $this;
     }
 
     /**

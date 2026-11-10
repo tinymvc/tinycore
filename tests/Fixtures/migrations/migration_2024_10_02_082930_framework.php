@@ -28,7 +28,7 @@ return new class {
         });
 
         Schema::create('jobs', function (Blueprint $table) {
-            $table->id();
+            $table->string('id')->primary();
             $table->string('queue')->index();
             $table->text('payload');
             $table->dateTime('scheduled_time');
@@ -41,8 +41,7 @@ return new class {
         });
 
         Schema::create('failed_jobs', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('job_id')->constrained()->cascadeOnDelete();
+            $table->string('job_id')->unique();
             $table->dateTime('failed_at')->index();
             $table->text('exception');
             $table->integer('attempts')->default(0);
