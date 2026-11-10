@@ -7,11 +7,10 @@ $query = '';
 $sourcePath = getcwd() . '/vendor/tinymvc/tinycore/src';
 $fileFilter = '';
 $limit = 25;
-$includeSupport = false;
 
 foreach ($args as $arg) {
     if ($arg === '--help') {
-        echo "Usage: php api-lookup.php SEARCH [--source=PATH] [--file=SUBSTRING] [--limit=1..200] [--include-support]\n";
+        echo "Usage: php api-lookup.php SEARCH [--source=PATH] [--file=SUBSTRING] [--limit=1..200]\n";
         echo "SEARCH matches a declared method, class, trait, or source filename (case-insensitive).\n";
         echo "Run from the application root; default source: vendor/tinymvc/tinycore/src.\n";
         exit(0);
@@ -30,8 +29,6 @@ foreach ($args as $arg) {
         }
 
         $limit = (int) $value;
-    } elseif ($arg === '--include-support') {
-        $includeSupport = true;
     } elseif (str_starts_with($arg, '--') || $query !== '') {
         fwrite(STDERR, "Unknown option or extra search argument; use --help.\n");
         exit(2);
@@ -55,9 +52,6 @@ foreach ($files as $file) {
     }
 
     $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($root) + 1));
-    if (!$includeSupport && str_starts_with($relative, 'Support/')) {
-        continue;
-    }
     if ($fileFilter !== '' && stripos($relative, $fileFilter) === false) {
         continue;
     }

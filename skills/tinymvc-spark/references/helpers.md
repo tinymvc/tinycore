@@ -148,7 +148,9 @@ Use Carbon for application dates and preserve explicit timezone/output contracts
 
 ## Support primitives
 
-Spark-native classes with familiar fluent APIs. They live under `Spark\Support\`; the whole `Support/` directory is hidden from `api-lookup.php` unless you pass `--include-support`.
+TinyMVC/Spark includes a fine-tuned collection of Laravel 12+ support utilities, provided by `tinymvc/laravel-supports` under the `Spark\Support` namespace. It includes familiar helpers and classes such as `Collection`, `Arr`, `Str`, `Js`, `Number`, and `Pluralizer`.
+
+It also provides a collection of familiar Laravel 12+ global helper functions, including `data_get()`, `data_set()`, `data_fill()`, `collect()`, `value()`, `tap()`, and more, bringing Laravel's convenient developer experience to TinyMVC/Spark.
 
 ### Collections and higher-order proxies
 

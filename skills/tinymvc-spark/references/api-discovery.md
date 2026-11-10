@@ -45,7 +45,6 @@ php skills/tinymvc-spark/scripts/api-lookup.php upsert --source=src
 | `--file=substring` | Narrow results to matching source paths |
 | `--limit=1..200` | Output cap (default 25 declarations, with signatures and absolute locations) |
 | `--source=/path/to/tinycore/src` | Explicitly select a checkout. The default is `vendor/tinymvc/tinycore/src` relative to the working directory, never an automatic sibling-checkout fallback |
-| `--include-support` | Include the `Support/` directory (`Collection`, `Str`, `Arr`, helpers), omitted by default, e.g. `slug --include-support --file=Support/Str.php` |
 
 Exit codes: `0` matches or help, `1` no matching declaration, `2` invalid arguments or source path.
 
