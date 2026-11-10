@@ -49,7 +49,7 @@ class PrimaryCommandsHandler
 
         Prompt::info("Server running on [http://$host:$port].");
         Prompt::comment(
-            sprintf('  Press %s+C to stop the server.', PHP_OS_FAMILY === 'Windows' ? 'Ctrl' : '⌘'),
+            sprintf('  Press %s+C to stop the server.', windows_os() ? 'Ctrl' : '⌘'),
         );
         Prompt::newline();
 
