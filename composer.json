@@ -23,9 +23,7 @@
             "Spark\\": "src/"
         },
         "files": [
-            "./src/Foundation/helpers.php",
-            "./src/Support/functions.php",
-            "./src/Support/helpers.php"
+            "./src/Foundation/helpers.php"
         ]
     },
     "autoload-dev": {
