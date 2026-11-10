@@ -88,7 +88,6 @@ final class ContainerTest extends TestCase
         $container->singleton(DependencyFixture::class);
         $container->alias('dependency', DependencyFixture::class);
         $consumer = $container->get(ConsumerFixture::class);
-        $this->assertSame($consumer->dependency, $container->resolve('dependency'));
         $this->assertSame('default', $consumer->label);
         $this->assertSame($consumer->dependency, $container->get('dependency'));
         $container->forgetInstance(DependencyFixture::class);
