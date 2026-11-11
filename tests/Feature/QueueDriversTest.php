@@ -79,7 +79,9 @@ final class QueueDriversTest extends DriverTestCase
         foreach ($this->queues() as $queue) {
             $job = new \Spark\Queue\Job('strlen', ['one'], now()->subSeconds(2));
             $queue->pushOnce($job, 'emails');
-            $queue->pushOnce($job, 'emails');
+            $insertedId = $job->getId();
+            $this->assertFalse($queue->pushOnce($job, 'emails'));
+            $this->assertSame($insertedId, $job->getId());
             $queue->push(new \Spark\Queue\Job('strlen', ['later'], now()->addHours(1)), 'emails');
             $this->assertCount(2, $queue->getJobs());
             $reserved = $queue->getNextJob('emails');
@@ -114,6 +116,31 @@ final class QueueDriversTest extends DriverTestCase
             $queue->clearAllJobs();
         }
 
+    }
+
+    public function test_database_bulk_removal_deletes_only_matching_failures(): void
+    {
+        $this->schema();
+        $queue = new \Spark\Queue\Storage\DatabaseStorage();
+        $repeated = (new \Spark\Queue\Job('strlen', ['repeated']))->repeatEveryMinutes(5);
+        $email = new \Spark\Queue\Job('strlen', ['email']);
+        $other = new \Spark\Queue\Job('strlen', ['other']);
+        $queue->push($repeated, 'emails');
+        $queue->push($email, 'emails');
+        $queue->push($other, 'other');
+
+        foreach ([$repeated, $email, $other] as $job) {
+            $queue->markJobAsFailed($job->getId(), new \RuntimeException('Failure'), 1);
+        }
+
+        $queue->clearRepeatedJobs();
+        $this->assertSame(2, query('failed_jobs')->count());
+        $this->assertSame(0, query('failed_jobs')->where('job_id', $repeated->getId())->count());
+        $this->assertTrue($queue->removeQueue('emails'));
+        $this->assertSame(1, query('failed_jobs')->count());
+        $this->assertSame($other->getId(), query('failed_jobs')->value('job_id'));
+        $this->assertCount(1, $queue->getJobs());
+        $this->assertFalse($queue->removeQueue('emails'));
     }
 
     public function test_named_queue_transaction_uses_its_connection(): void

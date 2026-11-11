@@ -289,7 +289,7 @@ class PrimaryCommandsHandler
      */
     public function clearQueueJobs(QueueManager $queue, array $args = [])
     {
-        $failed = isset($args['failed']) && in_array($args['failed'], [true, 'true', 1, '1', 'yes'], true);
+        $failed = isset($args['failed']) && in_array($args['failed'], [true, 'true', 1, '1', 'yes', ''], true);
         if ($failed) {
             $queue->connection($args['connection'] ?? null)->clearFailedJobs();
         } else {

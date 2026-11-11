@@ -20,11 +20,11 @@ use Spark\Queue\Contracts\JobContract;
  * @method static void clearAllJobs()
  * @method static void clearRepeatedJobs()
  * @method static void clearFailedJobs()
- * @method static bool removeJobById(int $id)
+ * @method static bool removeJobById(string $id)
  * @method static bool removeQueue(string $name)
  * @method static array getJobs(array|string|null $queue = null, array|string|null $status = null, int $from = 0, int $to = 500)
  * @method static array getFailedJobs(int $from = 0, int $to = 500)
- * @method static void retryFailedJobs()
+ * @method static void retryFailedJobs(?string $id = null)
  *
  * @package Spark\Facades
  * @author Shahin Moyshan <shahin.moyshan2@gmail.com>

@@ -165,7 +165,7 @@ final class QueueManagerTest extends FrameworkTestCase
             $handler->listQueueJobs($manager, ['connection' => 'secondary']);
             $handler->listFailedQueueJobs($manager, ['connection' => 'secondary']);
             $handler->retryFailedQueueJobs($manager, ['connection' => 'secondary']);
-            $handler->clearFailedQueueJobs($manager, ['connection' => 'secondary']);
+            $handler->clearQueueJobs($manager, ['connection' => 'secondary', 'failed' => true]);
             $handler->clearQueueJobs($manager, ['connection' => 'secondary']);
         } finally {
             ob_end_clean();

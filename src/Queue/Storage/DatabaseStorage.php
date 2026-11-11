@@ -176,7 +176,10 @@ class DatabaseStorage implements QueueStorageContract
 
     public function clearRepeatedJobs(): void
     {
-        $this->run('DELETE FROM {jobs} WHERE {repeat} IS NOT NULL');
+        $this->db->transaction(function () {
+            $this->run('DELETE FROM {failed} WHERE {job_id} IN (SELECT {id} FROM {jobs} WHERE {repeat} IS NOT NULL)');
+            $this->run('DELETE FROM {jobs} WHERE {repeat} IS NOT NULL');
+        });
     }
 
     public function clearFailedJobs(): void
@@ -196,7 +199,11 @@ class DatabaseStorage implements QueueStorageContract
 
     public function removeQueue(string $name): bool
     {
-        return $this->run('DELETE FROM {jobs} WHERE {queue} = ?', [$name])->rowCount() > 0;
+        return $this->db->transaction(function () use ($name) {
+            $this->run('DELETE FROM {failed} WHERE {job_id} IN (SELECT {id} FROM {jobs} WHERE {queue} = ?)', [$name]);
+
+            return $this->run('DELETE FROM {jobs} WHERE {queue} = ?', [$name])->rowCount() > 0;
+        });
     }
 
     /* ---------------------------------------------------------------------

@@ -85,7 +85,8 @@ $app->withQueue(jobs: [
 php spark queue:work --connection=redis --queue=emails --once --sleep=0
 php spark queue:restart
 php spark queue:failed --connection=redis
-php spark queue:retryFailed --connection=redis
+php spark queue:retry --connection=redis
+php spark queue:clear --failed --connection=redis
 ```
 
 Without `--once`, workers poll until their lifetime expires. `--timeout` is checked between jobs, not a hard job deadline; zero disables the lifetime limit. Timeout, sleep, and retry delay must be nonnegative; tries must be at least one. The first poll is immediate. Use a supervisor and configure I/O timeouts inside jobs.
@@ -100,6 +101,6 @@ Stale reservations older than 3600 seconds are recovered at worker startup. An i
 
 Default-connection database dispatch participates in the business transaction. Named database connections, file, and Redis do not join it. MySQL `pushOnce()` / `dispatchOnce()` rejects active transactions; dispatch after commit so deduplication does not outlive its advisory lock. There is no automatic `afterCommit()` API; use an outbox or explicit retry record when enqueueing after commit must be recoverable.
 
-Delivery is at least once: handlers must be idempotent. Stop workers/producers before clearing queues or changing drivers. `queue:clear` / `queue:clearFailed` delete work; purging a connection does not.
+Delivery is at least once: handlers must be idempotent. Stop workers/producers before clearing queues or changing drivers. `queue:clear` / `queue:clear --failed` delete work; purging a connection does not.
 
 Telemetry observes enqueue calls and worker attempts; `job.failed` means a failed attempt, not necessarily exhaustion. `pushOnce()` emits an enqueue observation even when storage deduplicates it. Synchronous dispatch bypasses the worker lifecycle. See [runtime telemetry](container-pipelines.md#runtime-telemetry).

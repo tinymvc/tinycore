@@ -378,7 +378,6 @@ LUA;
     {
         $payload = $this->serializeJob($job);
         $jobId = $jobId ?? \Spark\Hash::uuid7();
-        $job->setId($jobId);
         $payloadData = json_encode([
             'callback' => $payload['callback'],
             'parameters' => $payload['parameters'],
@@ -418,7 +417,7 @@ redis.call('SADD', KEYS[6], ARGV[1])
 return 1
 LUA;
 
-        return $this->redis->eval($script, [
+        $inserted = $this->redis->eval($script, [
             $this->redisJobsSetKey(),
             $this->redisQueueJobsSetKey($queue),
             $this->redisQueuesSetKey(),
@@ -434,6 +433,12 @@ LUA;
             $once ? '1' : '0',
             ...$pairs,
         ], 6) === 1;
+
+        if ($inserted) {
+            $job->setId($jobId);
+        }
+
+        return $inserted;
     }
 
     /** Atomically update a job and all indexes; never recreate a removed job. */
