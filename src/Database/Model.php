@@ -473,6 +473,7 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
             $condition = [$this->getPrimaryKey() => $identity];
             $updatedStatus = (bool) $this->newQuery()->update($data, $condition);
             if (!$updatedStatus && $this->newQuery()->where($condition)->exists()) {
+                $this->syncStoredAttributes($data);
                 $this->tracking['hash'] = $this->makeHash();
                 return true;
             }
@@ -494,6 +495,10 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
         // Save model id if it is newly created.
         if (!$this->hasPrimaryValue() && is_int($createdId) && $createdId > 0) {
             $this->attributes[$this->getPrimaryKey()] = $createdId;
+        }
+
+        if ($updatedStatus || $createdId) {
+            $this->syncStoredAttributes($data);
         }
 
         if ($updatedStatus) {
@@ -600,6 +605,16 @@ abstract class Model implements ModelContract, Arrayable, Jsonable, \ArrayAccess
 
         // returns associative array of model properties.
         return $data;
+    }
+
+    /** @internal Synchronize transformed attributes after a successful write. */
+    public function syncStoredAttributes(array $data): void
+    {
+        foreach ($data as $key => $value) {
+            if ($this->hasCast($key) || $this->hasMutator($key)) {
+                $this->attributes[$key] = $this->castAttribute($key, $value);
+            }
+        }
     }
 
     /**

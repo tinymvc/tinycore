@@ -250,6 +250,7 @@ trait BuildsWriteQueries
 
         if ($hasIdentity) {
             if ($count) {
+                $model->syncStoredAttributes($data);
                 $model->syncPersistenceKey($data[$model->getPrimaryKey()] ?? $model->getPersistenceKey());
                 $model->trackUpdated();
             } else {
