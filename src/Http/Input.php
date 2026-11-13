@@ -73,14 +73,15 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes an email address.
      *
      * @param ?string $key Key in the data array to sanitize.
+     * @param ?string $default Default value to return if key is not found or invalid.
      * @return string|null Sanitized email or null if invalid.
      */
-    public function email(?string $key = null): ?string
+    public function email(?string $key = null, ?string $default = null): ?string
     {
         $key ??= 'email';
-        $value = strtolower(trim($this->get($key) ?: ''));
+        $value = strtolower(trim($this->get($key, $default) ?: ''));
 
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return null;
         }
 
@@ -167,11 +168,12 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes an integer value.
      *
      * @param string $key Key in the data array to sanitize.
+     * @param int $default Default value to return if key is not found or invalid.
      * @return int|null Sanitized integer or null if invalid.
      */
-    public function number(string $key): ?int
+    public function number(string $key, int $default = 0): ?int
     {
-        $value = $this->get($key);
+        $value = $this->get($key, $default);
 
         if ($value === null || $value === '') {
             return null;
@@ -183,14 +185,27 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     }
 
     /**
+     * Sanitizes an integer value.
+     *
+     * @param string $key Key in the data array to sanitize.
+     * @param int $default Default value to return if key is not found or invalid.
+     * @return int|null Sanitized integer or null if invalid.
+     */
+    public function integer(string $key, int $default = 0): ?int
+    {
+        return $this->number($key, $default);
+    }
+
+    /**
      * Sanitizes a floating-point number.
      *
      * @param string $key Key in the data array to sanitize.
+     * @param float $default Default value to return if key is not found or invalid.
      * @return float|null Sanitized float or null if invalid.
      */
-    public function float(string $key): ?float
+    public function float(string $key, float $default = 0.0): ?float
     {
-        $value = $this->get($key);
+        $value = $this->get($key, $default);
 
         if ($value === null || $value === '') {
             return null;
@@ -205,24 +220,26 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes a boolean value.
      *
      * @param string $key Key in the data array to validate.
+     * @param bool $default Default value to return if key is not found or invalid.
      * @return bool|null Sanitized boolean or null if invalid.
      */
-    public function boolean(string $key): ?bool
+    public function boolean(string $key, bool $default = false): ?bool
     {
-        return filter_var(trim((string) ($this->get($key) ?: '')), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return filter_var(trim((string) ($this->get($key, $default) ?: '')), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     }
 
     /**
      * Sanitizes a URL.
      *
      * @param string $key Key in the data array to sanitize.
+     * @param string|null $default Default value to return if key is not found or invalid.
      * @return string|null Sanitized URL or null if invalid.
      */
-    public function url(string $key): ?string
+    public function url(string $key, ?string $default = null): ?string
     {
-        $value = trim($this->get($key) ?: '');
+        $value = trim($this->get($key, $default) ?: '');
 
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return null;
         }
 
@@ -234,13 +251,14 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Validates an IP address.
      *
      * @param string $key Key in the data array to validate.
+     * @param string|null $default Default value to return if key is not found or invalid.
      * @return string|null Valid IP address or null if invalid.
      */
-    public function ip(string $key): ?string
+    public function ip(string $key, ?string $default = null): ?string
     {
-        $value = trim($this->get($key) ?: '');
+        $value = trim($this->get($key, $default) ?: '');
 
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return null;
         }
 
@@ -318,11 +336,12 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes a string to contain only digits.
      *
      * @param string $key Key in the data array to sanitize.
+     * @param string|null $default Default value to return if key is not found or invalid.
      * @return string|null Sanitized digit string or null if invalid.
      */
-    public function digits(string $key): ?string
+    public function digits(string $key, ?string $default = null): ?string
     {
-        $value = $this->get($key);
+        $value = $this->get($key, $default);
         if ($value === null || $value === '') {
             return null;
         }
@@ -380,7 +399,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function json(string $key, bool $decode = false): string|array|null
     {
         $value = trim($this->get($key) ?: '');
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return null;
         }
 
@@ -656,7 +675,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function safe(string $key, array $allowedTags = []): ?string
     {
         $value = trim($this->get($key) ?: '');
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return null;
         }
 
@@ -720,6 +739,27 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
     public function has(string $key): bool
     {
         return $this->data->has($key);
+    }
+
+    /**
+     * Removes a key-value pair from the sanitizer data array.
+     *
+     * @param string|array $keys Key(s) to remove.
+     */
+    public function forget($keys): void
+    {
+        $this->data->forget(...func_get_args());
+    }
+
+    /**
+     * Checks if a key exists and is not empty in the sanitizer data array.
+     *
+     * @param string $key Key to check.
+     * @return bool True if key exists and is not empty, false otherwise.
+     */
+    public function filled(string $key): bool
+    {
+        return filled($this->get($key));
     }
 
     /**
@@ -955,9 +995,9 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
                 'email' => $this->email($field),
                 'text' => $this->text($field),
                 'html', 'escapeHtml' => $this->escapeHtml($field),
-                'number' => $this->number($field),
+                'number', 'integer' => $this->number($field),
                 'float' => $this->float($field),
-                'boolean' => $this->boolean($field),
+                'boolean', 'bool' => $this->boolean($field),
                 'url' => $this->url($field),
                 'ip' => $this->ip($field),
                 'alpha' => $this->alpha($field),
@@ -1072,7 +1112,7 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
         $key ??= 'slug';
 
         $value = trim($this->get($key) ?: '');
-        if ($value === null || $value === '') {
+        if ($value === '') {
             return null;
         }
 

@@ -1649,7 +1649,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
 
         foreach ($key as $k) {
             $value = $this->offsetGet($k);
-            if ($value === null || $value === [] || (is_string($value) && trim($value) === '')) {
+            if (filled($value) === false) {
                 return false;
             }
         }
@@ -1673,6 +1673,24 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
         }
 
         return $this->offsetGet($key);
+    }
+
+    /**
+     * Removes a specific key or keys from the request.
+     * 
+     * This method removes the specified key or keys from the request data
+     * (query parameters, post parameters, file uploads, or route parameters).
+     *
+     * @param string|array $key The key or array of keys to remove.
+     * @return void
+     */
+    public function forget(string|array $key): void
+    {
+        $key = is_array($key) ? $key : func_get_args();
+
+        foreach ($key as $k) {
+            $this->offsetUnset($k);
+        }
     }
 
     /**
