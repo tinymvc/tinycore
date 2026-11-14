@@ -331,7 +331,7 @@ abstract class StorageDriverContract extends DriverTestCase
     {
         $q = $this->queueStore();
         $q->push($this->job('failed'));
-        $id = (int) $q->getNextJob()->getId();
+        $id = $q->getNextJob()->getId();
         $q->markJobAsFailed($id, new RuntimeException('failure'), 1);
         $q->push($this->job('pending'));
         $q->clearFailedJobs();
@@ -368,7 +368,7 @@ abstract class StorageDriverContract extends DriverTestCase
     {
         $q = $this->queueStore();
         $q->push($this->job('failed'));
-        $id = (int) $q->getNextJob()->getId();
+        $id = $q->getNextJob()->getId();
         $q->markJobAsFailed($id, new RuntimeException('specific failure'), 3);
         $failed = $q->getFailedJobs();
         $this->assertCount(1, $failed);

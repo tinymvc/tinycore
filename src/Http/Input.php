@@ -168,10 +168,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes an integer value.
      *
      * @param string $key Key in the data array to sanitize.
-     * @param int $default Default value to return if key is not found or invalid.
+     * @param int|null $default Default value to return if key is not found or invalid.
      * @return int|null Sanitized integer or null if invalid.
      */
-    public function number(string $key, int $default = 0): ?int
+    public function number(string $key, ?int $default = null): ?int
     {
         $value = $this->get($key, $default);
 
@@ -188,10 +188,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes an integer value.
      *
      * @param string $key Key in the data array to sanitize.
-     * @param int $default Default value to return if key is not found or invalid.
+     * @param int|null $default Default value to return if key is not found or invalid.
      * @return int|null Sanitized integer or null if invalid.
      */
-    public function integer(string $key, int $default = 0): ?int
+    public function integer(string $key, ?int $default = null): ?int
     {
         return $this->number($key, $default);
     }
@@ -200,10 +200,10 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes a floating-point number.
      *
      * @param string $key Key in the data array to sanitize.
-     * @param float $default Default value to return if key is not found or invalid.
+     * @param float|null $default Default value to return if key is not found or invalid.
      * @return float|null Sanitized float or null if invalid.
      */
-    public function float(string $key, float $default = 0.0): ?float
+    public function float(string $key, ?float $default = null): ?float
     {
         $value = $this->get($key, $default);
 
@@ -220,12 +220,16 @@ class Input implements InputContract, Arrayable, Jsonable, \Stringable, \ArrayAc
      * Sanitizes a boolean value.
      *
      * @param string $key Key in the data array to validate.
-     * @param bool $default Default value to return if key is not found or invalid.
+     * @param bool|null $default Default value to return if key is not found or invalid.
      * @return bool|null Sanitized boolean or null if invalid.
      */
-    public function boolean(string $key, bool $default = false): ?bool
+    public function boolean(string $key, ?bool $default = null): ?bool
     {
-        return filter_var(trim((string) ($this->get($key, $default) ?: '')), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $value = $this->get($key, $default);
+        if ($value === null || $value === '') {
+            return null;
+        }
+        return filter_var(trim((string) $value), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
     }
 
     /**
