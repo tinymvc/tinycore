@@ -60,7 +60,7 @@ final class QueueWorkerTest extends FrameworkTestCase
         $this->app->setConfig('cache.default', 'missing');
         foreach ([false, true] as $fail) {
             $path = $this->storagePath . '/restart-job';
-            $queue->push(new Job(RestartWorkerJob::class, [$path, $fail]));
+            $queue->push(new Job(RestartWorkerJob::class, [$path, $fail], now()->subSeconds(2)));
             $queue->push(new Job('strlen', ['pending']));
             ob_start();
             try {
@@ -149,7 +149,7 @@ final class QueueWorkerTest extends FrameworkTestCase
     {
         $queue = $this->queue();
         $marker = $this->storagePath . '/unexpected-second-job';
-        $queue->push(new Job(RestartThenClearCacheJob::class));
+        $queue->push(new Job(RestartThenClearCacheJob::class, scheduledTime: now()->subSeconds(2)));
         $queue->push(new Job('file_put_contents', [$marker, 'ran']));
         ob_start();
         try {

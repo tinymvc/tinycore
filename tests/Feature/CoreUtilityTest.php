@@ -14,6 +14,7 @@ final class CoreUtilityTest extends FrameworkTestCase
         file_put_contents($this->storagePath . '/config/app.php', '<?php return ["name" => "Test"];');
         file_put_contents($this->storagePath . '/config/services/mail.php', '<?php return ["enabled" => false];');
         $config = DotEnv::discoverConfig($this->storagePath . '/config', $this->storagePath . '/compiled.php', $this->storagePath . '/.env', false);
+        ksort($config);
         $this->assertSame(['app' => ['name' => 'Test'], 'services' => ['mail' => ['enabled' => false]]], $config);
         $this->assertFalse(is_file($this->storagePath . '/compiled.php'));
     }
