@@ -10,7 +10,7 @@ final class UploadValidationTest extends FrameworkTestCase
 {
     public function test_psr_upload_validation_uses_actual_bytes_and_preserves_the_stream(): void
     {
-        $stream = Stream::create(str_repeat('x', 1024));
+        $stream = Stream::create(str_repeat("Plain text upload test fixture.\n", 32));
         $stream->seek(23);
         // Client metadata must not decide size or MIME checks.
         $file = new UploadedFile($stream, 1, UPLOAD_ERR_OK, 'fake.png', 'image/png');
