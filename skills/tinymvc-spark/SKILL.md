@@ -66,7 +66,7 @@ Read the selected response/adapter reference before implementing. Keep domain se
 
 **Blade** uses native helpers and anonymous components only. Never assume Laravel-only features:
 - No `\Spark\Facades\*` in views; use helpers (`user()`, `auth()`, `session()`, `route()`, `old()`, `errors()`, `config()`, `now()`).
-- No `$loop` (use `$index => $item`), no `@forelse` (use `@if` + `@foreach` + `@else`). Check arrays with `!empty($items)` and Collections with `$items->isNotEmpty()`.
+- No `$loop` (use `$index => $item`). Native `@forelse` ... `@empty` ... `@endforelse` is supported for arrays, Collections, and iterables.
 - No `@push`, `@stack`, `@once`, `@inject`, `<x-slot:name>`, or class components. Components are anonymous templates in `resources/views/components/` that render `{{ $slot }}`.
 - On `<x-...>` tags, use `::disabled` or `x-bind:disabled` for Alpine bindings.
 - Full directive list, escaping, and component syntax: [views and frontend](references/views-frontend.md).

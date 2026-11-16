@@ -7,7 +7,9 @@ final class BladeDirectiveTest extends FrameworkTestCase
     private function assertRendered(string $source, array $context, string $expected): void
     {
         $path = $this->storagePath . '/views';
-        mkdir($path, 0700, true);
+        if (!is_dir($path)) {
+            mkdir($path, 0700, true);
+        }
         file_put_contents($path . '/case.blade.php', $source);
         $blade = new \Spark\View\Blade($path, $this->storagePath . '/compiled');
         $level = ob_get_level();
@@ -151,4 +153,73 @@ final class BladeDirectiveTest extends FrameworkTestCase
         $this->assertRendered('{!! $value !!}|{{ $value }}', ['value' => '<p>x</p>'], '<p>x</p>|&lt;p&gt;x&lt;/p&gt;');
     }
 
+    public function test_forelse_with_empty_array(): void
+    {
+        $this->assertRendered('@forelse($items as $item){{ $item }}@empty No items @endforelse', ['items' => []], 'No items');
+    }
+
+    public function test_forelse_with_nonempty_array(): void
+    {
+        $this->assertRendered('@forelse($items as $item){{ $item }}@empty No items @endforelse', ['items' => ['a', 'b']], 'ab');
+    }
+
+    public function test_forelse_associative_array(): void
+    {
+        $this->assertRendered('@forelse($items as $key => $val){{ $key }}:{{ $val }};@empty None @endforelse', ['items' => ['x' => 1, 'y' => 2]], 'x:1;y:2;');
+    }
+
+    public function test_forelse_with_collection(): void
+    {
+        $collection = new \Spark\Support\Collection(['one', 'two']);
+        $emptyCollection = new \Spark\Support\Collection([]);
+
+        $this->assertRendered('@forelse($items as $item){{ $item }}@empty Empty @endforelse', ['items' => $collection], 'onetwo');
+        $this->assertRendered('@forelse($items as $item){{ $item }}@empty Empty @endforelse', ['items' => $emptyCollection], 'Empty');
+    }
+
+    public function test_forelse_nested(): void
+    {
+        $data = [
+            'groups' => [
+                ['name' => 'A', 'items' => [1, 2]],
+                ['name' => 'B', 'items' => []],
+            ]
+        ];
+
+        $source = '@forelse($groups as $group){{ $group["name"] }}:@forelse($group["items"] as $item){{ $item }}@empty none @endforelse;@empty no groups @endforelse';
+        $this->assertRendered($source, $data, 'A:12;B: none ;');
+
+        $this->assertRendered($source, ['groups' => []], 'no groups');
+    }
+
+    public function test_forelse_nested_empty_conditional(): void
+    {
+        $source = '@forelse($users as $user){{ $user["name"] }}@empty($user["bio"])(no bio)@endempty;@empty No users @endforelse';
+        $this->assertRendered($source, ['users' => [['name' => 'Ada', 'bio' => null]]], 'Ada(no bio);');
+        $this->assertRendered($source, ['users' => []], 'No users');
+    }
+
+    public function test_forelse_without_empty_block(): void
+    {
+        $this->assertRendered('@forelse($items as $item){{ $item }}@endforelse', ['items' => ['a', 'b']], 'ab');
+        $this->assertRendered('@forelse($items as $item){{ $item }}@endforelse', ['items' => []], '');
+    }
+
+    public function test_forelse_escaped_directives(): void
+    {
+        $source = '@@forelse($items as $item) @@empty @@endforelse';
+        $this->assertRendered($source, [], '@forelse($items as $item) @empty @endforelse');
+    }
+
+    public function test_forelse_unbalanced_parentheses_throws_exception(): void
+    {
+        $path = $this->storagePath . '/views';
+        if (!is_dir($path)) {
+            mkdir($path, 0700, true);
+        }
+        file_put_contents($path . '/unbalanced.blade.php', '@forelse($items as $item');
+        $blade = new \Spark\View\Blade($path, $this->storagePath . '/compiled');
+
+        $this->assertThrows(\InvalidArgumentException::class, fn() => $blade->render('unbalanced', ['items' => []]));
+    }
 }

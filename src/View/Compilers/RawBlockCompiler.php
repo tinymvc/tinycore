@@ -51,6 +51,7 @@ class RawBlockCompiler
         'sectionMissing',
         'session',
         'switch',
+        'forelse',
         'foreach',
         'for',
         'while',

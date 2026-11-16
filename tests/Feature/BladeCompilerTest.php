@@ -620,4 +620,15 @@ BLADE,
 
         $this->assertRenders($blade, $css . 'yes (open text');
     }
+
+    public function test_forelse_with_complex_expression_and_components(): void
+    {
+        $blade = $this->views([
+            'page' => '@forelse(array_filter($items, fn($x) => $x > 1) as $item)<x-card>{{ $item }}</x-card>@empty<p>Empty</p>@endforelse',
+            'components/card' => '<div>{{ $slot }}</div>',
+        ]);
+
+        $this->assertRenders($blade, '<div>2</div><div>3</div>', ['items' => [1, 2, 3]]);
+        $this->assertRenders($blade, '<p>Empty</p>', ['items' => [0, 1]]);
+    }
 }

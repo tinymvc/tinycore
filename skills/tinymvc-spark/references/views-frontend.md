@@ -60,7 +60,7 @@ Blocks use their corresponding closing directive unless listed otherwise. This i
 | --- | --- |
 | Conditions | `@if`, `@elseif`, `@else`, `@endif`; `@unless`, `@isset`, `@empty` with expressions and matching `@end...` |
 | Switch | `@switch($value)`, `@case($value)`, `@break`, `@default`, `@endswitch` |
-| Loops | `@foreach`, `@for`, `@while` and matching `@end...`; argument-free `@break`, `@continue` |
+| Loops | `@foreach`, `@forelse` (`@empty`, `@endforelse`), `@for`, `@while` and matching `@end...`; argument-free `@break`, `@continue` |
 | Gate | `@can('ability', $model)`, `@cannot(...)`, matching closing directives; `@authorize(...)` runs authorization |
 | Auth | `@auth`, `@guest`, optional guard (`@auth('admin')`), `@endauth`, `@endguest` |
 | Session | `@session('key') ... @endsession` checks `session()->has()` |
@@ -81,24 +81,21 @@ Blocks use their corresponding closing directive unless listed otherwise. This i
 
 | Unsupported | Use instead |
 | --- | --- |
-| `@forelse` / loop `@empty` branch | `@if` + `@foreach` + `@else` |
 | `$loop` | Explicit index/key or controller-prepared state |
 | `@push`, `@stack`, `@prepend`, `@once` | Layout sections or Vite bundles |
 | Named `<x-slot:...>` / `<x-slot name="...">` | Props and the one default `$slot` |
 | Class components / `<x-dynamic-component>` | Anonymous templates, explicit component choice |
 | `@break($condition)` / `@continue($condition)` | Conditional block around argument-free directive |
-| `@inject`, `@each` | Controller-provided data/helpers; `@foreach` |
+| `@inject`, `@each` | Controller-provided data/helpers; `@foreach` or `@forelse` |
 
-Check emptiness for the actual type: `!empty($items)` works for arrays; Collection objects need `isNotEmpty()`/`isEmpty()` or `count()`.
+Native `@forelse` works with arrays, collections, and any iterable:
 
 ```blade
-@if($posts->isNotEmpty())
-    @foreach($posts as $index => $post)
-        <p>{{ $index + 1 }}. {{ $post->title }}</p>
-    @endforeach
-@else
+@forelse($posts as $index => $post)
+    <p>{{ $index + 1 }}. {{ $post->title }}</p>
+@empty
     <p>No posts available.</p>
-@endif
+@endforelse
 ```
 
 ## Helpers and forms

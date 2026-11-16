@@ -113,6 +113,11 @@ class DirectiveCompiler
             ));
         }
 
+        // Compile forelse loops
+        if (str_contains($template, '@forelse')) {
+            $template = $this->compileForelse($template);
+        }
+
         // Compile loop directives
         foreach (self::LOOP_DIRECTIVES as $directive => $config) {
             if (!str_contains($template, "@$directive") && !str_contains($template, "@end$directive")) {
@@ -252,5 +257,70 @@ class DirectiveCompiler
         }
 
         return $template;
+    }
+
+    /**
+     * Compile forelse loops with @empty and @endforelse
+     */
+    public function compileForelse(string $template): string
+    {
+        $counter = 0;
+        $stack = [];
+
+        return $this->compileOutsidePhp($template, function (string $source) use (&$counter, &$stack) {
+            $pattern = '/(?<!@)\@(?:forelse\s*\(|empty\b(?!\s*\()|endforelse\b)/';
+            $offset = 0;
+
+            while (preg_match($pattern, $source, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                $matchStart = $matches[0][1];
+                $matched = $matches[0][0];
+
+                if (str_starts_with($matched, '@forelse')) {
+                    $parenStart = $matchStart + strlen($matched) - 1;
+                    $expression = $this->extractBalancedExpression($source, $parenStart);
+
+                    if ($expression === false) {
+                        throw new InvalidArgumentException('Unbalanced parentheses in @forelse directive');
+                    }
+
+                    $counter++;
+                    $stack[] = ['id' => $counter, 'has_empty' => false];
+                    $replacement = sprintf('<?php $__empty_%d = true; foreach(%s): $__empty_%d = false; ?>', $counter, $expression, $counter);
+                    $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+                    $source = substr_replace($source, $replacement, $matchStart, $directiveLength);
+                    $offset = $matchStart + strlen($replacement);
+                    continue;
+                }
+
+                if ($matched === '@empty') {
+                    if (empty($stack) || end($stack)['has_empty']) {
+                        $offset = $matchStart + strlen($matched);
+                        continue;
+                    }
+
+                    $stack[array_key_last($stack)]['has_empty'] = true;
+                    $current = end($stack)['id'];
+                    $replacement = sprintf('<?php endforeach; if ($__empty_%d): ?>', $current);
+                    $source = substr_replace($source, $replacement, $matchStart, strlen($matched));
+                    $offset = $matchStart + strlen($replacement);
+                    continue;
+                }
+
+                if ($matched === '@endforelse') {
+                    if (empty($stack)) {
+                        $offset = $matchStart + strlen($matched);
+                        continue;
+                    }
+
+                    $entry = array_pop($stack);
+                    $replacement = $entry['has_empty'] ? '<?php endif; ?>' : '<?php endforeach; ?>';
+                    $source = substr_replace($source, $replacement, $matchStart, strlen($matched));
+                    $offset = $matchStart + strlen($replacement);
+                    continue;
+                }
+            }
+
+            return $source;
+        });
     }
 }
