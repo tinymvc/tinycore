@@ -1628,9 +1628,9 @@ if (!function_exists('errors')) {
      *
      * @param null|array|string $field The field name to retrieve the error messages for.
      *                                  If null, all error object will be returned.
-     * @return ($field is null ? \Spark\Http\InputErrors : bool) An object containing the error messages from the current request.
+     * @return ($field is null ? \Spark\Http\ErrorBag : bool) An object containing the error messages from the current request.
      */
-    function errors(null|array|string $field = null): \Spark\Http\InputErrors|bool
+    function errors(null|array|string $field = null): \Spark\Http\ErrorBag|bool
     {
         return request()->errors($field);
     }

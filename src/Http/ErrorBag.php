@@ -2,7 +2,7 @@
 
 namespace Spark\Http;
 
-use Spark\Contracts\Http\InputErrorsContract;
+use Spark\Contracts\Http\ErrorBagContract;
 use Spark\Http\Session\Session;
 use Spark\Contracts\Support\Arrayable;
 use function array_key_exists;
@@ -13,14 +13,14 @@ use function is_object;
 use function is_scalar;
 
 /**
- * Class InputErrors - HTTP Request input validation errors
+ * Class ErrorBag - HTTP Request input validation errors
  *
  * This class handles HTTP request errors, providing methods to retrieve error messages,
  * old input values, and check for the existence of errors.
  *
  * @package Spark\Http
  */
-class InputErrors implements InputErrorsContract, Arrayable, \ArrayAccess, \IteratorAggregate, \Stringable
+class ErrorBag implements ErrorBagContract, Arrayable, \ArrayAccess, \IteratorAggregate, \Stringable
 {
     /**
      * @var array Stores error messages for fields

@@ -4,7 +4,7 @@ require_once dirname(__DIR__) . '/Support/FrameworkTestCase.php';
 
 use Spark\Utils\DotEnv;
 use Spark\Http\Input;
-use Spark\Http\InputErrors;
+use Spark\Http\ErrorBag;
 
 final class UtilityBoundaryTest extends FrameworkTestCase
 {
@@ -89,7 +89,7 @@ ENV);
 
     public function test_input_errors_accept_additions_to_string_messages_and_empty_rendering(): void
     {
-        $errors = app(InputErrors::class);
+        $errors = app(ErrorBag::class);
         $errors->setMessages(['name' => 'First']);
         $errors->addMessage('name', 'Second');
         $this->assertSame(['First', 'Second'], $errors->error('name'));

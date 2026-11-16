@@ -34,7 +34,7 @@ Use the linked API lists for supported names; inspect installed source for uncer
 | Http: Auth | `Spark\Http\Auth`, auth guards | [auth-gate.md](auth-gate.md) |
 | Http: Gate | `Spark\Http\Gate` | [auth-gate.md](auth-gate.md) |
 | Http: Input | `Spark\Http\Input` | [Typed accessors](requests-validation.md#input-shaping-and-extraction) |
-| Http: InputErrors | `Spark\Http\InputErrors` | [requests-validation.md](requests-validation.md) |
+| Http: ErrorBag | `Spark\Http\ErrorBag` | [requests-validation.md](requests-validation.md) |
 | Http: Middleware | `Spark\Http\Middleware`, `MiddlewareInterface` | [middleware.md](middleware.md) |
 | Http: Request | `Spark\Http\Request`, `Spark\Foundation\Http\FormRequest` | [requests-validation.md](requests-validation.md) |
 | Http: Response | `Spark\Http\Response` | [responses.md](responses.md) |

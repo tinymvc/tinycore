@@ -1896,12 +1896,12 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      *
      * @param null|array|string $field The field name to retrieve the error messages for.
      *                                  If null, all error object will be returned.
-     * @return ($field is null ? \Spark\Http\InputErrors : bool) An object containing the error messages from the current request.
+     * @return ($field is null ? \Spark\Http\ErrorBag : bool) An object containing the error messages from the current request.
      */
-    public function errors(null|array|string $field = null): bool|InputErrors
+    public function errors(null|array|string $field = null): bool|ErrorBag
     {
-        /** @var \Spark\Http\InputErrors $errors */
-        $errors = app(InputErrors::class);
+        /** @var \Spark\Http\ErrorBag $errors */
+        $errors = app(ErrorBag::class);
 
         if ($field !== null) {
             foreach ((array) $field as $name) {

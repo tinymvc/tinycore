@@ -6,7 +6,7 @@ require_once dirname(__DIR__) . '/Support/LifecycleTestCase.php';
 
 use Spark\Facades\Route;
 use Spark\Foundation\Providers\ServiceProvider;
-use Spark\Http\{Auth, InputErrors, Request, Response};
+use Spark\Http\{Auth, ErrorBag, Request, Response};
 use Spark\View\Blade;
 use Tests\Support\LifecycleTestCase;
 
@@ -68,13 +68,13 @@ final class ProviderLifecycleTest extends LifecycleTestCase
     public function testRequestScopedServicesRefreshWhileApplicationSingletonsPersist(): void
     {
         // Sentinel factories exercise reset boundaries without testing auth or view features.
-        foreach ([Response::class, InputErrors::class, Auth::class, Blade::class, 'persistent'] as $key) {
+        foreach ([Response::class, ErrorBag::class, Auth::class, Blade::class, 'persistent'] as $key) {
             $this->app->singleton($key, fn() => new \stdClass());
         }
         $snapshots = [];
         Route::get('/scope/{id}', function () use (&$snapshots) {
             $snapshot = [];
-            foreach ([Request::class, Response::class, InputErrors::class, Auth::class, Blade::class, 'persistent'] as $key) {
+            foreach ([Request::class, Response::class, ErrorBag::class, Auth::class, Blade::class, 'persistent'] as $key) {
                 $snapshot[$key] = $this->app->get($key);
             }
             $snapshots[] = $snapshot;
@@ -82,7 +82,7 @@ final class ProviderLifecycleTest extends LifecycleTestCase
         });
         $this->get('/scope/first')->assertOk();
         $this->get('/scope/second')->assertOk();
-        foreach ([Request::class, Response::class, InputErrors::class, Auth::class, Blade::class] as $key) {
+        foreach ([Request::class, Response::class, ErrorBag::class, Auth::class, Blade::class] as $key) {
             $this->assertFalse($snapshots[0][$key] === $snapshots[1][$key]);
         }
         $this->assertSame($snapshots[0]['persistent'], $snapshots[1]['persistent']);

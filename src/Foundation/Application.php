@@ -29,7 +29,7 @@ use Spark\Foundation\Exceptions\ValidationException;
 use Spark\Hash;
 use Spark\Utils\DotEnv;
 use Spark\Http\Auth;
-use Spark\Http\InputErrors;
+use Spark\Http\ErrorBag;
 use Spark\Http\Middleware;
 use Spark\Http\Request;
 use Spark\Http\Response;
@@ -65,7 +65,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.2.26';
+    public const VERSION = '4.2.27';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -187,7 +187,7 @@ class Application extends \Spark\Container implements ApplicationContract
 
         // Registration is lazy, including in CLI jobs and PSR hosts.
         $this->singleton(Translator::class);
-        $this->singleton(InputErrors::class);
+        $this->singleton(ErrorBag::class);
         $this->singleton(Request::class);
         $this->singleton(Response::class);
         $this->singleton(Gate::class);
@@ -196,7 +196,7 @@ class Application extends \Spark\Container implements ApplicationContract
 
         $this->alias('translator', Translator::class);
         $this->alias('session', Session::class);
-        $this->alias('inputErrors', InputErrors::class);
+        $this->alias('errorBag', ErrorBag::class);
         $this->alias('request', Request::class);
         $this->alias('response', Response::class);
         $this->alias('gate', Gate::class);
@@ -213,7 +213,7 @@ class Application extends \Spark\Container implements ApplicationContract
         $this->bind(\Spark\Contracts\Http\MiddlewareContract::class, fn() => $this->get(Middleware::class));
         $this->bind(\Spark\Contracts\EventDispatcherContract::class, fn() => $this->get(Events::class));
         $this->bind(\Spark\Contracts\Http\SessionContract::class, fn() => $this->get(Session::class));
-        $this->bind(\Spark\Contracts\Http\InputErrorsContract::class, fn() => $this->get(InputErrors::class));
+        $this->bind(\Spark\Contracts\Http\ErrorBagContract::class, fn() => $this->get(ErrorBag::class));
         $this->bind(\Spark\Contracts\Http\RequestContract::class, fn() => $this->get(Request::class));
         $this->bind(\Spark\Contracts\Http\ResponseContract::class, fn() => $this->get(Response::class));
         $this->bind(\Spark\Contracts\Http\GateContract::class, fn() => $this->get(Gate::class));
@@ -799,7 +799,7 @@ class Application extends \Spark\Container implements ApplicationContract
 
         if ($this->booted) {
             $this->forgetInstance(Response::class);
-            $this->forgetInstance(InputErrors::class);
+            $this->forgetInstance(ErrorBag::class);
             $this->forgetInstance(Auth::class);
             $this->forgetInstance(Blade::class);
         }

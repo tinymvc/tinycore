@@ -3,14 +3,14 @@
 namespace Spark\Contracts\Http;
 
 /**
- * Interface InputErrorsContract
+ * Interface ErrorBagContract
  *
  * This interface defines the contract for handling HTTP request input validation errors.
  * It provides methods to retrieve old input values, check for errors, and get error messages.
  *
  * @package Spark\Contracts\Http
  */
-interface InputErrorsContract
+interface ErrorBagContract
 {
     /**
      * Get the old value of the given field.

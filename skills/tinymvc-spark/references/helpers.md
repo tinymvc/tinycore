@@ -1,6 +1,6 @@
 # Global Helpers, Facades, and Support Primitives
 
-> **Read when:** you need a facade, a global helper function, or a support utility (Collection, Str, Arr, Number, Js, Url, InputErrors).
+> **Read when:** you need a facade, a global helper function, or a support utility (Collection, Str, Arr, Number, Js, Url, ErrorBag).
 > **Related:** [Foundation](foundation.md) · [API discovery](api-discovery.md) · [date boundaries](localization-dates.md)
 > Paths are relative to the application root. Verify exact signatures against installed source ([API discovery](api-discovery.md)).
 
@@ -99,7 +99,7 @@ Defined in `Spark\Foundation\helpers.php` and `Spark\Support\helpers.php`.
 
 - `session(array|string|null $param = null, mixed $default = null)`: get/set session data, or the `Spark\Http\Session` instance.
 - `cookie(string $name, mixed $value = null, mixed $options = null)`: read or set a cookie (use `now()->addDays(...)` for expiry).
-- `errors()`: flashed `Spark\Http\InputErrors` bag.
+- `errors()`: flashed `Spark\Http\ErrorBag` bag.
 - `old(string $key, ?string $default = null)`: flashed previous input.
 
 ### Views and Vite
@@ -270,7 +270,7 @@ $url->getPath();        // '/posts/spark-guide'
 $url->getQueryParams(); // ['ref' => 'email', ...]
 ```
 
-### Validation error bag (`Spark\Http\InputErrors`)
+### Validation error bag (`Spark\Http\ErrorBag`)
 
 ```php
 $errors = errors();

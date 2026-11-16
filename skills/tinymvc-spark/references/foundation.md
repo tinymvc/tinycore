@@ -66,7 +66,7 @@ Resolve the installed version from `composer.lock` / Composer installed metadata
 **Validation, auth, session**
 
 - `src/Foundation/Http/FormRequest.php`
-- `src/Http/Validator.php`, `Input.php` (validated input wrapper), `InputErrors.php`
+- `src/Http/Validator.php`, `Input.php` (validated input wrapper), `ErrorBag.php`
 - `src/Http/Auth.php`, `Gate.php`, `Session.php`
 
 **Database, ORM, migrations**

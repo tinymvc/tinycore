@@ -132,7 +132,7 @@ Use [API discovery](api-discovery.md) for uncertain parameters; Laravel rule syn
 
 ## Errors and uploads
 
-`errors()` returns `Spark\Http\InputErrors`: `any()`, `has($field)`, `first($field)`, `get($field)`, `all()`. `addMessage()` appends to a string/list; string conversion yields the first message or `''`.
+`errors()` returns `Spark\Http\ErrorBag`: `any()`, `has($field)`, `first($field)`, `get($field)`, `all()`. `addMessage()` appends to a string/list; string conversion yields the first message or `''`.
 
 ```blade
 @error('email')
