@@ -30,6 +30,8 @@ class DirectiveCompiler
     private const CONDITIONAL_DIRECTIVES = [
         'if' => ['open' => 'if(%s):', 'close' => 'endif;'],
         'elseif' => ['open' => 'elseif(%s):', 'close' => null],
+        'elsecan' => ['open' => 'elseif(can(%s)):', 'close' => null],
+        'elsecannot' => ['open' => 'elseif(cannot(%s)):', 'close' => null],
         'unless' => ['open' => 'if(!(%s)):', 'close' => 'endif;'],
         'isset' => ['open' => 'if(isset(%s)):', 'close' => 'endif;'],
         'empty' => ['open' => 'if(empty(%s)):', 'close' => 'endif;'],
@@ -37,7 +39,8 @@ class DirectiveCompiler
         'cannot' => ['open' => 'if(cannot(%s)):', 'close' => 'endif;'],
         'hasSection' => ['open' => 'if($this->hasSection(%s)):', 'close' => 'endif;'],
         'sectionMissing' => ['open' => 'if(!$this->hasSection(%s)):', 'close' => 'endif;'],
-        'session' => ['open' => 'if(session()->has(%s)):', 'close' => 'endif;'],
+        'session' => ['open' => 'if(session()->has($__bladeSessionKey = %s)): $value = session()->get($__bladeSessionKey);', 'close' => 'endif;'],
+        'env' => ['open' => 'if(app()->environment(%s)):', 'close' => 'endif;'],
         'switch' => ['open' => 'switch(%s):case 1.9996931348623157e+308:break;', 'close' => 'endswitch;'],
     ];
 
@@ -58,9 +61,13 @@ class DirectiveCompiler
         'json' => 'echo \Spark\Support\Js::from(%s);',
         'js' => 'echo \Spark\Support\Js::from(%s);',
         'case' => 'case %s:',
+        'break' => 'if(%s) break;',
+        'continue' => 'if(%s) continue;',
         'vite' => 'echo vite(%s);',
         'auth' => 'if(is_logged(%s)):',
         'guest' => 'if(is_guest(%s)):',
+        'elseauth' => 'elseif(is_logged(%s)):',
+        'elseguest' => 'elseif(is_guest(%s)):',
         'method' => 'echo method(%s);',
         'checked' => "echo (%s) ? 'checked' : '';",
         'disabled' => "echo (%s) ? 'disabled' : '';",
@@ -86,8 +93,12 @@ class DirectiveCompiler
         'enderror' => '<?php endif; ?>',
         'auth' => '<?php if(is_logged()): ?>',
         'guest' => '<?php if(is_guest()): ?>',
+        'elseauth' => '<?php elseif(is_logged()): ?>',
+        'elseguest' => '<?php elseif(is_guest()): ?>',
         'endauth' => '<?php endif; ?>',
         'endguest' => '<?php endif; ?>',
+        'production' => '<?php if(app()->environment() === "production"): ?>',
+        'endproduction' => '<?php endif; ?>',
     ];
 
     public function __construct(private BladeCompiler $compiler)
@@ -101,7 +112,7 @@ class DirectiveCompiler
     {
         // Compile conditional directives
         foreach (self::CONDITIONAL_DIRECTIVES as $directive => $config) {
-            if (!str_contains($template, "@$directive") && !str_contains($template, "@end$directive")) {
+            if (stripos($template, "@$directive") === false && stripos($template, "@end$directive") === false) {
                 continue;
             }
 
@@ -114,13 +125,13 @@ class DirectiveCompiler
         }
 
         // Compile forelse loops
-        if (str_contains($template, '@forelse')) {
+        if (stripos($template, '@forelse') !== false) {
             $template = $this->compileForelse($template);
         }
 
         // Compile loop directives
         foreach (self::LOOP_DIRECTIVES as $directive => $config) {
-            if (!str_contains($template, "@$directive") && !str_contains($template, "@end$directive")) {
+            if (stripos($template, "@$directive") === false && stripos($template, "@end$directive") === false) {
                 continue;
             }
 
@@ -134,7 +145,7 @@ class DirectiveCompiler
 
         // Compile output directives
         foreach (self::OUTPUT_DIRECTIVES as $directive => $phpCode) {
-            if (str_contains($template, "@$directive")) {
+            if (stripos($template, "@$directive") !== false) {
                 $template = $this->compileOutsidePhp($template, fn($source) => $this->compileDirectiveWithExpression(
                     $source,
                     $directive,
@@ -148,7 +159,7 @@ class DirectiveCompiler
 
         // Compile single-line directives
         foreach (self::SINGLE_LINE_DIRECTIVES as $directive => $phpCode) {
-            if (str_contains($template, "@$directive")) {
+            if (stripos($template, "@$directive") !== false) {
                 $template = $this->compileOutsidePhp($template, fn($source) => $this->compileSingleLineDirective(
                     $source,
                     $directive,
@@ -165,7 +176,7 @@ class DirectiveCompiler
      */
     public function compileDirectiveWithExpression(string $template, string $directive, string $openTemplate, ?string $closeTemplate = null): string
     {
-        $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
+        $pattern = '/(?<!@)\@' . preg_quote($directive, '/') . '\s*\(/i';
         $offset = 0;
 
         while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
@@ -187,7 +198,7 @@ class DirectiveCompiler
         if ($closeTemplate) {
             $closeDirective = "end$directive";
             $template = $this->compileOutsidePhp($template, fn($source) => preg_replace(
-                '/\@' . preg_quote($closeDirective, '/') . '\b/',
+                '/(?<!@)\@' . preg_quote($closeDirective, '/') . '\b/i',
                 sprintf('<?php %s ?>', $closeTemplate),
                 $source
             ));
@@ -212,7 +223,7 @@ class DirectiveCompiler
      */
     public function compileSingleLineDirective(string $template, string $directive, string $phpCode): string
     {
-        return preg_replace('/\@' . preg_quote($directive, '/') . '\b/', $phpCode, $template);
+        return preg_replace('/(?<!@)\@' . preg_quote($directive, '/') . '\b/i', $phpCode, $template);
     }
 
     /**
@@ -268,12 +279,12 @@ class DirectiveCompiler
         $stack = [];
 
         return $this->compileOutsidePhp($template, function (string $source) use (&$counter, &$stack) {
-            $pattern = '/(?<!@)\@(?:forelse\s*\(|empty\b(?!\s*\()|endforelse\b)/';
+            $pattern = '/(?<!@)\@(?:forelse\s*\(|empty\b(?!\s*\()|endforelse\b)/i';
             $offset = 0;
 
             while (preg_match($pattern, $source, $matches, PREG_OFFSET_CAPTURE, $offset)) {
                 $matchStart = $matches[0][1];
-                $matched = $matches[0][0];
+                $matched = strtolower($matches[0][0]);
 
                 if (str_starts_with($matched, '@forelse')) {
                     $parenStart = $matchStart + strlen($matched) - 1;

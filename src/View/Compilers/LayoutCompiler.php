@@ -6,6 +6,7 @@ use InvalidArgumentException;
 use Spark\View\BladeCompiler;
 use Spark\View\Compilers\Concerns\ParsesBladeSyntax;
 use function count;
+use function in_array;
 use function preg_match;
 use function preg_replace_callback;
 use function strlen;
@@ -50,6 +51,15 @@ class LayoutCompiler
 
         if (str_contains($template, '@yield')) {
             $template = $this->compileOutsidePhp($template, $this->compileYields(...));
+        }
+
+        if (
+            stripos($template, '@push') !== false ||
+            stripos($template, '@prepend') !== false ||
+            stripos($template, '@stack') !== false ||
+            stripos($template, '@once') !== false
+        ) {
+            $template = $this->compileOutsidePhp($template, $this->compileStacks(...));
         }
 
         return $template;
@@ -176,6 +186,58 @@ class LayoutCompiler
             $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
             $template = substr_replace($template, $replacement, $matchStart, $directiveLength);
             $offset = $matchStart + strlen($replacement);
+        }
+
+        return $template;
+    }
+
+    /**
+     * Compile stack directives: @stack, @push, @pushIf, @pushOnce, @prepend, @prependOnce, @once
+     */
+    public function compileStacks(string $template): string
+    {
+        $pattern = '/(?<!@)@(stack|pushOnce|prependOnce|pushIf|push|prepend)\s*\(|(?<!@)@(endpushOnce|endprependOnce|endpushIf|endpush|endprepend|once|endonce)\b/i';
+        $offset = 0;
+
+        while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $matches[0][1];
+            $length = strlen($matches[0][0]);
+            $directive = strtolower($matches[1][0] ?: $matches[2][0]);
+            $args = [];
+
+            if ($matches[1][0] !== '') {
+                $expression = $this->extractBalancedExpression($template, $start + $length - 1);
+                if ($expression === false) {
+                    throw new InvalidArgumentException("Unbalanced parentheses in @{$directive} directive");
+                }
+                $args = $this->splitDirectiveArguments($expression, 2, $this->compiler->getExpressionBlocks());
+                $length += strlen($expression) + 1;
+            }
+
+            $name = $args[0] ?? "''";
+            $replacement = match ($directive) {
+                'stack' => "<?= \$this->yieldStack({$name}, " . ($args[1] ?? "''") . "); ?>",
+                'push' => "<?php \$this->startPush({$name}); ?>",
+                'prepend' => "<?php \$this->startPush({$name}, true); ?>",
+                'pushif' => "<?php if ({$name}): \$this->startPush(" . ($args[1] ?? "''") . "); ?>",
+                'endpush', 'endprepend' => '<?php $this->endPush(); ?>',
+                'endpushonce', 'endprependonce', 'endpushif' => '<?php $this->endPush(); endif; ?>',
+                'endonce' => '<?php endif; ?>',
+                default => '',
+            };
+
+            if (in_array($directive, ['once', 'pushonce', 'prependonce'], true)) {
+                $id = 'once_' . bin2hex(random_bytes(16));
+                $replacement = "<?php if (!\$this->hasRenderedOnce('{$id}')): \$this->markRenderedOnce('{$id}');";
+                if ($directive !== 'once') {
+                    $prepend = $directive === 'prependonce' ? 'true' : 'false';
+                    $replacement .= " \$this->startPush({$name}, {$prepend});";
+                }
+                $replacement .= ' ?>';
+            }
+
+            $template = substr_replace($template, $replacement, $start, $length);
+            $offset = $start + strlen($replacement);
         }
 
         return $template;

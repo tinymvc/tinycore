@@ -631,4 +631,198 @@ BLADE,
         $this->assertRenders($blade, '<div>2</div><div>3</div>', ['items' => [1, 2, 3]]);
         $this->assertRenders($blade, '<p>Empty</p>', ['items' => [0, 1]]);
     }
+
+    public function test_stack_push_prepend_and_defaults(): void
+    {
+        $blade = $this->views([
+            'page' => '@push("scripts")<script src="2.js"></script>@endpush'
+                . '@push("scripts")<script src="3.js"></script>@endpush'
+                . '@prepend("scripts")<script src="1.js"></script>@endprepend'
+                . '<head>@stack("scripts")</head>'
+                . '<footer>@stack("missing", "default-fallback")</footer>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<head><script src="1.js"></script><script src="2.js"></script><script src="3.js"></script></head><footer>default-fallback</footer>'
+        );
+    }
+
+    public function test_pushif_conditional(): void
+    {
+        $blade = $this->views([
+            'page' => '@pushIf(true, "scripts")<script src="included.js"></script>@endpushIf'
+                . '@pushIf(false, "scripts")<script src="ignored.js"></script>@endpushIf'
+                . '@stack("scripts")',
+        ]);
+
+        $this->assertRenders($blade, '<script src="included.js"></script>');
+    }
+
+    public function test_stack_with_layout_and_child_template(): void
+    {
+        $blade = $this->views([
+            'layout' => '<html><head>@stack("styles")</head><body>@yield("content")@stack("scripts")</body></html>',
+            'page' => '@extends("layout")'
+                . '@push("styles")<link rel="stylesheet" href="page.css">@endpush'
+                . '@section("content")<h1>Page</h1><x-modal />@endsection'
+                . '@push("scripts")<script src="page.js"></script>@endpush',
+            'components/modal' => '@push("scripts")<script src="modal.js"></script>@endpush<div>Modal</div>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<html><head><link rel="stylesheet" href="page.css"></head><body><h1>Page</h1><div>Modal</div><script src="modal.js"></script><script src="page.js"></script></body></html>'
+        );
+    }
+
+    public function test_once_directive_executes_only_once_in_loops_and_components(): void
+    {
+        $blade = $this->views([
+            'page' => '@foreach($items as $item)<x-accordion :title="$item" />@endforeach',
+            'components/accordion' => '@props(["title"])@once<script src="accordion.js"></script>@endonce<div class="item">{{ $title }}</div>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<script src="accordion.js"></script><div class="item">One</div><div class="item">Two</div><div class="item">Three</div>',
+            ['items' => ['One', 'Two', 'Three']]
+        );
+    }
+
+    public function test_once_inside_push_stack_deduplicates(): void
+    {
+        $blade = $this->views([
+            'layout' => '<main>@yield("content")</main>@stack("scripts")',
+            'page' => '@extends("layout")@section("content")<x-dialog /><x-dialog /><x-dialog />@endsection',
+            'components/dialog' => '@push("scripts")@once<script src="dialog.js"></script>@endonce@endpush<div>Dialog</div>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<main><div>Dialog</div><div>Dialog</div><div>Dialog</div></main><script src="dialog.js"></script>'
+        );
+    }
+
+    public function test_named_component_slots_syntax_and_attributes(): void
+    {
+        $blade = $this->views([
+            'page' => '<x-card class="shadow">'
+                . '<x-slot:header class="bg-blue font-bold">Panel Header</x-slot:header>'
+                . '<p>Main body content</p>'
+                . '<x-slot:footer class="text-muted"><button>Save</button></x-slot:footer>'
+                . '</x-card>',
+            'components/card' => '<div {{ $attributes }}>'
+                . '<header {{ $header->attributes }}>{{ $header }}</header>'
+                . '<main>{{ $slot }}</main>'
+                . '<footer {{ $footer->attributes }}>{{ $footer }}</footer>'
+                . '</div>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<div class="shadow">'
+            . '<header class="bg-blue font-bold">Panel Header</header>'
+            . '<main><p>Main body content</p></main>'
+            . '<footer class="text-muted"><button>Save</button></footer>'
+            . '</div>'
+        );
+    }
+
+    public function test_named_component_slot_attributes_binding_and_methods(): void
+    {
+        $blade = $this->views([
+            'page' => '<x-card>'
+                . '<x-slot name="header" :data-id="$headerId" active>Header with {{ $name }}</x-slot>'
+                . '<x-slot:sidebar></x-slot:sidebar>'
+                . 'Body content'
+                . '</x-card>',
+            'components/card' => '@if($header->isNotEmpty())<div {{ $header->attributes }}>{{ $header }}</div>@endif'
+                . '{{ $slot }}'
+                . '@if($sidebar->isEmpty())<aside>No Sidebar</aside>@endif',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<div data-id="101" active>Header with Shahin</div>Body content<aside>No Sidebar</aside>',
+            ['headerId' => 101, 'name' => 'Shahin']
+        );
+    }
+
+    public function test_named_slots_with_nested_components_and_default_slot(): void
+    {
+        $blade = $this->views([
+            'page' => '<x-modal>'
+                . '<x-slot:title><x-badge variant="info">Note</x-badge> Welcome</x-slot:title>'
+                . '<p>Modal body with <x-badge variant="success">OK</x-badge></p>'
+                . '</x-modal>',
+            'components/modal' => '<div class="modal"><div class="title">{{ $title }}</div><div class="body">{{ $slot }}</div></div>',
+            'components/badge' => '@props(["variant"])<span class="badge-{{ $variant }}">{{ $slot }}</span>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<div class="modal">'
+            . '<div class="title"><span class="badge-info">Note</span> Welcome</div>'
+            . '<div class="body"><p>Modal body with <span class="badge-success">OK</span></p></div>'
+            . '</div>'
+        );
+    }
+
+    public function test_pushonce_and_prependonce_directives_deduplicate(): void
+    {
+        $blade = $this->views([
+            'page' => '@foreach($items as $item)<x-widget :title="$item" />@endforeach<main>@stack("scripts")</main>',
+            'components/widget' => '@props(["title"])'
+                . '@pushOnce("scripts")<script src="vendor.js"></script>@endpushOnce'
+                . '@prependOnce("scripts")<script src="init.js"></script>@endprependOnce'
+                . '<div>{{ $title }}</div>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<div>One</div><div>Two</div><main><script src="init.js"></script><script src="vendor.js"></script></main>',
+            ['items' => ['One', 'Two']]
+        );
+    }
+
+    public function test_case_insensitive_directives_and_pushif(): void
+    {
+        $blade = $this->views([
+            'page' => '@hassection("custom")Custom@else@sectionmissing("custom")Missing@endsectionmissing@endhassection'
+                . '@pushif(true, "scripts")<script src="pushif.js"></script>@endpushif'
+                . '@pushif(false, "scripts")<script src="ignore.js"></script>@endpushif'
+                . '@stack("scripts")',
+        ]);
+
+        $this->assertRenders($blade, 'Missing<script src="pushif.js"></script>');
+    }
+
+    public function test_named_slot_camelcasing_has_actual_content_and_self_closing(): void
+    {
+        $blade = $this->views([
+            'page' => '<x-panel>'
+                . '<x-slot:header-title>Main Heading</x-slot:header-title>'
+                . '<x-slot:self-closed-slot class="self-closed" />'
+                . '<p>Body</p>'
+                . '</x-panel>',
+            'components/panel' => '@if($headerTitle->hasActualContent())<h1>{{ $headerTitle }}</h1>@endif'
+                . '{{ $slot }}'
+                . '<div {{ $selfClosedSlot->attributes }}>Empty: {{ $selfClosedSlot->isEmpty() ? "yes" : "no" }}</div>',
+        ]);
+
+        $this->assertRenders(
+            $blade,
+            '<h1>Main Heading</h1><p>Body</p><div class="self-closed">Empty: yes</div>'
+        );
+    }
+
+    public function test_invalid_slot_tags_and_empty_names_throw_exceptions(): void
+    {
+        $blade = $this->views(['page' => '<x-card><x-slot name="">Invalid</x-slot></x-card>', 'components/card' => '{{ $slot }}']);
+        $this->assertThrows(InvalidArgumentException::class, fn() => $blade->render('page'));
+
+        $blade2 = $this->views(['page' => '<x-card><x-slot:header><x-card></x-slot></x-slot:header></x-card>', 'components/card' => '{{ $slot }}']);
+        $this->assertThrows(InvalidArgumentException::class, fn() => $blade2->render('page'));
+    }
 }

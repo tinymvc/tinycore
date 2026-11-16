@@ -5,7 +5,6 @@ namespace Spark\View;
 use Spark\Foundation\Application;
 use Spark\Http\Request;
 use Spark\Http\Session;
-use Spark\Support\HtmlString;
 use Spark\Support\Traits\Conditionable;
 use Spark\Support\Traits\Macroable;
 use Spark\View\BladeCompiler;
@@ -97,6 +96,34 @@ class Blade implements BladeContract
      * @var string|null
      */
     private string|null $extendsTemplate = null;
+
+    /**
+     * Stacks for @push, @prepend, @stack
+     * 
+     * @var array<string, array<int, string>>
+     */
+    private array $stacks = [];
+
+    /**
+     * Active push operations: [[name, prepend]]
+     * 
+     * @var array<int, array{0: string, 1: bool}>
+     */
+    private array $pushStack = [];
+
+    /**
+     * Set of rendered once IDs
+     * 
+     * @var array<string, bool>
+     */
+    private array $renderedOnce = [];
+
+    /**
+     * Current render depth (for nested includes)
+     * 
+     * @var int
+     */
+    private int $renderDepth = 0;
 
     /**
      * Initializes the template path and compiler.
@@ -305,23 +332,45 @@ class Blade implements BladeContract
         // Merge shared data with the context
         $context = [...self::$shared, ...$context];
 
-        // Reset state for this render
+        $nested = $this->renderDepth > 0;
+        $previousState = [
+            $this->extendsTemplate,
+            $this->sections,
+            $this->currentSection,
+            $this->sectionStack,
+            $this->pushStack,
+        ];
         $this->extendsTemplate = null;
-        $this->sections = [];
+        $this->sections = $context['sections'] ?? [];
         $this->currentSection = null;
         $this->sectionStack = [];
+        $this->pushStack = [];
 
-        // Render compiled template
-        $content = $this->renderCompiledTemplate($compiledPath, $context);
+        try {
+            $content = $this->renderCompiledTemplate($compiledPath, $context);
 
-        // Handle extends - if this template extends another template
-        if ($this->extendsTemplate) {
-            // Merge current sections with parent context
-            $parentContext = [...$context, 'sections' => $this->sections];
-            return $this->render($this->extendsTemplate, $parentContext);
+            if ($this->extendsTemplate) {
+                $parentContext = [
+                    ...$context,
+                    'sections' => $this->sections,
+                    'stacks' => $this->stacks,
+                    'renderedOnce' => $this->renderedOnce,
+                ];
+                return $this->render($this->extendsTemplate, $parentContext);
+            }
+
+            return $content;
+        } finally {
+            if ($nested) {
+                [
+                    $this->extendsTemplate,
+                    $this->sections,
+                    $this->currentSection,
+                    $this->sectionStack,
+                    $this->pushStack,
+                ] = $previousState;
+            }
         }
-
-        return $content;
     }
 
     /**
@@ -379,14 +428,24 @@ class Blade implements BladeContract
         $slot = $context['slot'] ?? '';
         unset($context['slot']);
 
-        // Ensure slot is an instance of HtmlString
-        if (!$slot instanceof HtmlString) {
-            $slot = new HtmlString((string) $slot);
+        // Separate named slots (instances of ComponentSlot) from regular attributes
+        $namedSlots = [];
+        foreach ($context as $key => $value) {
+            if ($value instanceof ComponentSlot) {
+                $namedSlots[$key] = $value;
+                unset($context[$key]);
+            }
+        }
+
+        // Normalize direct component calls to the same slot type as compiled tags.
+        if (!$slot instanceof ComponentSlot) {
+            $slot = new ComponentSlot((string) $slot);
         }
 
         // Merge shared data with the context
         $context = [
             ...self::$shared,
+            ...$namedSlots,
             'slot' => $slot,
             'attributes' => new Attributes($context),
         ];
@@ -541,8 +600,22 @@ class Blade implements BladeContract
      */
     private function renderCompiledTemplate(string $compiledPath, array $context): string
     {
-        // Store current global sections state
         $previousSections = $GLOBALS['sections'] ?? null;
+        if ($this->renderDepth === 0) {
+            $this->stacks = $context['stacks'] ?? [];
+            $this->renderedOnce = $context['renderedOnce'] ?? [];
+        }
+        $__bladePreviousState = [
+            $this->extendsTemplate,
+            $this->sections,
+            $this->currentSection,
+            $this->sectionStack,
+            $this->pushStack,
+            $this->stacks,
+            $this->renderedOnce,
+        ];
+        $__bladeCompleted = false;
+        $this->renderDepth++;
 
         // Make sections available globally for @yield to access
         if (isset($context['sections'])) {
@@ -561,7 +634,20 @@ class Blade implements BladeContract
             ob_start();
             include dir_path($compiledPath);
             $content = ob_get_clean();
+            $__bladeCompleted = true;
         } finally {
+            $this->renderDepth--;
+            if (!$__bladeCompleted) {
+                [
+                    $this->extendsTemplate,
+                    $this->sections,
+                    $this->currentSection,
+                    $this->sectionStack,
+                    $this->pushStack,
+                    $this->stacks,
+                    $this->renderedOnce,
+                ] = $__bladePreviousState;
+            }
             while (ob_get_level() > $bufferLevel) {
                 ob_end_clean();
             }
@@ -631,6 +717,65 @@ class Blade implements BladeContract
     public function exists(string $template): bool
     {
         return $this->templateExists($template);
+    }
+
+    /**
+     * Start pushing content onto a stack.
+     */
+    public function startPush(mixed $name, bool $prepend = false): void
+    {
+        $stackName = (string) $name;
+        $this->pushStack[] = [$stackName, $prepend];
+        ob_start();
+    }
+
+    /**
+     * Stop pushing content onto a stack.
+     */
+    public function endPush(): void
+    {
+        if (!empty($this->pushStack)) {
+            [$name, $prepend] = array_pop($this->pushStack);
+            $content = ob_get_clean();
+
+            if ($prepend) {
+                $this->stacks[$name] ??= [];
+                array_unshift($this->stacks[$name], $content);
+            } else {
+                $this->stacks[$name][] = $content;
+            }
+        }
+    }
+
+    /**
+     * Yield the content of a stack.
+     */
+    public function yieldStack(mixed $name, mixed $default = ''): string
+    {
+        $stackName = (string) $name;
+        $items = $this->stacks[$stackName] ?? null;
+
+        if ($items !== null) {
+            return implode('', $items);
+        }
+
+        return (string) $default;
+    }
+
+    /**
+     * Determine if a given once token has already been rendered.
+     */
+    public function hasRenderedOnce(string $id): bool
+    {
+        return isset($this->renderedOnce[$id]);
+    }
+
+    /**
+     * Mark a once token as rendered.
+     */
+    public function markRenderedOnce(string $id): void
+    {
+        $this->renderedOnce[$id] = true;
     }
 
     /**

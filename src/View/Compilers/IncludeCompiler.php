@@ -38,6 +38,19 @@ class IncludeCompiler
                 $dataExpr = $args[2] ?? '[]';
                 return "<?php if ({$condition}): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
             },
+            'includeUnless' => function (string $expression): string {
+                $args = $this->splitDirectiveArguments($expression, 3, $this->compiler->getExpressionBlocks());
+                $condition = $args[0] ?? 'false';
+                $viewExpr = $args[1] ?? "''";
+                $dataExpr = $args[2] ?? '[]';
+                return "<?php if (!({$condition})): echo \$this->include({$viewExpr}, {$dataExpr}); endif; ?>";
+            },
+            'includeFirst' => function (string $expression): string {
+                $args = $this->splitDirectiveArguments($expression, 2, $this->compiler->getExpressionBlocks());
+                $viewsExpr = $args[0] ?? '[]';
+                $dataExpr = $args[1] ?? '[]';
+                return "<?php foreach ({$viewsExpr} as \$__view): if (\$this->templateExists(\$__view)): echo \$this->include(\$__view, {$dataExpr}); break; endif; endforeach; ?>";
+            },
             'includeIf' => function (string $expression): string {
                 $args = $this->splitDirectiveArguments($expression, 2, $this->compiler->getExpressionBlocks());
                 $viewExpr = $args[0] ?? "''";
@@ -53,12 +66,12 @@ class IncludeCompiler
         ];
 
         foreach ($directives as $directive => $handler) {
-            if (!str_contains($template, "@$directive")) {
+            if (stripos($template, "@$directive") === false) {
                 continue;
             }
 
             $template = $this->compileOutsidePhp($template, function ($source) use ($directive, $handler) {
-                $pattern = '/\@' . preg_quote($directive, '/') . '\s*\(/';
+                $pattern = '/(?<!@)\@' . preg_quote($directive, '/') . '\s*\(/i';
                 $offset = 0;
 
                 while (preg_match($pattern, $source, $matches, PREG_OFFSET_CAPTURE, $offset)) {

@@ -2,6 +2,7 @@
 
 namespace Spark\View\Compilers\Concerns;
 
+use function array_shift;
 use function count;
 use function in_array;
 use function is_array;
@@ -10,6 +11,8 @@ use function substr;
 use function token_get_all;
 use const PHP_INT_MAX;
 use const T_INLINE_HTML;
+use const T_CURLY_OPEN;
+use const T_DOLLAR_OPEN_CURLY_BRACES;
 
 /**
  * Trait ParsesBladeSyntax
@@ -109,54 +112,30 @@ trait ParsesBladeSyntax
 
         $args = [];
         $depth = 0;
-        $inStr = false;
-        $strChar = null;
-        $escaped = false;
         $current = '';
-        $length = strlen($expression);
+        $tokens = token_get_all('<?php ' . $expression);
+        array_shift($tokens);
 
-        for ($i = 0; $i < $length; $i++) {
-            $char = $expression[$i];
-
-            if ($escaped) {
-                $current .= $char;
-                $escaped = false;
-                continue;
-            }
-
-            if ($char === '\\') {
-                $current .= $char;
-                $escaped = true;
-                continue;
-            }
-
-            if (!$inStr && ($char === '"' || $char === "'")) {
-                $inStr = true;
-                $strChar = $char;
-                $current .= $char;
-                continue;
-            }
-
-            if ($inStr && $char === $strChar) {
-                $inStr = false;
-                $strChar = null;
-                $current .= $char;
-                continue;
-            }
-
-            if (!$inStr) {
-                if (in_array($char, ['(', '[', '{'])) {
+        foreach ($tokens as $token) {
+            if (is_array($token)) {
+                if (in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)) {
                     $depth++;
-                } elseif (in_array($char, [')', ']', '}'])) {
-                    $depth--;
-                } elseif ($char === ',' && $depth === 0 && count($args) < $limit - 1) {
-                    $args[] = trim($current);
-                    $current = '';
-                    continue;
                 }
+                $current .= $token[1];
+                continue;
             }
 
-            $current .= $char;
+            if (in_array($token, ['(', '[', '{'], true)) {
+                $depth++;
+            } elseif (in_array($token, [')', ']', '}'], true)) {
+                $depth--;
+            } elseif ($token === ',' && $depth === 0 && count($args) < $limit - 1) {
+                $args[] = trim($current);
+                $current = '';
+                continue;
+            }
+
+            $current .= $token;
         }
 
         if ($current !== '' || !empty($args)) {

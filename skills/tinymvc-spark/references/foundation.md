@@ -211,6 +211,8 @@ Use `defer()` for small post-response tasks: audit logging, analytics, cleanup, 
 
 ## Configuration
 
+`app()->environment()` / `app_environment()` returns `app.env`, falling back to `APP_ENV`, then `local` when debug is enabled or `production` otherwise. Blank values use the fallback. Pass environment names or arrays to check for an exact match: `app_environment('local', 'testing')` or `app_environment(['local', 'testing'])`.
+
 Config files return PHP arrays. Read with `config('key.path')` and `env('KEY', $default)`.
 
 - `Configuration::discover($folder, $cache, $env, $useCache)` loads config files; `DotEnv::discoverConfig()` forwards to it for existing callers.

@@ -47,6 +47,7 @@ use Spark\View\Blade;
 use Throwable;
 use function array_key_exists;
 use function get_class;
+use function in_array;
 use function is_array;
 use function is_object;
 use function is_string;
@@ -65,7 +66,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.2.27';
+    public const VERSION = '4.2.28';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -408,6 +409,40 @@ class Application extends \Spark\Container implements ApplicationContract
     public function isDebugMode(): bool
     {
         return (bool) ($this->config['app']['debug'] ?? false);
+    }
+
+    /**
+     * Retrieves or checks the current environment of the application.
+     *
+     * This method checks the 'app.env' key in the configuration values
+     * to determine the current environment. If arguments are passed, it checks
+     * whether the current environment matches any of the given names.
+     *
+     * @param string|array ...$environments
+     * @return string|bool The current environment or whether it matches.
+     */
+    public function environment(string|array ...$environments): string|bool
+    {
+        $current = $this->getConfig('app.env');
+        if (!is_string($current) || trim($current) === '') {
+            $current = env('APP_ENV');
+        }
+        if (!is_string($current) || trim($current) === '') {
+            $current = $this->isDebugMode() ? 'local' : 'production';
+        }
+        $current = trim($current);
+
+        if (empty($environments)) {
+            return $current;
+        }
+
+        foreach ($environments as $environment) {
+            if (in_array($current, (array) $environment, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

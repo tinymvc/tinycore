@@ -249,14 +249,14 @@ class Migration implements MigrationContract
         $this->up($args);
     }
 
-    /** Require explicit approval before changing a database with debug disabled. */
+    /** Require explicit approval before changing a production database. */
     private function confirmToProceed(array $args, string $action): bool
     {
-        if (config('app.debug', false) || filter_var($args['force'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+        if (app_environment() !== 'production' || filter_var($args['force'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
             return true;
         }
 
-        Prompt::alert("Application debug mode is disabled. You are about to {$action}; this may change or delete data.");
+        Prompt::alert("Application is in production mode. You are about to $action; this may change or delete data.");
 
         if (Prompt::confirm('Are you sure you want to continue?', false)) {
             return true;

@@ -36,12 +36,22 @@ class RawBlockCompiler
         'extends',
         'section',
         'yield',
+        'stack',
+        'push',
+        'pushIf',
+        'pushOnce',
+        'prepend',
+        'prependOnce',
         'include',
         'includeIf',
         'includeWhen',
+        'includeUnless',
+        'includeFirst',
         'php',
         'if',
         'elseif',
+        'elsecan',
+        'elsecannot',
         'unless',
         'isset',
         'empty',
@@ -50,11 +60,14 @@ class RawBlockCompiler
         'hasSection',
         'sectionMissing',
         'session',
+        'env',
         'switch',
         'forelse',
         'foreach',
         'for',
         'while',
+        'break',
+        'continue',
         'dump',
         'dd',
         'props',
@@ -63,10 +76,13 @@ class RawBlockCompiler
         'share',
         'authorize',
         'json',
+        'js',
         'case',
         'vite',
         'auth',
         'guest',
+        'elseauth',
+        'elseguest',
         'method',
         'checked',
         'disabled',
@@ -93,6 +109,7 @@ class RawBlockCompiler
         $result = '';
         $offset = 0;
         $customDirectives = $this->compiler->getCustomDirectives();
+        $expressionDirectives = array_map('strtolower', self::EXPRESSION_DIRECTIVES);
 
         while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
             $start = $matches[0][1];
@@ -132,7 +149,7 @@ class RawBlockCompiler
                 // CSS at-rules and plain text do not contain Blade PHP arguments.
                 if (
                     $directive !== 'verbatim'
-                    && !in_array($directive, self::EXPRESSION_DIRECTIVES, true)
+                    && !in_array(strtolower($directive), $expressionDirectives, true)
                     && !isset($customDirectives[$directive])
                 ) {
                     $result .= str_starts_with($opening, '@@')

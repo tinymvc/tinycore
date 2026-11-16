@@ -210,6 +210,9 @@ interface ApplicationContract
     /** Whether the application is running in debug mode. */
     public function isDebugMode(): bool;
 
+    /** Get the current environment or check it against the given names. */
+    public function environment(string|array ...$environments): string|bool;
+
     /** Determine if the application has been booted. */
     public function isBooted(): bool;
 

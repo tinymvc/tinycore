@@ -2143,6 +2143,22 @@ if (!function_exists('is_debug_mode')) {
     }
 }
 
+if (!function_exists('app_environment')) {
+    /**
+     * Get or check the current application environment.
+     *
+     * This function retrieves the current application environment or checks
+     * if it matches the given environments.
+     *
+     * @param string|array ...$environments
+     * @return string|bool The current application environment or match result.
+     */
+    function app_environment(string|array ...$environments): string|bool
+    {
+        return Application::$app->environment(...$environments);
+    }
+}
+
 if (!function_exists('tracer_log')) {
     /**
      * Log a message using the Tracer instance.

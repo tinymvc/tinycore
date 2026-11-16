@@ -10,11 +10,12 @@ final class BladeDirectiveTest extends FrameworkTestCase
         if (!is_dir($path)) {
             mkdir($path, 0700, true);
         }
-        file_put_contents($path . '/case.blade.php', $source);
+        $name = 'case_' . md5($source);
+        file_put_contents($path . '/' . $name . '.blade.php', $source);
         $blade = new \Spark\View\Blade($path, $this->storagePath . '/compiled');
         $level = ob_get_level();
-        $this->assertSame($expected, trim($blade->render('case', $context)));
-        $this->assertSame($expected, trim($blade->render('case', $context)), 'Cached render must match the first render.');
+        $this->assertSame($expected, trim($blade->render($name, $context)));
+        $this->assertSame($expected, trim($blade->render($name, $context)), 'Cached render must match the first render.');
         $this->assertSame($level, ob_get_level());
     }
 
@@ -221,5 +222,88 @@ final class BladeDirectiveTest extends FrameworkTestCase
         $blade = new \Spark\View\Blade($path, $this->storagePath . '/compiled');
 
         $this->assertThrows(\InvalidArgumentException::class, fn() => $blade->render('unbalanced', ['items' => []]));
+    }
+
+    public function test_continue_without_condition(): void
+    {
+        $this->assertRendered('@foreach($items as $item)@continue{{ $item }}@endforeach', ['items' => [1, 2]], '');
+    }
+
+    public function test_continue_with_condition(): void
+    {
+        $this->assertRendered('@foreach($items as $item)@continue($item === 2){{ $item }}@endforeach', ['items' => [1, 2, 3]], '13');
+    }
+
+    public function test_break_without_condition(): void
+    {
+        $this->assertRendered('@foreach($items as $item){{ $item }}@break @endforeach', ['items' => [1, 2, 3]], '1');
+    }
+
+    public function test_break_with_condition(): void
+    {
+        $this->assertRendered('@foreach($items as $item){{ $item }}@break($item === 2)@endforeach', ['items' => [1, 2, 3]], '12');
+    }
+
+    public function test_session_binds_value(): void
+    {
+        session()->set('status', 'TaskCompleted');
+        $this->assertRendered('@session("status")Status: {{ $value }}@endsession', [], 'Status: TaskCompleted');
+        $this->assertRendered('@session("missing")Status: {{ $value }}@endsession', [], '');
+    }
+
+    public function test_elsecan_and_elsecannot(): void
+    {
+        \Spark\Facades\Gate::define('edit', fn($user, $role) => $role === 'editor');
+        \Spark\Facades\Gate::define('view', fn($user, $role) => $role === 'viewer');
+
+        $template = '@can("edit", $role)can-edit@elsecan("view", $role)can-view@else cannot-do-anything@endcan';
+        $this->assertRendered($template, ['role' => 'editor'], 'can-edit');
+        $this->assertRendered($template, ['role' => 'viewer'], 'can-view');
+        $this->assertRendered($template, ['role' => 'guest'], 'cannot-do-anything');
+    }
+
+    public function test_elseauth_and_elseguest(): void
+    {
+        $template = '@auth welcome-user @elseguest welcome-guest @endauth';
+        // In test environment, not logged in by default
+        $this->assertRendered($template, [], 'welcome-guest');
+    }
+
+    public function test_production_and_env(): void
+    {
+        // Default test environment is 'testing'
+        $this->assertSame('testing', app_environment());
+        $this->assertTrue(app_environment('testing'));
+        $this->assertFalse(app_environment('production'));
+        $this->assertTrue(app_environment(['local', 'testing']));
+        $this->assertFalse(app_environment(['production', 'staging']));
+        $this->assertTrue(app()->environment('testing'));
+        $this->assertFalse(app()->environment('production'));
+
+        $this->assertRendered('@production is-prod @endproduction@env("testing") is-test @endenv', [], 'is-test');
+        $this->assertRendered('@env(["local", "testing"]) is-env @endenv', [], 'is-env');
+        $this->assertRendered('@env(["production", "staging"]) is-env @endenv', [], '');
+    }
+
+    public function test_include_unless(): void
+    {
+        $path = $this->storagePath . '/views';
+        if (!is_dir($path)) {
+            mkdir($path, 0700, true);
+        }
+        file_put_contents($path . '/greeting.blade.php', 'Hello {{ $name }}');
+
+        $this->assertRendered('@includeUnless(false, "greeting", ["name" => "Ada"])|@includeUnless(true, "greeting", ["name" => "Bob"])', [], 'Hello Ada|');
+    }
+
+    public function test_include_first(): void
+    {
+        $path = $this->storagePath . '/views';
+        if (!is_dir($path)) {
+            mkdir($path, 0700, true);
+        }
+        file_put_contents($path . '/existing.blade.php', 'Found: {{ $item }}');
+
+        $this->assertRendered('@includeFirst(["nonexistent1", "existing", "nonexistent2"], ["item" => "Widget"])', [], 'Found: Widget');
     }
 }

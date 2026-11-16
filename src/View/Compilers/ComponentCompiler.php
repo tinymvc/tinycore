@@ -4,6 +4,7 @@ namespace Spark\View\Compilers;
 
 use InvalidArgumentException;
 use Spark\View\BladeCompiler;
+use Spark\View\Compilers\Concerns\ParsesBladeSyntax;
 use function array_pop;
 use function ctype_alnum;
 use function ctype_alpha;
@@ -31,6 +32,8 @@ use const PREG_SPLIT_DELIM_CAPTURE;
  */
 class ComponentCompiler
 {
+    use ParsesBladeSyntax;
+
     private const TAG_PATTERN = '/<(?<closing>\/)?(?<name>[a-zA-Z][a-zA-Z0-9\-_.:]*)(?=[\s\/>])/';
 
     public function __construct(private BladeCompiler $compiler)
@@ -70,6 +73,10 @@ class ComponentCompiler
                 throw new InvalidArgumentException("Unexpected component tag [{$tagName}].");
             }
 
+            if ($name === 'slot' || str_starts_with($name, 'slot:')) {
+                throw new InvalidArgumentException("Unexpected slot tag [<{$tagName}>] outside of component.");
+            }
+
             $attributeSource = rtrim(substr($template, $nameEnd, $tagEnd - $nameEnd));
             $selfClosing = str_ends_with($attributeSource, '/');
 
@@ -77,13 +84,15 @@ class ComponentCompiler
                 $attributeSource = substr($attributeSource, 0, -1);
                 $end = $tagEnd + 1;
                 $slot = null;
+                $namedSlots = [];
             } else {
                 [$closeStart, $end] = $this->findComponentClose($template, $name, $tagEnd + 1);
-                $slot = $this->compile(substr($template, $tagEnd + 1, $closeStart - $tagEnd - 1));
+                $rawBody = substr($template, $tagEnd + 1, $closeStart - $tagEnd - 1);
+                [$slot, $namedSlots] = $this->extractSlots($rawBody);
             }
 
             $attributes = $this->parseXComponentAttributes($attributeSource);
-            $attributesArray = $this->buildAttributesArray($attributes, $slot);
+            $attributesArray = $this->buildAttributesArray($attributes, $slot, $namedSlots);
             $replacement = "<?= \$this->component('{$name}', {$attributesArray}); ?>";
             $template = substr_replace($template, $replacement, $start, $end - $start);
             $offset = $start + strlen($replacement);
@@ -118,7 +127,8 @@ class ComponentCompiler
             $selfClosing = str_ends_with(rtrim(substr($template, $start, $tagEnd - $start)), '/');
 
             if ($closing) {
-                if ($tagName !== array_pop($stack)) {
+                $expected = array_pop($stack);
+                if ($tagName !== $expected && !($tagName === 'slot' && str_starts_with($expected, 'slot:'))) {
                     throw new InvalidArgumentException("Mismatched closing tag for component [{$tagName}].");
                 }
 
@@ -161,16 +171,18 @@ class ComponentCompiler
     /**
      * Capture rendered slot markup in the caller's scope, preserving user escaping.
      */
-    public function processSlotContent(string $content): string
+    public function processSlotContent(string $content, array $attributes = []): string
     {
         $content = trim($content);
+        $attributesExport = $this->buildAttributesArray($attributes);
 
         if (!preg_match('/<\\?|\\{\\{|\\{!!|@[a-zA-Z@]|__BLADE_RAW_/', $content)) {
-            return var_export($content, true);
+            $exportContent = var_export($content, true);
+            return "new \\Spark\\View\\ComponentSlot({$exportContent}, {$attributesExport})";
         }
 
         return '(function (array $__bladeSlotContext) { extract($__bladeSlotContext, EXTR_SKIP); '
-            . 'ob_start(); ?>' . $content . '<?php return ob_get_clean(); })(get_defined_vars())';
+            . 'ob_start(); ?>' . $content . '<?php return new \\Spark\\View\\ComponentSlot(ob_get_clean(), ' . $attributesExport . '); })(get_defined_vars())';
     }
 
     /**
@@ -396,7 +408,7 @@ class ComponentCompiler
     /**
      * Build PHP array string from attributes
      */
-    public function buildAttributesArray(array $attributes, ?string $slot = null): string
+    public function buildAttributesArray(array $attributes, ?string $slot = null, array $namedSlots = []): string
     {
         $dynamicAttributes = $attributes['__dynamic__'] ?? [];
         unset($attributes['__dynamic__']);
@@ -417,11 +429,180 @@ class ComponentCompiler
             $pairs[] = "$keyExpression => $valueExpression";
         }
 
+        if ($namedSlots !== []) {
+            $attributesArray = '[' . implode(', ', $pairs) . ']';
+            return '(function (array $__bladeComponentContext, array $__bladeComponentAttributes) { '
+                . 'extract($__bladeComponentContext, EXTR_SKIP); $__bladeNamedSlots = []; ob_start(); ?>'
+                . trim($slot ?? '')
+                . '<?php $__bladeComponentAttributes["slot"] = new \\Spark\\View\\ComponentSlot(ob_get_clean()); '
+                . 'return [...$__bladeComponentAttributes, ...$__bladeNamedSlots]; })(get_defined_vars(), '
+                . $attributesArray . ')';
+        }
+
         if ($slot !== null) {
             $pairs[] = "'slot' => " . $this->processSlotContent($slot);
         }
 
         return '[' . implode(', ', $pairs) . ']';
+    }
+
+    /**
+     * Extract top-level <x-slot> tags and the remaining default slot.
+     *
+     * @return array{0: string|null, 1: array<string, array{content: string, attributes: array}>}
+     */
+    public function extractSlots(string $body): array
+    {
+        if (!str_contains($body, '<x-slot')) {
+            return [$this->compile($body), []];
+        }
+
+        $namedSlots = [];
+        $defaultSlot = '';
+        $offset = 0;
+        $length = strlen($body);
+
+        while ($offset < $length) {
+            if (!preg_match(self::TAG_PATTERN, $body, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                $defaultSlot .= substr($body, $offset);
+                break;
+            }
+
+            $start = $matches[0][1];
+            $tagName = $matches['name'][0];
+            $nameEnd = $start + strlen($matches[0][0]);
+            $tagEnd = $this->findOpeningTagEnd($body, $nameEnd);
+
+            if ($tagEnd === false) {
+                $defaultSlot .= substr($body, $offset);
+                break;
+            }
+
+            if (!str_starts_with($tagName, 'x-')) {
+                $defaultSlot .= substr($body, $offset, $tagEnd + 1 - $offset);
+                $offset = $tagEnd + 1;
+                continue;
+            }
+
+            $isSlot = ($tagName === 'x-slot' || str_starts_with($tagName, 'x-slot:'));
+
+            if (!$isSlot) {
+                $compName = substr($tagName, 2);
+                $isClosing = $matches['closing'][0] === '/';
+                $attributeSource = rtrim(substr($body, $nameEnd, $tagEnd - $nameEnd));
+                $selfClosing = str_ends_with($attributeSource, '/');
+
+                if (!$isClosing && !$selfClosing) {
+                    [, $innerEnd] = $this->findComponentClose($body, $compName, $tagEnd + 1);
+                    $defaultSlot .= substr($body, $offset, $innerEnd - $offset);
+                    $offset = $innerEnd;
+                } else {
+                    $defaultSlot .= substr($body, $offset, ($tagEnd + 1) - $offset);
+                    $offset = $tagEnd + 1;
+                }
+                continue;
+            }
+
+            $isClosing = $matches['closing'][0] === '/';
+            if ($isClosing) {
+                throw new InvalidArgumentException("Unexpected closing tag [</{$tagName}>] without opening slot.");
+            }
+
+            $defaultSlot .= substr($body, $offset, $start - $offset);
+
+            $attributeSource = rtrim(substr($body, $nameEnd, $tagEnd - $nameEnd));
+            $selfClosing = str_ends_with($attributeSource, '/');
+            if ($selfClosing) {
+                $attributeSource = substr($attributeSource, 0, -1);
+            }
+
+            $attributes = $this->parseXComponentAttributes($attributeSource);
+
+            $slotName = str_starts_with($tagName, 'x-slot:') ? substr($tagName, 7) : null;
+            if ($slotName === null || $slotName === '') {
+                if (isset($attributes['name'])) {
+                    if (!is_string($attributes['name']) || isset($attributes['__dynamic__']['name'])) {
+                        throw new InvalidArgumentException('Slot name must be a static string.');
+                    }
+                    $slotName = $attributes['name'];
+                    unset($attributes['name']);
+                } else {
+                    throw new InvalidArgumentException('Missing [name] attribute on <x-slot> tag.');
+                }
+            }
+
+            if ($slotName === '') {
+                throw new InvalidArgumentException('Slot name cannot be empty.');
+            }
+
+            $slotName = \Spark\Support\Str::camel($slotName);
+            if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/D', $slotName) || in_array($slotName, ['slot', 'attributes'], true)) {
+                throw new InvalidArgumentException("Invalid slot name [{$slotName}].");
+            }
+
+            if ($selfClosing) {
+                $slotContent = '';
+                $offset = $tagEnd + 1;
+            } else {
+                [$slotCloseStart, $slotEnd] = $this->findSlotClose($body, $tagEnd + 1);
+                $slotContent = substr($body, $tagEnd + 1, $slotCloseStart - $tagEnd - 1);
+                $offset = $slotEnd;
+            }
+
+            $namedSlots[$slotName] = [
+                'content' => $this->compile($slotContent),
+                'attributes' => $attributes,
+            ];
+            $defaultSlot .= '<?php $__bladeNamedSlots[' . var_export($slotName, true) . '] = '
+                . $this->processSlotContent($namedSlots[$slotName]['content'], $attributes) . '; ?>';
+        }
+
+        return [$this->compileOutsidePhp($defaultSlot, $this->compile(...)), $namedSlots];
+    }
+
+    /**
+     * Find closing tag for an <x-slot> tag.
+     */
+    public function findSlotClose(string $body, int $offset): array
+    {
+        $stack = ['slot'];
+
+        while (preg_match(self::TAG_PATTERN, $body, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $start = $matches[0][1];
+            $tagEnd = $this->findOpeningTagEnd($body, $start + strlen($matches[0][0]));
+
+            if ($tagEnd === false) {
+                break;
+            }
+
+            $offset = $tagEnd + 1;
+
+            if (!str_starts_with($matches['name'][0], 'x-')) {
+                continue;
+            }
+
+            $tagName = substr($matches['name'][0], 2);
+            $closing = $matches['closing'][0] === '/';
+            $selfClosing = str_ends_with(rtrim(substr($body, $start, $tagEnd - $start)), '/');
+
+            $isSlotTag = ($tagName === 'slot' || str_starts_with($tagName, 'slot:'));
+            $normalizedName = $isSlotTag ? 'slot' : $tagName;
+
+            if ($closing) {
+                $expected = array_pop($stack);
+                if ($expected !== $normalizedName) {
+                    throw new InvalidArgumentException("Mismatched closing tag for slot [{$tagName}].");
+                }
+
+                if ($stack === []) {
+                    return [$start, $tagEnd + 1];
+                }
+            } elseif (!$selfClosing) {
+                $stack[] = $normalizedName;
+            }
+        }
+
+        throw new InvalidArgumentException('Missing closing tag for <x-slot>.');
     }
 
     /**

@@ -58,17 +58,18 @@ Blocks use their corresponding closing directive unless listed otherwise. This i
 
 | Purpose | Syntax |
 | --- | --- |
-| Conditions | `@if`, `@elseif`, `@else`, `@endif`; `@unless`, `@isset`, `@empty` with expressions and matching `@end...` |
+| Conditions | `@if`, `@elseif`, `@else`, `@endif`; `@unless`, `@isset`, `@empty` with expressions and matching `@end...`; `@env('local')` / `@endenv`, `@production` / `@endproduction` |
 | Switch | `@switch($value)`, `@case($value)`, `@break`, `@default`, `@endswitch` |
-| Loops | `@foreach`, `@forelse` (`@empty`, `@endforelse`), `@for`, `@while` and matching `@end...`; argument-free `@break`, `@continue` |
-| Gate | `@can('ability', $model)`, `@cannot(...)`, matching closing directives; `@authorize(...)` runs authorization |
-| Auth | `@auth`, `@guest`, optional guard (`@auth('admin')`), `@endauth`, `@endguest` |
-| Session | `@session('key') ... @endsession` checks `session()->has()` |
+| Loops | `@foreach`, `@forelse` (`@empty`, `@endforelse`), `@for`, `@while` and matching `@end...`; `@break`, `@continue`, and conditional `@break($condition)`, `@continue($condition)` |
+| Gate | `@can('ability', $model)`, `@cannot(...)`, `@elsecan(...)`, `@elsecannot(...)`, matching closing directives; `@authorize(...)` runs authorization |
+| Auth | `@auth`, `@guest`, `@elseauth`, `@elseguest`, optional guard (`@auth('admin')`), `@endauth`, `@endguest` |
+| Session | `@session('key') ... @endsession` checks `session()->has()`, exposing `$value = session()->get('key')` |
 | Errors | `@error('field')` first `$message`, `@errors('field')` each `$message`, `@enderror`, `@enderrors`; `@old('field', $default)` escapes old input |
 | Components | `@props(['name', 'type' => 'text'])` |
+| Stacks | `@stack('scripts', 'default')`, `@push('scripts') ... @endpush`, `@prepend('scripts') ... @endprepend`, `@pushIf($condition, 'scripts') ... @endpushIf`, `@pushOnce('scripts') ... @endpushOnce`, `@prependOnce('scripts') ... @endprependOnce`, `@once ... @endonce` |
 | Layout | `@extends('layouts.app')`, `@section('name') ... @endsection`, inline `@section('name', 'Value')`, `@yield('name', 'Default')` |
 | Section helpers | `@stop` ends capture; `@show` ends/yields; `@hasSection('name')` / `@sectionMissing('name')` with matching `@end...` |
-| Includes | `@include('view', $data)`, `@includeIf('view', $data)`, `@includeWhen($condition, 'view', $data)` |
+| Includes | `@include('view', $data)`, `@includeIf('view', $data)`, `@includeWhen($condition, 'view', $data)`, `@includeUnless($condition, 'view', $data)`, `@includeFirst(['view1', 'view2'], $data)` |
 | Forms | `@csrf`, `@method('PUT')`, `@checked($bool)`, `@disabled($bool)`, `@selected($bool)`, `@readonly($bool)`, `@required($bool)` |
 | Attributes | `@class(['btn', 'active' => $active])`, `@style(['color: red' => $error])`, `@attributes($array)` |
 | Assets/data | `@vite('app.js')` or `@vite`, `@json($data)`, `@js($data)`, `@share(['key' => $value])` |
@@ -77,15 +78,67 @@ Blocks use their corresponding closing directive unless listed otherwise. This i
 | Raw/PHP | `@php($statement)`, `@php ... @endphp`, `@verbatim ... @endverbatim` |
 | Comments | `{{-- removed from output --}}` |
 
+## Named component slots and stacks
+
+### Named slots
+Components support named slots via `<x-slot:name>` or `<x-slot name="name">`. Each named slot is an instance of `Spark\View\ComponentSlot` (which implements `Htmlable`), exposing its own `$attributes`, `isEmpty()`, and `isNotEmpty()`. Content outside `<x-slot>` tags belongs to the default `$slot`.
+
+Names are static and camel-cased (`header-title` becomes `$headerTitle`); `slot` and `attributes` are reserved. The shorthand also accepts `</x-slot>`. Slots follow surrounding conditions and loops, capture variables at their source location, and remain scoped to their own component.
+
+```blade
+{{-- components/card.blade.php --}}
+<div {{ $attributes->merge(['class' => 'card']) }}>
+    @if(isset($header) && $header->isNotEmpty())
+        <div {{ $header->attributes->merge(['class' => 'card-header']) }}>
+            {{ $header }}
+        </div>
+    @endif
+    <div class="card-body">
+        {{ $slot }}
+    </div>
+</div>
+
+{{-- usage --}}
+<x-card class="shadow-sm">
+    <x-slot:header class="font-bold">
+        <span>Featured Post</span>
+    </x-slot:header>
+    <p>Card body content</p>
+</x-card>
+```
+
+### Stacks and once
+Push scripts or styles onto named stacks from anywhere in templates, included views, or components:
+
+```blade
+{{-- layout --}}
+<head>
+    @stack('styles')
+</head>
+<body>
+    @yield('content')
+    @stack('scripts')
+</body>
+
+{{-- child template or component --}}
+@push('scripts')
+    <script src="/js/chart.js"></script>
+@endpush
+
+{{-- Ensure a script or style block renders only once per page render --}}
+@pushOnce('scripts')
+    <script src="/js/vendor-modal.js"></script>
+@endpushOnce
+```
+
+Stack entries and once markers are scoped to one render, shared by its includes, components, nested renders, and inherited layouts. Repeating a top-level render starts fresh. Once directives deduplicate each compiled block; separate blocks have separate identities.
+
 ## Unsupported features and native replacements
 
 | Unsupported | Use instead |
 | --- | --- |
-| `$loop` | Explicit index/key or controller-prepared state |
-| `@push`, `@stack`, `@prepend`, `@once` | Layout sections or Vite bundles |
-| Named `<x-slot:...>` / `<x-slot name="...">` | Props and the one default `$slot` |
+| `$loop` | Explicit index/key or controller-prepared state (`$index => $item`) |
 | Class components / `<x-dynamic-component>` | Anonymous templates, explicit component choice |
-| `@break($condition)` / `@continue($condition)` | Conditional block around argument-free directive |
 | `@inject`, `@each` | Controller-provided data/helpers; `@foreach` or `@forelse` |
 
 Native `@forelse` works with arrays, collections, and any iterable:
