@@ -66,7 +66,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.2.28';
+    public const VERSION = '4.3.0';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -270,6 +270,24 @@ class Application extends \Spark\Container implements ApplicationContract
     public function isTesting(): bool
     {
         return $this->testing;
+    }
+
+    /**
+     * Registers console services for the application.
+     *
+     * This method adds the ConsoleServiceProvider to the application, which provides
+     * services related to command-line interface (CLI) functionality. If the EmberServiceProvider
+     * class exists, it will also be added to the application.
+     *
+     * @return void
+     */
+    public function registerConsoleServices(): void
+    {
+        // Add the ConsoleServiceProvider to the application for CLI functionality.
+        $this->addServiceProvider(new \Spark\Foundation\Providers\ConsoleServiceProvider());
+
+        // If the EmberServiceProvider class exists, add it to the application.
+        class_exists(\Spark\Ember\EmberServiceProvider::class) && $this->addServiceProvider(new \Spark\Ember\EmberServiceProvider());
     }
 
     /**

@@ -5,6 +5,8 @@ namespace Spark\View\Compilers;
 use InvalidArgumentException;
 use Spark\View\BladeCompiler;
 use Spark\View\Compilers\Concerns\ParsesBladeSyntax;
+use function count;
+use function in_array;
 use function preg_match;
 use function preg_quote;
 use function strlen;
@@ -62,6 +64,20 @@ class IncludeCompiler
                 $viewExpr = $args[0] ?? "''";
                 $dataExpr = $args[1] ?? '[]';
                 return "<?= \$this->include({$viewExpr}, {$dataExpr}); ?>";
+            },
+            'each' => function (string $expression): string {
+                $args = $this->splitDirectiveArguments($expression, expressionBlocks: $this->compiler->getExpressionBlocks());
+                if (count($args) > 3 && end($args) === '') {
+                    array_pop($args);
+                }
+                if (count($args) < 3 || count($args) > 4 || in_array('', $args, true)) {
+                    throw new InvalidArgumentException('The @each directive requires a view name, an iterable dataset, and an iterator variable name.');
+                }
+                $viewExpr = $args[0];
+                $dataExpr = $args[1];
+                $iteratorExpr = $args[2];
+                $emptyExpr = $args[3] ?? 'null';
+                return "<?= \$this->renderEach({$viewExpr}, {$dataExpr}, {$iteratorExpr}, {$emptyExpr}); ?>";
             },
         ];
 

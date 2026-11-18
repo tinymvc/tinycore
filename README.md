@@ -4,7 +4,7 @@ TinyCore (`tinymvc/tinycore`) is the PHP runtime for **TinyMVC / Spark**, provid
 
 [![PHP](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1421%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1442%20passed-brightgreen.svg)](tests/)
 
 Start an application with [Skeleton](https://github.com/tinymvc/skeleton):
 
@@ -39,14 +39,14 @@ php tests/database.php                   # Requires MySQL and PostgreSQL
 SPARK_TEST_TABLE_PREFIX=app_ php tests/database.php
 ```
 
-Verified on **2026-11-08** with PHP **8.4.27**.
+Verified on **2026-11-18** with PHP **8.4.27**.
 
 | Checks | Passed | Skipped | Assertions |
 | --- | ---: | ---: | ---: |
-| Full suite | 1,421 | 0 | 7,562 |
-| Database scenarios, per engine/prefix | 474 | 0 | 1,335 |
+| Full suite | 1,442 | 0 | 7,690 |
+| Database scenarios, per engine/prefix (2026-11-08) | 474 | 0 | 1,335 |
 
-All **1,421 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP integration checks. Each database run repeated the same 474 scenarios on SQLite, MySQL, or PostgreSQL with an empty or `app_` table prefix.
+All **1,442 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP integration checks. The separate database matrix was last verified on 2026-11-08: each run repeated the same 474 scenarios on SQLite, MySQL, or PostgreSQL with an empty or `app_` table prefix; that matrix was not rerun for this update.
 
 ### Coverage
 
@@ -59,4 +59,5 @@ All **1,421 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP in
 | Authentication | Guards, gates, password/encryption helpers, JWT tokens, revocation, and CSRF |
 | Storage | Local filesystem boundaries, upload handling, S3 signing, pagination, and failed/partial transfers through local fixtures |
 | Events and telemetry | Wildcard payloads, priorities, one-time listeners, nested dispatch, lazy payloads, observer failure/recursion isolation, HTTP sends/downloads/prepared requests/pools, and service/lifecycle hooks |
-| Core services | Blade, container/providers, CLI boot, configuration/environment caching, Tracer logging/error handling, Tinker, dates/localization, URLs, subprocesses, and concurrency |
+| Blade | Directive parsing and escaping, quoted/commented expressions, nested and reference loops, array/Collection/Paginator/iterator metadata, streaming iterables, include cleanup, `@each`, `@inject`, `@canany`, conditional stacks, and malformed arguments |
+| Core services | Container/providers, CLI boot, configuration/environment caching, Tracer logging/error handling, Tinker, dates/localization, URLs, subprocesses, and concurrency |

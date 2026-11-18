@@ -126,6 +126,13 @@ class Blade implements BladeContract
     private int $renderDepth = 0;
 
     /**
+     * Stack of loop data objects
+     * 
+     * @var array<int, object>
+     */
+    private array $loopsStack = [];
+
+    /**
      * Initializes the template path and compiler.
      *
      * @param string|null $path Optional base path for templates
@@ -396,7 +403,42 @@ class Blade implements BladeContract
         $context = [...self::$shared, ...$context];
         $context['sections'] = $this->sections;
 
+        if (!isset($context['loop']) && ($lastLoop = $this->getLastLoop()) !== null) {
+            $context['loop'] = $lastLoop;
+        }
+
         return $this->renderCompiledTemplate($compiledPath, $context);
+    }
+
+    /**
+     * Render a template for each item in the data.
+     * 
+     * @param string $template
+     * @param mixed $data
+     * @param string $iterator
+     * @param string|null $empty
+     * @return string
+     */
+    public function renderEach(string $template, mixed $data, string $iterator, ?string $empty = null): string
+    {
+        $hasItems = false;
+        $output = '';
+
+        if (is_iterable($data)) {
+            foreach ($data as $key => $item) {
+                $hasItems = true;
+                $output .= $this->include($template, [
+                    $iterator => $item,
+                    'key' => $key,
+                ]);
+            }
+        }
+
+        if (!$hasItems && $empty !== null && $empty !== '') {
+            return $this->include($empty);
+        }
+
+        return $output;
     }
 
     /**
@@ -604,7 +646,9 @@ class Blade implements BladeContract
         if ($this->renderDepth === 0) {
             $this->stacks = $context['stacks'] ?? [];
             $this->renderedOnce = $context['renderedOnce'] ?? [];
+            $this->loopsStack = [];
         }
+        $__bladePreviousLoops = $this->loopsStack;
         $__bladePreviousState = [
             $this->extendsTemplate,
             $this->sections,
@@ -637,6 +681,8 @@ class Blade implements BladeContract
             $__bladeCompleted = true;
         } finally {
             $this->renderDepth--;
+            // Includes may return before reaching a loop's closing directive.
+            $this->loopsStack = $__bladePreviousLoops;
             if (!$__bladeCompleted) {
                 [
                     $this->extendsTemplate,
@@ -776,6 +822,89 @@ class Blade implements BladeContract
     public function markRenderedOnce(string $id): void
     {
         $this->renderedOnce[$id] = true;
+    }
+
+    /**
+     * Add a new loop to the loops stack.
+     * 
+     * @param mixed $data
+     * @return void
+     */
+    public function addLoop(mixed $data): void
+    {
+        $count = is_countable($data) ? count($data) : null;
+        $parent = !empty($this->loopsStack) ? end($this->loopsStack) : null;
+
+        $this->loopsStack[] = (object) [
+            'iteration' => 0,
+            'index' => -1,
+            'remaining' => $count,
+            'count' => $count,
+            'first' => false,
+            'last' => false,
+            'even' => false,
+            'odd' => false,
+            'depth' => count($this->loopsStack) + 1,
+            'parent' => $parent,
+        ];
+    }
+
+    /**
+     * Increment the iteration indices for the current loop.
+     * 
+     * @return void
+     */
+    public function incrementLoopIndices(): void
+    {
+        if (empty($this->loopsStack)) {
+            return;
+        }
+
+        $loop = end($this->loopsStack);
+        $loop->iteration++;
+        $loop->index = $loop->iteration - 1;
+        $loop->first = $loop->iteration === 1;
+
+        if ($loop->count !== null) {
+            $loop->remaining = max(0, $loop->count - $loop->iteration);
+            $loop->last = $loop->iteration === $loop->count;
+        } else {
+            $loop->remaining = null;
+            $loop->last = null;
+        }
+
+        $loop->even = $loop->iteration % 2 === 0;
+        $loop->odd = !$loop->even;
+    }
+
+    /**
+     * Pop the current loop from the loops stack.
+     * 
+     * @return void
+     */
+    public function popLoop(): void
+    {
+        array_pop($this->loopsStack);
+    }
+
+    /**
+     * Get the current active loop object.
+     * 
+     * @return object|null
+     */
+    public function getLastLoop(): ?object
+    {
+        return !empty($this->loopsStack) ? end($this->loopsStack) : null;
+    }
+
+    /**
+     * Get the entire loops stack.
+     * 
+     * @return array<int, object>
+     */
+    public function getLoopsStack(): array
+    {
+        return $this->loopsStack;
     }
 
     /**

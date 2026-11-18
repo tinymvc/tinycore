@@ -6,6 +6,10 @@ use InvalidArgumentException;
 use Spark\View\BladeCompiler;
 use Spark\View\Compilers\Concerns\ParsesBladeSyntax;
 use function array_fill;
+use function array_slice;
+use function count;
+use function in_array;
+use function is_array;
 use function preg_match;
 use function preg_quote;
 use function preg_replace;
@@ -32,11 +36,13 @@ class DirectiveCompiler
         'elseif' => ['open' => 'elseif(%s):', 'close' => null],
         'elsecan' => ['open' => 'elseif(can(%s)):', 'close' => null],
         'elsecannot' => ['open' => 'elseif(cannot(%s)):', 'close' => null],
+        'elsecanany' => ['open' => 'elseif(canAny(%s)):', 'close' => null],
         'unless' => ['open' => 'if(!(%s)):', 'close' => 'endif;'],
         'isset' => ['open' => 'if(isset(%s)):', 'close' => 'endif;'],
         'empty' => ['open' => 'if(empty(%s)):', 'close' => 'endif;'],
         'can' => ['open' => 'if(can(%s)):', 'close' => 'endif;'],
         'cannot' => ['open' => 'if(cannot(%s)):', 'close' => 'endif;'],
+        'canany' => ['open' => 'if(canAny(%s)):', 'close' => 'endif;'],
         'hasSection' => ['open' => 'if($this->hasSection(%s)):', 'close' => 'endif;'],
         'sectionMissing' => ['open' => 'if(!$this->hasSection(%s)):', 'close' => 'endif;'],
         'session' => ['open' => 'if(session()->has($__bladeSessionKey = %s)): $value = session()->get($__bladeSessionKey);', 'close' => 'endif;'],
@@ -45,7 +51,6 @@ class DirectiveCompiler
     ];
 
     private const LOOP_DIRECTIVES = [
-        'foreach' => ['open' => 'foreach(%s):', 'close' => 'endforeach;'],
         'for' => ['open' => 'for(%s):', 'close' => 'endfor;'],
         'while' => ['open' => 'while(%s):', 'close' => 'endwhile;'],
     ];
@@ -89,6 +94,7 @@ class DirectiveCompiler
         'csrf' => '<?= csrf(); ?>',
         'else' => '<?php else: ?>',
         'endif' => '<?php endif; ?>',
+        'endcanany' => '<?php endif; ?>',
         'enderrors' => '<?php endforeach; endif; ?>',
         'enderror' => '<?php endif; ?>',
         'auth' => '<?php if(is_logged()): ?>',
@@ -129,6 +135,11 @@ class DirectiveCompiler
             $template = $this->compileForelse($template);
         }
 
+        // Compile foreach loops
+        if (stripos($template, '@foreach') !== false || stripos($template, '@endforeach') !== false) {
+            $template = $this->compileForeach($template);
+        }
+
         // Compile loop directives
         foreach (self::LOOP_DIRECTIVES as $directive => $config) {
             if (stripos($template, "@$directive") === false && stripos($template, "@end$directive") === false) {
@@ -156,6 +167,11 @@ class DirectiveCompiler
 
         // Compile custom directives
         $template = $this->compileCustomDirectives($template);
+
+        // Compile inject directives
+        if (stripos($template, '@inject') !== false) {
+            $template = $this->compileInject($template);
+        }
 
         // Compile single-line directives
         foreach (self::SINGLE_LINE_DIRECTIVES as $directive => $phpCode) {
@@ -271,7 +287,49 @@ class DirectiveCompiler
     }
 
     /**
-     * Compile forelse loops with @empty and @endforelse
+     * Compile foreach loops with $loop tracking
+     */
+    public function compileForeach(string $template): string
+    {
+        return $this->compileOutsidePhp($template, function (string $source) {
+            $pattern = '/(?<!@)\@foreach\s*\(/i';
+            $offset = 0;
+
+            while (preg_match($pattern, $source, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                $matchStart = $matches[0][1];
+                $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+
+                $expression = $this->extractBalancedExpression($source, $parenStart);
+
+                if ($expression === false) {
+                    throw new InvalidArgumentException('Unbalanced parentheses in @foreach directive');
+                }
+
+                $rawExpression = strtr($expression, $this->compiler->getExpressionBlocks());
+
+                [$iteratee, $iteration] = $this->splitLoopExpression($rawExpression, 'foreach');
+
+                $replacement = sprintf(
+                    '<?php unset($__currentLoopData); $__currentLoopData = %s; $this->addLoop($__currentLoopData); foreach($__currentLoopData as %s): $this->incrementLoopIndices(); $loop = $this->getLastLoop(); ?>',
+                    $this->loopDataExpression($iteratee, $iteration),
+                    $iteration
+                );
+
+                $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+                $source = substr_replace($source, $replacement, $matchStart, $directiveLength);
+                $offset = $matchStart + strlen($replacement);
+            }
+
+            return $this->compileOutsidePhp($source, fn(string $html) => preg_replace(
+                '/(?<!@)\@endforeach\b/i',
+                '<?php endforeach; $this->popLoop(); $loop = $this->getLastLoop(); ?>',
+                $html
+            ));
+        });
+    }
+
+    /**
+     * Compile forelse loops with @empty, @endforelse, and $loop tracking
      */
     public function compileForelse(string $template): string
     {
@@ -287,16 +345,26 @@ class DirectiveCompiler
                 $matched = strtolower($matches[0][0]);
 
                 if (str_starts_with($matched, '@forelse')) {
-                    $parenStart = $matchStart + strlen($matched) - 1;
+                    $parenStart = $matchStart + strlen($matches[0][0]) - 1;
                     $expression = $this->extractBalancedExpression($source, $parenStart);
 
                     if ($expression === false) {
                         throw new InvalidArgumentException('Unbalanced parentheses in @forelse directive');
                     }
 
+                    $rawExpression = strtr($expression, $this->compiler->getExpressionBlocks());
+
+                    [$iteratee, $iteration] = $this->splitLoopExpression($rawExpression, 'forelse');
+
                     $counter++;
                     $stack[] = ['id' => $counter, 'has_empty' => false];
-                    $replacement = sprintf('<?php $__empty_%d = true; foreach(%s): $__empty_%d = false; ?>', $counter, $expression, $counter);
+                    $replacement = sprintf(
+                        '<?php $__empty_%d = true; unset($__currentLoopData); $__currentLoopData = %s; $this->addLoop($__currentLoopData); foreach($__currentLoopData as %s): $__empty_%d = false; $this->incrementLoopIndices(); $loop = $this->getLastLoop(); ?>',
+                        $counter,
+                        $this->loopDataExpression($iteratee, $iteration),
+                        $iteration,
+                        $counter
+                    );
                     $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
                     $source = substr_replace($source, $replacement, $matchStart, $directiveLength);
                     $offset = $matchStart + strlen($replacement);
@@ -305,30 +373,132 @@ class DirectiveCompiler
 
                 if ($matched === '@empty') {
                     if (empty($stack) || end($stack)['has_empty']) {
-                        $offset = $matchStart + strlen($matched);
+                        $offset = $matchStart + strlen($matches[0][0]);
                         continue;
                     }
 
                     $stack[array_key_last($stack)]['has_empty'] = true;
                     $current = end($stack)['id'];
-                    $replacement = sprintf('<?php endforeach; if ($__empty_%d): ?>', $current);
-                    $source = substr_replace($source, $replacement, $matchStart, strlen($matched));
+                    $replacement = sprintf('<?php endforeach; $this->popLoop(); $loop = $this->getLastLoop(); if ($__empty_%d): ?>', $current);
+                    $source = substr_replace($source, $replacement, $matchStart, strlen($matches[0][0]));
                     $offset = $matchStart + strlen($replacement);
                     continue;
                 }
 
                 if ($matched === '@endforelse') {
                     if (empty($stack)) {
-                        $offset = $matchStart + strlen($matched);
+                        $offset = $matchStart + strlen($matches[0][0]);
                         continue;
                     }
 
                     $entry = array_pop($stack);
-                    $replacement = $entry['has_empty'] ? '<?php endif; ?>' : '<?php endforeach; ?>';
-                    $source = substr_replace($source, $replacement, $matchStart, strlen($matched));
+                    $replacement = $entry['has_empty']
+                        ? '<?php endif; ?>'
+                        : '<?php endforeach; $this->popLoop(); $loop = $this->getLastLoop(); ?>';
+                    $source = substr_replace($source, $replacement, $matchStart, strlen($matches[0][0]));
                     $offset = $matchStart + strlen($replacement);
                     continue;
                 }
+            }
+
+            return $source;
+        });
+    }
+
+    private function splitLoopExpression(string $expression, string $directive): array
+    {
+        $iteratee = '';
+        $iteration = '';
+        $depth = 0;
+        $foundAs = false;
+
+        foreach (array_slice(token_get_all("<?php $expression"), 1) as $token) {
+            if (is_array($token) && $token[0] === T_AS && $depth === 0 && !$foundAs) {
+                $foundAs = true;
+                continue;
+            }
+
+            $text = is_array($token) ? $token[1] : $token;
+            if (is_array($token) && in_array($token[0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true)) {
+                $depth++;
+            }
+            if (!is_array($token)) {
+                if (in_array($token, ['(', '[', '{'], true)) {
+                    $depth++;
+                } elseif (in_array($token, [')', ']', '}'], true)) {
+                    $depth--;
+                }
+            }
+
+            if ($foundAs) {
+                $iteration .= $text;
+            } else {
+                $iteratee .= $text;
+            }
+        }
+
+        if (!$foundAs || trim($iteratee) === '' || trim($iteration) === '') {
+            throw new InvalidArgumentException("Malformed @{$directive} expression: {$expression}");
+        }
+
+        // Preserve newlines that terminate PHP line comments.
+        return [$iteratee, $iteration];
+    }
+
+    private function loopDataExpression(string $iteratee, string $iteration): string
+    {
+        // Keep writes through a referenced array variable visible to the template.
+        $variable = trim($iteratee);
+        if (
+            preg_match('/^(?:.*=>\s*)?&\s*\$/s', ltrim($iteration))
+            && preg_match('/^\$[a-zA-Z_][a-zA-Z0-9_]*$/', $variable)
+        ) {
+            return "&$variable";
+        }
+
+        return $iteratee;
+    }
+
+    /**
+     * Compile @inject directive: @inject('var', 'Service')
+     */
+    public function compileInject(string $template): string
+    {
+        return $this->compileOutsidePhp($template, function (string $source) {
+            $pattern = '/(?<!@)\@inject\s*\(/i';
+            $offset = 0;
+
+            while (preg_match($pattern, $source, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+                $matchStart = $matches[0][1];
+                $parenStart = $matchStart + strlen($matches[0][0]) - 1;
+
+                $expression = $this->extractBalancedExpression($source, $parenStart);
+
+                if ($expression === false) {
+                    throw new InvalidArgumentException('Unbalanced parentheses in @inject directive');
+                }
+
+                $args = $this->splitDirectiveArguments($expression, expressionBlocks: $this->compiler->getExpressionBlocks());
+                if (count($args) > 2 && end($args) === '') {
+                    array_pop($args);
+                }
+
+                if (count($args) !== 2 || in_array('', $args, true)) {
+                    throw new InvalidArgumentException('The @inject directive requires a variable name and a service name.');
+                }
+
+                $varName = ltrim(trim($args[0], '\'" '), '$');
+
+                if (in_array($varName, ['', 'this', 'GLOBALS'], true) || !preg_match('/^[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*$/', $varName)) {
+                    throw new InvalidArgumentException("Invalid variable name [{$args[0]}] in @inject directive.");
+                }
+
+                $service = trim($args[1]);
+
+                $replacement = sprintf('<?php $%s = app(%s); ?>', $varName, $service);
+                $directiveLength = $parenStart - $matchStart + strlen($expression) + 2;
+                $source = substr_replace($source, $replacement, $matchStart, $directiveLength);
+                $offset = $matchStart + strlen($replacement);
             }
 
             return $source;

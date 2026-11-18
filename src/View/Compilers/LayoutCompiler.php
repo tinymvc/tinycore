@@ -196,7 +196,7 @@ class LayoutCompiler
      */
     public function compileStacks(string $template): string
     {
-        $pattern = '/(?<!@)@(stack|pushOnce|prependOnce|pushIf|push|prepend)\s*\(|(?<!@)@(endpushOnce|endprependOnce|endpushIf|endpush|endprepend|once|endonce)\b/i';
+        $pattern = '/(?<!@)@(stack|pushOnce|prependOnce|pushIf|prependIf|push|prepend)\s*\(|(?<!@)@(endpushOnce|endprependOnce|endpushIf|endprependIf|endpush|endprepend|once|endonce)\b/i';
         $offset = 0;
 
         while (preg_match($pattern, $template, $matches, PREG_OFFSET_CAPTURE, $offset)) {
@@ -220,8 +220,9 @@ class LayoutCompiler
                 'push' => "<?php \$this->startPush({$name}); ?>",
                 'prepend' => "<?php \$this->startPush({$name}, true); ?>",
                 'pushif' => "<?php if ({$name}): \$this->startPush(" . ($args[1] ?? "''") . "); ?>",
+                'prependif' => "<?php if ({$name}): \$this->startPush(" . ($args[1] ?? "''") . ", true); ?>",
                 'endpush', 'endprepend' => '<?php $this->endPush(); ?>',
-                'endpushonce', 'endprependonce', 'endpushif' => '<?php $this->endPush(); endif; ?>',
+                'endpushonce', 'endprependonce', 'endpushif', 'endprependif' => '<?php $this->endPush(); endif; ?>',
                 'endonce' => '<?php endif; ?>',
                 default => '',
             };
