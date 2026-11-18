@@ -679,7 +679,7 @@ class Router implements RouterContract
                         Telemetry::emit('routeDispatched');
                         return Response::from($response);
                     }
-                    return Response::error(Response::STATUS_NOT_FOUND, 'Route not found');
+                    return Response::error(Response::STATUS_NOT_FOUND, 'Not found');
                 }
 
                 if ($this->isCorsPreflight($request) && !$this->routeAllowsMethod($matched['method'], Request::METHOD_OPTIONS)) {

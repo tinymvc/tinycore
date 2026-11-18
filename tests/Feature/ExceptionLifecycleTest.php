@@ -40,8 +40,8 @@ final class ExceptionLifecycleTest extends LifecycleTestCase
 
     public function testMissingRoutesNegotiateJsonAndHtml(): void
     {
-        $this->getJson('/missing')->assertNotFound()->assertJsonPath('message', 'Route not found');
-        $this->get('/missing')->assertNotFound()->assertHeader('Content-Type', 'text/html; charset=utf-8')->assertSee('Route not found');
+        $this->getJson('/missing')->assertNotFound()->assertJsonPath('message', 'Not found');
+        $this->get('/missing')->assertNotFound()->assertHeader('Content-Type', 'text/html; charset=utf-8')->assertSee('Not found');
     }
 
     public function testFallbackReceivesCurrentRequestAndCompletesLifecycle(): void

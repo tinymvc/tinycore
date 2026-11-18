@@ -240,7 +240,7 @@ final class PsrHttpLifecycleTest extends FrameworkTestCase
             $this->assertSame('early', (string) $response->getBody());
             $response = $this->app->handlePsr(new ServerRequest('GET', '/missing', ['Accept' => 'application/json']));
             $this->assertSame(404, $response->getStatusCode());
-            $this->assertSame(['message' => 'Route not found', 'code' => 404], json_decode((string) $response->getBody(), true));
+            $this->assertSame(['message' => 'Not found', 'code' => 404], json_decode((string) $response->getBody(), true));
         } finally {
             $testing->setValue($this->app, true);
         }
