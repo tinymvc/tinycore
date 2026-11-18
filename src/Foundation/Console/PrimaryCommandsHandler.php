@@ -11,6 +11,7 @@ use Spark\Http\Routing\Router;
 use Spark\Utils\File;
 use function count;
 use function in_array;
+use function is_array;
 use function is_string;
 use function sprintf;
 use function strlen;
@@ -518,5 +519,68 @@ class PrimaryCommandsHandler
         }
 
         $publisher->publish($provider, $tag, isset($args['force']));
+    }
+
+    /**
+     * Discovers and caches package service providers from installed composer packages.
+     *
+     * @return void
+     */
+    public function discoverServices(): void
+    {
+        $installedFile = base_path('vendor/composer/installed.json');
+
+        if (!is_file($installedFile) || !is_readable($installedFile)) {
+            Prompt::warning('Composer installed.json file not found. Run composer install first.');
+            return;
+        }
+
+        $packages = json_decode(file_get_contents($installedFile), true);
+
+        if (!is_array($packages)) {
+            Prompt::error('Failed to parse vendor/composer/installed.json.');
+            return;
+        }
+
+        $packageList = $packages['packages'] ?? $packages;
+        $discoveredProviders = [];
+        $discoveredPackages = [];
+
+        foreach ($packageList as $package) {
+            $providers = $package['extra']['spark']['providers'] ?? $package['extra']['tinymvc']['providers'] ?? [];
+
+            if (!empty($providers)) {
+                $packageName = $package['name'] ?? 'unknown';
+                $discoveredPackages[$packageName] = (array) $providers;
+
+                foreach ((array) $providers as $provider) {
+                    if (is_string($provider) && trim($provider) !== '') {
+                        $discoveredProviders[] = trim($provider);
+                    }
+                }
+            }
+        }
+
+        $discoveredProviders = array_values(array_unique($discoveredProviders));
+
+        $cacheDir = root_dir('bootstrap/cache');
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+
+        $cacheFile = dir_path("$cacheDir/services.php");
+        $lines = array_map(static fn($provider) => '    ' . var_export($provider, true) . ',', $discoveredProviders);
+        $content = "<?php\n\nreturn [\n" . implode("\n", $lines) . ($lines !== [] ? "\n" : "") . "];\n";
+
+        if (file_put_contents($cacheFile, $content, LOCK_EX) === false) {
+            Prompt::error('Failed to write cached services file.');
+            return;
+        }
+
+        foreach ($discoveredPackages as $packageName => $providers) {
+            Prompt::comment("Discovered Package: <info>{$packageName}</info>");
+        }
+
+        Prompt::success('Package services discovered and cached successfully.');
     }
 }

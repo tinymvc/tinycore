@@ -701,6 +701,20 @@ if (!function_exists('root_dir')) {
     }
 }
 
+if (!function_exists('base_path')) {
+    /**
+     * Get the root directory path with an optional appended path.
+     *
+     * @param string $path The sub-path to append to the application directory path. Default is '/'.
+     *
+     * @return string The full path to the application directory, including the appended sub-path.
+     */
+    function base_path(string $path = '/'): string
+    {
+        return root_dir($path);
+    }
+}
+
 if (!function_exists('remove_root_dir')) {
     /**
      * Remove the root directory from a given path.

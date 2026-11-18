@@ -181,6 +181,9 @@ class ConsoleServiceProvider extends ServiceProvider
             ->description('Publish registered package resources')
             ->help('Run without options to list resources. Select --tag=name, --provider=class, or --all. Use --force to replace existing files.');
 
+        // Discover package services
+        $commands->addCommand('package:discover', [PrimaryCommandsHandler::class, 'discoverServices'])
+            ->description('Discover and cache package service providers');
 
         // Add the tinker command
         $commands->addCommand('tinker', Tinker::start(...))

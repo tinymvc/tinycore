@@ -66,7 +66,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.3.1';
+    public const VERSION = '4.3.2';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -257,7 +257,9 @@ class Application extends \Spark\Container implements ApplicationContract
     public static function create(string $path, null|string|array $config = 'config', null|array $providers = null): self
     {
         $app = new self($path);
-        $providers ??= (static fn() => require dir_path("$path/bootstrap/providers.php"))();
+        $providers ??= is_file(dir_path("$path/bootstrap/providers.php"))
+            ? (static fn() => require dir_path("$path/bootstrap/providers.php"))()
+            : [];
 
         return $app->withApp(config: $config, providers: $providers);
     }
@@ -270,24 +272,6 @@ class Application extends \Spark\Container implements ApplicationContract
     public function isTesting(): bool
     {
         return $this->testing;
-    }
-
-    /**
-     * Registers console services for the application.
-     *
-     * This method adds the ConsoleServiceProvider to the application, which provides
-     * services related to command-line interface (CLI) functionality. If the EmberServiceProvider
-     * class exists, it will also be added to the application.
-     *
-     * @return void
-     */
-    public function registerConsoleServices(): void
-    {
-        // Add the ConsoleServiceProvider to the application for CLI functionality.
-        $this->addServiceProvider(new \Spark\Foundation\Providers\ConsoleServiceProvider());
-
-        // If the EmberServiceProvider class exists, add it to the application.
-        class_exists(\Spark\Ember\EmberServiceProvider::class) && $this->addServiceProvider(new \Spark\Ember\EmberServiceProvider());
     }
 
     /**
@@ -505,25 +489,58 @@ class Application extends \Spark\Container implements ApplicationContract
             $this->withMiddleware(register: $middlewares);
         }
 
-        if ($providers !== null) {
-            foreach ($providers as $provider) {
-                if (is_string($provider)) {
-                    if (!class_exists($provider)) {
-                        continue;
-                    }
+        $rootPath = rtrim($this->path, '/\\');
+        $servicesCache = dir_path("$rootPath/bootstrap/cache/services.php");
 
-                    $provider = new $provider;
-                }
+        if (is_file($servicesCache)) {
+            $cachedProviders = (static fn() => require $servicesCache)();
 
-                if (!is_object($provider) || !method_exists($provider, 'register')) {
-                    continue;
-                }
-
-                $this->addServiceProvider($provider);
+            if (is_array($cachedProviders)) {
+                $this->registerProviders($cachedProviders);
             }
         }
 
+        if ($providers !== null) {
+            $this->registerProviders($providers);
+        }
+
         $then && $then($this);
+
+        return $this;
+    }
+
+    /**
+     * Registers service providers with the application.
+     *
+     * @param array $providers An array of service provider classes or instances.
+     * @return self
+     */
+    public function registerProviders(array $providers): self
+    {
+        $registered = $this->debug()['providers'];
+
+        foreach ($providers as $provider) {
+            $class = is_object($provider) ? get_class($provider) : (string) $provider;
+
+            if (in_array($class, $registered, true)) {
+                continue;
+            }
+
+            if (is_string($provider)) {
+                if (!class_exists($provider)) {
+                    continue;
+                }
+
+                $provider = new $provider;
+            }
+
+            if (!is_object($provider) || !method_exists($provider, 'register')) {
+                continue;
+            }
+
+            $this->addServiceProvider($provider);
+            $registered[] = $class;
+        }
 
         return $this;
     }
@@ -591,6 +608,22 @@ class Application extends \Spark\Container implements ApplicationContract
         $then && $then($this->get(Commands::class));
 
         return $this;
+    }
+
+    /**
+     * Registers console services for the application.
+     *
+     * This method adds the ConsoleServiceProvider to the application, which provides
+     * services related to command-line interface (CLI) functionality.
+     *
+     * @return void
+     */
+    public function withConsoleServices(): self
+    {
+        // Add the ConsoleServiceProvider to the application for CLI functionality.
+        $this->addServiceProvider(new \Spark\Foundation\Providers\ConsoleServiceProvider());
+
+        return $this; // Return the application instance for method chaining.
     }
 
     /**

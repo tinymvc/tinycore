@@ -93,6 +93,14 @@ interface ApplicationContract
     ): self;
 
     /**
+     * Registers service providers with the application.
+     *
+     * @param array $providers An array of service provider classes or instances.
+     * @return self
+     */
+    public function registerProviders(array $providers): self;
+
+    /**
      * Applies a callback to the application's router.
      *
      * This method takes a callback function which receives the router
@@ -218,6 +226,9 @@ interface ApplicationContract
 
     /** Determine if the application has terminated. */
     public function isTerminated(): bool;
+
+    /** Configure the console services for the application. */
+    public function withConsoleServices(): self;
 
     /**
      * Runs the command line interface.

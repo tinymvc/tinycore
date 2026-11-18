@@ -167,17 +167,6 @@ class Prompt implements PromptContract
     }
 
     /**
-     * Prints a warning message.
-     *
-     * @param string $message
-     * @deprecated Use warning() instead.
-     */
-    public static function warn(string $message): void
-    {
-        self::warning($message);
-    }
-
-    /**
      * Prints an error message.
      *
      * @param string $message

@@ -139,13 +139,6 @@ interface PromptContract
     public static function confirm(string $question, bool $default = false): bool;
 
     /**
-     * Show output using <warn> style as backward-compatible alias.
-     *
-     * @param string $message
-     */
-    public static function warn(string $message): void;
-
-    /**
      * Parse CLI arguments.
      *
      * @param array $args
