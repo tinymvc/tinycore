@@ -61,6 +61,8 @@ class Router implements RouterContract
      */
     public function __construct(private array $routes = [])
     {
+        $this->macro('fire', fn() => throw new \RuntimeException('The "fire" macro is not implemented. Please implement it in your application.'));
+        $this->macro('inertia', fn() => throw new \RuntimeException('The "inertia" macro is not implemented. Please implement it in your application.'));
     }
 
     /**
