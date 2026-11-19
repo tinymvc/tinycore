@@ -525,16 +525,6 @@ class Container implements ContainerContract, \ArrayAccess
         return isset($this->aliases[$alias]);
     }
 
-    /**
-     * Get all registered aliases.
-     *
-     * @return array
-     */
-    public function getAliases(): array
-    {
-        return $this->aliases;
-    }
-
     /** Forget a resolved instance while keeping its service binding. */
     public function forgetInstance(string $abstract): void
     {
@@ -655,11 +645,11 @@ class Container implements ContainerContract, \ArrayAccess
     public function debug(): array
     {
         return [
-            'bindings' => $this->bindings,
-            'instances' => $this->instances,
-            'aliases' => $this->aliases,
-            'singletons' => array_keys($this->singletons),
-            'providers' => array_map(get_class(...), $this->providers),
+            'bindings' => $this->getBindings(),
+            'instances' => $this->getInstances(),
+            'aliases' => $this->getAliases(),
+            'singletons' => $this->getSingletons(),
+            'providers' => $this->getProviders(),
         ];
     }
 
@@ -680,6 +670,32 @@ class Container implements ContainerContract, \ArrayAccess
         $this->contextualBindings = [];
         $this->buildStack = [];
         $this->resolving = [];
+    }
+
+    /** Get the current bindings, instances, aliases, singletons, and providers in the container. */
+    protected function getBindings(): array
+    {
+        return $this->bindings;
+    }
+
+    protected function getInstances(): array
+    {
+        return $this->instances;
+    }
+
+    protected function getProviders(): array
+    {
+        return array_map(get_class(...), $this->providers);
+    }
+
+    protected function getAliases(): array
+    {
+        return $this->aliases;
+    }
+
+    protected function getSingletons(): array
+    {
+        return array_keys($this->singletons);
     }
 
     /**

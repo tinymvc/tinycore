@@ -570,7 +570,7 @@ class PrimaryCommandsHandler
 
         $cacheFile = dir_path("$cacheDir/services.php");
         $lines = array_map(static fn($provider) => '    ' . var_export($provider, true) . ',', $discoveredProviders);
-        $content = "<?php return array(\n" . implode("\n", $lines) . ($lines !== [] ? "\n" : "") . ");";
+        $content = "<?php return array(\n" . implode("\n", $lines) . ($lines !== [] ? "\n" : "") . ");\n";
 
         if (file_put_contents($cacheFile, $content, LOCK_EX) === false) {
             Prompt::error('Failed to write cached services file.');

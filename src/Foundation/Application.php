@@ -66,7 +66,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.3.3';
+    public const VERSION = '4.3.4';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -517,7 +517,7 @@ class Application extends \Spark\Container implements ApplicationContract
      */
     public function registerProviders(array $providers): self
     {
-        $registered = $this->debug()['providers'];
+        $registered = $this->getProviders();
 
         foreach ($providers as $provider) {
             $class = is_object($provider) ? get_class($provider) : (string) $provider;
