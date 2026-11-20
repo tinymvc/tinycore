@@ -330,9 +330,16 @@ class Highlight
             return '<div class="syntax-highlight-empty">This file is empty: ' . htmlspecialchars($file, ENT_QUOTES, 'UTF-8') . '</div>';
         }
 
+        // Strip opening and closing wrappers across PHP versions:
+        // PHP 8.3+: <pre><code...> ... </code></pre>
+        // PHP 8.2:  <code><span style="color: #000000">\r?\n ... </span>\r?\n</code>
         $raw = preg_replace('/^<pre><code[^>]*>/i', '', $raw);
-        $raw = preg_replace('/<\/code><\/pre>$/i', '', $raw);
+        $raw = preg_replace('/<\/code><\/pre>\s*$/i', '', $raw);
+        $raw = preg_replace('/^<code><span[^>]*>(?:\r\n|\n|\r)?/i', '', $raw);
+        $raw = preg_replace('/(?:\r\n|\n|\r)?<\/span>\s*<\/code>\s*$/i', '', $raw);
+
         $raw = str_replace(["\r\n", "\r", '<br />', '<br>'], "\n", $raw);
+        $raw = str_replace('&nbsp;', ' ', $raw);
         $lines = explode("\n", $raw);
         $lineCount = count($lines);
 
