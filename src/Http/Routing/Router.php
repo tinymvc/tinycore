@@ -61,8 +61,8 @@ class Router implements RouterContract
      */
     public function __construct(private array $routes = [])
     {
-        $this->macro('fire', fn() => throw new \RuntimeException('The "fire" macro is not implemented. Please implement it in your application.'));
-        $this->macro('inertia', fn() => throw new \RuntimeException('The "inertia" macro is not implemented. Please implement it in your application.'));
+        $this->macro('fire', fn(string $path) => $this->get($path, fn() => throw new \RuntimeException('The fireline-php package is not installed. Install it by running composer require tinymvc/fireline-php.')));
+        $this->macro('inertia', fn(string $path) => $this->get($path, fn() => throw new \RuntimeException('The inertia-php package is not installed. Install it by running composer require tinymvc/inertia-php.')));
     }
 
     /**

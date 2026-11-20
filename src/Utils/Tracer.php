@@ -371,10 +371,7 @@ class Tracer implements TracerContract
         if ($json) {
             echo json_encode(['message' => $message], JSON_INVALID_UTF8_SUBSTITUTE);
         } else {
-            echo '<div style="font:16px/1.5 system-ui,sans-serif;max-width:480px;margin:18vh auto;padding:0 24px;text-align:center;color:#111827">'
-                . '<div style="font-size:80px;font-weight:700;letter-spacing:-.04em;color:#e5e7eb">500</div>'
-                . '<h1 style="margin:0 0 8px;font-size:20px;font-weight:600">Internal Server Error</h1>'
-                . '<p style="margin:0;font-size:14px;color:#6b7280">' . htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p></div>';
+            include dirname(__DIR__) . '/Foundation/resources/error.php';
         }
 
         exit(1);

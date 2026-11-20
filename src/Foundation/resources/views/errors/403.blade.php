@@ -1,5 +1,5 @@
 @extends('master')
-@section('title', 'Forbidden')
+@section('title', '403: ' . ($message ?? __('Forbidden')))
 
 @section('content')
     <div id="error-page">

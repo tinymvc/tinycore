@@ -890,24 +890,7 @@ if (!function_exists('dump')) {
      */
     function dump(...$args)
     {
-        if (!is_cli()) {
-            echo '<pre style="font-size: 18px;margin: 25px;"><code>';
-            ob_start();
-
-            // Dump the given variable(s) to the output
-            var_dump(...$args);
-
-            // Get the output from the output buffer
-            $output = highlight_string('<?php ' . ob_get_clean(), true);
-
-            // Remove the <?php tag from the output
-            echo str_replace('&lt;?php ', '', $output);
-
-            // Close the <pre> and <code> tags
-            echo '</code></pre>';
-        } else {
-            var_dump(...$args);
-        }
+        \Spark\Utils\Highlight::dump(...$args);
     }
 }
 
@@ -921,22 +904,7 @@ if (!function_exists('dd')) {
      */
     function dd(...$args): never
     {
-        // show the file and line number
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 1);
-        $file = $trace[0]['file'] ?? ''; // Get the file name
-        $line = $trace[0]['line'] ?? ''; // Get the line number
-
-        // Make the file path relative to the root directory
-        $file = str_replace(root_dir(), '@', $file);
-
-        if (is_cli()) {
-            echo "// Dumped from: " . $file . ":" . $line . "\n";
-        } else {
-            echo '<p style="color:#666;font-size: 14px;margin: 25px 25px 0 25px;font-style:italic;"><strong>// Dumped from:</strong> ' . $file . ':' . $line . '</p>';
-        }
-
-        dump(...$args);
-
+        \Spark\Utils\Highlight::dumpAndDie(...$args);
         die(0);
     }
 }

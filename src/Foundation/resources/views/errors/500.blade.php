@@ -1,5 +1,5 @@
 @extends('master')
-@section('title', 'Internal Server Error')
+@section('title', '500: ' . ($message ?? __('Internal Server Error')))
 
 @section('content')
     <div id="error-page">
