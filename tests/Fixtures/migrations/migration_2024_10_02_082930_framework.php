@@ -46,7 +46,6 @@ return new class {
             $table->text('exception');
             $table->integer('attempts')->default(0);
         });
-
     }
 
     public function down(): void

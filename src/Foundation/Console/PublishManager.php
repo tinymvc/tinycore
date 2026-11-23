@@ -104,7 +104,7 @@ class PublishManager
         }
 
         if (!$matched) {
-            throw new RuntimeException('No publishable resources match the selected provider or tag.');
+            Prompt::info("No publishable resources match the selected provider or tag.");
         }
     }
 
