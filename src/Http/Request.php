@@ -1919,10 +1919,10 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      * Get the value of a field from the previous request using the old input.
      *
      * @param string $field The name of the field to retrieve.
-     * @param null|string $default The default value to return if the field is not found.
-     * @return string|null The value of the field from the previous request, or the default value if not found.
+     * @param mixed $default The default value to return if the field is not found.
+     * @return mixed The value of the field from the previous request, or the default value if not found.
      */
-    public function old(string $field, null|string $default = null): null|string
+    public function old(string $field, mixed $default = null): mixed
     {
         return $this->errors()->getOld($field, $default);
     }

@@ -1623,10 +1623,10 @@ if (!function_exists('old')) {
      * Retrieve the old value of a given field from the previous request.
      *
      * @param string $field The field name to retrieve the old value for.
-     * @param null|string $default The default value to return if the field does not exist.
-     * @return null|string The old value of the field from the previous request, or the default value if not found.
+     * @param mixed $default The default value to return if the field does not exist.
+     * @return mixed The old value of the field from the previous request, or the default value if not found.
      */
-    function old(string $field, null|string $default = null): null|string
+    function old(string $field, mixed $default = null): mixed
     {
         return request()->old($field, $default);
     }

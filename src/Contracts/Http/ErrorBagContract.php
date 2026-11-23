@@ -21,28 +21,13 @@ interface ErrorBagContract
      * 
      * @param string $field
      *   The field name.
-     * @param ?string $default
+     * @param mixed $default
      *   The default value to return if the field does not exist.
      * 
-     * @return string|null
+     * @return mixed
      *   The old value of the given field.
      */
-    public function getOld(string $field, ?string $default = null): ?string;
-
-    /**
-     * Get the old value of the given field.
-     * 
-     * This method is an alias for the getOld method.
-     * 
-     * @param string $field
-     *   The field name.
-     * @param ?string $default
-     *   The default value to return if the field does not exist.
-     * 
-     * @return string|null
-     *   The old value of the given field.
-     */
-    public function old(string $field, ?string $default = null): ?string;
+    public function getOld(string $field, mixed $default = null): mixed;
 
     /**
      * Check if there are any error messages.

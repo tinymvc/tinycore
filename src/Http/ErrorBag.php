@@ -8,7 +8,6 @@ use Spark\Contracts\Support\Arrayable;
 use function array_key_exists;
 use function count;
 use function is_array;
-use function is_bool;
 use function is_object;
 use function is_scalar;
 
@@ -59,28 +58,19 @@ class ErrorBag implements ErrorBagContract, Arrayable, \ArrayAccess, \IteratorAg
      * 
      * @param string $field
      *   The field name.
-     * @param ?string $default
+     * @param mixed $default
      *   The default value to return if the field does not exist.
      * 
-     * @return string|null
+     * @return mixed
      *   The old value of the given field.
      */
-    public function getOld(string $field, ?string $default = null): ?string
+    public function getOld(string $field, mixed $default = null): mixed
     {
         if (!array_key_exists($field, $this->attributes)) {
             return $default;
         }
 
-        $value = $this->attributes[$field];
-        if (is_array($value) || is_object($value)) {
-            return json_encode($value) ?: null;
-        }
-
-        if ($value === null) {
-            return null;
-        }
-
-        return is_bool($value) ? ($value ? '1' : '0') : (string) $value;
+        return $this->attributes[$field];
     }
 
     /**
@@ -90,13 +80,13 @@ class ErrorBag implements ErrorBagContract, Arrayable, \ArrayAccess, \IteratorAg
      * 
      * @param string $field
      *   The field name.
-     * @param ?string $default
+     * @param mixed $default
      *   The default value to return if the field does not exist.
      * 
-     * @return string|null
+     * @return mixed
      *   The old value of the given field.
      */
-    public function old(string $field, ?string $default = null): ?string
+    public function old(string $field, mixed $default = null): mixed
     {
         return $this->getOld($field, $default);
     }
