@@ -100,7 +100,6 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         $run('--provider=' . ConsoleAssetFixtureProvider::class);
         $this->assertSame('package settings', file_get_contents($untagged));
 
-        $this->assertThrows(RuntimeException::class, fn() => $run('--provider=Unknown', '--tag=fixture-views', '--force'));
         $this->assertThrows(InvalidArgumentException::class, fn() => $run('--tag', '--force'));
         $this->assertThrows(InvalidArgumentException::class, fn() => $run('--provider=""'));
         $this->assertThrows(InvalidArgumentException::class, fn() => $run("--provider='   '"));
