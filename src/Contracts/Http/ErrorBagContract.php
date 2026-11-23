@@ -27,7 +27,7 @@ interface ErrorBagContract
      * @return mixed
      *   The old value of the given field.
      */
-    public function getOld(string $field, mixed $default = null): mixed;
+    public function old(string $field, mixed $default = null): mixed;
 
     /**
      * Check if there are any error messages.
@@ -50,7 +50,7 @@ interface ErrorBagContract
      * @param string $field The field name to retrieve the error message for.
      * @return null|string|array The error messages for the given field, or null if no error exists for the field.
      */
-    public function error(string $field): null|string|array;
+    public function get(string $field): null|string|array;
 
     /**
      * Determine if an error message exists for a given field.

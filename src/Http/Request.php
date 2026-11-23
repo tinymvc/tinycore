@@ -1924,7 +1924,7 @@ class Request implements RequestContract, \ArrayAccess, \IteratorAggregate
      */
     public function old(string $field, mixed $default = null): mixed
     {
-        return $this->errors()->getOld($field, $default);
+        return $this->errors()->old($field, $default);
     }
 
     /**

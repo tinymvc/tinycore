@@ -64,31 +64,13 @@ class ErrorBag implements ErrorBagContract, Arrayable, \ArrayAccess, \IteratorAg
      * @return mixed
      *   The old value of the given field.
      */
-    public function getOld(string $field, mixed $default = null): mixed
+    public function old(string $field, mixed $default = null): mixed
     {
         if (!array_key_exists($field, $this->attributes)) {
             return $default;
         }
 
         return $this->attributes[$field];
-    }
-
-    /**
-     * Get the old value of the given field.
-     * 
-     * This method is an alias for the getOld method.
-     * 
-     * @param string $field
-     *   The field name.
-     * @param mixed $default
-     *   The default value to return if the field does not exist.
-     * 
-     * @return mixed
-     *   The old value of the given field.
-     */
-    public function old(string $field, mixed $default = null): mixed
-    {
-        return $this->getOld($field, $default);
     }
 
     /**
@@ -143,7 +125,7 @@ class ErrorBag implements ErrorBagContract, Arrayable, \ArrayAccess, \IteratorAg
      * @param string $field
      * @return null|string|array
      */
-    public function error(string $field): null|string|array
+    public function get(string $field): null|string|array
     {
         return $this->messages[$field] ?? null;
     }
@@ -157,21 +139,6 @@ class ErrorBag implements ErrorBagContract, Arrayable, \ArrayAccess, \IteratorAg
     public function has(string $field): bool
     {
         return array_key_exists($field, $this->messages);
-    }
-
-    /**
-     * Get the error message for a specific field.
-     * 
-     * This method is an alias for the error method.
-     * 
-     * @param string $field The field name to retrieve the error message for.
-     * 
-     * @return null|string|array
-     *   The error messages for the given field, or null if no error exists for the field.
-     */
-    public function get(string $field): null|string|array
-    {
-        return $this->error($field);
     }
 
     /**

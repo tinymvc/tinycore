@@ -92,7 +92,7 @@ ENV);
         $errors = app(ErrorBag::class);
         $errors->setMessages(['name' => 'First']);
         $errors->addMessage('name', 'Second');
-        $this->assertSame(['First', 'Second'], $errors->error('name'));
+        $this->assertSame(['First', 'Second'], $errors->get('name'));
         $errors->setMessages(['name' => []]);
         $this->assertSame('', (string) $errors);
     }

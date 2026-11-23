@@ -163,7 +163,7 @@ class PublishManager
             }
             foreach (new FilesystemIterator($source) as $item) {
                 if (!$item->isLink() || !$item->isDir()) {
-                    $this->copy($item->getPathname(), $destination . '/' . $item->getFilename(), $force);
+                    $this->copy($item->getPathname(), "$destination/" . $item->getFilename(), $force);
                 }
             }
             return;
