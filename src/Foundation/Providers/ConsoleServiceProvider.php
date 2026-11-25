@@ -59,14 +59,19 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('help', [PrimaryCommandsHandler::class, 'handleHelp'])
             ->description('Show command help');
 
-        // Add the help command
+        // Add the about command
+        $commands->addCommand('about', [PrimaryCommandsHandler::class, 'about'])
+            ->description('Display basic information about the application');
+
+        // Add the route:list command
         $commands->addCommand('route:list', [PrimaryCommandsHandler::class, 'routeList'])
-            ->description('Show route list');
+            ->description('Show route list')
+            ->help('Filter with --method=GET, --path=api, or --name=users.');
 
         // Add the queue:work command
         $commands->addCommand('queue:work', [PrimaryCommandsHandler::class, 'runQueueJobs'])
             ->description('Run the queue jobs workers')
-            ->help('Use --connection=name to select a configured queue connection.');
+            ->help('Options: --connection=name, --queue=default, --once, --timeout=3600, --sleep=3, --delay=5, --tries=3.');
 
         $commands->addCommand('queue:restart', [PrimaryCommandsHandler::class, 'restartQueueWorkers'])
             ->description('Gracefully stop queue workers so a supervisor can restart them')
@@ -75,7 +80,12 @@ class ConsoleServiceProvider extends ServiceProvider
         // Add the queue:clear command
         $commands->addCommand('queue:clear', [PrimaryCommandsHandler::class, 'clearQueueJobs'])
             ->description('Clear all queue jobs')
-            ->help('Use --failed to clear failed queue jobs, and --connection=name to select a configured queue connection.');
+            ->help('Use --failed to clear failed queue jobs, --queue=name to clear one queue, and --connection=name to select a configured queue connection.');
+
+        // Add the queue:forget command
+        $commands->addCommand('queue:forget', [PrimaryCommandsHandler::class, 'forgetQueueJob'])
+            ->description('Delete a single queue job by ID')
+            ->help('Usage: queue:forget <id> [--connection=name]');
 
         // Add the queue:list command
         $commands->addCommand('queue:list', [PrimaryCommandsHandler::class, 'listQueueJobs'])
@@ -87,7 +97,7 @@ class ConsoleServiceProvider extends ServiceProvider
             ->description('Display all failed queue jobs')
             ->help('Use --connection=name to select a configured queue connection.');
 
-        // Add the queue:retryFailed command
+        // Add the queue:retry command
         $commands->addCommand('queue:retry', [PrimaryCommandsHandler::class, 'retryFailedQueueJobs'])
             ->description('Retry failed queue jobs by ID or all')
             ->help('Usage: queue:retry [id|all] [--connection=name]');
@@ -95,33 +105,62 @@ class ConsoleServiceProvider extends ServiceProvider
         // Add the migrate command
         $commands->addCommand('migrate', [Migration::class, 'up'])
             ->description('Run the database migrations')
-            ->help('Use --force to skip confirmation when app.debug is disabled.');
+            ->help('Use --seed to also run seeders, and --force to skip confirmation in production.');
+
+        // Add the migrate:status command
+        $commands->addCommand('migrate:status', [Migration::class, 'status'])
+            ->description('Show the status of each migration and seeder')
+            ->help('Use --pending or --ran to filter results.');
 
         // Add the migrate:rollback command
         $commands->addCommand('migrate:rollback', [Migration::class, 'down'])
-            ->description('Rollback the last database migration')
-            ->help('Use --force to skip confirmation when app.debug is disabled.');
+            ->description('Rollback the last database migration batch')
+            ->help('Use --step=N to roll back N migrations, --batch=N for a specific batch, --all to roll back all, and --force in production.');
 
         // Add the migrate:fresh command
         $commands->addCommand('migrate:fresh', [Migration::class, 'refresh'])
             ->description('Rollback all database migrations and re-run them')
-            ->help('Use --force to skip confirmation when app.debug is disabled.');
+            ->help('Use --seed to also run seeders, and --force to skip confirmation in production.');
+
+        // Add the db:seed command
+        $commands->addCommand('db:seed', [Migration::class, 'seed'])
+            ->description('Run database seeders')
+            ->help('Usage: db:seed [name] [--class=name] [--force]');
 
         // Add the key:generate command
         $commands->addCommand('key:generate', [PrimaryCommandsHandler::class, 'generateAppKey'])
-            ->description('Generate a new encryption key');
+            ->description('Generate a new encryption key')
+            ->help('Use --force to overwrite an existing key or --show to print a generated key without saving.');
 
-        // Clear the view caches
+        // Cache and clear views
+        $commands->addCommand('view:cache', [PrimaryCommandsHandler::class, 'cacheViews'])
+            ->description('Compile all Blade templates');
+
         $commands->addCommand('view:clear', [PrimaryCommandsHandler::class, 'clearViewCaches'])
             ->description('Clear the view caches');
 
-        // Clear all cache files
+        // Cache management
         $commands->addCommand('cache:clear', [PrimaryCommandsHandler::class, 'clearCache'])
-            ->description('Clear all cache files');
+            ->description('Clear cache files and entries')
+            ->help('Use --namespace=name or --store=name to flush a single cache namespace without clearing compiled config/views.');
 
-        // Clear the configuration cache
+        $commands->addCommand('cache:prune', [PrimaryCommandsHandler::class, 'pruneCache'])
+            ->description('Remove expired cache entries and expired locks')
+            ->help('Use --namespace=name or --store=name to target a specific cache namespace.');
+
+        // Config caching
+        $commands->addCommand('config:cache', [PrimaryCommandsHandler::class, 'cacheConfig'])
+            ->description('Create a cache file for faster configuration loading');
+
         $commands->addCommand('config:clear', [PrimaryCommandsHandler::class, 'clearConfigCache'])
             ->description('Remove the configuration cache file');
+
+        // Optimize commands
+        $commands->addCommand('optimize', [PrimaryCommandsHandler::class, 'optimize'])
+            ->description('Cache framework bootstrap files, configuration, and views');
+
+        $commands->addCommand('optimize:clear', [PrimaryCommandsHandler::class, 'clearOptimization'])
+            ->description('Remove cached bootstrap files, configuration, and views');
 
         // Add the storage:link command
         $commands->addCommand('storage:link', [PrimaryCommandsHandler::class, 'createSymbolicLinkForUploads'])
@@ -133,7 +172,8 @@ class ConsoleServiceProvider extends ServiceProvider
 
         // Make a Migration file
         $commands->addCommand('make:migration', [MakeStubCommandsHandler::class, 'makeMigration'])
-            ->description('Create a new database migration file');
+            ->description('Create a new database migration file')
+            ->help('Use --table=name to generate a Schema::table() migration, --pivot for a pivot table, or --seed to also generate a seeder.');
 
         // Make a Seeder file
         $commands->addCommand('make:seeder', [MakeStubCommandsHandler::class, 'makeSeeder'])
@@ -147,9 +187,13 @@ class ConsoleServiceProvider extends ServiceProvider
         $commands->addCommand('make:cast', [MakeStubCommandsHandler::class, 'makeCast'])
             ->description('Create a new cast class for model attributes');
 
-        // Make a Cast class file
+        // Make a Form Request class file
         $commands->addCommand('make:request', [MakeStubCommandsHandler::class, 'makeFormRequest'])
             ->description('Create a new form request class for validating incoming HTTP requests');
+
+        // Make a Validation Rule class file
+        $commands->addCommand('make:rule', [MakeStubCommandsHandler::class, 'makeRule'])
+            ->description('Create a new validation rule class');
 
         // Make a JSON Resource class file
         $commands->addCommand('make:resource', [MakeStubCommandsHandler::class, 'makeJsonResource'])
@@ -174,7 +218,6 @@ class ConsoleServiceProvider extends ServiceProvider
         // Make a view component file
         $commands->addCommand('make:component', [MakeStubCommandsHandler::class, 'makeViewComponent'])
             ->description('Create a new view component file');
-
 
         // Add the vendor:publish command
         $commands->addCommand('vendor:publish', [PrimaryCommandsHandler::class, 'vendorPublish'])

@@ -534,6 +534,8 @@ class FileStorage implements CacheStorageContract
 
                     return (int) $this->deleteExistingFile($path);
                 });
+
+                $this->removeStaleTempFiles($this->lockRoot);
             }
         } catch (CacheException) {
             // Best effort, same as the other drivers.
@@ -590,17 +592,6 @@ class FileStorage implements CacheStorageContract
             return (bool) $this->withGuard($dir, fn() => $this->deleteExistingFile($path));
         } catch (CacheException) {
             return false;
-        }
-    }
-
-    public function optimizeLocks(): void
-    {
-        $this->releaseExpiredLocks();
-
-        try {
-            $this->removeStaleTempFiles($this->lockRoot);
-        } catch (CacheException) {
-            // Ignore optimize errors.
         }
     }
 

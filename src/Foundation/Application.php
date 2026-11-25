@@ -66,7 +66,7 @@ class Application extends \Spark\Container implements ApplicationContract
     use Macroable;
 
     /** The current version of the application. */
-    public const VERSION = '4.3.9';
+    public const VERSION = '4.3.10';
 
     /** @var Application Singleton instance of the application. */
     public static ?Application $app = null;
@@ -959,14 +959,14 @@ class Application extends \Spark\Container implements ApplicationContract
      * Bootstraps the application by registering providers and calling the `boot` method
      * on each provider. Then, it runs the command line interface.
      *
-     * @return void
+     * @return int Exit status code.
      */
-    public function handleCommand(): void
+    public function handleCommand(): int
     {
         $this->boot();
 
         $console = $this->get(Console::class);
-        $console->run();
+        return $console->run();
     }
 
     /**

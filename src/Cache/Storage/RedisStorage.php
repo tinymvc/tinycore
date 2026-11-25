@@ -467,11 +467,6 @@ LUA;
         return (bool) $this->redis->del($this->lockKey($key));
     }
 
-    public function optimizeLocks(): void
-    {
-        $this->releaseExpiredLocks();
-    }
-
     private function cacheKey(string $key): string
     {
         return $this->cacheKeyPrefix . $key;

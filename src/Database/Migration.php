@@ -6,12 +6,13 @@ use PDO;
 use PDOStatement;
 use Spark\Console\Prompt;
 use Spark\Database\Contracts\MigrationContract;
+use Spark\Database\Schema\Schema;
 use Spark\Facades\DB;
 use Throwable;
 use function array_slice;
-use function count;
 use function in_array;
 use function is_object;
+use function is_string;
 
 /**
  * Class Migration
@@ -28,6 +29,11 @@ class Migration implements MigrationContract
      * The PDO connection used to track and run migrations.
      */
     private PDO $pdo;
+
+    /**
+     * The unquoted/unprefixed migration ledger table name.
+     */
+    private string $rawTable;
 
     /**
      * Creates a new instance of the migration class.
@@ -48,6 +54,7 @@ class Migration implements MigrationContract
             throw new \InvalidArgumentException('Invalid migration table name.');
         }
 
+        $this->rawTable = $this->table;
         $this->pdo = DB::getPdo();
 
         if (!in_array($driver = DB::getDriver(), DB::SUPPORTED_DRIVERS, true)) {
@@ -145,14 +152,13 @@ class Migration implements MigrationContract
     }
 
     /**
-     * Rolls back the last applied migrations.
+     * Rolls back applied migrations.
      *
-     * Retrieves the list of applied migrations, most recently applied first,
-     * and calls down() on the specified number of them.
+     * By default, rolls back all migrations in the latest applied batch, most
+     * recently applied first. Supports --step=N, --batch=N, and --all.
      *
      * @param array $args
-     *   An array containing the number of steps to rollback.
-     *   If 'step' is not provided, it defaults to 1.
+     *   Rollback options ('step', 'batch', 'all', 'force').
      * @return void
      */
     public function down(array $args = []): void
@@ -170,20 +176,15 @@ class Migration implements MigrationContract
             return;
         }
 
-        $steps = (int) ($args['step'] ?? ($args['_args'][0] ?? 1));
+        $migrationsToRollback = $this->resolveMigrationsToRollback($args, $appliedMigrations);
 
-        if (isset($args['all']) && $args['all']) {
-            $steps = count($appliedMigrations); // Rollback all applied migrations
+        if ($migrationsToRollback === []) {
+            Prompt::message("Nothing to roll back.", 'warning');
+            return;
         }
-
-        if ($steps < 1) {
-            throw new \InvalidArgumentException('Rollback steps must be a positive integer.');
-        }
-
-        // Most recently applied migrations are rolled back first.
-        $migrationsToRollback = array_slice(array_reverse($appliedMigrations), 0, $steps);
 
         $run = 0;
+        $migrationName = null;
         Prompt::info('Rolling back migrations.');
 
         try {
@@ -213,7 +214,7 @@ class Migration implements MigrationContract
                 $run++;
             }
         } catch (Throwable $e) {
-            Prompt::status($migrationName, 'FAIL', microtime(true) - $startedAt);
+            Prompt::status((string) $migrationName, 'FAIL', microtime(true) - $startedAt);
             Prompt::message("Rollback failed: {$e->getMessage()}", 'error');
             throw $e;
         }
@@ -247,6 +248,224 @@ class Migration implements MigrationContract
         Prompt::newline();
 
         $this->up($args);
+    }
+
+    /**
+     * Show the status of each migration and seeder file without modifying the database.
+     *
+     * @param array $args Supports --pending and --ran filters.
+     * @return void
+     */
+    public function status(array $args = []): void
+    {
+        $applied = [];
+        if (Schema::hasTable($this->rawTable)) {
+            $rows = $this->run("SELECT migration, type, batch, applied_at FROM {$this->table} ORDER BY id ASC")
+                ->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($rows as $row) {
+                $applied[$row['migration']] = $row;
+            }
+        }
+
+        $files = glob($this->migrationsFolder . DIRECTORY_SEPARATOR . '*.php') ?: [];
+        sort($files);
+
+        $onlyPending = !empty($args['pending']);
+        $onlyRan = !empty($args['ran']);
+
+        $tableRows = [];
+        $seen = [];
+        $ranCount = 0;
+        $pendingCount = 0;
+        $missingCount = 0;
+
+        foreach ($files as $file) {
+            $name = basename($file);
+            if (!str_starts_with($name, 'migration_') && !str_starts_with($name, 'seed_')) {
+                continue;
+            }
+
+            $seen[$name] = true;
+            $type = str_starts_with($name, 'seed_') ? 'seed' : 'migration';
+
+            if (isset($applied[$name])) {
+                $ranCount++;
+                if ($onlyPending && !$onlyRan) {
+                    continue;
+                }
+
+                $record = $applied[$name];
+                $tableRows[] = [
+                    $name,
+                    (string) ($record['type'] ?? $type),
+                    'Ran',
+                    (string) $record['batch'],
+                    date('Y-m-d H:i:s', (int) $record['applied_at']),
+                ];
+            } else {
+                $pendingCount++;
+                if ($onlyRan && !$onlyPending) {
+                    continue;
+                }
+
+                $tableRows[] = [$name, $type, 'Pending', '-', '-'];
+            }
+        }
+
+        foreach ($applied as $name => $record) {
+            if (isset($seen[$name])) {
+                continue;
+            }
+
+            $missingCount++;
+            if ($onlyPending && !$onlyRan) {
+                continue;
+            }
+
+            $tableRows[] = [
+                $name,
+                (string) ($record['type'] ?? 'migration'),
+                'Missing',
+                (string) $record['batch'],
+                date('Y-m-d H:i:s', (int) $record['applied_at']),
+            ];
+        }
+
+        if ($tableRows === []) {
+            Prompt::info(
+                $ranCount + $pendingCount + $missingCount === 0
+                ? 'No migrations found.'
+                : 'No migrations match the selected filter.'
+            );
+            return;
+        }
+
+        Prompt::table(['Migration', 'Type', 'Status', 'Batch', 'Applied at'], $tableRows);
+        $summary = "  Showing {$ranCount} ran, {$pendingCount} pending";
+        if ($missingCount > 0) {
+            $summary .= ", {$missingCount} missing";
+        }
+        Prompt::comment($summary . '.');
+    }
+
+    /**
+     * Run standalone database seeders (seed_*.php) without tracking in the migration ledger.
+     *
+     * @param array $args Supports positional target, --class=name, --only=name, and --force.
+     * @return void
+     */
+    public function seed(array $args = []): void
+    {
+        if (!$this->confirmToProceed($args, 'run database seeders')) {
+            return;
+        }
+
+        $files = glob($this->migrationsFolder . DIRECTORY_SEPARATOR . 'seed_*.php') ?: [];
+        sort($files);
+
+        $target = $args['class'] ?? $args['only'] ?? $args['_args'][0] ?? null;
+        if (is_string($target)) {
+            $target = trim($target);
+        } else {
+            $target = null;
+        }
+
+        if ($target !== null && $target !== '') {
+            $needle = strtolower(str_ends_with($target, '.php') ? substr($target, 0, -4) : $target);
+            $exact = array_values(array_filter(
+                $files,
+                static fn(string $file): bool => strtolower(basename($file, '.php')) === $needle
+            ));
+
+            $files = $exact !== []
+                ? $exact
+                : array_values(array_filter(
+                    $files,
+                    static fn(string $file): bool => str_contains(strtolower(basename($file, '.php')), $needle)
+                ));
+
+            if ($files === []) {
+                throw new \RuntimeException("Seeder not found: {$target}");
+            }
+        }
+
+        if ($files === []) {
+            Prompt::info('No seeders found.');
+            return;
+        }
+
+        Prompt::info('Seeding database.');
+        $seedName = null;
+        $startedAt = microtime(true);
+
+        try {
+            foreach ($files as $file) {
+                $seedName = basename($file);
+                $startedAt = microtime(true);
+                Prompt::status($seedName, 'RUNNING');
+
+                $seeder = require $file;
+                if (!is_object($seeder) || !is_callable([$seeder, 'up'])) {
+                    throw new \RuntimeException("Seeder must expose a public up() method: {$seedName}");
+                }
+
+                $this->runMigration(static function () use ($seeder): void {
+                    $seeder->up();
+                });
+
+                Prompt::status($seedName, 'DONE', microtime(true) - $startedAt);
+            }
+        } catch (Throwable $e) {
+            Prompt::status((string) $seedName, 'FAIL', microtime(true) - $startedAt);
+            Prompt::message("Seeding failed: {$seedName} — {$e->getMessage()}", 'error');
+            throw $e;
+        }
+    }
+
+    /**
+     * Resolve which applied migrations should be rolled back based on CLI options.
+     *
+     * @param array<string, mixed> $args
+     * @param array<int, string> $appliedMigrations
+     * @return array<int, string>
+     */
+    private function resolveMigrationsToRollback(array $args, array $appliedMigrations): array
+    {
+        if (isset($args['all']) && $args['all']) {
+            return array_reverse($appliedMigrations);
+        }
+
+        if (isset($args['batch'])) {
+            $batch = filter_var($args['batch'], FILTER_VALIDATE_INT);
+            if ($batch === false || $batch < 1) {
+                throw new \InvalidArgumentException('Rollback batch must be a positive integer.');
+            }
+
+            $stmt = $this->run("SELECT migration FROM {$this->table} WHERE batch = ? ORDER BY id DESC", [$batch]);
+            return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        }
+
+        if (isset($args['step']) || isset($args['_args'][0])) {
+            $steps = (int) ($args['step'] ?? $args['_args'][0]);
+            if ($steps < 1) {
+                throw new \InvalidArgumentException('Rollback steps must be a positive integer.');
+            }
+
+            return array_slice(array_reverse($appliedMigrations), 0, $steps);
+        }
+
+        $latestBatch = $this->run("SELECT MAX(batch) FROM {$this->table}")->fetchColumn();
+        if ($latestBatch === false || $latestBatch === null) {
+            return [];
+        }
+
+        $stmt = $this->run(
+            "SELECT migration FROM {$this->table} WHERE batch = ? ORDER BY id DESC",
+            [(int) $latestBatch]
+        );
+
+        return $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
     }
 
     /** Require explicit approval before changing a production database. */

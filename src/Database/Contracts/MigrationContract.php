@@ -46,4 +46,20 @@ interface MigrationContract
      * @return void
      */
     public function refresh(array $args): void;
+
+    /**
+     * Display the status of migrations and seeders.
+     *
+     * @param array $args
+     * @return void
+     */
+    public function status(array $args = []): void;
+
+    /**
+     * Run database seeder files.
+     *
+     * @param array $args
+     * @return void
+     */
+    public function seed(array $args = []): void;
 }

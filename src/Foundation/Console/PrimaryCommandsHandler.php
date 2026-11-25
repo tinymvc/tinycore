@@ -2,16 +2,25 @@
 
 namespace Spark\Foundation\Console;
 
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use Spark\Cache\Cache;
+use Spark\Cache\CacheManager;
 use Spark\Console\Commands;
 use Spark\Console\Process;
 use Spark\Console\Prompt;
+use Spark\Foundation\Application;
 use Spark\Queue\QueueManager;
 use Spark\Http\Routing\Router;
+use Spark\Utils\Configuration;
+use Spark\Utils\DotEnv;
 use Spark\Utils\File;
 use function count;
+use function get_class;
 use function in_array;
 use function is_array;
+use function is_object;
 use function is_string;
 use function sprintf;
 use function strlen;
@@ -56,11 +65,13 @@ class PrimaryCommandsHandler
         Prompt::newline();
 
         // Use the current PHP binary to avoid shell wrapper quirks on Windows.
-        Process::command([PHP_BINARY, '-S', "$host:$port", '-t', 'public'])
+        $process = Process::command([PHP_BINARY, '-S', "$host:$port", '-t', 'public'])
             ->path(root_dir())
             ->forever()
             ->tty()
             ->execute();
+
+        return $process->exitCode() ?? 0;
     }
 
     /**
@@ -118,34 +129,92 @@ class PrimaryCommandsHandler
     /**
      * Displays a list of registered routes in the console.
      *
-     * This method retrieves the registered routes from the router and displays
-     * them in the console with their associated HTTP methods and (optional)
-     * route names. The output is formatted to be easy to read, with the route
-     * path and HTTP method(s) aligned in columns.
-     *
      * @param Router $router
      *   An instance of the Router class containing the registered routes.
+     * @param array $args
+     *   Optional filters (--method=, --path=, --name=).
      */
-    public function routeList(Router $router)
+    public function routeList(Router $router, array $args = []): void
     {
-        $rows = [];
+        $routes = $router->getRoutes();
+        if ($routes === []) {
+            Prompt::info('No routes are registered.');
+            return;
+        }
 
-        foreach ($router->getRoutes() as $name => $route) {
+        $methodFilter = isset($args['method']) && is_string($args['method']) ? strtoupper(trim($args['method'])) : null;
+        $pathFilter = isset($args['path']) && is_string($args['path']) ? trim($args['path']) : null;
+        $nameFilter = isset($args['name']) && is_string($args['name']) ? trim($args['name']) : null;
+
+        $rows = [];
+        foreach ($routes as $name => $route) {
+            $methods = array_map('strtoupper', (array) ($route['method'] ?? ['GET']));
+            $path = (string) ($route['path'] ?? '/');
+            $routeName = is_string($name) ? $name : '';
+
+            if ($methodFilter !== null && $methodFilter !== '' && !in_array($methodFilter, $methods, true) && !in_array('*', $methods, true)) {
+                continue;
+            }
+            if ($pathFilter !== null && $pathFilter !== '' && !str_contains(strtolower($path), strtolower($pathFilter))) {
+                continue;
+            }
+            if ($nameFilter !== null && $nameFilter !== '' && !str_contains(strtolower($routeName), strtolower($nameFilter))) {
+                continue;
+            }
+
             $rows[] = [
-                implode('|', (array) $route['method']),
-                $route['path'],
-                is_string($name) ? $name : '',
+                implode('|', $methods),
+                $path,
+                $routeName,
+                $this->formatRouteAction($route),
+                $this->formatRouteMiddleware($route),
             ];
         }
 
         if ($rows === []) {
-            Prompt::info('No routes are registered.');
-
+            Prompt::info('No routes match the given filters.');
             return;
         }
 
-        Prompt::table(['Method', 'URI', 'Name'], $rows);
+        Prompt::table(['Method', 'URI', 'Name', 'Action', 'Middleware'], $rows);
         Prompt::comment('  Showing ' . count($rows) . ' routes.');
+    }
+
+    private function formatRouteAction(array $route): string
+    {
+        if (!empty($route['template'])) {
+            return 'view:' . $route['template'];
+        }
+
+        $callback = $route['callback'] ?? null;
+        if (is_array($callback) && count($callback) >= 2) {
+            $target = is_object($callback[0]) ? get_class($callback[0]) : (string) $callback[0];
+            return "$target@$callback[1]";
+        }
+
+        if ($callback instanceof \Closure) {
+            return 'Closure';
+        }
+
+        if (is_string($callback)) {
+            return $callback;
+        }
+
+        if (is_object($callback)) {
+            return get_class($callback) . '@__invoke';
+        }
+
+        return '-';
+    }
+
+    private function formatRouteMiddleware(array $route): string
+    {
+        $middlewares = array_map(
+            static fn($item): string => is_string($item) ? $item : (is_object($item) ? get_class($item) : 'Closure'),
+            (array) ($route['middleware'] ?? [])
+        );
+
+        return implode(', ', $middlewares);
     }
 
     /**
@@ -158,22 +227,28 @@ class PrimaryCommandsHandler
      *   An associative array of arguments, where the command name can be
      *   specified using the '_args' key.
      *
-     * @return void
+     * @return int Exit status code.
      */
-    public function handleHelp(Commands $commands, array $args)
+    public function handleHelp(Commands $commands, array $args): int
     {
         $commandName = $args['_args'][0] ?? null;
 
-        // If a command name is provided, show the help for that command.
-        if ($commandName && $commands->hasCommand($commandName)) {
-            $commands->showCommandHelp($commandName);
-        } else {
-            // Otherwise, list all the registered commands.
-            Prompt::section('Available commands');
-            $commands->listCommands();
-            Prompt::newline();
-            Prompt::comment("  Use 'help <command>' to view details for a specific command.");
+        if ($commandName !== null && $commandName !== '') {
+            if ($commands->hasCommand($commandName)) {
+                $commands->showCommandHelp($commandName);
+                return 0;
+            }
+
+            Prompt::message("Command '{$commandName}' not found.", 'danger');
+            return 1;
         }
+
+        Prompt::section('Available commands');
+        $commands->listCommands();
+        Prompt::newline();
+        Prompt::comment("  Use 'help <command>' or '<command> --help' to view details for a specific command.");
+
+        return 0;
     }
 
     /**
@@ -190,10 +265,10 @@ class PrimaryCommandsHandler
     {
         $queue->connection($args['connection'] ?? null)->work(
             once: isset($args['once']),
-            timeout: $args['timeout'] ?? 3580, // 59 minutes and 40 seconds
-            sleep: $args['sleep'] ?? 4, // 4 seconds
-            delay: $args['delay'] ?? 8, // 8 seconds on failure
-            tries: $args['tries'] ?? 3, // 3 attempts on failure
+            timeout: (int) ($args['timeout'] ?? 3600),
+            sleep: (int) ($args['sleep'] ?? 3),
+            delay: (int) ($args['delay'] ?? 5),
+            tries: (int) ($args['tries'] ?? 3),
             queue: $args['queue'] ?? 'default',
         ); // Run all pending queue jobs
     }
@@ -281,22 +356,61 @@ class PrimaryCommandsHandler
     }
 
     /**
-     * Clears all the pending jobs in the queue.
+     * Clears pending, failed, or named queue jobs.
      *
      * @param QueueManager $queue
      *   The queue connection manager for clearing queue jobs.
-     * 
+     * @param array $args
+     *
      * @return void
      */
     public function clearQueueJobs(QueueManager $queue, array $args = [])
     {
+        $connection = $queue->connection($args['connection'] ?? null);
         $failed = isset($args['failed']) && in_array($args['failed'], [true, 'true', 1, '1', 'yes', ''], true);
+        $queueName = isset($args['queue']) && is_string($args['queue']) ? trim($args['queue']) : null;
+
         if ($failed) {
-            $queue->connection($args['connection'] ?? null)->clearFailedJobs();
-        } else {
-            $queue->connection($args['connection'] ?? null)->clearAllJobs();
+            $connection->clearFailedJobs();
+            Prompt::message('Failed queue jobs cleared.', 'success');
+            return;
         }
+
+        if ($queueName !== null && $queueName !== '') {
+            $removed = $connection->removeQueue($queueName);
+            Prompt::message(
+                $removed ? "Queue [{$queueName}] cleared." : "No jobs found in queue [{$queueName}].",
+                $removed ? 'success' : 'info'
+            );
+            return;
+        }
+
+        $connection->clearAllJobs();
         Prompt::message("Queue jobs cleared.", "success");
+    }
+
+    /**
+     * Delete a single queue job by ID.
+     */
+    public function forgetQueueJob(QueueManager $queue, array $args = []): int
+    {
+        $id = $args['id'] ?? $args['_args'][0] ?? null;
+
+        if (!is_string($id) || trim($id) === '') {
+            Prompt::error('Please specify a job ID to delete.');
+            return 1;
+        }
+
+        $id = trim($id);
+        $removed = $queue->connection($args['connection'] ?? null)->removeJobById($id);
+
+        if (!$removed) {
+            Prompt::warning("Queue job [{$id}] was not found.");
+            return 1;
+        }
+
+        Prompt::success("Queue job [{$id}] deleted.");
+        return 0;
     }
 
     /**
@@ -360,19 +474,179 @@ class PrimaryCommandsHandler
         Prompt::message("Configuration cache cleared.", "success");
     }
 
-    /** Clear the default cache and compiled views/configuration without releasing active locks. */
-    public function clearCache(): void
+    /** Clear cache entries, or the default cache and compiled views/configuration without releasing active locks. */
+    public function clearCache(array $args = []): void
     {
+        $hasStore = isset($args['store']) && is_string($args['store']) && trim($args['store']) !== '';
+        $hasNamespace = isset($args['namespace']) && is_string($args['namespace']) && trim($args['namespace']) !== '';
+
+        if ($hasStore || $hasNamespace) {
+            $store = $hasStore ? trim($args['store']) : null;
+            $namespace = $hasNamespace ? trim($args['namespace']) : 'default';
+
+            app(CacheManager::class)
+                ->repository($store, $namespace)
+                ->flush();
+
+            Prompt::success("Cache cleared for namespace [{$namespace}].");
+            return;
+        }
+
         Cache::make()->flush();
+
         $this->clearViewCaches();
         $this->clearConfigCache();
 
         Prompt::message('Default cache, compiled views and configuration cleared.', 'success');
     }
 
-    /** Generate an application key only when the environment has no existing key. */
-    public function generateAppKey()
+    /** Remove expired cache entries and expired locks for a store/namespace. */
+    public function pruneCache(array $args = []): void
     {
+        $store = isset($args['store']) && is_string($args['store']) && trim($args['store']) !== ''
+            ? trim($args['store'])
+            : null;
+        $namespace = isset($args['namespace']) && is_string($args['namespace']) && trim($args['namespace']) !== ''
+            ? trim($args['namespace'])
+            : 'default';
+
+        $result = app(CacheManager::class)->repository($store, $namespace)->prune();
+
+        Prompt::success("Pruned {$result['entries']} expired cache entries and {$result['locks']} expired locks.");
+    }
+
+    /** Pre-compile .env and configuration files into bootstrap/cache/. */
+    public function cacheConfig(): int
+    {
+        foreach ([root_dir('bootstrap/cache/config.php'), root_dir('bootstrap/cache/env.php')] as $cacheFile) {
+            is_file($cacheFile) && unlink($cacheFile);
+        }
+
+        if (is_file(root_dir('.env'))) {
+            DotEnv::bootstrap(root_dir());
+        }
+
+        $configDir = root_dir('config');
+        if (is_dir($configDir)) {
+            $compiled = Configuration::discover(
+                folder: $configDir,
+                cache: root_dir('bootstrap/cache/config.php'),
+                env: root_dir('.env'),
+                useCache: true,
+            );
+            Application::$app?->mergeConfig($compiled);
+        }
+
+        Prompt::success('Configuration cached successfully.');
+        return 0;
+    }
+
+    /** Pre-compile all Blade templates in configured view directories. */
+    public function cacheViews(): int
+    {
+        $blade = app(\Spark\View\Blade::class);
+        $compiler = $blade->getCompiler();
+        $paths = ['' => $blade->getPath(), ...$blade->getUsePath()];
+        $compiled = 0;
+
+        foreach ($paths as $namespace => $directory) {
+            if (!is_string($directory) || !is_dir($directory)) {
+                continue;
+            }
+
+            $base = rtrim($directory, '/\\');
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($base, FilesystemIterator::SKIP_DOTS)
+            );
+
+            foreach ($iterator as $file) {
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.blade.php')) {
+                    continue;
+                }
+
+                $relative = ltrim(str_replace(DIRECTORY_SEPARATOR, '/', substr($file->getPathname(), strlen($base))), '/');
+                $viewName = substr($relative, 0, -strlen('.blade.php'));
+                $template = str_starts_with($viewName, 'components/')
+                    ? $viewName
+                    : str_replace('/', '.', $viewName);
+
+                if (is_string($namespace) && $namespace !== '') {
+                    $template = "{$namespace}::{$template}";
+                }
+
+                $compiler->compile($file->getPathname(), $compiler->getCompiledPath($template));
+                $compiled++;
+            }
+        }
+
+        Prompt::success("Compiled {$compiled} view template(s).");
+        return 0;
+    }
+
+    /** Cache discovered package services, configuration, and views. */
+    public function optimize(): void
+    {
+        $this->discoverServices();
+        $this->cacheConfig();
+        $this->cacheViews();
+
+        Prompt::success('Application optimized successfully.');
+    }
+
+    /** Remove all compiled bootstrap and view cache files. */
+    public function clearOptimization(): void
+    {
+        $this->clearConfigCache();
+        $this->clearViewCaches();
+
+        $servicesCache = root_dir('bootstrap/cache/services.php');
+        if (is_file($servicesCache)) {
+            unlink($servicesCache);
+        }
+
+        Prompt::success('Cached configuration, views, and discovered services cleared.');
+    }
+
+    /** Display concise framework and environment diagnostics. */
+    public function about(): void
+    {
+        $configCached = is_file(root_dir('bootstrap/cache/config.php'));
+        $envCached = is_file(root_dir('bootstrap/cache/env.php'));
+        $servicesCached = is_file(root_dir('bootstrap/cache/services.php'));
+
+        Prompt::section('Environment');
+        Prompt::definitionList([
+            'Application Name' => (string) config('app.name', 'Spark'),
+            'TinyCore Version' => Application::VERSION,
+            'PHP Version' => PHP_VERSION,
+            'Environment' => (string) app_environment(),
+            'Debug Mode' => is_debug_mode() ? '<warning>ENABLED</warning>' : 'DISABLED',
+            'URL' => (string) config('app.url', ''),
+        ]);
+
+        Prompt::newline();
+        Prompt::section('Cache & Drivers');
+        Prompt::definitionList([
+            'Config Cache' => $configCached ? '<success>CACHED</success>' : '<comment>NOT CACHED</comment>',
+            'Env Cache' => $envCached ? '<success>CACHED</success>' : '<comment>NOT CACHED</comment>',
+            'Services Cache' => $servicesCached ? '<success>CACHED</success>' : '<comment>NOT CACHED</comment>',
+            'Database Driver' => (string) config('database.default', config('database.driver', 'mysql')),
+            'Cache Store' => (string) config('cache.default', config('cache.store', config('cache.driver', 'database'))),
+            'Queue Connection' => (string) config('queue.default', config('queue.driver', 'database')),
+            'Session Driver' => (string) config('session.default', config('session.handler', config('session.driver', 'file'))),
+        ]);
+    }
+
+    /** Generate an application key when missing, or rotate with --force, or print with --show. */
+    public function generateAppKey(array $args = [])
+    {
+        $appKey = bin2hex(random_bytes(16));
+
+        if (!empty($args['show'])) {
+            Prompt::line($appKey);
+            return;
+        }
+
         $envFile = root_dir('.env');
 
         if (!is_file($envFile) || !is_readable($envFile) || !is_writable($envFile)) {
@@ -387,8 +661,9 @@ class PrimaryCommandsHandler
 
         // [ \t] instead of \s so the match can never cross a line break
         $pattern = '/^APP_KEY[ \t]*=[ \t]*([^\r\n]*)/m';
+        $force = filter_var($args['force'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-        if (preg_match($pattern, $envFileContent, $match)) {
+        if (!$force && preg_match($pattern, $envFileContent, $match)) {
             $existing = trim($match[1], " \t\"'");
 
             if ($existing !== '' && strlen($existing) === 32) {
@@ -398,7 +673,6 @@ class PrimaryCommandsHandler
             }
         }
 
-        $appKey = bin2hex(random_bytes(16));
         $line = "APP_KEY=$appKey";
 
         $envFileContent = preg_match($pattern, $envFileContent)

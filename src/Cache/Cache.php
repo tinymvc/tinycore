@@ -395,6 +395,27 @@ class Cache implements CacheContract, \ArrayAccess
     }
 
     /**
+     * Release expired locks from the underlying lock storage.
+     */
+    public function releaseExpiredLocks(): int
+    {
+        return $this->storage->releaseExpiredLocks();
+    }
+
+    /**
+     * Prune expired cache entries and expired locks, returning removal counts.
+     *
+     * @return array{entries: int, locks: int}
+     */
+    public function prune(): array
+    {
+        return [
+            'entries' => $this->storage->eraseExpired(),
+            'locks' => $this->storage->releaseExpiredLocks(),
+        ];
+    }
+
+    /**
      * Retrieve an item from the cache by key (alias of retrieve).
      *
      * @param string $key

@@ -269,21 +269,42 @@ class Commands implements CommandsContract
 
         $maxLength = max(array_map('strlen', array_keys($this->commands))) + 4;
 
-        ksort($this->commands);
-
+        $grouped = ['' => []];
         foreach ($this->commands as $name => $config) {
-            $description = $config['description'] ?? 'No description';
-            $spacing = str_repeat(' ', $maxLength - strlen($name));
+            $group = str_contains($name, ':') ? explode(':', $name, 2)[0] : '';
+            $grouped[$group][$name] = $config;
+        }
 
-            // Check if the command is disabled and set the appropriate message
-            $isDisabled = $this->isDisabled($name) ? ' <warning>(disabled)</warning>' : '';
+        $root = $grouped[''];
+        unset($grouped['']);
+        ksort($root);
+        ksort($grouped);
 
-            Prompt::message(
-                // Format the command name and description using ANSI escape
-                // sequences for color and bold formatting.
-                "  <success>{$name}</success>{$spacing}{$description}{$isDisabled}",
-                'raw'
-            );
+        $renderGroup = function (array $items, ?string $heading = null) use ($maxLength): void {
+            if ($items === []) {
+                return;
+            }
+
+            if ($heading !== null) {
+                Prompt::message(" <warning>{$heading}</warning>", 'raw');
+            }
+
+            ksort($items);
+            foreach ($items as $name => $config) {
+                $description = $config['description'] ?? 'No description';
+                $spacing = str_repeat(' ', $maxLength - strlen($name));
+                $isDisabled = $this->isDisabled($name) ? ' <warning>(disabled)</warning>' : '';
+
+                Prompt::message(
+                    "  <success>{$name}</success>{$spacing}{$description}{$isDisabled}",
+                    'raw'
+                );
+            }
+        };
+
+        $renderGroup($root);
+        foreach ($grouped as $group => $items) {
+            $renderGroup($items, $group);
         }
     }
 }

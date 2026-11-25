@@ -13,9 +13,9 @@ interface ConsoleContract
      * This method is called when the console application is started. It is
      * used to initialize the console application and execute the commands.
      *
-     * @return void
+     * @return int Exit status code.
      */
-    public function run(): void;
+    public function run(): int;
 
     /**
      * Executes a console command.
@@ -25,7 +25,7 @@ interface ConsoleContract
      * @param array $args
      *   The arguments to pass to the command.
      *
-     * @return void
+     * @return int Exit status code.
      */
-    public function executeCommand(string $name, array $args): void;
+    public function executeCommand(string $name, array $args): int;
 }

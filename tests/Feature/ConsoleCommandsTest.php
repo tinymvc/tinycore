@@ -284,6 +284,164 @@ final class ConsoleCommandsTest extends FrameworkTestCase
         $this->assertFalse(str_contains($output, 'DONE'));
         $this->assertSame(0, (int) app(\Spark\Database\DB::class)->query('SELECT COUNT(*) FROM migrations')->fetchColumn());
     }
+
+    public function test_console_help_version_exit_codes_and_primary_commands(): void
+    {
+        $commands = new \Spark\Console\Commands();
+        $ran = false;
+        $commands->addCommand('probe', function () use (&$ran): int {
+            $ran = true;
+            return 3;
+        })->description('Probe command')->help('Probe detailed help.');
+        $console = new \Spark\Console\Console($commands);
+
+        // --version prints TinyCore version and exits 0.
+        $GLOBALS['argv'] = ['spark', '--version'];
+        ob_start();
+        try {
+            $exit = $console->run();
+            $versionOutput = ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString(\Spark\Foundation\Application::VERSION, $versionOutput);
+
+        // --help shows command help without executing the command callback.
+        $GLOBALS['argv'] = ['spark', 'probe', '--help'];
+        ob_start();
+        try {
+            $exit = $console->run();
+            $helpOutput = ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+        $this->assertSame(0, $exit);
+        $this->assertFalse($ran);
+        $this->assertStringContainsString('Probe detailed help.', $helpOutput);
+
+        // Returning an integer exit code propagates cleanly; unknown command exits 1.
+        $GLOBALS['argv'] = ['spark', 'probe'];
+        ob_start();
+        try {
+            $exit = $console->run();
+        } finally {
+            ob_end_clean();
+        }
+        $this->assertTrue($ran);
+        $this->assertSame(3, $exit);
+
+        $GLOBALS['argv'] = ['spark', 'unknown:cmd'];
+        ob_start();
+        try {
+            $exit = $console->run();
+        } finally {
+            ob_end_clean();
+        }
+        $this->assertSame(1, $exit);
+
+        // make:migration --table=users and make:rule generate expected files.
+        $maker = new \Spark\Foundation\Console\MakeStubCommandsHandler();
+        ob_start();
+        try {
+            $maker->makeMigration(['_args' => ['add_bio_to_users'], 'table' => 'users']);
+            $maker->makeRule(['_args' => ['Uppercase']]);
+        } finally {
+            ob_end_clean();
+        }
+        $migrations = glob($this->storagePath . '/database/migrations/migration_*_add_bio_to_users.php') ?: [];
+        $this->assertCount(1, $migrations);
+        $this->assertStringContainsString("Schema::table('users'", file_get_contents($migrations[0]));
+        $ruleFile = $this->storagePath . '/app/Http/Rules/UppercaseRule.php';
+        $this->assertTrue(is_file($ruleFile));
+        $this->assertStringContainsString('implements RuleContract', file_get_contents($ruleFile));
+
+        // config:cache, view:cache, about, cache:prune, cache:clear --namespace, queue:forget, queue:clear --queue, route:list filters, key:generate --force/--show, optimize:clear.
+        mkdir($this->storagePath . '/config', 0755, true);
+        file_put_contents($this->storagePath . '/config/app.php', "<?php return ['name' => 'TestApp', 'debug' => true];\n");
+        file_put_contents($this->storagePath . '/.env', "APP_NAME=TestApp\nAPP_KEY=0123456789abcdef0123456789abcdef\n");
+        mkdir($this->storagePath . '/resources/views/pages', 0755, true);
+        file_put_contents($this->storagePath . '/resources/views/pages/home.blade.php', '<h1>{{ $title }}</h1>');
+        config([
+            'app.views_dir' => $this->storagePath . '/resources/views',
+            'app.storage_dir' => $this->storagePath . '/storage',
+            'cache' => ['default' => 'file', 'connections' => ['file' => ['driver' => 'file', 'path' => $this->storagePath . '/cache-prune']]],
+            'queue' => ['default' => 'file', 'connections' => ['file' => ['driver' => 'file', 'path' => $this->storagePath . '/queue-forget']]],
+        ]);
+        app()->forgetInstance(\Spark\View\Blade::class);
+
+        $cache = app(\Spark\Cache\CacheManager::class)->store();
+        $cache->store('stale', 'v', '-1 minute');
+        $throttled = app(\Spark\Cache\CacheManager::class)->repository(null, 'throttle');
+        $throttled->store('ip', 5);
+        $queue = app(\Spark\Queue\QueueManager::class)->connection();
+        $job = new \Spark\Queue\Job('strlen', ['abc']);
+        $queue->push($job);
+        $jobId = (string) $job->getId();
+        $queue->push(new \Spark\Queue\Job('strlen', ['mail']), 'emails');
+
+        $handler = new \Spark\Foundation\Console\PrimaryCommandsHandler();
+        $router = new \Spark\Http\Routing\Router([
+            'users.index' => ['path' => '/users', 'method' => ['GET'], 'callback' => ['UserController', 'index'], 'middleware' => ['auth']],
+            'posts.store' => ['path' => '/posts', 'method' => ['POST'], 'callback' => fn() => 'ok', 'middleware' => []],
+        ]);
+
+        ob_start();
+        try {
+            $handler->cacheConfig();
+            $handler->cacheViews();
+            $handler->about();
+            $handler->pruneCache();
+            $handler->clearCache(['namespace' => 'throttle']);
+            $handler->routeList($router, ['method' => 'get']);
+            $forgetFound = $handler->forgetQueueJob(app(\Spark\Queue\QueueManager::class), ['_args' => [$jobId]]);
+            $forgetMissing = $handler->forgetQueueJob(app(\Spark\Queue\QueueManager::class), ['_args' => [$jobId]]);
+            $handler->clearQueueJobs(app(\Spark\Queue\QueueManager::class), ['queue' => 'emails']);
+            $output = ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+
+        $this->assertTrue(is_file($this->storagePath . '/bootstrap/cache/config.php'));
+        $this->assertTrue(is_file($this->storagePath . '/bootstrap/cache/env.php'));
+        $this->assertCount(1, glob($this->storagePath . '/storage/framework/views/*.php') ?: []);
+        $this->assertFalse($throttled->has('ip'));
+        $this->assertCount(0, $queue->getJobs(queue: 'emails'));
+        $this->assertStringContainsString('Configuration cached successfully.', $output);
+        $this->assertStringContainsString('Compiled 1 view template(s).', $output);
+        $this->assertStringContainsString('TinyCore Version', $output);
+        $this->assertStringContainsString('Pruned 1 expired cache entries', $output);
+        $this->assertStringContainsString('UserController@index', $output);
+        $this->assertStringNotContainsString('/posts', $output);
+        $this->assertSame(0, $forgetFound);
+        $this->assertSame(1, $forgetMissing);
+
+        ob_start();
+        try {
+            $handler->clearOptimization();
+            $handler->generateAppKey(['force' => true]);
+            $handler->generateAppKey(['show' => true]);
+        } finally {
+            ob_end_clean();
+        }
+        $this->assertFalse(is_file($this->storagePath . '/bootstrap/cache/config.php'));
+        $this->assertFalse(is_file($this->storagePath . '/bootstrap/cache/env.php'));
+        $this->assertSame([], glob($this->storagePath . '/storage/framework/views/*.php') ?: []);
+        $this->assertNotSame("APP_NAME=TestApp\nAPP_KEY=0123456789abcdef0123456789abcdef\n", file_get_contents($this->storagePath . '/.env'));
+
+        // Application::handleCommand() returns the command exit code and `test` / `db:wipe` are not registered.
+        $this->app->withConsoleServices()->boot();
+        $this->assertFalse(app(\Spark\Console\Commands::class)->hasCommand('test'));
+        $this->assertFalse(app(\Spark\Console\Commands::class)->hasCommand('db:wipe'));
+        $GLOBALS['argv'] = ['spark', 'about'];
+        ob_start();
+        try {
+            $aboutExit = $this->app->handleCommand();
+        } finally {
+            ob_end_clean();
+        }
+        $this->assertSame(0, $aboutExit);
+    }
 }
 
 final class UnbootedFixtureProvider extends \Spark\Foundation\Providers\ServiceProvider

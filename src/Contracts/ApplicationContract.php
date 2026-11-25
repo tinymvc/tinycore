@@ -235,9 +235,9 @@ interface ApplicationContract
      *
      * This method bootstraps providers and runs the command console.
      *
-     * @return void
+     * @return int Exit status code.
      */
-    public function handleCommand(): void;
+    public function handleCommand(): int;
 
     /**
      * Register a callback to run after the HTTP response has been sent.

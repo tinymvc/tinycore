@@ -65,17 +65,39 @@ class MakeStubCommandsHandler
 
         $this->askName($args, 'What is the name of the migration?');
 
-        // Otherwise, proceed with the regular migration creation
-        StubCreation::create(
-            $args['_args'][0],
-            [
-                'stub' => __DIR__ . '/stubs/database/migration.stub',
-                'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
-                'replacements' => [
-                    '{{ table }}' => '::name:pluralize:lowercase',
-                ],
-            ]
-        );
+        $tableOpt = $args['table'] ?? $args['t'] ?? null;
+        if ($tableOpt !== null && $tableOpt !== false) {
+            $tableName = is_string($tableOpt) && trim($tableOpt) !== ''
+                ? strtolower(trim($tableOpt))
+                : '::name:pluralize:lowercase';
+
+            $fileSuffix = is_string($tableOpt) && trim($tableOpt) !== ''
+                ? '::name:lowercase'
+                : '::name:pluralize:lowercase';
+
+            StubCreation::create(
+                $args['_args'][0],
+                [
+                    'stub' => __DIR__ . '/stubs/database/migration-table.stub',
+                    'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_' . $fileSuffix . '.php',
+                    'replacements' => [
+                        '{{ table }}' => $tableName,
+                    ],
+                ]
+            );
+        } else {
+            // Otherwise, proceed with the regular migration creation
+            StubCreation::create(
+                $args['_args'][0],
+                [
+                    'stub' => __DIR__ . '/stubs/database/migration.stub',
+                    'destination' => 'database/migrations/::subfolder:lowercase/migration_' . date('Y_m_d_His') . '_::name:pluralize:lowercase.php',
+                    'replacements' => [
+                        '{{ table }}' => '::name:pluralize:lowercase',
+                    ],
+                ]
+            );
+        }
 
         if ($this->hasFlag($args, ['seeder', 'seed', 's'])) {
             return $this->makeSeeder($args);
@@ -265,6 +287,33 @@ class MakeStubCommandsHandler
                     '{{ namespace }}' => 'App\Http\Resources::subfolder:namespace',
                     '{{ class }}' => '::name:ucfirst',
                     '{{ model }}' => ucfirst($this->removeSuffix($name, 'Resource')),
+                ],
+            ]
+        );
+    }
+
+    /**
+     * Create a custom validation rule stub.
+     *
+     * @param array $args
+     *   The arguments passed to the command.
+     *
+     * @return void
+     */
+    public function makeRule(array $args)
+    {
+        $this->askName($args, 'What is the name of the validation rule?');
+
+        $name = $this->resolveSuffix($args['_args'][0], 'Rule');
+
+        StubCreation::create(
+            $name,
+            [
+                'stub' => __DIR__ . '/stubs/rule.stub',
+                'destination' => 'app/Http/Rules/::subfolder:ucfirst/::name:ucfirst.php',
+                'replacements' => [
+                    '{{ namespace }}' => 'App\Http\Rules::subfolder:namespace',
+                    '{{ class }}' => '::name:ucfirst',
                 ],
             ]
         );

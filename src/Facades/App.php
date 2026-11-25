@@ -45,7 +45,7 @@ use Spark\Foundation\Application;
  * @method static void run()
  * @method static \Spark\Http\Response handle(\Spark\Http\Request $request)
  * @method static void terminate()
- * @method static void handleCommand(array $arguments = [])
+ * @method static int handleCommand()
  * @method static Application prepareResponseUsing(callable $callback)
  * @method static \Spark\Http\Response prepareResponse(\Spark\Http\Response $response)
  * @method static Application addServiceProvider(string $provider)

@@ -60,6 +60,4 @@ interface CacheStorageContract
     public function getLockInfo(string $key): ?array;
 
     public function forceUnlock(string $key): bool;
-
-    public function optimizeLocks(): void;
 }

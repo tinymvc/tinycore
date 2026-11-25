@@ -1,0 +1,18 @@
+<?php
+
+namespace {{ namespace }};
+
+use Spark\Contracts\Http\RuleContract;
+
+class {{ class }} implements RuleContract
+{
+    public function passes(string $attribute, mixed $value): bool
+    {
+        return true;
+    }
+
+    public function message(): string
+    {
+        return 'The :attribute field is invalid.';
+    }
+}

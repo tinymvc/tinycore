@@ -1,0 +1,20 @@
+<?php
+
+use Spark\Database\Schema\Blueprint;
+use Spark\Database\Schema\Schema;
+
+return new class {
+    public function up(): void
+    {
+        Schema::table('{{ table }}', function (Blueprint $table) {
+            // alter existing columns or add new ones
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('{{ table }}', function (Blueprint $table) {
+            // reverse the alterations made in up()
+        });
+    }
+};

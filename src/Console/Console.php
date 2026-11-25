@@ -31,11 +31,9 @@ class Console implements ConsoleContract
      * This method is called when the console application is started. It is
      * used to initialize the console application and execute the commands.
      *
-     * If the application is not running in CLI mode, this method does nothing.
-     *
-     * @return void
+     * @return int Exit status code.
      */
-    public function run(): void
+    public function run(): int
     {
         // Check if the application is running in CLI mode
         if (!is_cli()) {
@@ -57,11 +55,20 @@ class Console implements ConsoleContract
 
         Prompt::newline(); // Add a newline
 
-        if ($commandName === '') {
-            // If no command name is provided, list all available commands
+        if ($commandName === '--version' || $commandName === '-V') {
+            Prompt::line('<bold>TinyCore</bold> <info>v' . Application::VERSION . '</info>');
+            return 0;
+        }
+
+        if (
+            $commandName === ''
+            || $commandName === '--help'
+            || $commandName === '-h'
+            || ($commandName === 'list' && !$this->commands->hasCommand('list'))
+        ) {
             Prompt::section('Available commands');
             $this->commands->listCommands();
-            return;
+            return 0;
         }
 
         // Check if the command is registered
@@ -69,11 +76,16 @@ class Console implements ConsoleContract
             // If the command is not found, show an error message and list available commands
             Prompt::message("Command '{$commandName}' not found.", "danger");
             $this->commands->listCommands();
-            return;
+            return 1;
+        }
+
+        if ($commandName !== 'help' && (isset($parsedArgs['help']) || isset($parsedArgs['h']))) {
+            $this->commands->showCommandHelp($commandName);
+            return 0;
         }
 
         // Execute the specified command
-        $this->executeCommand($commandName, $parsedArgs);
+        return $this->executeCommand($commandName, $parsedArgs);
     }
 
     /**
@@ -88,18 +100,18 @@ class Console implements ConsoleContract
      * @param array $args
      *   The parsed arguments for the command.
      *   
-     * @return void
+     * @return int Exit status code.
      */
-    public function executeCommand(string $name, array $args): void
+    public function executeCommand(string $name, array $args): int
     {
         if (!$this->commands->hasCommand($name)) {
             Prompt::message("Command '{$name}' not found.", "danger");
-            return;
+            return 1;
         }
 
         if ($this->commands->isDisabled($name)) {
             Prompt::message("Command '{$name}' is disabled.", "warning");
-            return;
+            return 1;
         }
 
         // Get the command instance
@@ -115,6 +127,7 @@ class Console implements ConsoleContract
         try {
             $result = Application::$app->call($command['callback'], ['args' => $args]);
             $exitCode = is_int($result) ? $result : 0;
+            return $exitCode;
         } catch (\Throwable $e) {
             $exitCode = 1;
             throw $e;

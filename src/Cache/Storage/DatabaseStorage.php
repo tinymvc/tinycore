@@ -615,11 +615,6 @@ class DatabaseStorage implements CacheStorageContract
         }
     }
 
-    public function optimizeLocks(): void
-    {
-        $this->releaseExpiredLocks();
-    }
-
     /* ---------------------------------------------------------------------
      | Internals: lock acquisition
      | ------------------------------------------------------------------ */
