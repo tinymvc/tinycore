@@ -4,7 +4,7 @@ TinyCore (`tinymvc/tinycore`) is the PHP runtime for **TinyMVC / Spark**, provid
 
 [![PHP](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1442%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-1455%20passed-brightgreen.svg)](tests/)
 
 Start an application with [Skeleton](https://github.com/tinymvc/skeleton):
 
@@ -43,10 +43,10 @@ Verified on **2026-11-18** with PHP **8.4.27**.
 
 | Checks | Passed | Skipped | Assertions |
 | --- | ---: | ---: | ---: |
-| Full suite | 1,442 | 0 | 7,690 |
+| Full suite | 1,455 | 0 | 7,786 |
 | Database scenarios, per engine/prefix (2026-11-08) | 474 | 0 | 1,335 |
 
-All **1,442 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP integration checks. The separate database matrix was last verified on 2026-11-08: each run repeated the same 474 scenarios on SQLite, MySQL, or PostgreSQL with an empty or `app_` table prefix; that matrix was not rerun for this update.
+All **1,455 tests** passed, including Redis, PostgreSQL, MySQL, and real HTTP integration checks. The separate database matrix was last verified on 2026-11-08: each run repeated the same 474 scenarios on SQLite, MySQL, or PostgreSQL with an empty or `app_` table prefix; that matrix was not rerun for this update.
 
 ### Coverage
 
